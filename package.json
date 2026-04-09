@@ -1,0 +1,24 @@
+{
+  "name": "crm-erp-pnf",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace @crm-erp-pnf/web run dev",
+    "dev:api": "npm --workspace @crm-erp-pnf/api run start:dev",
+    "dev:worker": "npm --workspace @crm-erp-pnf/worker run dev",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:generate": "npm --workspace @crm-erp-pnf/api run prisma:generate",
+    "db:migrate": "npm --workspace @crm-erp-pnf/api run prisma:migrate",
+    "db:studio": "npm --workspace @crm-erp-pnf/api run prisma:studio"
+  },
+  "engines": {
+    "node": ">=20.11.0"
+  }
+}
