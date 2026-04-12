@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useListOptions } from '@/lib/list-options-client'
+import { isValidEmail } from '@/lib/validation'
 
 export default function LeadCreateForm({
   userId,
@@ -40,6 +41,13 @@ export default function LeadCreateForm({
     event.preventDefault()
     setSaving(true)
     setError(null)
+
+    if (email.trim() && !isValidEmail(email)) {
+      setError('Please enter a valid email address')
+      setSaving(false)
+      return
+    }
+
     try {
       const response = await fetch('/api/leads', {
         method: 'POST',

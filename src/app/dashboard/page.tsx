@@ -1,4 +1,4 @@
-﻿import Link from 'next/link'
+import Link from 'next/link'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
@@ -6,11 +6,13 @@ import SignOutButton from '@/components/SignOutButton'
 import { prisma } from '@/lib/prisma'
 
 function getActivityHref(entityType: string, entityId: string) {
-  if (entityType === 'customer') return `/crm/${entityId}`
+  if (entityType === 'department') return `/departments/${entityId}`
+  if (entityType === 'employee') return `/employees/${entityId}`
+  if (entityType === 'customer') return `/customers/${entityId}`
   if (entityType === 'vendor') return `/vendors/${entityId}`
   if (entityType === 'contact') return `/contacts/${entityId}`
   if (entityType === 'opportunity') return `/opportunities/${entityId}`
-  if (entityType === 'quote') return `/quotes/${entityId}`
+  if (entityType === 'quote') return `/estimates/${entityId}`
   if (entityType === 'sales-order') return `/sales-orders/${entityId}`
   if (entityType === 'invoice') return `/invoices/${entityId}`
   if (entityType === 'purchase-order') return `/purchase-orders/${entityId}`
@@ -47,7 +49,6 @@ export default async function Dashboard() {
 
   return (
     <div className="min-h-full px-8 py-8">
-      {/* Header */}
       <div className="mb-8 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-white">Welcome, {session.user.name?.split(' ')[0] ?? 'User'}</h1>
@@ -58,7 +59,6 @@ export default async function Dashboard() {
         <SignOutButton />
       </div>
 
-      {/* Stat cards */}
       <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Customers" value={customerCount} icon={<IconUsers />} />
         <StatCard label="Vendors" value={vendorCount} icon={<IconVendor />} />
@@ -78,14 +78,14 @@ export default async function Dashboard() {
         <StatusChip label="Critical" tone="danger" />
       </div>
 
-      {/* Nav cards */}
       <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <NavCard title="Leads" description="Capture and qualify lead records" href="/leads" />
-        <NavCard title="Customers" description="Manage customer master data" href="/crm" />
+        <NavCard title="Customers" description="Manage customer master data" href="/customers" />
         <NavCard title="Contacts" description="Customer contacts and relationships" href="/contacts" />
+        <NavCard title="Departments" description="Organize employee structure and ownership" href="/departments" />
         <NavCard title="Vendors" description="Manage vendor master data" href="/vendors" />
         <NavCard title="Opportunities" description="Track sales pipeline and deals" href="/opportunities" />
-        <NavCard title="Estimates" description="Customer proposals from opportunities" href="/quotes" />
+        <NavCard title="Estimates" description="Customer proposals from opportunities" href="/estimates" />
         <NavCard title="Sales Orders" description="Booked customer orders" href="/sales-orders" />
         <NavCard title="Invoices" description="Customer billing and payment status" href="/invoices" />
         <NavCard title="Purchase Requisitions" description="Plan and request procurement purchases" href="/purchase-requisitions" />
@@ -94,12 +94,11 @@ export default async function Dashboard() {
         <NavCard title="AP Portal" description="Accounts payable and supplier invoices" href="/ap" />
       </div>
 
-      {/* Recent activity */}
       <section className="rounded-xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>Recent Activity</h2>
           <Link href="/activity" className="text-xs font-medium" style={{ color: 'var(--accent-primary-strong)' }}>
-            View all →
+            View all
           </Link>
         </div>
         <div className="overflow-hidden rounded-lg" style={{ border: '1px solid var(--border-muted)' }}>
@@ -133,7 +132,7 @@ export default async function Dashboard() {
                         {href && item.action !== 'delete' ? (
                           <Link href={href} className="font-medium" style={{ color: 'var(--accent-primary-strong)' }}>Open</Link>
                         ) : (
-                          <span style={{ color: 'var(--text-muted)' }}>—</span>
+                          <span style={{ color: 'var(--text-muted)' }}>-</span>
                         )}
                       </td>
                     </tr>
@@ -168,7 +167,7 @@ function NavCard({ title, description, href }: { title: string; description: str
       style={{ backgroundColor: 'var(--card)', border: '1px solid var(--border-muted)' }}
     >
       <div className="flex items-center justify-between">
-        <span className="font-medium text-white transition-colors group-hover:text-blue-400">{title} →</span>
+        <span className="font-medium text-white transition-colors group-hover:text-blue-400">{title}</span>
       </div>
       <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>{description}</p>
     </Link>

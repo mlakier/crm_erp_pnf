@@ -9,12 +9,24 @@ type CreateModalButtonProps = {
   children: ReactElement<{ onSuccess?: () => void; onCancel?: () => void }>
   buttonClassName?: string
   buttonStyle?: CSSProperties
+  modalWidthClassName?: string
 }
 
-export default function CreateModalButton({ buttonLabel, title, children, buttonClassName, buttonStyle }: CreateModalButtonProps) {
+export default function CreateModalButton({
+  buttonLabel,
+  title,
+  children,
+  buttonClassName,
+  buttonStyle,
+  modalWidthClassName,
+}: CreateModalButtonProps) {
   const [open, setOpen] = useState(false)
+  const [dismissPrompt, setDismissPrompt] = useState('')
 
-  const close = () => setOpen(false)
+  const close = () => {
+    setDismissPrompt('')
+    setOpen(false)
+  }
   const content = useMemo(() => {
     if (!isValidElement(children)) return children
     return cloneElement(children, {
@@ -27,7 +39,10 @@ export default function CreateModalButton({ buttonLabel, title, children, button
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setDismissPrompt('')
+          setOpen(true)
+        }}
         className={`inline-flex items-center rounded-lg px-3.5 py-1.5 text-base font-semibold transition ${buttonClassName ?? ''}`}
         style={{ backgroundColor: 'var(--accent-primary-strong)', color: '#ffffff', ...(buttonStyle ?? {}) }}
       >
@@ -35,9 +50,16 @@ export default function CreateModalButton({ buttonLabel, title, children, button
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={close}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setDismissPrompt('Use Save or Cancel in the form to close this window.')
+            }
+          }}
+        >
           <div
-            className="w-full max-w-2xl rounded-xl border p-6 shadow-2xl"
+            className={`w-full ${modalWidthClassName ?? 'max-w-2xl'} rounded-xl border p-6 shadow-2xl`}
             style={{ backgroundColor: 'var(--card-elevated)', borderColor: 'var(--border-muted)' }}
             onClick={(event) => event.stopPropagation()}
           >
@@ -49,9 +71,10 @@ export default function CreateModalButton({ buttonLabel, title, children, button
                 className="rounded-md px-2 py-1 text-sm"
                 style={{ color: 'var(--text-secondary)' }}
               >
-                Close
+                Cancel
               </button>
             </div>
+            {dismissPrompt ? <p className="mb-3 text-xs" style={{ color: 'var(--text-secondary)' }}>{dismissPrompt}</p> : null}
             {content}
           </div>
         </div>

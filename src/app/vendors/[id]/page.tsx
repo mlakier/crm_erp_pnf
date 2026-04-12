@@ -4,11 +4,11 @@ import { prisma } from '@/lib/prisma'
 import { fmtCurrency, fmtPhone, normalizePhone } from '@/lib/format'
 import DeleteButton from '@/components/DeleteButton'
 import EditButton from '@/components/EditButton'
-import VendorDetailPurchaseOrderForm from '@/components/VendorDetailPurchaseOrderForm'
+import VendorCreateMenu from '@/components/VendorCreateMenu'
 
 export default async function VendorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const [vendor, defaultUser] = await Promise.all([
+  const [vendor, defaultUser, subsidiaries, currencies] = await Promise.all([
     prisma.vendor.findUnique({
       where: { id },
       include: {
@@ -19,6 +19,14 @@ export default async function VendorDetailPage({ params }: { params: Promise<{ i
       },
     }),
     prisma.user.findFirst({ where: { email: 'admin@example.com' }, select: { id: true } }),
+    prisma.entity.findMany({
+      orderBy: { code: 'asc' },
+      select: { id: true, code: true, name: true },
+    }),
+    prisma.currency.findMany({
+      orderBy: { code: 'asc' },
+      select: { id: true, code: true, name: true },
+    }),
   ])
 
   if (!vendor) notFound()
@@ -43,6 +51,7 @@ export default async function VendorDetailPage({ params }: { params: Promise<{ i
             )}
           </div>
           <div className="flex items-center gap-2">
+            {defaultUser ? <VendorCreateMenu vendorId={vendor.id} userId={defaultUser.id} /> : null}
             <EditButton
               resource="vendors"
               id={vendor.id}
@@ -52,8 +61,28 @@ export default async function VendorDetailPage({ params }: { params: Promise<{ i
                 { name: 'phone', label: 'Phone', value: normalizePhone(vendor.phone) ?? '' },
                 { name: 'address', label: 'Address', value: vendor.address ?? '' },
                 { name: 'taxId', label: 'Tax ID', value: vendor.taxId ?? '' },
-                { name: 'primarySubsidiaryId', label: 'Primary Subsidiary Id', value: vendor.entityId ?? '' },
-                { name: 'primaryCurrencyId', label: 'Primary Currency Id', value: vendor.currencyId ?? '' },
+                {
+                  name: 'primarySubsidiaryId',
+                  label: 'Primary Subsidiary',
+                  value: vendor.entityId ?? '',
+                  type: 'select',
+                  placeholder: 'Select subsidiary',
+                  options: subsidiaries.map((subsidiary) => ({
+                    value: subsidiary.id,
+                    label: `${subsidiary.code} - ${subsidiary.name}`,
+                  })),
+                },
+                {
+                  name: 'primaryCurrencyId',
+                  label: 'Primary Currency',
+                  value: vendor.currencyId ?? '',
+                  type: 'select',
+                  placeholder: 'Select currency',
+                  options: currencies.map((currency) => ({
+                    value: currency.id,
+                    label: `${currency.code} - ${currency.name}`,
+                  })),
+                },
               ]}
             />
             <DeleteButton resource="vendors" id={vendor.id} />
@@ -66,8 +95,6 @@ export default async function VendorDetailPage({ params }: { params: Promise<{ i
           <StatCard label="Total spend" value={fmtCurrency(totalSpend)} accent="teal" />
           <StatCard label="Open AP invoices" value={openInvoices.length} accent={openInvoices.length > 0 ? 'yellow' : undefined} />
         </div>
-
-        {defaultUser ? <VendorDetailPurchaseOrderForm vendorId={vendor.id} userId={defaultUser.id} /> : null}
 
         {/* Details */}
         <div className="mb-8 rounded-xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>

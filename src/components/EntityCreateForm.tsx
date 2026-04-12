@@ -65,7 +65,7 @@ export default function EntityCreateForm({
       const response = await fetch('/api/entities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, name, legalName, entityType, defaultCurrencyId }),
+        body: JSON.stringify({ code, name, legalName, entityType, defaultCurrencyId, inactive: false }),
       })
       const json = await response.json()
       if (!response.ok) throw new Error(json?.error ?? 'Create failed')

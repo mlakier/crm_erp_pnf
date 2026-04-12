@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { isFieldRequired } from '@/lib/form-requirements'
 import { useEffect } from 'react'
+import { isValidEmail } from '@/lib/validation'
 
 export default function ContactCreateForm({
   userId,
@@ -67,6 +68,12 @@ export default function ContactCreateForm({
     setSaving(true)
 
     try {
+      if (email.trim() && !isValidEmail(email)) {
+        setError('Please enter a valid email address')
+        setSaving(false)
+        return
+      }
+
       if (req('customerId') && !customerId) {
         setError('Please select a customer')
         setSaving(false)
@@ -86,6 +93,7 @@ export default function ContactCreateForm({
           position,
           customerId,
           userId,
+          inactive: false,
         }),
       })
 

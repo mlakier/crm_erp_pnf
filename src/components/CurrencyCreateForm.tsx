@@ -19,7 +19,7 @@ export default function CurrencyCreateForm({ onSuccess, onCancel }: { onSuccess?
       const response = await fetch('/api/currencies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, name, symbol }),
+        body: JSON.stringify({ code, name, symbol, inactive: false }),
       })
       const json = await response.json()
       if (!response.ok) throw new Error(json?.error ?? 'Create failed')

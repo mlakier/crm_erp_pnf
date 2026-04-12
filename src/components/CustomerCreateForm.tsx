@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { isFieldRequired } from '@/lib/form-requirements'
 import { useEffect } from 'react'
 import { useListOptions } from '@/lib/list-options-client'
+import { isValidEmail } from '@/lib/validation'
 
 export default function CustomerCreateForm({
   ownerUserId,
@@ -27,6 +28,7 @@ export default function CustomerCreateForm({
   const [primarySubsidiaryId, setPrimarySubsidiaryId] = useState('')
   const [primaryCurrencyId, setPrimaryCurrencyId] = useState('')
   const [addressModalOpen, setAddressModalOpen] = useState(false)
+  const [addressModalPrompt, setAddressModalPrompt] = useState('')
   const [addressValidationError, setAddressValidationError] = useState('')
   const [validatingAddress, setValidatingAddress] = useState(false)
   const [street1, setStreet1] = useState('')
@@ -118,12 +120,23 @@ export default function CustomerCreateForm({
     setAddressValidationError('')
     // Temporarily using local validation until external address API key is configured.
     setAddress(formatAddress())
+    setAddressModalPrompt('')
     setAddressModalOpen(false)
   }
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
+
+    if (email.trim() && !isValidEmail(email)) {
+      setError('Please enter a valid email address')
+      return
+    }
+
+    if (contactEmail.trim() && !isValidEmail(contactEmail)) {
+      setError('Please enter a valid contact email address')
+      return
+    }
 
     if (req('address') && !address.trim()) {
       setError('Address is required. Click Address and save a validated address.')
@@ -304,11 +317,14 @@ export default function CustomerCreateForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Address', req('address'))}</label>
+          <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Billing Address', req('address'))}</label>
           <div className="mt-1 flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setAddressModalOpen(true)}
+              onClick={() => {
+                setAddressModalPrompt('')
+                setAddressModalOpen(true)
+              }}
               className="rounded-md border px-3 py-2 text-sm font-medium"
               style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
             >
@@ -379,7 +395,14 @@ export default function CustomerCreateForm({
         </div>
 
         {addressModalOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setAddressModalOpen(false)}>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) {
+                setAddressModalPrompt('Use Save Address or Cancel to close this window.')
+              }
+            }}
+          >
             <div
               className="w-full max-w-2xl rounded-xl border p-6 shadow-2xl"
               style={{ backgroundColor: 'var(--card-elevated)', borderColor: 'var(--border-muted)' }}
@@ -389,13 +412,17 @@ export default function CustomerCreateForm({
                 <h2 className="text-2xl font-semibold text-white">Validate Address</h2>
                 <button
                   type="button"
-                  onClick={() => setAddressModalOpen(false)}
+                  onClick={() => {
+                    setAddressModalPrompt('')
+                    setAddressModalOpen(false)
+                  }}
                   className="rounded-md px-2 py-1 text-sm"
                   style={{ color: 'var(--text-secondary)' }}
                 >
-                  Close
+                  Cancel
                 </button>
               </div>
+              {addressModalPrompt ? <p className="mb-3 text-xs" style={{ color: 'var(--text-secondary)' }}>{addressModalPrompt}</p> : null}
 
               <div className="space-y-4">
                 <div>

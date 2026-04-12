@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { isFieldRequired } from '@/lib/form-requirements'
 import { useEffect } from 'react'
+import { isValidEmail } from '@/lib/validation'
 
 export default function VendorCreateForm({
   subsidiaries,
@@ -21,6 +22,7 @@ export default function VendorCreateForm({
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
   const [addressModalOpen, setAddressModalOpen] = useState(false)
+  const [addressModalPrompt, setAddressModalPrompt] = useState('')
   const [addressValidationError, setAddressValidationError] = useState('')
   const [validatingAddress, setValidatingAddress] = useState(false)
   const [street1, setStreet1] = useState('')
@@ -109,12 +111,18 @@ export default function VendorCreateForm({
     setAddressValidationError('')
     setValidatingAddress(false)
     setAddress(formatAddress())
+    setAddressModalPrompt('')
     setAddressModalOpen(false)
   }
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
+
+    if (email.trim() && !isValidEmail(email)) {
+      setError('Please enter a valid email address')
+      return
+    }
 
     if (req('address') && !address.trim()) {
       setError('Address is required. Click Address and save a validated address.')
@@ -249,7 +257,10 @@ export default function VendorCreateForm({
           <div className="mt-1 flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setAddressModalOpen(true)}
+              onClick={() => {
+                setAddressModalPrompt('')
+                setAddressModalOpen(true)
+              }}
               className="rounded-md border px-3 py-2 text-sm font-medium"
               style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
             >
@@ -261,7 +272,14 @@ export default function VendorCreateForm({
           </div>
         </div>
         {addressModalOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setAddressModalOpen(false)}>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) {
+                setAddressModalPrompt('Use Save Address or Cancel to close this window.')
+              }
+            }}
+          >
             <div
               className="w-full max-w-2xl rounded-xl border p-6 shadow-2xl"
               style={{ backgroundColor: 'var(--card-elevated)', borderColor: 'var(--border-muted)' }}
@@ -271,13 +289,17 @@ export default function VendorCreateForm({
                 <h2 className="text-2xl font-semibold text-white">Validate Address</h2>
                 <button
                   type="button"
-                  onClick={() => setAddressModalOpen(false)}
+                  onClick={() => {
+                    setAddressModalPrompt('')
+                    setAddressModalOpen(false)
+                  }}
                   className="rounded-md px-2 py-1 text-sm"
                   style={{ color: 'var(--text-secondary)' }}
                 >
-                  Close
+                  Cancel
                 </button>
               </div>
+              {addressModalPrompt ? <p className="mb-3 text-xs" style={{ color: 'var(--text-secondary)' }}>{addressModalPrompt}</p> : null}
 
               <div className="space-y-4">
                 <div>

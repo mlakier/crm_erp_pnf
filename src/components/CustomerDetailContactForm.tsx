@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { isValidEmail } from '@/lib/validation'
 
 export default function CustomerDetailContactForm({
   customerId,
@@ -39,6 +40,12 @@ export default function CustomerDetailContactForm({
     event.preventDefault()
     setSaving(true)
     setError('')
+
+    if (email.trim() && !isValidEmail(email)) {
+      setError('Please enter a valid email address')
+      setSaving(false)
+      return
+    }
 
     try {
       const response = await fetch('/api/contacts', {

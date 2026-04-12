@@ -2,12 +2,15 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { isValidEmail } from '@/lib/validation'
 
 export interface EditField {
   name: string
   label: string
   value: string
-  type?: 'text' | 'number' | 'date'
+  type?: 'text' | 'number' | 'date' | 'email' | 'select'
+  options?: Array<{ value: string; label: string }>
+  placeholder?: string
 }
 
 export default function EditButton({
@@ -25,28 +28,52 @@ export default function EditButton({
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [dismissPrompt, setDismissPrompt] = useState('')
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setError('')
+
+    for (const field of fields) {
+      const isEmailField = field.type === 'email' || field.name.toLowerCase().includes('email')
+      if (!isEmailField) continue
+
+      const value = (values[field.name] ?? '').trim()
+      if (value && !isValidEmail(value)) {
+        setError(`${field.label} is not a valid email address`)
+        setSaving(false)
+        return
+      }
+    }
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15000)
+
     try {
       const res = await fetch(`/api/${resource}?id=${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),
+        signal: controller.signal,
       })
       if (!res.ok) {
         const body = await res.json()
         setError(body?.error || 'Failed to save')
-        setSaving(false)
         return
       }
       setOpen(false)
+      setDismissPrompt('')
       router.refresh()
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError('Save timed out. Please try again.')
+        return
+      }
       setError('Failed to save')
+    } finally {
+      clearTimeout(timeout)
       setSaving(false)
     }
   }
@@ -55,7 +82,11 @@ export default function EditButton({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setValues(Object.fromEntries(fields.map((f) => [f.name, f.value])))
+          setDismissPrompt('')
+          setOpen(true)
+        }}
         className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
         style={{ backgroundColor: 'var(--accent-primary-strong)' }}
       >
@@ -64,33 +95,65 @@ export default function EditButton({
       {open && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={(e) => { if (e.target === e.currentTarget) setOpen(false) }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setDismissPrompt('Use Save changes to keep updates or Cancel to discard.')
+            }
+          }}
         >
           <div
             className="w-full max-w-md rounded-xl border p-6 shadow-xl"
             style={{ backgroundColor: 'var(--card-elevated)', borderColor: 'var(--border-muted)' }}
           >
             <h3 className="mb-4 text-base font-semibold text-white">Edit record</h3>
+            {dismissPrompt ? <p className="mb-3 text-xs" style={{ color: 'var(--text-secondary)' }}>{dismissPrompt}</p> : null}
             <form onSubmit={handleSubmit} className="space-y-3">
               {fields.map((f) => (
                 <div key={f.name}>
                   <label className="block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{f.label}</label>
-                  <input
-                    type={f.type ?? 'text'}
-                    value={values[f.name]}
-                    onChange={(e) =>
-                      setValues((prev) => ({ ...prev, [f.name]: e.target.value }))
-                    }
-                    className="mt-1 block w-full rounded-md border bg-transparent px-3 py-1.5 text-sm text-white shadow-sm focus:outline-none"
-                    style={{ borderColor: 'var(--border-muted)' }}
-                  />
+                  {f.type === 'select' ? (
+                    <select
+                      value={values[f.name]}
+                      onChange={(e) =>
+                        setValues((prev) => ({ ...prev, [f.name]: e.target.value }))
+                      }
+                      className="mt-1 block w-full rounded-md border bg-transparent px-3 py-1.5 text-sm text-white shadow-sm focus:outline-none"
+                      style={{ borderColor: 'var(--border-muted)' }}
+                    >
+                      <option value="" style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
+                        {f.placeholder ?? 'Select option'}
+                      </option>
+                      {(f.options ?? []).map((option) => (
+                        <option
+                          key={`${f.name}-${option.value}`}
+                          value={option.value}
+                          style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}
+                        >
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type={f.type ?? 'text'}
+                      value={values[f.name]}
+                      onChange={(e) =>
+                        setValues((prev) => ({ ...prev, [f.name]: e.target.value }))
+                      }
+                      className="mt-1 block w-full rounded-md border bg-transparent px-3 py-1.5 text-sm text-white shadow-sm focus:outline-none"
+                      style={{ borderColor: 'var(--border-muted)' }}
+                    />
+                  )}
                 </div>
               ))}
               {error ? <p className="text-xs" style={{ color: 'var(--danger)' }}>{error}</p> : null}
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    setDismissPrompt('')
+                    setOpen(false)
+                  }}
                   className="rounded-md border px-3 py-1.5 text-xs font-medium"
                   style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
                 >

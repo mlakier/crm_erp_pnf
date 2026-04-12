@@ -2,13 +2,16 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { isValidEmail } from '@/lib/validation'
 
 export default function EmployeeCreateForm({
   entities,
+  departments,
   onSuccess,
   onCancel,
 }: {
   entities: Array<{ id: string; code: string; name: string }>
+  departments: Array<{ id: string; code: string; name: string }>
   onSuccess?: () => void
   onCancel?: () => void
 }) {
@@ -17,6 +20,7 @@ export default function EmployeeCreateForm({
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [title, setTitle] = useState('')
+  const [departmentId, setDepartmentId] = useState('')
   const [entityId, setEntityId] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -25,11 +29,18 @@ export default function EmployeeCreateForm({
     event.preventDefault()
     setSaving(true)
     setError(null)
+
+    if (email.trim() && !isValidEmail(email)) {
+      setError('Please enter a valid email address')
+      setSaving(false)
+      return
+    }
+
     try {
       const response = await fetch('/api/employees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ firstName, lastName, email, title, entityId }),
+        body: JSON.stringify({ firstName, lastName, email, title, departmentId, entityId, inactive: false }),
       })
       const json = await response.json()
       if (!response.ok) throw new Error(json?.error ?? 'Create failed')
@@ -64,6 +75,13 @@ export default function EmployeeCreateForm({
           <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-md border px-3 py-2 text-white bg-transparent" style={{ borderColor: 'var(--border-muted)' }} />
         </label>
       </div>
+      <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+        <span>Department</span>
+        <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} className="w-full rounded-md border px-3 py-2 text-white bg-transparent" style={{ borderColor: 'var(--border-muted)' }}>
+          <option value="">None</option>
+          {departments.map((department) => <option key={department.id} value={department.id}>{department.code} - {department.name}</option>)}
+        </select>
+      </label>
       <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
         <span>Subsidiary</span>
         <select value={entityId} onChange={(e) => setEntityId(e.target.value)} className="w-full rounded-md border px-3 py-2 text-white bg-transparent" style={{ borderColor: 'var(--border-muted)' }}>
