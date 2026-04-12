@@ -14,6 +14,7 @@ export async function POST(request: Request) {
     const legalName = String(body?.legalName ?? '').trim() || null
     const entityType = String(body?.entityType ?? '').trim() || null
     const defaultCurrencyId = String(body?.defaultCurrencyId ?? '').trim() || null
+    const inactive = String(body?.inactive ?? 'false').trim().toLowerCase() === 'true'
 
     if (!code || !name) {
       return NextResponse.json({ error: 'Code and name are required.' }, { status: 400 })
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
         legalName,
         entityType,
         defaultCurrencyId,
-        active: true,
+        active: !inactive,
       },
       include: { defaultCurrency: true },
     })
@@ -50,9 +51,14 @@ export async function PUT(request: Request) {
     const defaultCurrencyId = body?.defaultCurrencyId !== undefined ? (String(body.defaultCurrencyId).trim() || null) : undefined
     const taxId = body?.taxId !== undefined ? (String(body.taxId).trim() || null) : undefined
     const registrationNumber = body?.registrationNumber !== undefined ? (String(body.registrationNumber).trim() || null) : undefined
-    const active = body?.active !== undefined
-      ? String(body.active).trim().toLowerCase() === 'true'
+    const inactive = body?.inactive !== undefined
+      ? String(body.inactive).trim().toLowerCase() === 'true'
       : undefined
+    const active = inactive !== undefined
+      ? !inactive
+      : body?.active !== undefined
+        ? String(body.active).trim().toLowerCase() === 'true'
+        : undefined
     const updated = await prisma.entity.update({
       where: { id },
       data: Object.fromEntries(

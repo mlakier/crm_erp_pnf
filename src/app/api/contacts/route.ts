@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { firstName, lastName, email, phone, position, customerId, userId } = body
+    const inactive = String(body?.inactive ?? 'false').trim().toLowerCase() === 'true'
 
     if (!userId) {
       return NextResponse.json({ error: 'userId is required' }, { status: 400 })
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
         email,
         phone: normalizePhone(phone),
         position,
+        active: !inactive,
         customerId,
         userId,
       },
@@ -71,11 +73,26 @@ export async function PUT(request: NextRequest) {
 
     const body = await request.json()
     const { firstName, lastName, email, phone, position } = body
+    const inactive = body?.inactive !== undefined
+      ? String(body.inactive).trim().toLowerCase() === 'true'
+      : undefined
+    const active = inactive !== undefined
+      ? !inactive
+      : body?.active !== undefined
+        ? String(body.active).trim().toLowerCase() === 'true'
+        : undefined
     if (!firstName || !lastName) return NextResponse.json({ error: 'First and last name are required' }, { status: 400 })
 
     const contact = await prisma.contact.update({
       where: { id },
-      data: { firstName, lastName, email: email || null, phone: normalizePhone(phone), position: position || null },
+      data: {
+        firstName,
+        lastName,
+        email: email || null,
+        phone: normalizePhone(phone),
+        position: position || null,
+        ...(active !== undefined ? { active } : {}),
+      },
     })
 
     await logActivity({

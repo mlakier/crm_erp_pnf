@@ -20,6 +20,7 @@ export async function POST(request: Request) {
     const listPrice = Number(body?.listPrice ?? 0)
     const currencyId = String(body?.currencyId ?? '').trim() || null
     const entityId = String(body?.entityId ?? '').trim() || null
+    const inactive = String(body?.inactive ?? 'false').trim().toLowerCase() === 'true'
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required.' }, { status: 400 })
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
         listPrice: Number.isFinite(listPrice) ? listPrice : 0,
         currencyId,
         entityId,
-        active: true,
+        active: !inactive,
       },
       include: { currency: true, entity: true },
     })
@@ -61,9 +62,14 @@ export async function PUT(request: Request) {
     const description = body?.description !== undefined ? (String(body.description).trim() || null) : undefined
     const currencyId = body?.currencyId !== undefined ? (String(body.currencyId).trim() || null) : undefined
     const entityId = body?.entityId !== undefined ? (String(body.entityId).trim() || null) : undefined
-    const active = body?.active !== undefined
-      ? String(body.active).trim().toLowerCase() === 'true'
+    const inactive = body?.inactive !== undefined
+      ? String(body.inactive).trim().toLowerCase() === 'true'
       : undefined
+    const active = inactive !== undefined
+      ? !inactive
+      : body?.active !== undefined
+        ? String(body.active).trim().toLowerCase() === 'true'
+        : undefined
     const updated = await prisma.item.update({
       where: { id },
       data: Object.fromEntries(

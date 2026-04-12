@@ -5,8 +5,11 @@ import CurrencyCreateForm from '@/components/CurrencyCreateForm'
 import EditButton from '@/components/EditButton'
 import DeleteButton from '@/components/DeleteButton'
 import ColumnSelector from '@/components/ColumnSelector'
+import ExportButton from '@/components/ExportButton'
 import PaginationFooter from '@/components/PaginationFooter'
 import { getPagination } from '@/lib/pagination'
+import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
+import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
 
 const COLS = [
   { id: 'code', label: 'Code' },
@@ -14,6 +17,7 @@ const COLS = [
   { id: 'symbol', label: 'Symbol' },
   { id: 'decimals', label: 'Decimals' },
   { id: 'created', label: 'Created' },
+  { id: 'last-modified', label: 'Last Modified' },
   { id: 'actions', label: 'Actions', locked: true },
 ]
 
@@ -31,7 +35,11 @@ export default async function CurrenciesPage({
 
   const total = await prisma.currency.count({ where })
   const pagination = getPagination(total, params.page)
-  const currencies = await prisma.currency.findMany({ where, orderBy: { code: 'asc' }, skip: pagination.skip, take: pagination.pageSize })
+  const [currencies, companySettings, cabinetFiles] = await Promise.all([
+    prisma.currency.findMany({ where, orderBy: { code: 'asc' }, skip: pagination.skip, take: pagination.pageSize }),
+    loadCompanyInformationSettings(),
+    loadCompanyCabinetFiles(),
+  ])
 
   const buildPageHref = (p: number) => {
     const s = new URLSearchParams()
@@ -40,9 +48,24 @@ export default async function CurrenciesPage({
     return `/currencies?${s.toString()}`
   }
 
+  const selectedLogoValue = companySettings.companyLogoPagesFileId
+  const companyLogoPages =
+    cabinetFiles.find((file) => file.id === selectedLogoValue)
+    ?? cabinetFiles.find((file) => file.originalName === selectedLogoValue)
+    ?? cabinetFiles.find((file) => file.storedName === selectedLogoValue)
+    ?? cabinetFiles.find((file) => file.url === selectedLogoValue)
+    ?? (!selectedLogoValue ? cabinetFiles[0] : undefined)
+
   return (
     <div className="min-h-full px-8 py-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="mb-6 flex items-center justify-between gap-4">
+        {companyLogoPages ? (
+          <img
+            src={companyLogoPages.url}
+            alt="Company logo"
+            className="h-16 w-auto rounded"
+          />
+        ) : null}
         <div>
           <h1 className="text-xl font-semibold text-white">Currencies</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{total} total</p>
@@ -54,24 +77,26 @@ export default async function CurrenciesPage({
 
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
-          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
+          <div className="flex gap-3 items-center flex-nowrap">
             <input
               type="text"
               name="q"
               defaultValue={params.q ?? ''}
               placeholder="Search code or name"
-              className="rounded-md border bg-transparent px-3 py-2 text-sm text-white"
+              className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
               style={{ borderColor: 'var(--border-muted)' }}
             />
             <input type="hidden" name="page" value="1" />
-            <button type="submit" className="rounded-md px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: 'var(--accent-primary-strong)' }}>Apply</button>
-            <Link href="/currencies" className="rounded-md border px-3 py-2 text-sm font-medium text-center" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>Reset</Link>
+            <div className="flex items-center gap-2">
+              <Link href="/currencies" className="rounded-md border px-3 py-2 text-sm font-medium text-center" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>Reset</Link>
+              <ExportButton tableId="currencies-list" fileName="currencies" />
+            </div>
             <ColumnSelector tableId="currencies-list" columns={COLS} />
           </div>
         </form>
 
         <div className="overflow-x-auto" data-column-selector-table="currencies-list">
-          <table className="min-w-full">
+          <table className="min-w-full" id="currencies-list">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
                 <th data-column="code" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Code</th>
@@ -79,13 +104,14 @@ export default async function CurrenciesPage({
                 <th data-column="symbol" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Symbol</th>
                 <th data-column="decimals" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Decimals</th>
                 <th data-column="created" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Created</th>
+                <th data-column="last-modified" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Last Modified</th>
                 <th data-column="actions" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {currencies.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                  <td colSpan={7} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
                     No currencies found
                   </td>
                 </tr>
@@ -97,6 +123,7 @@ export default async function CurrenciesPage({
                     <td data-column="symbol" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{currency.symbol ?? '—'}</td>
                     <td data-column="decimals" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{currency.decimals}</td>
                     <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(currency.createdAt).toLocaleDateString()}</td>
+                    <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(currency.updatedAt).toLocaleDateString()}</td>
                     <td data-column="actions" className="px-4 py-2 text-sm">
                       <div className="flex items-center gap-2">
                         <EditButton

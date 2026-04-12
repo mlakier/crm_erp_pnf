@@ -12,6 +12,7 @@ export async function POST(request: Request) {
     const code = String(body?.code ?? '').trim().toUpperCase()
     const name = String(body?.name ?? '').trim()
     const symbol = String(body?.symbol ?? '').trim() || null
+    const inactive = String(body?.inactive ?? 'false').trim().toLowerCase() === 'true'
 
     if (!code || !name) {
       return NextResponse.json({ error: 'Code and name are required.' }, { status: 400 })
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
         name,
         symbol,
         decimals: 2,
-        active: true,
+        active: !inactive,
       },
     })
 
@@ -46,9 +47,14 @@ export async function PUT(request: Request) {
     const isBase = body?.isBase !== undefined
       ? String(body.isBase).trim().toLowerCase() === 'true'
       : undefined
-    const active = body?.active !== undefined
-      ? String(body.active).trim().toLowerCase() === 'true'
+    const inactive = body?.inactive !== undefined
+      ? String(body.inactive).trim().toLowerCase() === 'true'
       : undefined
+    const active = inactive !== undefined
+      ? !inactive
+      : body?.active !== undefined
+        ? String(body.active).trim().toLowerCase() === 'true'
+        : undefined
     const updated = await prisma.currency.update({
       where: { id },
       data: Object.fromEntries(

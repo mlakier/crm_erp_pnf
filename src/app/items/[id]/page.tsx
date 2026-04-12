@@ -3,21 +3,27 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import EditButton from '@/components/EditButton'
 import DeleteButton from '@/components/DeleteButton'
+import { loadListOptions } from '@/lib/list-options-store'
 
 export default async function ItemDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const item = await prisma.item.findUnique({
-    where: { id },
-    include: {
-      currency: true,
-      entity: true,
-      purchaseOrderLineItems: {
-        orderBy: { createdAt: 'desc' },
-        take: 25,
-        include: { purchaseOrder: { select: { id: true, number: true, status: true, createdAt: true } } },
+  const [item, currencies, subsidiaries, listOptions] = await Promise.all([
+    prisma.item.findUnique({
+      where: { id },
+      include: {
+        currency: true,
+        entity: true,
+        purchaseOrderLineItems: {
+          orderBy: { createdAt: 'desc' },
+          take: 25,
+          include: { purchaseOrder: { select: { id: true, number: true, status: true, createdAt: true } } },
+        },
       },
-    },
-  })
+    }),
+    prisma.currency.findMany({ orderBy: { code: 'asc' }, select: { id: true, code: true, name: true } }),
+    prisma.entity.findMany({ orderBy: { code: 'asc' }, select: { id: true, code: true, name: true } }),
+    loadListOptions(),
+  ])
 
   if (!item) notFound()
 
@@ -47,13 +53,20 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ id:
                 { name: 'name', label: 'Name', value: item.name },
                 { name: 'itemNumber', label: 'Item #', value: item.itemNumber ?? '' },
                 { name: 'sku', label: 'SKU', value: item.sku ?? '' },
-                { name: 'itemType', label: 'Type', value: item.itemType },
+                {
+                  name: 'itemType',
+                  label: 'Item Type',
+                  value: item.itemType,
+                  type: 'select',
+                  placeholder: 'Select item type',
+                  options: listOptions.item.type.map((value) => ({ value, label: value })),
+                },
                 { name: 'uom', label: 'UOM', value: item.uom ?? '' },
                 { name: 'listPrice', label: 'List Price', value: String(item.listPrice), type: 'number' },
-                { name: 'currencyId', label: 'Currency Id', value: item.currencyId ?? '' },
-                { name: 'entityId', label: 'Subsidiary Id', value: item.entityId ?? '' },
+                { name: 'currencyId', label: 'Currency', value: item.currencyId ?? '', type: 'select', placeholder: 'Select currency', options: currencies.map((c) => ({ value: c.id, label: `${c.code} – ${c.name}` })) },
+                { name: 'entityId', label: 'Subsidiary', value: item.entityId ?? '', type: 'select', placeholder: 'Select subsidiary', options: subsidiaries.map((s) => ({ value: s.id, label: `${s.code} – ${s.name}` })) },
                 { name: 'description', label: 'Description', value: item.description ?? '' },
-                { name: 'active', label: 'Active', value: String(item.active) },
+                { name: 'inactive', label: 'Inactive', value: String(!item.active), type: 'select', options: [{ value: 'false', label: 'False' }, { value: 'true', label: 'True' }] },
               ]}
             />
             <DeleteButton resource="items" id={item.id} />

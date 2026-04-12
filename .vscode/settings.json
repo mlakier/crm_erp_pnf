@@ -1,0 +1,16 @@
+{
+  "files.watcherExclude": {
+    "**/dev.db": true,
+    "**/dev.db-*": true,
+    "**/*.db-journal": true,
+    "**/*.db-shm": true,
+    "**/*.db-wal": true
+  },
+  "search.exclude": {
+    "**/dev.db": true,
+    "**/dev.db-*": true,
+    "**/*.db-journal": true,
+    "**/*.db-shm": true,
+    "**/*.db-wal": true
+  }
+}

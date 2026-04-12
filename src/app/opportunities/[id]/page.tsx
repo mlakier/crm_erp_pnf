@@ -87,7 +87,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
                 <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--accent-primary-strong)' }}>Generated quote</h2>
                 <p className="mt-2 text-lg font-semibold text-white">{opportunity.quote.number}</p>
               </div>
-              <Link href={`/quotes/${opportunity.quote.id}`} className="inline-flex items-center rounded-md px-4 py-2 text-sm font-medium text-white" style={{ backgroundColor: 'var(--accent-primary-strong)' }}>
+              <Link href={`/estimates/${opportunity.quote.id}`} className="inline-flex items-center rounded-md px-4 py-2 text-sm font-medium text-white" style={{ backgroundColor: 'var(--accent-primary-strong)' }}>
                 Open quote
               </Link>
             </div>
@@ -98,7 +98,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
         <div className="mb-8 rounded-xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Customer</h2>
-            <Link href={`/crm/${opportunity.customer.id}`} className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+            <Link href={`/customers/${opportunity.customer.id}`} className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
               View customer →
             </Link>
           </div>

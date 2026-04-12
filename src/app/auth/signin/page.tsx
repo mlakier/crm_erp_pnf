@@ -1,29 +1,47 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { isValidEmail } from '@/lib/validation'
 
 export default function SignIn() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50" />}>
+      <SignInContent />
+    </Suspense>
+  )
+}
+
+function SignInContent() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
+    if (!isValidEmail(email)) {
+      setError('Please enter a valid email address')
+      return
+    }
+
     const result = await signIn('credentials', {
       email,
       password,
       redirect: false,
+      callbackUrl,
     })
 
     if (result?.error) {
       setError('Invalid credentials')
     } else {
-      router.push('/dashboard')
+      router.push(result?.url || callbackUrl)
     }
   }
 

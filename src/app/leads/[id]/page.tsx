@@ -113,7 +113,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           <div className="grid gap-3 p-6 sm:grid-cols-3">
             <RelatedLink
               label="Customer"
-              href={lead.customer ? `/crm/${lead.customer.id}` : null}
+              href={lead.customer ? `/customers/${lead.customer.id}` : null}
               value={lead.customer ? `${lead.customer.customerNumber ?? 'Pending'} ${lead.customer.name}` : '—'}
             />
             <RelatedLink

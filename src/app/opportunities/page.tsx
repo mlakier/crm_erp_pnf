@@ -7,8 +7,11 @@ import EditButton from '@/components/EditButton'
 import OpportunityStageMoveButton from '@/components/OpportunityStageMoveButton'
 import CreateModalButton from '@/components/CreateModalButton'
 import ColumnSelector from '@/components/ColumnSelector'
+import ExportButton from '@/components/ExportButton'
 import PaginationFooter from '@/components/PaginationFooter'
 import { getPagination } from '@/lib/pagination'
+import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
+import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
 
 const STAGE_ORDER = ['prospecting', 'qualification', 'proposal', 'negotiation', 'won', 'lost'] as const
 
@@ -28,6 +31,8 @@ const OPPORTUNITY_COLUMNS = [
   { id: 'stage', label: 'Stage' },
   { id: 'amount', label: 'Amount' },
   { id: 'close-date', label: 'Close Date' },
+  { id: 'created', label: 'Created' },
+  { id: 'last-modified', label: 'Last Modified' },
   { id: 'actions', label: 'Actions', locked: true },
 ]
 
@@ -82,11 +87,13 @@ export default async function OpportunitiesPage({
           ? [{ amount: 'asc' as const }]
           : [{ createdAt: 'desc' as const }]
 
-  const [totalOpportunities, customers, adminUser, pipelineAgg] = await Promise.all([
+  const [totalOpportunities, customers, adminUser, pipelineAgg, companySettings, cabinetFiles] = await Promise.all([
     prisma.opportunity.count({ where }),
     prisma.customer.findMany({ orderBy: { name: 'asc' } }),
     prisma.user.findUnique({ where: { email: 'admin@example.com' } }),
     prisma.opportunity.aggregate({ where, _sum: { amount: true } }),
+    loadCompanyInformationSettings(),
+    loadCompanyCabinetFiles(),
   ])
 
   const pagination = getPagination(totalOpportunities, params.page)
@@ -122,9 +129,24 @@ export default async function OpportunitiesPage({
     return `/opportunities?${search.toString()}`
   }
 
+  const selectedLogoValue = companySettings.companyLogoPagesFileId
+  const companyLogoPages =
+    cabinetFiles.find((file) => file.id === selectedLogoValue)
+    ?? cabinetFiles.find((file) => file.originalName === selectedLogoValue)
+    ?? cabinetFiles.find((file) => file.storedName === selectedLogoValue)
+    ?? cabinetFiles.find((file) => file.url === selectedLogoValue)
+    ?? (!selectedLogoValue ? cabinetFiles[0] : undefined)
+
   return (
     <div className="min-h-full px-8 py-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="mb-6 flex items-center justify-between gap-4">
+        {companyLogoPages ? (
+          <img
+            src={companyLogoPages.url}
+            alt="Company logo"
+            className="h-16 w-auto rounded"
+          />
+        ) : null}
         <div>
           <h1 className="text-xl font-semibold text-white">Opportunities</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{totalOpportunities} total</p>
@@ -140,13 +162,13 @@ export default async function OpportunitiesPage({
 
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
-          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto_auto]">
+          <div className="flex gap-3 items-center flex-nowrap">
                 <input
                   type="text"
                   name="q"
                   defaultValue={params.q ?? ''}
                   placeholder="Search opportunity ID, name, customer, stage"
-                  className="rounded-md border bg-transparent px-3 py-2 text-sm text-white"
+                  className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
                   style={{ borderColor: 'var(--border-muted)' }}
                 />
                 <select name="stage" defaultValue={stageFilter} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
@@ -170,9 +192,8 @@ export default async function OpportunitiesPage({
                 </select>
                 <input type="hidden" name="page" value="1" />
                 <div className="flex items-center gap-2">
-                  <button type="submit" className="rounded-md px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: 'var(--accent-primary-strong)' }}>Apply</button>
                   <Link href={`/opportunities?view=${view}`} className="rounded-md border px-3 py-2 text-sm font-medium text-center" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>Reset</Link>
-                </div>
+                  <ExportButton tableId="opportunities-list" fileName="opportunities" />                </div>
                 {view === 'table' ? <ColumnSelector tableId="opportunities-list" columns={OPPORTUNITY_COLUMNS} /> : null}
           </div>
         </form>
@@ -241,7 +262,7 @@ export default async function OpportunitiesPage({
           </div>
         ) : (
           <div className="overflow-x-auto" data-column-selector-table="opportunities-list">
-            <table className="min-w-full">
+          <table className="min-w-full" id="opportunities-list">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
                   <th data-column="opportunity-number" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Opportunity #</th>
@@ -250,13 +271,15 @@ export default async function OpportunitiesPage({
                   <th data-column="stage" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Stage</th>
                   <th data-column="amount" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Amount</th>
                   <th data-column="close-date" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Close Date</th>
+                  <th data-column="created" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Created</th>
+                  <th data-column="last-modified" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Last Modified</th>
                   <th data-column="actions" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredOpportunities.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                    <td colSpan={9} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
                       No opportunities found
                     </td>
                   </tr>
@@ -272,6 +295,8 @@ export default async function OpportunitiesPage({
                     <td data-column="stage" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{STAGE_LABELS[opportunity.normalizedStage]}</td>
                     <td data-column="amount" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtCurrency(opportunity.amount)}</td>
                     <td data-column="close-date" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{opportunity.closeDate ? new Date(opportunity.closeDate).toLocaleDateString() : '—'}</td>
+                    <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(opportunity.createdAt).toLocaleDateString()}</td>
+                    <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(opportunity.updatedAt).toLocaleDateString()}</td>
                     <td data-column="actions" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
                       <div className="flex items-center gap-2">
                         <EditButton

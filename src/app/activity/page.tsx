@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import ColumnSelector from '@/components/ColumnSelector'
 import PaginationFooter from '@/components/PaginationFooter'
+import ExportButton from '@/components/ExportButton'
 import { getPagination } from '@/lib/pagination'
 
 const ACTIVITY_COLUMNS = [
@@ -13,11 +14,11 @@ const ACTIVITY_COLUMNS = [
 ]
 
 function getActivityHref(entityType: string, entityId: string) {
-  if (entityType === 'customer') return `/crm/${entityId}`
+  if (entityType === 'customer') return `/customers/${entityId}`
   if (entityType === 'vendor') return `/vendors/${entityId}`
   if (entityType === 'contact') return `/contacts/${entityId}`
   if (entityType === 'opportunity') return `/opportunities/${entityId}`
-  if (entityType === 'quote') return `/quotes/${entityId}`
+  if (entityType === 'quote') return `/estimates/${entityId}`
   if (entityType === 'sales-order') return `/sales-orders/${entityId}`
   if (entityType === 'invoice') return `/invoices/${entityId}`
   if (entityType === 'purchase-order') return `/purchase-orders/${entityId}`
@@ -96,15 +97,15 @@ export default async function ActivityPage({
             </select>
             <input type="hidden" name="page" value="1" />
             <div className="flex items-center gap-2">
-              <button type="submit" className="rounded-md px-3 py-2 text-sm font-medium" style={{ backgroundColor: 'var(--accent-primary-strong)', color: '#fff' }}>Apply</button>
               <Link href="/activity" className="rounded-md border px-3 py-2 text-sm font-medium text-center" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>Reset</Link>
+              <ExportButton tableId="activity-list" fileName="activity" />
             </div>
             <ColumnSelector tableId="activity-list" columns={ACTIVITY_COLUMNS} />
           </div>
         </form>
 
         <div className="overflow-x-auto" data-column-selector-table="activity-list">
-          <table className="min-w-full">
+          <table className="min-w-full" id="activity-list">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
                 <th data-column="when" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>When</th>

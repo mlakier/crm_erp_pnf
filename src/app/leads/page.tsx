@@ -5,9 +5,12 @@ import DeleteButton from '@/components/DeleteButton'
 import EditButton from '@/components/EditButton'
 import ConvertLeadButton from '@/components/ConvertLeadButton'
 import ColumnSelector from '@/components/ColumnSelector'
+import ExportButton from '@/components/ExportButton'
 import PaginationFooter from '@/components/PaginationFooter'
 import LeadCreateForm from '@/components/LeadCreateForm'
 import { getPagination } from '@/lib/pagination'
+import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
+import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
 
 const LEAD_COLUMNS = [
   { id: 'lead-number', label: 'Lead #' },
@@ -18,6 +21,7 @@ const LEAD_COLUMNS = [
   { id: 'subsidiary', label: 'Subsidiary' },
   { id: 'currency', label: 'Currency' },
   { id: 'created', label: 'Created' },
+  { id: 'last-modified', label: 'Last Modified' },
   { id: 'actions', label: 'Actions', locked: true },
 ]
 
@@ -61,11 +65,13 @@ export default async function LeadsPage({
           ? [{ company: 'asc' as const }, { createdAt: 'desc' as const }]
           : [{ createdAt: 'desc' as const }]
 
-  const [totalLeads, adminUser, entities, currencies] = await Promise.all([
+  const [totalLeads, adminUser, entities, currencies, companySettings, cabinetFiles] = await Promise.all([
     prisma.lead.count({ where }),
     prisma.user.findUnique({ where: { email: 'admin@example.com' } }),
     prisma.entity.findMany({ orderBy: { code: 'asc' }, select: { id: true, code: true, name: true } }),
     prisma.currency.findMany({ orderBy: { code: 'asc' }, select: { id: true, code: true, name: true } }),
+    loadCompanyInformationSettings(),
+    loadCompanyCabinetFiles(),
   ])
 
   const pagination = getPagination(totalLeads, params.page)
@@ -87,9 +93,24 @@ export default async function LeadsPage({
     return `/leads?${search.toString()}`
   }
 
+  const selectedLogoValue = companySettings.companyLogoPagesFileId
+  const companyLogoPages =
+    cabinetFiles.find((file) => file.id === selectedLogoValue)
+    ?? cabinetFiles.find((file) => file.originalName === selectedLogoValue)
+    ?? cabinetFiles.find((file) => file.storedName === selectedLogoValue)
+    ?? cabinetFiles.find((file) => file.url === selectedLogoValue)
+    ?? (!selectedLogoValue ? cabinetFiles[0] : undefined)
+
   return (
     <div className="min-h-full px-8 py-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="mb-6 flex items-center justify-between gap-4">
+        {companyLogoPages ? (
+          <img
+            src={companyLogoPages.url}
+            alt="Company logo"
+            className="h-16 w-auto rounded"
+          />
+        ) : null}
         <div>
           <h1 className="text-xl font-semibold text-white">Leads</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{totalLeads} total</p>
@@ -103,13 +124,14 @@ export default async function LeadsPage({
 
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
-          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto_auto_auto]">
+          <input type="hidden" name="page" value="1" />
+          <div className="flex gap-3 items-center flex-nowrap">
             <input
               type="text"
               name="q"
               defaultValue={params.q ?? ''}
-              placeholder="Search lead #, name, email, company, source"
-              className="rounded-md border bg-transparent px-3 py-2 text-sm text-white"
+              placeholder="Search lead #, name, company, email, source"
+              className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
               style={{ borderColor: 'var(--border-muted)' }}
             />
             <select name="status" defaultValue={statusFilter} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
@@ -127,15 +149,16 @@ export default async function LeadsPage({
               <option value="name">Name A-Z</option>
               <option value="company">Company A-Z</option>
             </select>
-            <input type="hidden" name="page" value="1" />
-            <button type="submit" className="rounded-md px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: 'var(--accent-primary-strong)' }}>Apply</button>
-            <a href="/leads" className="rounded-md border px-3 py-2 text-sm font-medium text-center" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>Reset</a>
+            <div className="flex items-center gap-2">
+              <a href="/leads" className="rounded-md border px-3 py-2 text-sm font-medium text-center" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>Reset</a>
+              <ExportButton tableId="leads-list" fileName="leads" />
+            </div>
             <ColumnSelector tableId="leads-list" columns={LEAD_COLUMNS} />
           </div>
         </form>
 
         <div className="overflow-x-auto" data-column-selector-table="leads-list">
-          <table className="min-w-full">
+          <table className="min-w-full" id="leads-list">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
                 <th data-column="lead-number" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Lead #</th>
@@ -146,6 +169,7 @@ export default async function LeadsPage({
                 <th data-column="subsidiary" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Subsidiary</th>
                 <th data-column="currency" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Currency</th>
                 <th data-column="created" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Created</th>
+                <th data-column="last-modified" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Last Modified</th>
                 <th data-column="actions" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Actions</th>
               </tr>
             </thead>
@@ -169,6 +193,7 @@ export default async function LeadsPage({
                     <td data-column="subsidiary" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{lead.entity?.code ?? '—'}</td>
                     <td data-column="currency" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{lead.currency?.code ?? '—'}</td>
                     <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(lead.createdAt).toLocaleDateString()}</td>
+                    <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(lead.updatedAt).toLocaleDateString()}</td>
                     <td data-column="actions" className="px-4 py-2 text-sm">
                       <div className="flex items-center gap-2">
                         <ConvertLeadButton

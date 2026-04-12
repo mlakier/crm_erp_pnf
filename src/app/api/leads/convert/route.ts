@@ -45,26 +45,33 @@ async function getNextSequenceNumber(
   field: 'customerNumber' | 'contactNumber' | 'opportunityNumber',
   prefix: string
 ) {
-  const latest =
-    model === 'customer'
-      ? await tx.customer.findFirst({
-          where: { customerNumber: { not: null } },
-          orderBy: { customerNumber: 'desc' },
-          select: { customerNumber: true },
-        })
-      : model === 'contact'
-        ? await tx.contact.findFirst({
-            where: { contactNumber: { not: null } },
-            orderBy: { contactNumber: 'desc' },
-            select: { contactNumber: true },
-          })
-        : await tx.opportunity.findFirst({
-            where: { opportunityNumber: { not: null } },
-            orderBy: { opportunityNumber: 'desc' },
-            select: { opportunityNumber: true },
-          })
+  let raw: string | null | undefined
 
-  const raw = latest?.[field]
+  if (model === 'customer' && field === 'customerNumber') {
+    const latest = await tx.customer.findFirst({
+      where: { customerNumber: { not: null } },
+      orderBy: { customerNumber: 'desc' },
+      select: { customerNumber: true },
+    })
+    raw = latest?.customerNumber
+  } else if (model === 'contact' && field === 'contactNumber') {
+    const latest = await tx.contact.findFirst({
+      where: { contactNumber: { not: null } },
+      orderBy: { contactNumber: 'desc' },
+      select: { contactNumber: true },
+    })
+    raw = latest?.contactNumber
+  } else if (model === 'opportunity' && field === 'opportunityNumber') {
+    const latest = await tx.opportunity.findFirst({
+      where: { opportunityNumber: { not: null } },
+      orderBy: { opportunityNumber: 'desc' },
+      select: { opportunityNumber: true },
+    })
+    raw = latest?.opportunityNumber
+  } else {
+    throw new Error(`Invalid sequence selector: ${model}.${field}`)
+  }
+
   const latestSequence = raw ? Number.parseInt(raw.replace(prefix, ''), 10) : 0
   return Number.isNaN(latestSequence) ? 1 : latestSequence + 1
 }

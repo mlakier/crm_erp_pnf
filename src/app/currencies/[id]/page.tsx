@@ -44,8 +44,26 @@ export default async function CurrencyDetailPage({ params }: { params: Promise<{
                 { name: 'name', label: 'Name', value: currency.name },
                 { name: 'symbol', label: 'Symbol', value: currency.symbol ?? '' },
                 { name: 'decimals', label: 'Decimal Places', value: String(currency.decimals), type: 'number' },
-                { name: 'isBase', label: 'Base Currency', value: String(currency.isBase) },
-                { name: 'active', label: 'Active', value: String(currency.active) },
+                {
+                  name: 'isBase',
+                  label: 'Base Currency',
+                  value: String(currency.isBase),
+                  type: 'select',
+                  options: [
+                    { value: 'false', label: 'False' },
+                    { value: 'true', label: 'True' },
+                  ],
+                },
+                {
+                  name: 'inactive',
+                  label: 'Inactive',
+                  value: String(!currency.active),
+                  type: 'select',
+                  options: [
+                    { value: 'false', label: 'False' },
+                    { value: 'true', label: 'True' },
+                  ],
+                },
               ]}
             />
             <DeleteButton resource="currencies" id={currency.id} />
@@ -89,7 +107,7 @@ export default async function CurrencyDetailPage({ params }: { params: Promise<{
                 {currency.entities.map((e) => (
                   <tr key={e.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
                     <Td>
-                      <Link href={`/entities/${e.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                      <Link href={`/subsidiaries/${e.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                         {e.code}
                       </Link>
                     </Td>
@@ -117,7 +135,7 @@ export default async function CurrencyDetailPage({ params }: { params: Promise<{
                 {currency.customers.map((c) => (
                   <tr key={c.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
                     <Td>
-                      <Link href={`/crm/${c.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                      <Link href={`/customers/${c.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                         {c.customerNumber ?? 'Pending'}
                       </Link>
                     </Td>

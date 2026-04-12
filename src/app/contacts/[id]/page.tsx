@@ -52,6 +52,16 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
                 { name: 'email', label: 'Email', value: contact.email ?? '' },
                 { name: 'phone', label: 'Phone', value: normalizePhone(contact.phone) ?? '' },
                 { name: 'position', label: 'Position', value: contact.position ?? '' },
+                {
+                  name: 'inactive',
+                  label: 'Inactive',
+                  value: String(!contact.active),
+                  type: 'select',
+                  options: [
+                    { value: 'false', label: 'False' },
+                    { value: 'true', label: 'True' },
+                  ],
+                },
               ]}
             />
             <DeleteButton resource="contacts" id={contact.id} />
@@ -71,6 +81,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
             <Field label="Email" value={contact.email} />
             <Field label="Phone" value={fmtPhone(contact.phone)} />
             <Field label="Position" value={contact.position} />
+            <Field label="Inactive" value={contact.active ? 'False' : 'True'} />
             <Field label="Created" value={new Date(contact.createdAt).toLocaleDateString()} />
           </dl>
         </div>
@@ -78,7 +89,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
         <div className="mb-8 rounded-xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Linked customer</h2>
-            <Link href={`/crm/${contact.customer.id}`} className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+            <Link href={`/customers/${contact.customer.id}`} className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
               View customer →
             </Link>
           </div>

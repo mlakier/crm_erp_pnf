@@ -6,15 +6,30 @@ import DeleteButton from '@/components/DeleteButton'
 
 export default async function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const employee = await prisma.employee.findUnique({
-    where: { id },
-    include: {
-      entity: true,
-      departmentRef: true,
-      manager: { select: { id: true, firstName: true, lastName: true, title: true } },
-      directReports: { orderBy: { lastName: 'asc' }, select: { id: true, firstName: true, lastName: true, title: true, email: true } },
-    },
-  })
+  const [employee, subsidiaries, departments, managers] = await Promise.all([
+    prisma.employee.findUnique({
+      where: { id },
+      include: {
+        entity: true,
+        departmentRef: true,
+        manager: { select: { id: true, firstName: true, lastName: true, title: true } },
+        directReports: { orderBy: { lastName: 'asc' }, select: { id: true, firstName: true, lastName: true, title: true, email: true } },
+      },
+    }),
+    prisma.entity.findMany({
+      orderBy: { code: 'asc' },
+      select: { id: true, code: true, name: true },
+    }),
+    prisma.department.findMany({
+      orderBy: [{ code: 'asc' }, { name: 'asc' }],
+      select: { id: true, code: true, name: true },
+    }),
+    prisma.employee.findMany({
+      where: { id: { not: id } },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      select: { id: true, firstName: true, lastName: true, employeeNumber: true },
+    }),
+  ])
 
   if (!employee) notFound()
 
@@ -45,13 +60,37 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
                 { name: 'lastName', label: 'Last Name', value: employee.lastName },
                 { name: 'email', label: 'Email', value: employee.email ?? '' },
                 { name: 'title', label: 'Title', value: employee.title ?? '' },
-                { name: 'department', label: 'Department', value: employee.department ?? '' },
+                {
+                  name: 'departmentId',
+                  label: 'Department',
+                  value: employee.departmentId ?? '',
+                  type: 'select',
+                  placeholder: 'Select department',
+                  options: departments.map((d) => ({ value: d.id, label: `${d.code} – ${d.name}` })),
+                },
                 { name: 'phone', label: 'Phone', value: employee.phone ?? '' },
-                { name: 'entityId', label: 'Subsidiary Id', value: employee.entityId ?? '' },
-                { name: 'managerId', label: 'Manager Id', value: employee.managerId ?? '' },
+                {
+                  name: 'entityId',
+                  label: 'Subsidiary',
+                  value: employee.entityId ?? '',
+                  type: 'select',
+                  placeholder: 'Select subsidiary',
+                  options: subsidiaries.map((s) => ({ value: s.id, label: `${s.code} – ${s.name}` })),
+                },
+                {
+                  name: 'managerId',
+                  label: 'Manager',
+                  value: employee.managerId ?? '',
+                  type: 'select',
+                  placeholder: 'Select manager',
+                  options: managers.map((m) => ({
+                    value: m.id,
+                    label: `${m.firstName} ${m.lastName}${m.employeeNumber ? ` (${m.employeeNumber})` : ''}`,
+                  })),
+                },
                 { name: 'hireDate', label: 'Hire Date', value: employee.hireDate ? new Date(employee.hireDate).toISOString().split('T')[0] : '', type: 'date' },
                 { name: 'terminationDate', label: 'Termination Date', value: employee.terminationDate ? new Date(employee.terminationDate).toISOString().split('T')[0] : '', type: 'date' },
-                { name: 'active', label: 'Active', value: String(employee.active) },
+                { name: 'inactive', label: 'Inactive', value: String(!employee.active), type: 'select', options: [{ value: 'false', label: 'False' }, { value: 'true', label: 'True' }] },
               ]}
             />
             <DeleteButton resource="employees" id={employee.id} />
