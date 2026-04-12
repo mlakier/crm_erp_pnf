@@ -1,15 +1,18 @@
 {
   "customer": {
     "industry": [
-      "AAA",
-      "BBB"
+      "Technology",
+      "Manufacturing",
+      "Healthcare",
+      "Financial Services",
+      "Retail"
     ]
   },
   "item": {
     "type": [
-      "service",
-      "product",
-      "expense"
+      "Service",
+      "Product",
+      "Expense"
     ]
   },
   "lead": {
@@ -21,19 +24,19 @@
       "Webinar"
     ],
     "rating": [
-      "hot",
-      "warm",
-      "cold"
+      "Hot",
+      "Warm",
+      "Cold"
     ]
   },
   "opportunity": {
     "stage": [
-      "prospecting",
-      "qualification",
-      "proposal",
-      "negotiation",
-      "won",
-      "lost"
+      "Prospecting",
+      "Qualification",
+      "Proposal",
+      "Negotiation",
+      "Won",
+      "Lost"
     ]
   }
 }

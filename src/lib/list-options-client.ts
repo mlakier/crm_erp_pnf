@@ -1,13 +1,19 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getDefaultListValues, ListOptionsConfig, ListPageKey } from '@/lib/list-options'
+import {
+  getDefaultListValues,
+  ListOptionsConfig,
+  ListPageKey,
+  sanitizeListOrderMode,
+  sortListValues,
+} from '@/lib/list-options'
 
 export function useListOptions<P extends ListPageKey>(
   page: P,
   list: keyof ListOptionsConfig[P] & string
 ) {
-  const [options, setOptions] = useState<string[]>(() => getDefaultListValues(page, list))
+  const [options, setOptions] = useState<string[]>(() => sortListValues(getDefaultListValues(page, list), 'table'))
 
   useEffect(() => {
     let mounted = true
@@ -18,10 +24,15 @@ export function useListOptions<P extends ListPageKey>(
         const body = await response.json()
         if (!response.ok || !mounted) return
 
+        const orderMode = sanitizeListOrderMode(body?.orderConfig?.[page]?.[list], 'table')
+
         const incoming = body?.config?.[page]?.[list]
         if (Array.isArray(incoming) && incoming.length > 0) {
-          setOptions(incoming.map((value: unknown) => String(value)))
+          setOptions(sortListValues(incoming.map((value: unknown) => String(value)), orderMode))
+          return
         }
+
+        setOptions(sortListValues(getDefaultListValues(page, list), orderMode))
       } catch {
         // Keep local defaults if loading managed options fails.
       }

@@ -14,6 +14,22 @@ export type ListOptionsConfig = {
   }
 }
 
+export type ListValueRow = {
+  id: string
+  value: string
+  sortOrder: number
+}
+
+export type ListValueRowsConfig = {
+  [P in ListPageKey]: { [L in keyof ListOptionsConfig[P] & string]: ListValueRow[] }
+}
+
+export type ListOrderMode = 'alpha' | 'table'
+
+export type ListOrderConfig = {
+  [P in ListPageKey]: Record<keyof ListOptionsConfig[P] & string, ListOrderMode>
+}
+
 export type ListPageKey = keyof ListOptionsConfig
 
 export const LIST_PAGE_LABELS: Record<ListPageKey, string> = {
@@ -28,7 +44,7 @@ export const LIST_LABELS: { [P in ListPageKey]: Record<keyof ListOptionsConfig[P
     industry: 'Industry',
   },
   item: {
-    type: 'Type',
+    type: 'Item Type',
   },
   lead: {
     source: 'Source',
@@ -55,12 +71,36 @@ export const LIST_OPTIONS_DEFAULTS: ListOptionsConfig = {
   },
 }
 
+export const LIST_ORDER_DEFAULTS: ListOrderConfig = {
+  customer: {
+    industry: 'table',
+  },
+  item: {
+    type: 'table',
+  },
+  lead: {
+    source: 'table',
+    rating: 'table',
+  },
+  opportunity: {
+    stage: 'table',
+  },
+}
+
 export function cloneListDefaults(): ListOptionsConfig {
   return JSON.parse(JSON.stringify(LIST_OPTIONS_DEFAULTS)) as ListOptionsConfig
 }
 
+export function cloneListOrderDefaults(): ListOrderConfig {
+  return JSON.parse(JSON.stringify(LIST_ORDER_DEFAULTS)) as ListOrderConfig
+}
+
 export function getDefaultListValues<P extends ListPageKey>(page: P, list: keyof ListOptionsConfig[P] & string): string[] {
-  return [...LIST_OPTIONS_DEFAULTS[page][list]]
+  const pageDefaults = LIST_OPTIONS_DEFAULTS[page] as Record<string, string[]>
+  const firstListKey = Object.keys(pageDefaults)[0]
+  const fallback = firstListKey ? pageDefaults[firstListKey] : []
+  const selected = pageDefaults[list] ?? fallback
+  return [...selected]
 }
 
 export function sanitizeListValues(values: unknown, fallback: string[]): string[] {
@@ -78,6 +118,44 @@ export function sanitizeListValues(values: unknown, fallback: string[]): string[
   return deduped.length > 0 ? deduped : [...fallback]
 }
 
+export function sanitizeListOrderMode(mode: unknown, fallback: ListOrderMode = 'table'): ListOrderMode {
+  return mode === 'alpha' || mode === 'table' ? mode : fallback
+}
+
+export function mergeListOrderConfig(overrides: unknown): ListOrderConfig {
+  const merged = cloneListOrderDefaults()
+  if (!overrides || typeof overrides !== 'object') return merged
+
+  const root = overrides as Record<string, unknown>
+  const pageKeys = Object.keys(merged) as ListPageKey[]
+
+  for (const page of pageKeys) {
+    const pageInput = root[page]
+    if (!pageInput || typeof pageInput !== 'object') continue
+
+    const listInput = pageInput as Record<string, unknown>
+    const pageMerged = merged[page] as Record<string, ListOrderMode>
+    const pageDefaults = LIST_ORDER_DEFAULTS[page] as Record<string, ListOrderMode>
+    const listKeys = Object.keys(pageMerged)
+
+    for (const list of listKeys) {
+      if (Object.prototype.hasOwnProperty.call(listInput, list)) {
+        pageMerged[list] = sanitizeListOrderMode(listInput[list], pageDefaults[list])
+      }
+    }
+  }
+
+  return merged
+}
+
+export function sortListValues(values: string[], mode: ListOrderMode): string[] {
+  if (mode === 'alpha') {
+    return [...values].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }))
+  }
+
+  return [...values]
+}
+
 export function mergeListConfig(overrides: unknown): ListOptionsConfig {
   const merged = cloneListDefaults()
   if (!overrides || typeof overrides !== 'object') return merged
@@ -90,11 +168,13 @@ export function mergeListConfig(overrides: unknown): ListOptionsConfig {
     if (!pageInput || typeof pageInput !== 'object') continue
 
     const listInput = pageInput as Record<string, unknown>
-    const listKeys = Object.keys(merged[page]) as Array<keyof ListOptionsConfig[typeof page] & string>
+    const pageMerged = merged[page] as Record<string, string[]>
+    const pageDefaults = LIST_OPTIONS_DEFAULTS[page] as Record<string, string[]>
+    const listKeys = Object.keys(pageMerged)
 
     for (const list of listKeys) {
       if (Object.prototype.hasOwnProperty.call(listInput, list)) {
-        merged[page][list] = sanitizeListValues(listInput[list], LIST_OPTIONS_DEFAULTS[page][list])
+        pageMerged[list] = sanitizeListValues(listInput[list], pageDefaults[list])
       }
     }
   }
