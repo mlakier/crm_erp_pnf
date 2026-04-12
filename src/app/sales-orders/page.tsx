@@ -4,8 +4,11 @@ import { fmtCurrency } from '@/lib/format'
 import CreateModalButton from '@/components/CreateModalButton'
 import SalesOrderCreateFromQuoteForm from '@/components/SalesOrderCreateFromQuoteForm'
 import ColumnSelector from '@/components/ColumnSelector'
+import ExportButton from '@/components/ExportButton'
 import PaginationFooter from '@/components/PaginationFooter'
 import { getPagination } from '@/lib/pagination'
+import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
+import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
 
 const SALES_ORDER_COLUMNS = [
   { id: 'sales-order-number', label: 'Sales Order #' },
@@ -14,6 +17,7 @@ const SALES_ORDER_COLUMNS = [
   { id: 'status', label: 'Status' },
   { id: 'total', label: 'Total' },
   { id: 'created', label: 'Created' },
+  { id: 'last-modified', label: 'Last Modified' },
 ]
 
 export default async function SalesOrdersPage({
@@ -49,7 +53,7 @@ export default async function SalesOrdersPage({
           ? [{ total: 'asc' as const }]
           : [{ createdAt: 'desc' as const }]
 
-  const [totalSalesOrders, quotesWithoutSalesOrder] = await Promise.all([
+  const [totalSalesOrders, quotesWithoutSalesOrder, companySettings, cabinetFiles] = await Promise.all([
     prisma.salesOrder.count({ where }),
     prisma.quote.findMany({
       where: { salesOrder: null },
@@ -57,6 +61,8 @@ export default async function SalesOrdersPage({
       orderBy: { createdAt: 'desc' },
       take: 200,
     }),
+    loadCompanyInformationSettings(),
+    loadCompanyCabinetFiles(),
   ])
 
   const pagination = getPagination(totalSalesOrders, params.page)
@@ -81,9 +87,24 @@ export default async function SalesOrdersPage({
     return `/sales-orders?${search.toString()}`
   }
 
+  const selectedLogoValue = companySettings.companyLogoPagesFileId
+  const companyLogoPages =
+    cabinetFiles.find((file) => file.id === selectedLogoValue)
+    ?? cabinetFiles.find((file) => file.originalName === selectedLogoValue)
+    ?? cabinetFiles.find((file) => file.storedName === selectedLogoValue)
+    ?? cabinetFiles.find((file) => file.url === selectedLogoValue)
+    ?? (!selectedLogoValue ? cabinetFiles[0] : undefined)
+
   return (
     <div className="min-h-full px-8 py-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="mb-6 flex items-center justify-between gap-4">
+        {companyLogoPages ? (
+          <img
+            src={companyLogoPages.url}
+            alt="Company logo"
+            className="h-16 w-auto rounded"
+          />
+        ) : null}
         <div>
           <h1 className="text-xl font-semibold text-white">Sales Orders</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{totalSalesOrders} total</p>
@@ -103,13 +124,13 @@ export default async function SalesOrdersPage({
 
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
-          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto_auto]">
+          <div className="flex gap-3 items-center flex-nowrap">
             <input
               type="text"
               name="q"
               defaultValue={params.q ?? ''}
               placeholder="Search sales order #, customer, quote, status"
-              className="rounded-md border bg-transparent px-3 py-2 text-sm text-white"
+              className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
               style={{ borderColor: 'var(--border-muted)' }}
             />
             <select name="status" defaultValue={statusFilter} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
@@ -127,15 +148,14 @@ export default async function SalesOrdersPage({
             </select>
             <input type="hidden" name="page" value="1" />
             <div className="flex items-center gap-2">
-              <button type="submit" className="rounded-md px-3 py-2 text-sm font-medium" style={{ backgroundColor: 'var(--accent-primary-strong)', color: '#fff' }}>Apply</button>
               <Link href="/sales-orders" className="rounded-md border px-3 py-2 text-sm font-medium text-center" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>Reset</Link>
-            </div>
+              <ExportButton tableId="sales-orders-list" fileName="sales-orders" />            </div>
             <ColumnSelector tableId="sales-orders-list" columns={SALES_ORDER_COLUMNS} />
           </div>
         </form>
 
         <div className="overflow-x-auto" data-column-selector-table="sales-orders-list">
-          <table className="min-w-full">
+          <table className="min-w-full" id="sales-orders-list">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
                 <th data-column="sales-order-number" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Sales Order #</th>
@@ -144,12 +164,13 @@ export default async function SalesOrdersPage({
                 <th data-column="status" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Status</th>
                 <th data-column="total" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Total</th>
                 <th data-column="created" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Created</th>
+                <th data-column="last-modified" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Last Modified</th>
               </tr>
             </thead>
             <tbody>
               {salesOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No sales orders yet. Create one from a quote.</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No sales orders yet. Create one from a quote.</td>
                 </tr>
               ) : (
                 salesOrders.map((order, index) => (
@@ -164,6 +185,7 @@ export default async function SalesOrdersPage({
                     <td data-column="status" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{order.status}</td>
                     <td data-column="total" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtCurrency(order.total)}</td>
                     <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(order.createdAt).toLocaleDateString()}</td>
+                    <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(order.updatedAt).toLocaleDateString()}</td>
                   </tr>
                 ))
               )}

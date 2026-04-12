@@ -16,7 +16,7 @@ export default function OpportunityCreateQuoteButton({
 
   const handleCreate = async () => {
     if (existingQuoteId) {
-      router.push(`/quotes/${existingQuoteId}`)
+      router.push(`/estimates/${existingQuoteId}`)
       return
     }
 
@@ -33,7 +33,7 @@ export default function OpportunityCreateQuoteButton({
       const body = await response.json()
       if (!response.ok) {
         if (response.status === 409 && body?.quoteId) {
-          router.push(`/quotes/${body.quoteId}`)
+          router.push(`/estimates/${body.quoteId}`)
           return
         }
 
@@ -42,7 +42,7 @@ export default function OpportunityCreateQuoteButton({
         return
       }
 
-      router.push(`/quotes/${body.id}`)
+      router.push(`/estimates/${body.id}`)
       router.refresh()
     } catch {
       setError('Unable to create quote')

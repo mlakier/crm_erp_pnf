@@ -3,28 +3,36 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import DeleteButton from '@/components/DeleteButton'
 import EditButton from '@/components/EditButton'
-import CreateModalButton from '@/components/CreateModalButton'
-import CustomerDetailContactForm from '@/components/CustomerDetailContactForm'
-import CustomerDetailOpportunityForm from '@/components/CustomerDetailOpportunityForm'
-import QuoteCreateFromOpportunityForm from '@/components/QuoteCreateFromOpportunityForm'
-import InvoiceCreateFromSalesOrderForm from '@/components/InvoiceCreateFromSalesOrderForm'
+import CustomerCreateMenu from '@/components/CustomerCreateMenu'
 import CustomerRelatedDocs from '@/components/CustomerRelatedDocs'
 import { fmtCurrency, fmtPhone, normalizePhone } from '@/lib/format'
+import { loadListOptions } from '@/lib/list-options-store'
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const customer = await prisma.customer.findUnique({
-    where: { id },
-    include: {
-      entity: true,
-      currency: true,
-      contacts: { orderBy: { createdAt: 'desc' } },
-      opportunities: { orderBy: { createdAt: 'desc' } },
-      quotes: { orderBy: { createdAt: 'desc' } },
-      salesOrders: { orderBy: { createdAt: 'desc' } },
-      invoices: { orderBy: { createdAt: 'desc' } },
-    },
-  })
+  const [customer, subsidiaries, currencies, listOptions] = await Promise.all([
+    prisma.customer.findUnique({
+      where: { id },
+      include: {
+        entity: true,
+        currency: true,
+        contacts: { orderBy: { createdAt: 'desc' } },
+        opportunities: { orderBy: { createdAt: 'desc' } },
+        quotes: { orderBy: { createdAt: 'desc' } },
+        salesOrders: { orderBy: { createdAt: 'desc' } },
+        invoices: { orderBy: { createdAt: 'desc' } },
+      },
+    }),
+    prisma.entity.findMany({
+      orderBy: { code: 'asc' },
+      select: { id: true, code: true, name: true },
+    }),
+    prisma.currency.findMany({
+      orderBy: { code: 'asc' },
+      select: { id: true, code: true, name: true },
+    }),
+    loadListOptions(),
+  ])
 
   if (!customer) notFound()
 
@@ -37,7 +45,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <Link href="/crm" className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+            <Link href="/customers" className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
               ← Back to CRM
             </Link>
             <p className="mt-2 text-sm font-medium tracking-wide" style={{ color: 'var(--text-muted)' }}>{customer.customerNumber ?? 'Pending'}</p>
@@ -49,39 +57,59 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             )}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <CreateModalButton buttonLabel="Contact" title="Create Contact" buttonClassName="!text-sm !px-3 !py-1.5">
-              <CustomerDetailContactForm customerId={customer.id} userId={customer.userId} />
-            </CreateModalButton>
-            <CreateModalButton buttonLabel="Opportunity" title="Create Opportunity" buttonClassName="!text-sm !px-3 !py-1.5">
-              <CustomerDetailOpportunityForm customerId={customer.id} userId={customer.userId} />
-            </CreateModalButton>
-            <CreateModalButton buttonLabel="Estimate" title="Create Estimate" buttonClassName="!text-sm !px-3 !py-1.5">
-              <QuoteCreateFromOpportunityForm
-                opportunities={customer.opportunities.map((opportunity) => ({
-                  id: opportunity.id,
-                  label: `${opportunity.opportunityNumber ?? 'Pending'} - ${opportunity.name}`,
-                }))}
-              />
-            </CreateModalButton>
-            <CreateModalButton buttonLabel="Invoice" title="Create Invoice" buttonClassName="!text-sm !px-3 !py-1.5">
-              <InvoiceCreateFromSalesOrderForm
-                salesOrders={customer.salesOrders.map((salesOrder) => ({
-                  id: salesOrder.id,
-                  label: salesOrder.number,
-                }))}
-              />
-            </CreateModalButton>
+            <CustomerCreateMenu
+              customerId={customer.id}
+              userId={customer.userId}
+              opportunities={customer.opportunities.map((opportunity) => ({
+                id: opportunity.id,
+                label: `${opportunity.opportunityNumber ?? 'Pending'} - ${opportunity.name}`,
+              }))}
+              salesOrders={customer.salesOrders.map((salesOrder) => ({
+                id: salesOrder.id,
+                label: salesOrder.number,
+              }))}
+            />
             <EditButton
               resource="customers"
               id={customer.id}
               fields={[
                 { name: 'name', label: 'Name', value: customer.name },
-                { name: 'email', label: 'Email', value: customer.email ?? '' },
+                { name: 'email', label: 'Email', value: customer.email ?? '', type: 'email' },
                 { name: 'phone', label: 'Phone', value: normalizePhone(customer.phone) ?? '' },
-                { name: 'address', label: 'Address', value: customer.address ?? '' },
-                { name: 'industry', label: 'Industry', value: customer.industry ?? '' },
-                { name: 'primarySubsidiaryId', label: 'Primary Subsidiary Id', value: customer.entityId ?? '' },
-                { name: 'primaryCurrencyId', label: 'Primary Currency Id', value: customer.currencyId ?? '' },
+                { name: 'address', label: 'Billing Address', value: customer.address ?? '' },
+                {
+                  name: 'industry',
+                  label: 'Industry',
+                  value: customer.industry ?? '',
+                  type: 'select',
+                  placeholder: 'Select industry',
+                  options: listOptions.customer.industry.map((value) => ({
+                    value,
+                    label: value,
+                  })),
+                },
+                {
+                  name: 'primarySubsidiaryId',
+                  label: 'Primary Subsidiary',
+                  value: customer.entityId ?? '',
+                  type: 'select',
+                  placeholder: 'Select subsidiary',
+                  options: subsidiaries.map((subsidiary) => ({
+                    value: subsidiary.id,
+                    label: `${subsidiary.code} - ${subsidiary.name}`,
+                  })),
+                },
+                {
+                  name: 'primaryCurrencyId',
+                  label: 'Primary Currency',
+                  value: customer.currencyId ?? '',
+                  type: 'select',
+                  placeholder: 'Select currency',
+                  options: currencies.map((currency) => ({
+                    value: currency.id,
+                    label: `${currency.code} - ${currency.name}`,
+                  })),
+                },
               ]}
             />
             <DeleteButton resource="customers" id={customer.id} />
@@ -102,7 +130,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             <Field label="Customer #" value={customer.customerNumber} />
             <Field label="Email" value={customer.email} />
             <Field label="Phone" value={fmtPhone(customer.phone)} />
-            <Field label="Address" value={customer.address} />
+            <Field label="Billing Address" value={customer.address} />
             <Field label="Primary Subsidiary" value={customer.entity ? `${customer.entity.code} - ${customer.entity.name}` : null} />
             <Field label="Primary Currency" value={customer.currency?.code ?? null} />
             <Field label="Customer since" value={new Date(customer.createdAt).toLocaleDateString()} />

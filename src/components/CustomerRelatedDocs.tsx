@@ -147,7 +147,7 @@ export default function CustomerRelatedDocs({ opportunities, quotes, salesOrders
                 {quotes.map((q) => (
                   <tr key={q.id}>
                     <Td>
-                      <Link href={`/quotes/${q.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                      <Link href={`/estimates/${q.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                         {q.number}
                       </Link>
                     </Td>

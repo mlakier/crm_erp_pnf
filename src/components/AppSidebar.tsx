@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useMemo, useState } from 'react'
 import { usePathname } from 'next/navigation'
 
 type NavItem = {
@@ -19,53 +20,92 @@ const NAV: NavGroup[] = [
     items: [{ label: 'Dashboard', href: '/dashboard' }],
   },
   {
+    section: 'COMPANY',
+    items: [
+      { label: 'Company Information', href: '/company-information' },
+      { label: 'File Cabinet', href: '/company-information/file-cabinet' },
+    ],
+  },
+  {
     section: 'CONFIGURATION',
     items: [{ label: 'Configuration', href: '/configuration' }],
   },
   {
     section: 'MASTER DATA',
     items: [
+      { label: 'Import Master Data', href: '/master-data-import' },
       { label: 'Contacts', href: '/contacts' },
-      { label: 'Customers', href: '/crm' },
+      { label: 'Customers', href: '/customers' },
       { label: 'Vendors', href: '/vendors' },
-      { label: 'Subsidiaries', href: '/entities' },
+      { label: 'Subsidiaries', href: '/subsidiaries' },
       { label: 'Currencies', href: '/currencies' },
       { label: 'Items', href: '/items' },
+      { label: 'Departments', href: '/departments' },
       { label: 'Employees', href: '/employees' },
       { label: 'Lists', href: '/lists' },
     ],
   },
   {
-    section: 'Q2C',
+    section: 'TREASURY',
+    items: [],
+  },
+  {
+    section: 'ORDER TO CASH',
     items: [
       { label: 'Leads', href: '/leads' },
       { label: 'Opportunities', href: '/opportunities' },
-      { label: 'Estimates', href: '/quotes' },
+      { label: 'Estimates', href: '/estimates' },
       { label: 'Sales Orders', href: '/sales-orders' },
       { label: 'Invoices', href: '/invoices' },
     ],
   },
   {
-    section: 'P2P',
+    section: 'PROCURE TO PAY',
     items: [
+      { label: 'AP Portal', href: '/ap' },
       { label: 'Purchase Requisitions', href: '/purchase-requisitions' },
       { label: 'Purchase Orders', href: '/purchase-orders' },
       { label: 'Bills', href: '/bills' },
     ],
   },
   {
-    section: 'AP',
-    items: [{ label: 'AP Portal', href: '/ap' }],
+    section: 'RECORD TO REPORT',
+    items: [],
   },
 ]
 
 export default function AppSidebar() {
   const pathname = usePathname()
 
+  const initialExpanded = useMemo(() => {
+    const expanded: Record<string, boolean> = {}
+    for (const group of NAV) {
+      expanded[group.section] = true
+    }
+    return expanded
+  }, [])
+
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(initialExpanded)
+
   function isActive(href: string) {
     if (href === '/dashboard') return pathname === href
     return pathname === href || pathname.startsWith(`${href}/`)
   }
+
+  function toggleSection(section: string) {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }))
+  }
+
+  useEffect(() => {
+    const activeGroup = NAV.find((group) => group.items.some((item) => isActive(item.href)))
+    if (!activeGroup) return
+    setExpandedSections((prev) =>
+      prev[activeGroup.section] ? prev : { ...prev, [activeGroup.section]: true }
+    )
+  }, [pathname])
 
   return (
     <aside className="flex h-screen w-52 flex-shrink-0 flex-col overflow-y-auto" style={{ backgroundColor: 'var(--sidebar-background)' }}>
@@ -81,10 +121,25 @@ export default function AppSidebar() {
       <nav className="mt-2 flex-1 px-2 pb-4">
         {NAV.map((group) => (
           <div key={group.section} className="mt-5">
-            <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
-              {group.section}
-            </p>
-            {group.items.map((item) => {
+            {(() => {
+              const sectionId = `sidebar-section-${group.section.toLowerCase().replace(/\s+/g, '-')}`
+              return (
+                <>
+            <button
+              type="button"
+              onClick={() => toggleSection(group.section)}
+              className="mb-1 flex w-full items-center justify-between rounded-md px-3 py-1 text-left text-[10px] font-semibold uppercase tracking-widest transition-colors hover:bg-white/5"
+              style={{ color: 'var(--text-muted)' }}
+              aria-expanded={expandedSections[group.section] ? 'true' : 'false'}
+              aria-controls={sectionId}
+            >
+              <span>{group.section}</span>
+              <span className="text-xs" aria-hidden="true">
+                {expandedSections[group.section] ? '▾' : '▸'}
+              </span>
+            </button>
+            <div id={sectionId}>
+            {expandedSections[group.section] && group.items.map((item) => {
               const active = isActive(item.href)
               return (
                 <Link
@@ -101,6 +156,10 @@ export default function AppSidebar() {
                 </Link>
               )
             })}
+            </div>
+                </>
+              )
+            })()}
           </div>
         ))}
       </nav>

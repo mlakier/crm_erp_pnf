@@ -6,15 +6,21 @@ import DeleteButton from '@/components/DeleteButton'
 
 export default async function SubsidiaryDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const entity = await prisma.entity.findUnique({
-    where: { id },
-    include: {
-      defaultCurrency: true,
-      employees: { orderBy: { lastName: 'asc' }, select: { id: true, firstName: true, lastName: true, title: true, email: true } },
-      customers: { orderBy: { name: 'asc' }, select: { id: true, name: true, customerNumber: true } },
-      vendors: { orderBy: { name: 'asc' }, select: { id: true, name: true, vendorNumber: true } },
-    },
-  })
+  const [entity, currencies] = await Promise.all([
+    prisma.entity.findUnique({
+      where: { id },
+      include: {
+        defaultCurrency: true,
+        employees: { orderBy: { lastName: 'asc' }, select: { id: true, firstName: true, lastName: true, title: true, email: true } },
+        customers: { orderBy: { name: 'asc' }, select: { id: true, name: true, customerNumber: true } },
+        vendors: { orderBy: { name: 'asc' }, select: { id: true, name: true, vendorNumber: true } },
+      },
+    }),
+    prisma.currency.findMany({
+      orderBy: { code: 'asc' },
+      select: { id: true, code: true, name: true },
+    }),
+  ])
 
   if (!entity) notFound()
 
@@ -25,7 +31,7 @@ export default async function SubsidiaryDetailPage({ params }: { params: Promise
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <Link href="/entities" className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+            <Link href="/subsidiaries" className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
               ← Back to Subsidiaries
             </Link>
             <p className="mt-2 text-sm font-medium tracking-wide" style={{ color: 'var(--text-muted)' }}>{entity.code}</p>
@@ -47,8 +53,27 @@ export default async function SubsidiaryDetailPage({ params }: { params: Promise
                 { name: 'entityType', label: 'Type', value: entity.entityType ?? '' },
                 { name: 'taxId', label: 'Tax ID', value: entity.taxId ?? '' },
                 { name: 'registrationNumber', label: 'Registration #', value: entity.registrationNumber ?? '' },
-                { name: 'defaultCurrencyId', label: 'Default Currency Id', value: entity.defaultCurrencyId ?? '' },
-                { name: 'active', label: 'Active', value: String(entity.active) },
+                {
+                  name: 'defaultCurrencyId',
+                  label: 'Default Currency',
+                  value: entity.defaultCurrencyId ?? '',
+                  type: 'select',
+                  placeholder: 'Select currency',
+                  options: currencies.map((currency) => ({
+                    value: currency.id,
+                    label: `${currency.code} - ${currency.name}`,
+                  })),
+                },
+                {
+                  name: 'inactive',
+                  label: 'Inactive',
+                  value: String(!entity.active),
+                  type: 'select',
+                  options: [
+                    { value: 'false', label: 'False' },
+                    { value: 'true', label: 'True' },
+                  ],
+                },
               ]}
             />
             <DeleteButton resource="entities" id={entity.id} />
@@ -124,7 +149,7 @@ export default async function SubsidiaryDetailPage({ params }: { params: Promise
                 {entity.customers.map((c) => (
                   <tr key={c.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
                     <Td>
-                      <Link href={`/crm/${c.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                      <Link href={`/customers/${c.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                         {c.customerNumber ?? 'Pending'}
                       </Link>
                     </Td>

@@ -1,4 +1,4 @@
-﻿import Link from 'next/link'
+import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { normalizePhone } from '@/lib/format'
 import CustomerCreateForm from '@/components/CustomerCreateForm'
@@ -6,8 +6,11 @@ import DeleteButton from '@/components/DeleteButton'
 import EditButton from '@/components/EditButton'
 import CreateModalButton from '@/components/CreateModalButton'
 import ColumnSelector from '@/components/ColumnSelector'
+import ExportButton from '@/components/ExportButton'
 import PaginationFooter from '@/components/PaginationFooter'
 import { getPagination } from '@/lib/pagination'
+import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
+import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
 
 const CUSTOMER_COLUMNS = [
   { id: 'number', label: 'Number' },
@@ -15,8 +18,9 @@ const CUSTOMER_COLUMNS = [
   { id: 'status', label: 'Status' },
   { id: 'subsidiary', label: 'Primary Subsidiary' },
   { id: 'currency', label: 'Primary Currency' },
-  { id: 'address', label: 'Address' },
+  { id: 'address', label: 'Billing Address' },
   { id: 'created', label: 'Created' },
+  { id: 'last-modified', label: 'Last Modified' },
   { id: 'actions', label: 'Actions', locked: true },
 ]
 
@@ -47,14 +51,24 @@ export default async function CRMPage({
         ? [{ name: 'asc' as const }, { createdAt: 'desc' as const }]
         : [{ createdAt: 'desc' as const }]
 
-  const [totalCustomers, adminUser, subsidiaries, currencies] = await Promise.all([
+  const [totalCustomers, adminUser, subsidiaries, currencies, companySettings, cabinetFiles] = await Promise.all([
     prisma.customer.count({ where }),
     prisma.user.findUnique({
       where: { email: 'admin@example.com' },
     }),
     prisma.entity.findMany({ orderBy: { code: 'asc' }, select: { id: true, code: true, name: true } }),
     prisma.currency.findMany({ orderBy: { code: 'asc' }, select: { id: true, code: true, name: true } }),
+    loadCompanyInformationSettings(),
+    loadCompanyCabinetFiles(),
   ])
+
+  const selectedLogoValue = companySettings.companyLogoPagesFileId
+  const companyLogoPages =
+    cabinetFiles.find((file) => file.id === selectedLogoValue)
+    ?? cabinetFiles.find((file) => file.originalName === selectedLogoValue)
+    ?? cabinetFiles.find((file) => file.storedName === selectedLogoValue)
+    ?? cabinetFiles.find((file) => file.url === selectedLogoValue)
+    ?? (!selectedLogoValue ? cabinetFiles[0] : undefined)
 
   const pagination = getPagination(totalCustomers, params.page)
 
@@ -71,12 +85,19 @@ export default async function CRMPage({
     if (params.q) search.set('q', params.q)
     if (sort) search.set('sort', sort)
     search.set('page', String(nextPage))
-    return `/crm?${search.toString()}`
+    return `/customers?${search.toString()}`
   }
 
   return (
     <div className="min-h-full px-8 py-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="mb-6 flex items-center justify-between gap-4">
+        {companyLogoPages ? (
+          <img
+            src={companyLogoPages.url}
+            alt="Company logo"
+            className="h-16 w-auto rounded"
+          />
+        ) : null}
         <div>
           <h1 className="text-xl font-semibold text-white">Customers</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{totalCustomers} total</p>
@@ -90,13 +111,14 @@ export default async function CRMPage({
 
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
-          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto_auto]">
+          <input type="hidden" name="page" value="1" />
+          <div className="flex gap-3 items-center flex-nowrap">
             <input
               type="text"
               name="q"
               defaultValue={params.q ?? ''}
               placeholder="Search customer #, name, email, industry"
-              className="rounded-md border bg-transparent px-3 py-2 text-sm text-white"
+              className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
               style={{ borderColor: 'var(--border-muted)' }}
             />
             <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
@@ -104,19 +126,18 @@ export default async function CRMPage({
               <option value="oldest">Oldest</option>
               <option value="name">Name A-Z</option>
             </select>
-            <input type="hidden" name="page" value="1" />
-            <button type="submit" className="rounded-md px-3 py-2 text-sm font-medium" style={{ backgroundColor: 'var(--accent-primary-strong)', color: '#fff' }}>
-              Apply
-            </button>
-            <Link href="/crm" className="rounded-md border px-3 py-2 text-sm font-medium text-center" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-              Reset
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href="/customers" className="rounded-md border px-3 py-2 text-sm font-medium text-center" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
+                Reset
+              </Link>
+              <ExportButton tableId="customers-list" fileName="customers" />
+            </div>
             <ColumnSelector tableId="customers-list" columns={CUSTOMER_COLUMNS} />
           </div>
         </form>
 
         <div className="overflow-x-auto" data-column-selector-table="customers-list">
-          <table className="min-w-full">
+          <table className="min-w-full" id="customers-list">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
                 <th data-column="number" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Number</th>
@@ -124,15 +145,16 @@ export default async function CRMPage({
                 <th data-column="status" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Status</th>
                 <th data-column="subsidiary" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Primary Subsidiary</th>
                 <th data-column="currency" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Primary Currency</th>
-                <th data-column="address" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Address</th>
+                <th data-column="address" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Billing Address</th>
                 <th data-column="created" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Created</th>
+                <th data-column="last-modified" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Last Modified</th>
                 <th data-column="actions" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {customers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                  <td colSpan={9} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
                     No customers found
                   </td>
                 </tr>
@@ -140,18 +162,19 @@ export default async function CRMPage({
                 customers.map((customer, index) => (
                   <tr key={customer.id} style={index < customers.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
                     <td data-column="number" className="px-4 py-2 text-sm">
-                      <Link href={`/crm/${customer.id}`} className="font-medium hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                      <Link href={`/customers/${customer.id}`} className="font-medium hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                         {customer.customerNumber ?? 'Pending'}
                       </Link>
                     </td>
                     <td data-column="name" className="px-4 py-2 text-sm text-white">{customer.name}</td>
                     <td data-column="status" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>active</td>
                     <td data-column="subsidiary" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {customer.entity ? `${customer.entity.code} (${customer.entity.name})` : '—'}
+                      {customer.entity ? `${customer.entity.code} (${customer.entity.name})` : 'N/A'}
                     </td>
-                    <td data-column="currency" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{customer.currency?.code ?? '—'}</td>
-                    <td data-column="address" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{customer.address ?? '—'}</td>
+                    <td data-column="currency" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{customer.currency?.code ?? 'N/A'}</td>
+                    <td data-column="address" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{customer.address ?? 'N/A'}</td>
                     <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(customer.createdAt).toLocaleDateString()}</td>
+                    <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(customer.updatedAt).toLocaleDateString()}</td>
                     <td data-column="actions" className="px-4 py-2 text-sm">
                       <div className="flex items-center gap-2">
                         <EditButton
@@ -161,7 +184,7 @@ export default async function CRMPage({
                             { name: 'name', label: 'Name', value: customer.name },
                             { name: 'email', label: 'Email', value: customer.email ?? '' },
                             { name: 'phone', label: 'Phone', value: normalizePhone(customer.phone) ?? '' },
-                            { name: 'address', label: 'Address', value: customer.address ?? '' },
+                            { name: 'address', label: 'Billing Address', value: customer.address ?? '' },
                             { name: 'industry', label: 'Industry', value: customer.industry ?? '' },
                           ]}
                         />
