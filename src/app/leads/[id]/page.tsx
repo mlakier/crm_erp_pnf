@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import EditButton from '@/components/EditButton'
+import LeadEditButton from '@/components/LeadEditButton'
 import DeleteButton from '@/components/DeleteButton'
 
 function leadName(lead: { firstName: string | null; lastName: string | null; email: string | null }) {
@@ -16,16 +16,20 @@ function fmtDate(value: Date | null | undefined) {
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const lead = await prisma.lead.findUnique({
-    where: { id },
-    include: {
-      entity: true,
-      currency: true,
-      customer: { select: { id: true, name: true, customerId: true } },
-      contact: { select: { id: true, firstName: true, lastName: true, contactNumber: true } },
-      opportunity: { select: { id: true, name: true, opportunityNumber: true } },
-    },
-  })
+  const [lead, entities, currencies] = await Promise.all([
+    prisma.lead.findUnique({
+      where: { id },
+      include: {
+        entity: true,
+        currency: true,
+        customer: { select: { id: true, name: true, customerId: true } },
+        contact: { select: { id: true, firstName: true, lastName: true, contactNumber: true } },
+        opportunity: { select: { id: true, name: true, opportunityNumber: true } },
+      },
+    }),
+    prisma.entity.findMany({ orderBy: { code: 'asc' }, select: { id: true, code: true, name: true } }),
+    prisma.currency.findMany({ orderBy: { code: 'asc' }, select: { id: true, code: true, name: true } }),
+  ])
 
   if (!lead) notFound()
 
@@ -46,30 +50,31 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             </span>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <EditButton
-              resource="leads"
-              id={lead.id}
-              fields={[
-                { name: 'firstName', label: 'First Name', value: lead.firstName ?? '' },
-                { name: 'lastName', label: 'Last Name', value: lead.lastName ?? '' },
-                { name: 'company', label: 'Company', value: lead.company ?? '' },
-                { name: 'email', label: 'Email', value: lead.email ?? '' },
-                { name: 'phone', label: 'Phone', value: lead.phone ?? '' },
-                { name: 'title', label: 'Title', value: lead.title ?? '' },
-                { name: 'website', label: 'Website', value: lead.website ?? '' },
-                { name: 'industry', label: 'Industry', value: lead.industry ?? '' },
-                { name: 'address', label: 'Address', value: lead.address ?? '' },
-                { name: 'status', label: 'Status', value: lead.status ?? '' },
-                { name: 'source', label: 'Source', value: lead.source ?? '' },
-                { name: 'rating', label: 'Rating', value: lead.rating ?? '' },
-                { name: 'expectedValue', label: 'Expected Value', value: lead.expectedValue?.toString() ?? '', type: 'number' },
-                { name: 'entityId', label: 'Subsidiary Id', value: lead.entityId ?? '' },
-                { name: 'currencyId', label: 'Currency Id', value: lead.currencyId ?? '' },
-                { name: 'lastContactedAt', label: 'Last Contacted', value: lead.lastContactedAt ? new Date(lead.lastContactedAt).toISOString().split('T')[0] : '', type: 'date' },
-                { name: 'qualifiedAt', label: 'Qualified At', value: lead.qualifiedAt ? new Date(lead.qualifiedAt).toISOString().split('T')[0] : '', type: 'date' },
-                { name: 'convertedAt', label: 'Converted At', value: lead.convertedAt ? new Date(lead.convertedAt).toISOString().split('T')[0] : '', type: 'date' },
-                { name: 'notes', label: 'Notes', value: lead.notes ?? '' },
-              ]}
+            <LeadEditButton
+              leadId={lead.id}
+              entities={entities}
+              currencies={currencies}
+              values={{
+                firstName: lead.firstName ?? '',
+                lastName: lead.lastName ?? '',
+                company: lead.company ?? '',
+                email: lead.email ?? '',
+                phone: lead.phone ?? '',
+                title: lead.title ?? '',
+                website: lead.website ?? '',
+                industry: lead.industry ?? '',
+                status: lead.status ?? 'new',
+                source: lead.source ?? '',
+                rating: lead.rating ?? '',
+                expectedValue: lead.expectedValue?.toString() ?? '',
+                entityId: lead.entityId ?? '',
+                currencyId: lead.currencyId ?? '',
+                lastContactedAt: lead.lastContactedAt ? new Date(lead.lastContactedAt).toISOString().split('T')[0] : '',
+                qualifiedAt: lead.qualifiedAt ? new Date(lead.qualifiedAt).toISOString().split('T')[0] : '',
+                convertedAt: lead.convertedAt ? new Date(lead.convertedAt).toISOString().split('T')[0] : '',
+                notes: lead.notes ?? '',
+                address: lead.address ?? '',
+              }}
             />
             <DeleteButton resource="leads" id={lead.id} />
           </div>

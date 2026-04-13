@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import CreateModalButton from '@/components/CreateModalButton'
 import DeleteButton from '@/components/DeleteButton'
-import EditButton from '@/components/EditButton'
+import LeadEditButton from '@/components/LeadEditButton'
 import ConvertLeadButton from '@/components/ConvertLeadButton'
 import ColumnSelector from '@/components/ColumnSelector'
 import ExportButton from '@/components/ExportButton'
@@ -201,22 +201,31 @@ export default async function LeadsPage({
                           canConvert={lead.status === 'qualified'}
                           opportunityId={lead.opportunity?.id ?? null}
                         />
-                        <EditButton
-                          resource="leads"
-                          id={lead.id}
-                          fields={[
-                            { name: 'firstName', label: 'First Name', value: lead.firstName ?? '' },
-                            { name: 'lastName', label: 'Last Name', value: lead.lastName ?? '' },
-                            { name: 'company', label: 'Company', value: lead.company ?? '' },
-                            { name: 'email', label: 'Email', value: lead.email ?? '' },
-                            { name: 'phone', label: 'Phone', value: lead.phone ?? '' },
-                            { name: 'title', label: 'Title', value: lead.title ?? '' },
-                            { name: 'status', label: 'Status', value: lead.status ?? '' },
-                            { name: 'source', label: 'Source', value: lead.source ?? '' },
-                            { name: 'rating', label: 'Rating', value: lead.rating ?? '' },
-                            { name: 'expectedValue', label: 'Expected Value', value: lead.expectedValue?.toString() ?? '', type: 'number' },
-                            { name: 'notes', label: 'Notes', value: lead.notes ?? '' },
-                          ]}
+                        <LeadEditButton
+                          leadId={lead.id}
+                          entities={entities}
+                          currencies={currencies}
+                          values={{
+                            firstName: lead.firstName ?? '',
+                            lastName: lead.lastName ?? '',
+                            company: lead.company ?? '',
+                            email: lead.email ?? '',
+                            phone: lead.phone ?? '',
+                            title: lead.title ?? '',
+                            website: lead.website ?? '',
+                            industry: lead.industry ?? '',
+                            status: lead.status ?? 'new',
+                            source: lead.source ?? '',
+                            rating: lead.rating ?? '',
+                            expectedValue: lead.expectedValue?.toString() ?? '',
+                            entityId: lead.entityId ?? '',
+                            currencyId: lead.currencyId ?? '',
+                            lastContactedAt: lead.lastContactedAt ? new Date(lead.lastContactedAt).toISOString().split('T')[0] : '',
+                            qualifiedAt: lead.qualifiedAt ? new Date(lead.qualifiedAt).toISOString().split('T')[0] : '',
+                            convertedAt: lead.convertedAt ? new Date(lead.convertedAt).toISOString().split('T')[0] : '',
+                            notes: lead.notes ?? '',
+                            address: lead.address ?? '',
+                          }}
                         />
                         <DeleteButton resource="leads" id={lead.id} />
                       </div>
