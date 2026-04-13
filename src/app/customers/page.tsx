@@ -2,15 +2,17 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { normalizePhone } from '@/lib/format'
 import CustomerCreateForm from '@/components/CustomerCreateForm'
+import CustomerEditButton from '@/components/CustomerEditButton'
 import DeleteButton from '@/components/DeleteButton'
-import EditButton from '@/components/EditButton'
 import CreateModalButton from '@/components/CreateModalButton'
+import MasterDataCustomizeButton from '@/components/MasterDataCustomizeButton'
 import ColumnSelector from '@/components/ColumnSelector'
 import ExportButton from '@/components/ExportButton'
 import PaginationFooter from '@/components/PaginationFooter'
 import { getPagination } from '@/lib/pagination'
 import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
+import { loadListOptions } from '@/lib/list-options-store'
 
 const CUSTOMER_COLUMNS = [
   { id: 'number', label: 'Customer Id' },
@@ -51,7 +53,7 @@ export default async function CRMPage({
         ? [{ name: 'asc' as const }, { createdAt: 'desc' as const }]
         : [{ createdAt: 'desc' as const }]
 
-  const [totalCustomers, adminUser, subsidiaries, currencies, companySettings, cabinetFiles] = await Promise.all([
+  const [totalCustomers, adminUser, subsidiaries, currencies, companySettings, cabinetFiles, listOptions] = await Promise.all([
     prisma.customer.count({ where }),
     prisma.user.findUnique({
       where: { email: 'admin@example.com' },
@@ -60,6 +62,7 @@ export default async function CRMPage({
     prisma.currency.findMany({ orderBy: { code: 'asc' }, select: { id: true, code: true, name: true } }),
     loadCompanyInformationSettings(),
     loadCompanyCabinetFiles(),
+    loadListOptions(),
   ])
 
   const selectedLogoValue = companySettings.companyLogoPagesFileId
@@ -102,11 +105,14 @@ export default async function CRMPage({
           <h1 className="text-xl font-semibold text-white">Customers</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{totalCustomers} total</p>
         </div>
-        {adminUser ? (
-          <CreateModalButton buttonLabel="New Customer" title="New Customer">
-            <CustomerCreateForm ownerUserId={adminUser.id} subsidiaries={subsidiaries} currencies={currencies} />
-          </CreateModalButton>
-        ) : null}
+        <div className="flex items-center gap-2">
+          <MasterDataCustomizeButton tableId="customers-list" columns={CUSTOMER_COLUMNS} title="Customers" />
+          {adminUser ? (
+            <CreateModalButton buttonLabel="New Customer" title="New Customer">
+              <CustomerCreateForm ownerUserId={adminUser.id} subsidiaries={subsidiaries} currencies={currencies} />
+            </CreateModalButton>
+          ) : null}
+        </div>
       </div>
 
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
@@ -179,17 +185,21 @@ export default async function CRMPage({
                     <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(customer.updatedAt).toLocaleDateString()}</td>
                     <td data-column="actions" className="px-4 py-2 text-sm">
                       <div className="flex items-center gap-2">
-                        <EditButton
-                          resource="customers"
-                          id={customer.id}
-                          fields={[
-                            { name: 'name', label: 'Name', value: customer.name },
-                            { name: 'email', label: 'Email', value: customer.email ?? '' },
-                            { name: 'phone', label: 'Phone', value: normalizePhone(customer.phone) ?? '' },
-                            { name: 'address', label: 'Billing Address', value: customer.address ?? '' },
-                            { name: 'industry', label: 'Industry', value: customer.industry ?? '' },
-                            { name: 'inactive', label: 'Inactive', value: String(customer.inactive), type: 'checkbox' },
-                          ]}
+                        <CustomerEditButton
+                          customerId={customer.id}
+                          entities={subsidiaries}
+                          currencies={currencies}
+                          industryOptions={listOptions.customer.industry}
+                          values={{
+                            name: customer.name,
+                            email: customer.email ?? '',
+                            phone: normalizePhone(customer.phone) ?? '',
+                            address: customer.address ?? '',
+                            industry: customer.industry ?? '',
+                            primarySubsidiaryId: customer.entityId ?? '',
+                            primaryCurrencyId: customer.currencyId ?? '',
+                            inactive: customer.inactive,
+                          }}
                         />
                         <DeleteButton resource="customers" id={customer.id} />
                       </div>

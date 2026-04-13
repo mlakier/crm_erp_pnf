@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import DeleteButton from '@/components/DeleteButton'
-import EditButton from '@/components/EditButton'
+import CustomerEditButton from '@/components/CustomerEditButton'
 import CustomerCreateMenu from '@/components/CustomerCreateMenu'
 import CustomerRelatedDocs from '@/components/CustomerRelatedDocs'
 import { fmtCurrency, fmtPhone, normalizePhone } from '@/lib/format'
@@ -69,49 +69,21 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                 label: salesOrder.number,
               }))}
             />
-            <EditButton
-              resource="customers"
-              id={customer.id}
-              fields={[
-                { name: 'name', label: 'Name', value: customer.name },
-                { name: 'email', label: 'Email', value: customer.email ?? '', type: 'email' },
-                { name: 'phone', label: 'Phone', value: normalizePhone(customer.phone) ?? '' },
-                { name: 'address', label: 'Billing Address', value: customer.address ?? '' },
-                {
-                  name: 'industry',
-                  label: 'Industry',
-                  value: customer.industry ?? '',
-                  type: 'select',
-                  placeholder: 'Select industry',
-                  options: listOptions.customer.industry.map((value) => ({
-                    value,
-                    label: value,
-                  })),
-                },
-                {
-                  name: 'primarySubsidiaryId',
-                  label: 'Primary Subsidiary',
-                  value: customer.entityId ?? '',
-                  type: 'select',
-                  placeholder: 'Select subsidiary',
-                  options: subsidiaries.map((subsidiary) => ({
-                    value: subsidiary.id,
-                    label: `${subsidiary.code} - ${subsidiary.name}`,
-                  })),
-                },
-                {
-                  name: 'primaryCurrencyId',
-                  label: 'Primary Currency',
-                  value: customer.currencyId ?? '',
-                  type: 'select',
-                  placeholder: 'Select currency',
-                  options: currencies.map((currency) => ({
-                    value: currency.id,
-                    label: `${currency.code} - ${currency.name}`,
-                  })),
-                },
-                { name: 'inactive', label: 'Inactive', value: String(customer.inactive), type: 'checkbox' },
-              ]}
+            <CustomerEditButton
+              customerId={customer.id}
+              entities={subsidiaries}
+              currencies={currencies}
+              industryOptions={listOptions.customer.industry}
+              values={{
+                name: customer.name,
+                email: customer.email ?? '',
+                phone: normalizePhone(customer.phone) ?? '',
+                address: customer.address ?? '',
+                industry: customer.industry ?? '',
+                primarySubsidiaryId: customer.entityId ?? '',
+                primaryCurrencyId: customer.currencyId ?? '',
+                inactive: customer.inactive,
+              }}
             />
             <DeleteButton resource="customers" id={customer.id} />
           </div>
