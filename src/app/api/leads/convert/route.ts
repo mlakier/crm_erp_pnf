@@ -81,11 +81,18 @@ export async function POST(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const leadId = searchParams.get('id')
     const body = await request.json().catch(() => ({}))
-    const { name, amount, stage, closeDate } = body as {
+    const { name, amount, stage, closeDate, lineItems } = body as {
       name?: string
       amount?: string | number | null
       stage?: string
       closeDate?: string | null
+      lineItems?: Array<{
+        itemId?: string | null
+        description?: string
+        quantity?: string | number | null
+        unitPrice?: string | number | null
+        notes?: string | null
+      }>
     }
 
     if (!leadId) {
@@ -179,17 +186,51 @@ export async function POST(request: NextRequest) {
             ? null
             : Number(amount)
 
+      const normalizedLines = Array.isArray(lineItems)
+        ? lineItems
+            .map((line) => {
+              const quantity = Math.max(1, Number.parseInt(String(line.quantity ?? '1'), 10) || 1)
+              const unitPrice = Number.parseFloat(String(line.unitPrice ?? '0')) || 0
+              const description = (line.description ?? '').trim()
+              if (!description) return null
+              return {
+                itemId: line.itemId || null,
+                description,
+                quantity,
+                unitPrice,
+                lineTotal: quantity * unitPrice,
+                notes: line.notes?.trim() || null,
+              }
+            })
+            .filter((line): line is {
+              itemId: string | null
+              description: string
+              quantity: number
+              unitPrice: number
+              lineTotal: number
+              notes: string | null
+            } => Boolean(line))
+        : []
+
+      const linesTotal = normalizedLines.reduce((sum, line) => sum + line.lineTotal, 0)
+      const finalAmount = parsedAmount ?? (normalizedLines.length > 0 ? linesTotal : null)
+
       const opportunity = await tx.opportunity.create({
         data: {
           opportunityNumber: formatOpportunityNumber(opportunitySequence),
           name: (name || '').trim() || opportunityNameFromLead(lead),
-          amount: parsedAmount,
+          amount: finalAmount,
           stage: stage || (lead.status === 'qualified' ? 'qualification' : 'prospecting'),
           closeDate: closeDate ? new Date(closeDate) : null,
           entityId: lead.entityId || null,
           currencyId: lead.currencyId || null,
           customerId,
           userId: lead.userId,
+          lineItems: normalizedLines.length
+            ? {
+                create: normalizedLines,
+              }
+            : undefined,
         },
         select: { id: true, opportunityNumber: true, name: true },
       })

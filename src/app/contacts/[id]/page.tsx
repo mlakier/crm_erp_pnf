@@ -3,24 +3,27 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { fmtCurrency, fmtPhone, normalizePhone } from '@/lib/format'
 import DeleteButton from '@/components/DeleteButton'
-import EditButton from '@/components/EditButton'
+import ContactEditButton from '@/components/ContactEditButton'
 
 export default async function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const contact = await prisma.contact.findUnique({
-    where: { id },
-    include: {
-      customer: {
-        include: {
-          opportunities: {
-            orderBy: { createdAt: 'desc' },
-            take: 5,
+  const [contact, customers] = await Promise.all([
+    prisma.contact.findUnique({
+      where: { id },
+      include: {
+        customer: {
+          include: {
+            opportunities: {
+              orderBy: { createdAt: 'desc' },
+              take: 5,
+            },
           },
         },
+        user: true,
       },
-      user: true,
-    },
-  })
+    }),
+    prisma.customer.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+  ])
 
   if (!contact) notFound()
 
@@ -43,26 +46,19 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
             ) : null}
           </div>
           <div className="flex items-center gap-2">
-            <EditButton
-              resource="contacts"
-              id={contact.id}
-              fields={[
-                { name: 'firstName', label: 'First Name', value: contact.firstName },
-                { name: 'lastName', label: 'Last Name', value: contact.lastName },
-                { name: 'email', label: 'Email', value: contact.email ?? '' },
-                { name: 'phone', label: 'Phone', value: normalizePhone(contact.phone) ?? '' },
-                { name: 'position', label: 'Position', value: contact.position ?? '' },
-                {
-                  name: 'inactive',
-                  label: 'Inactive',
-                  value: String(!contact.active),
-                  type: 'select',
-                  options: [
-                    { value: 'false', label: 'No' },
-                    { value: 'true', label: 'Yes' },
-                  ],
-                },
-              ]}
+            <ContactEditButton
+              contactId={contact.id}
+              values={{
+                firstName: contact.firstName,
+                lastName: contact.lastName,
+                email: contact.email ?? '',
+                phone: normalizePhone(contact.phone) ?? '',
+                address: contact.address ?? '',
+                position: contact.position ?? '',
+                customerId: contact.customerId,
+                inactive: !contact.active,
+              }}
+              customers={customers}
             />
             <DeleteButton resource="contacts" id={contact.id} />
           </div>
@@ -80,6 +76,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
             <Field label="Contact Id" value={contact.contactNumber} />
             <Field label="Email" value={contact.email} />
             <Field label="Phone" value={fmtPhone(contact.phone)} />
+            <Field label="Address" value={contact.address} />
             <Field label="Position" value={contact.position} />
             <Field label="Inactive" value={contact.active ? 'No' : 'Yes'} />
             <Field label="Created" value={new Date(contact.createdAt).toLocaleDateString()} />

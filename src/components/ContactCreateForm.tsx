@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { isFieldRequired } from '@/lib/form-requirements'
 import { useEffect } from 'react'
 import { isValidEmail } from '@/lib/validation'
+import AddressModal, { parseAddress } from '@/components/AddressModal'
 
 export default function ContactCreateForm({
   userId,
@@ -21,6 +22,8 @@ export default function ContactCreateForm({
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [address, setAddress] = useState('')
+  const [addressModalOpen, setAddressModalOpen] = useState(false)
   const [position, setPosition] = useState('')
   const [customerId, setCustomerId] = useState('')
   const [error, setError] = useState('')
@@ -90,6 +93,7 @@ export default function ContactCreateForm({
           lastName,
           email,
           phone,
+          address,
           position,
           customerId,
           userId,
@@ -108,7 +112,9 @@ export default function ContactCreateForm({
       setLastName('')
       setEmail('')
       setPhone('')
+      setAddress('')
       setPosition('')
+      setAddressModalOpen(false)
       setSaving(false)
       onSuccess?.()
       router.refresh()
@@ -168,6 +174,22 @@ export default function ContactCreateForm({
           </div>
         </div>
         <div>
+          <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Address', req('address'))}</label>
+          <div className="mt-1 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setAddressModalOpen(true)}
+              className="rounded-md border px-3 py-2 text-sm font-medium"
+              style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+            >
+              {address ? 'Edit Address' : 'Enter Address'}
+            </button>
+            <p className="text-xs" style={{ color: address ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+              {address ? address : 'No address saved yet'}
+            </p>
+          </div>
+        </div>
+        <div>
           <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Position</label>
           <input
             value={position}
@@ -195,6 +217,16 @@ export default function ContactCreateForm({
             ))}
           </select>
         </div>
+        <AddressModal
+          open={addressModalOpen}
+          onClose={() => setAddressModalOpen(false)}
+          onSave={(formatted) => {
+            setAddress(formatted)
+            setAddressModalOpen(false)
+          }}
+          initialFields={parseAddress(address)}
+          zIndex={130}
+        />
         {error && <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
         <div className="grid grid-cols-2 gap-3">
           <button

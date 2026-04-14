@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import CreateModalButton from '@/components/CreateModalButton'
 import ItemCreateForm from '@/components/ItemCreateForm'
+import MasterDataCustomizeButton from '@/components/MasterDataCustomizeButton'
 import EditButton from '@/components/EditButton'
 import DeleteButton from '@/components/DeleteButton'
 import ColumnSelector from '@/components/ColumnSelector'
@@ -79,9 +80,12 @@ export default async function ItemsPage({
           <h1 className="text-xl font-semibold text-white">Items</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{total} total</p>
         </div>
-        <CreateModalButton buttonLabel="New Item" title="New Item">
-          <ItemCreateForm entities={entities} currencies={currencies} />
-        </CreateModalButton>
+        <div className="flex items-center gap-2">
+          <MasterDataCustomizeButton tableId="items-list" columns={COLS} title="Items" />
+          <CreateModalButton buttonLabel="New Item" title="New Item">
+            <ItemCreateForm entities={entities} currencies={currencies} />
+          </CreateModalButton>
+        </div>
       </div>
 
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>

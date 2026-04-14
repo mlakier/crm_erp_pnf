@@ -5,6 +5,7 @@ import { fmtCurrency, fmtPhone } from '@/lib/format'
 import DeleteButton from '@/components/DeleteButton'
 import EditButton from '@/components/EditButton'
 import OpportunityCreateQuoteButton from '@/components/OpportunityCreateQuoteButton'
+import OpportunityLineItemForm from '@/components/OpportunityLineItemForm'
 
 export default async function OpportunityDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -12,12 +13,22 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     where: { id },
     include: {
       quote: true,
+      lineItems: {
+        orderBy: { createdAt: 'asc' },
+        include: { item: true },
+      },
       customer: {
         include: {
           contacts: { orderBy: { firstName: 'asc' } },
         },
       },
     },
+  })
+
+  const items = await prisma.item.findMany({
+    where: { active: true },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true, listPrice: true, itemNumber: true },
   })
 
   if (!opportunity) notFound()
@@ -28,7 +39,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
 
   return (
     <div className="min-h-full px-8 py-8">
-      <div className="max-w-4xl">
+      <div className="max-w-6xl">
 
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -78,6 +89,62 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
             <Field label="Quote" value={opportunity.quote?.number} />
             <Field label="Created" value={new Date(opportunity.createdAt).toLocaleDateString()} />
           </dl>
+        </div>
+
+        <div className="mb-8">
+          <OpportunityLineItemForm opportunityId={opportunity.id} items={items} />
+        </div>
+
+        <div className="mb-8 overflow-hidden rounded-xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
+          <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-muted)' }}>
+            <h2 className="text-base font-semibold text-white">Line Items</h2>
+            <span className="rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>
+              {opportunity.lineItems.length}
+            </span>
+          </div>
+          {opportunity.lineItems.length === 0 ? (
+            <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>No line items yet. Add one above.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
+                    <Th>Item</Th>
+                    <Th>Description</Th>
+                    <Th>Qty</Th>
+                    <Th>Unit Price</Th>
+                    <Th>Line Total</Th>
+                    <Th>Notes</Th>
+                    <Th>Actions</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {opportunity.lineItems.map((line, index) => (
+                    <tr key={line.id} style={index < opportunity.lineItems.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
+                      <Td>{line.item ? (line.item.itemNumber ? `${line.item.itemNumber} - ${line.item.name}` : line.item.name) : '—'}</Td>
+                      <Td>{line.description}</Td>
+                      <Td>{line.quantity}</Td>
+                      <Td>{fmtCurrency(line.unitPrice)}</Td>
+                      <Td>{fmtCurrency(line.lineTotal)}</Td>
+                      <Td>{line.notes ?? '—'}</Td>
+                      <Td>
+                        <DeleteButton resource="opportunities/line-items" id={line.id} />
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ borderTop: '1px solid var(--border-muted)' }}>
+                    <td colSpan={4} className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                      Total
+                    </td>
+                    <td className="px-4 py-2 text-sm font-semibold text-white">{fmtCurrency(opportunity.amount)}</td>
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
 
         {opportunity.quote ? (

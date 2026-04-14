@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { isValidEmail } from '@/lib/validation'
+import AddressModal, { parseAddress } from '@/components/AddressModal'
 
 export interface EditField {
   name: string
   label: string
   value: string
-  type?: 'text' | 'number' | 'date' | 'email' | 'select' | 'checkbox'
+  type?: 'text' | 'number' | 'date' | 'email' | 'select' | 'checkbox' | 'address'
   options?: Array<{ value: string; label: string }>
   placeholder?: string
 }
@@ -30,6 +31,7 @@ export default function EditButton({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [dismissPrompt, setDismissPrompt] = useState('')
+  const [addressFieldBeingEdited, setAddressFieldBeingEdited] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
 
@@ -63,8 +65,13 @@ export default function EditButton({
         signal: controller.signal,
       })
       if (!res.ok) {
-        const body = await res.json()
-        setError(body?.error || 'Failed to save')
+        const raw = await res.text()
+        try {
+          const body = JSON.parse(raw) as { error?: string }
+          setError(body?.error || 'Failed to save')
+        } catch {
+          setError(raw || 'Failed to save')
+        }
         return
       }
       setOpen(false)
@@ -128,6 +135,20 @@ export default function EditButton({
                       />
                       <label htmlFor={`field-${f.name}`} className="text-sm text-white">{f.placeholder ?? f.label}</label>
                     </div>
+                  ) : f.type === 'address' ? (
+                    <div className="mt-1 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setAddressFieldBeingEdited(f.name)}
+                        className="rounded-md border px-3 py-2 text-sm font-medium"
+                        style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+                      >
+                        {values[f.name] ? 'Edit Address' : 'Enter Address'}
+                      </button>
+                      <p className="text-xs" style={{ color: values[f.name] ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                        {values[f.name] ? values[f.name] : 'No address saved yet'}
+                      </p>
+                    </div>
                   ) : f.type === 'select' ? (
                     <select
                       value={values[f.name]}
@@ -186,6 +207,25 @@ export default function EditButton({
                 </button>
               </div>
             </form>
+            <AddressModal
+              open={addressFieldBeingEdited !== null}
+              onClose={() => setAddressFieldBeingEdited(null)}
+              onSave={(formattedAddress) => {
+                const fieldName = addressFieldBeingEdited
+                if (!fieldName) return
+                const parsed = parseAddress(formattedAddress)
+                setValues((prev) => {
+                  const next = { ...prev, [fieldName]: formattedAddress }
+                  if (Object.prototype.hasOwnProperty.call(next, 'country')) {
+                    next.country = parsed.country
+                  }
+                  return next
+                })
+                setAddressFieldBeingEdited(null)
+              }}
+              initialFields={parseAddress(addressFieldBeingEdited ? values[addressFieldBeingEdited] ?? '' : '')}
+              zIndex={130}
+            />
           </div>
         </div>,
         document.body

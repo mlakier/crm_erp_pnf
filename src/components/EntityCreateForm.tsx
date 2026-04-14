@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import AddressModal, { parseAddress } from '@/components/AddressModal'
+import { COUNTRY_OPTIONS, DEFAULT_COUNTRY_CODE } from '@/lib/address-country-config'
 
 export default function EntityCreateForm({
   currencies,
@@ -21,6 +23,10 @@ export default function EntityCreateForm({
   const [name, setName] = useState('')
   const [legalName, setLegalName] = useState('')
   const [entityType, setEntityType] = useState('')
+  const [country, setCountry] = useState(DEFAULT_COUNTRY_CODE)
+  const [taxId, setTaxId] = useState('')
+  const [address, setAddress] = useState('')
+  const [addressModalOpen, setAddressModalOpen] = useState(false)
   const [defaultCurrencyId, setDefaultCurrencyId] = useState('')
   const [parentEntityId, setParentEntityId] = useState('')
   const [saving, setSaving] = useState(false)
@@ -69,7 +75,7 @@ export default function EntityCreateForm({
       const response = await fetch('/api/entities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, legalName, entityType, defaultCurrencyId, parentEntityId, inactive: false }),
+        body: JSON.stringify({ name, legalName, entityType, country, taxId, address, defaultCurrencyId, parentEntityId, inactive: false }),
       })
       const json = await response.json()
       if (!response.ok) throw new Error(json?.error ?? 'Create failed')
@@ -104,6 +110,43 @@ export default function EntityCreateForm({
           <input value={entityType} onChange={(e) => setEntityType(e.target.value)} className="w-full rounded-md border px-3 py-2 text-white bg-transparent" style={{ borderColor: 'var(--border-muted)' }} />
         </label>
       </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+          <span>Country</span>
+          <select
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            className="w-full rounded-md border px-3 py-2"
+            style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)', backgroundColor: 'var(--card)' }}
+          >
+            {COUNTRY_OPTIONS.map((option) => (
+              <option key={option.code} value={option.code} style={{ color: 'var(--text-secondary)', backgroundColor: 'var(--card)' }}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+          <span>Tax ID</span>
+          <input value={taxId} onChange={(e) => setTaxId(e.target.value)} className="w-full rounded-md border px-3 py-2 text-white bg-transparent" style={{ borderColor: 'var(--border-muted)' }} />
+        </label>
+      </div>
+      <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+        <span>Address</span>
+        <div className="mt-1 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAddressModalOpen(true)}
+            className="rounded-md border px-3 py-2 text-sm font-medium"
+            style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+          >
+            {address ? 'Edit Address' : 'Enter Address'}
+          </button>
+          <p className="text-xs" style={{ color: address ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+            {address ? address : 'No address saved yet'}
+          </p>
+        </div>
+      </label>
       <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
         <span>Parent Subsidiary</span>
         <select
@@ -139,6 +182,16 @@ export default function EntityCreateForm({
           ))}
         </select>
       </label>
+      <AddressModal
+        open={addressModalOpen}
+        onClose={() => setAddressModalOpen(false)}
+        onSave={(formattedAddress) => {
+          setAddress(formattedAddress)
+          setCountry(parseAddress(formattedAddress).country)
+          setAddressModalOpen(false)
+        }}
+        initialFields={{ ...parseAddress(address), country }}
+      />
       {error ? <p className="text-sm text-red-300">{error}</p> : null}
       <div className="flex items-center justify-end gap-2">
         <button type="button" onClick={onCancel} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>Cancel</button>

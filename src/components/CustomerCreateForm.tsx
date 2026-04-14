@@ -6,6 +6,7 @@ import { isFieldRequired } from '@/lib/form-requirements'
 import { useEffect } from 'react'
 import { useListOptions } from '@/lib/list-options-client'
 import { isValidEmail } from '@/lib/validation'
+import AddressModal, { parseAddress } from '@/components/AddressModal'
 
 export default function CustomerCreateForm({
   ownerUserId,
@@ -28,16 +29,6 @@ export default function CustomerCreateForm({
   const [primarySubsidiaryId, setPrimarySubsidiaryId] = useState('')
   const [primaryCurrencyId, setPrimaryCurrencyId] = useState('')
   const [addressModalOpen, setAddressModalOpen] = useState(false)
-  const [addressModalPrompt, setAddressModalPrompt] = useState('')
-  const [addressValidationError, setAddressValidationError] = useState('')
-  const [validatingAddress, setValidatingAddress] = useState(false)
-  const [street1, setStreet1] = useState('')
-  const [street2, setStreet2] = useState('')
-  const [street3, setStreet3] = useState('')
-  const [city, setCity] = useState('')
-  const [stateProvince, setStateProvince] = useState('')
-  const [postalCode, setPostalCode] = useState('')
-  const [country, setCountry] = useState('US')
   const [contactFirstName, setContactFirstName] = useState('')
   const [contactLastName, setContactLastName] = useState('')
   const [contactEmail, setContactEmail] = useState('')
@@ -81,47 +72,6 @@ export default function CustomerCreateForm({
         {text} <span style={{ color: 'var(--danger)' }}>*</span>
       </>
     )
-  }
-
-  function formatAddress(): string {
-    const lines = [street1.trim(), street2.trim(), street3.trim()].filter(Boolean)
-    const cityLine = `${city.trim()}, ${stateProvince.trim()} ${postalCode.trim()}`.trim()
-    return [...lines, cityLine, country.trim()].join(', ')
-  }
-
-  function validateAddressDraft(): string | null {
-    if (req('addressStreet1') && !street1.trim()) return 'Street Address 1 is required'
-    if (req('addressCity') && !city.trim()) return 'City is required'
-    if (req('addressStateProvince') && !stateProvince.trim()) return 'State/Province is required'
-    if (req('addressPostalCode') && !postalCode.trim()) return 'Zip/Postal Code is required'
-    if (req('addressCountry') && !country.trim()) return 'Country is required'
-
-    const normalizedCountry = country.trim().toUpperCase()
-    const normalizedPostal = postalCode.trim()
-
-    if (normalizedCountry === 'US' && !/^\d{5}(-\d{4})?$/.test(normalizedPostal)) {
-      return 'US Zip Code must be 5 digits or ZIP+4 (e.g. 90210 or 90210-1234)'
-    }
-
-    if (normalizedCountry === 'CA' && !/^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/.test(normalizedPostal)) {
-      return 'Canadian Postal Code must match format A1A 1A1'
-    }
-
-    return null
-  }
-
-  async function saveAddressFromModal() {
-    const validationError = validateAddressDraft()
-    if (validationError) {
-      setAddressValidationError(validationError)
-      return
-    }
-
-    setAddressValidationError('')
-    // Temporarily using local validation until external address API key is configured.
-    setAddress(formatAddress())
-    setAddressModalPrompt('')
-    setAddressModalOpen(false)
   }
 
   const handleSubmit = async (event: FormEvent) => {
@@ -203,15 +153,6 @@ export default function CustomerCreateForm({
       setIndustry('')
       setPrimarySubsidiaryId('')
       setPrimaryCurrencyId('')
-      setStreet1('')
-      setStreet2('')
-      setStreet3('')
-      setCity('')
-      setStateProvince('')
-      setPostalCode('')
-      setCountry('US')
-      setAddressValidationError('')
-      setValidatingAddress(false)
       setContactFirstName('')
       setContactLastName('')
       setContactEmail('')
@@ -321,10 +262,7 @@ export default function CustomerCreateForm({
           <div className="mt-1 flex items-center gap-2">
             <button
               type="button"
-              onClick={() => {
-                setAddressModalPrompt('')
-                setAddressModalOpen(true)
-              }}
+              onClick={() => setAddressModalOpen(true)}
               className="rounded-md border px-3 py-2 text-sm font-medium"
               style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
             >
@@ -394,134 +332,16 @@ export default function CustomerCreateForm({
           </div>
         </div>
 
-        {addressModalOpen ? (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-            onClick={(event) => {
-              if (event.target === event.currentTarget) {
-                setAddressModalPrompt('Use Save Address or Cancel to close this window.')
-              }
-            }}
-          >
-            <div
-              className="w-full max-w-2xl rounded-xl border p-6 shadow-2xl"
-              style={{ backgroundColor: 'var(--card-elevated)', borderColor: 'var(--border-muted)' }}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-2xl font-semibold text-white">Validate Address</h2>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAddressModalPrompt('')
-                    setAddressModalOpen(false)
-                  }}
-                  className="rounded-md px-2 py-1 text-sm"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  Cancel
-                </button>
-              </div>
-              {addressModalPrompt ? <p className="mb-3 text-xs" style={{ color: 'var(--text-secondary)' }}>{addressModalPrompt}</p> : null}
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Street Address 1', req('addressStreet1'))}</label>
-                  <input
-                    value={street1}
-                    onChange={(e) => setStreet1(e.target.value)}
-                    className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                    style={{ borderColor: 'var(--border-muted)' }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Street Address 2</label>
-                  <input
-                    value={street2}
-                    onChange={(e) => setStreet2(e.target.value)}
-                    className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                    style={{ borderColor: 'var(--border-muted)' }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Street Address 3</label>
-                  <input
-                    value={street3}
-                    onChange={(e) => setStreet3(e.target.value)}
-                    className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                    style={{ borderColor: 'var(--border-muted)' }}
-                  />
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('City', req('addressCity'))}</label>
-                    <input
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                      style={{ borderColor: 'var(--border-muted)' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('State/Province', req('addressStateProvince'))}</label>
-                    <input
-                      value={stateProvince}
-                      onChange={(e) => setStateProvince(e.target.value)}
-                      className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                      style={{ borderColor: 'var(--border-muted)' }}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Zip Code / Postal Code', req('addressPostalCode'))}</label>
-                    <input
-                      value={postalCode}
-                      onChange={(e) => setPostalCode(e.target.value)}
-                      className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                      style={{ borderColor: 'var(--border-muted)' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Country', req('addressCountry'))}</label>
-                    <input
-                      value={country}
-                      onChange={(e) => setCountry(e.target.value.toUpperCase())}
-                      className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                      style={{ borderColor: 'var(--border-muted)' }}
-                      placeholder="US"
-                    />
-                  </div>
-                </div>
-
-                {addressValidationError ? <p className="text-sm" style={{ color: 'var(--danger)' }}>{addressValidationError}</p> : null}
-
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setAddressModalOpen(false)}
-                    disabled={validatingAddress}
-                    className="rounded-md border px-4 py-2 text-sm font-medium"
-                    style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={saveAddressFromModal}
-                    disabled={validatingAddress}
-                    className="rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                    style={{ backgroundColor: validatingAddress ? '#64748b' : 'var(--accent-primary-strong)' }}
-                  >
-                    {validatingAddress ? 'Validating...' : 'Validate and Save Address'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        <AddressModal
+          open={addressModalOpen}
+          onClose={() => setAddressModalOpen(false)}
+          onSave={(formatted) => {
+            setAddress(formatted)
+            setAddressModalOpen(false)
+          }}
+          initialFields={parseAddress(address)}
+          zIndex={130}
+        />
 
         {error && <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
 

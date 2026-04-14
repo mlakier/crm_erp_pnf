@@ -81,6 +81,7 @@ model Contact {
   lastName      String
   email         String?
   phone         String?
+  address       String?
   position      String?
   active        Boolean  @default(true)
   createdAt     DateTime @default(now())
@@ -467,12 +468,32 @@ model Opportunity {
   userId     String
   user       User      @relation(fields: [userId], references: [id])
   quote      Quote?
+  lineItems  OpportunityLineItem[]
   entity     Entity?   @relation(fields: [entityId], references: [id])
   currency   Currency? @relation(fields: [currencyId], references: [id])
 
   @@index([entityId])
   @@index([currencyId])
   @@map("opportunities")
+}
+
+model OpportunityLineItem {
+  id            String      @id @default(cuid())
+  description   String
+  quantity      Int         @default(1)
+  unitPrice     Float       @default(0)
+  lineTotal     Float       @default(0)
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  itemId        String?
+  item          Item?       @relation(fields: [itemId], references: [id])
+
+  @@index([itemId])
+  @@map("opportunity_line_items")
 }
 
 model Quote {
@@ -823,6 +844,8 @@ model Entity {
   name               String
   legalName          String?
   entityType         String?
+  country            String?
+  address            String?
   taxId              String?
   registrationNumber String?
   parentEntityId     String?
@@ -873,6 +896,7 @@ model Item {
   currency               Currency?               @relation(fields: [currencyId], references: [id])
   entityId               String?
   entity                 Entity?                 @relation(fields: [entityId], references: [id])
+  opportunityLineItems   OpportunityLineItem[]
   purchaseOrderLineItems PurchaseOrderLineItem[]
   requisitionLineItems   RequisitionLineItem[]
 

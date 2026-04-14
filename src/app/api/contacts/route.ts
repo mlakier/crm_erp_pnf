@@ -17,7 +17,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { firstName, lastName, email, phone, position, customerId, userId } = body
+    const { firstName, lastName, email, phone, address, position, customerId, userId } = body
     const inactive = String(body?.inactive ?? 'false').trim().toLowerCase() === 'true'
 
     if (!userId) {
@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
         lastName,
         email,
         phone: normalizePhone(phone),
+        address: address || null,
         position,
         active: !inactive,
         customerId,
@@ -72,7 +73,7 @@ export async function PUT(request: NextRequest) {
     if (!id) return NextResponse.json({ error: 'Missing contact id' }, { status: 400 })
 
     const body = await request.json()
-    const { firstName, lastName, email, phone, position } = body
+    const { firstName, lastName, email, phone, address, position, customerId } = body
     const inactive = body?.inactive !== undefined
       ? String(body.inactive).trim().toLowerCase() === 'true'
       : undefined
@@ -90,7 +91,9 @@ export async function PUT(request: NextRequest) {
         lastName,
         email: email || null,
         phone: normalizePhone(phone),
+        address: address || null,
         position: position || null,
+        ...(customerId ? { customerId } : {}),
         ...(active !== undefined ? { active } : {}),
       },
     })

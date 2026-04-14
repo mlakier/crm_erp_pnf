@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { fmtCurrency, fmtPhone, normalizePhone } from '@/lib/format'
 import DeleteButton from '@/components/DeleteButton'
-import EditButton from '@/components/EditButton'
+import VendorEditButton from '@/components/VendorEditButton'
 import VendorCreateMenu from '@/components/VendorCreateMenu'
 
 export default async function VendorDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -52,38 +52,20 @@ export default async function VendorDetailPage({ params }: { params: Promise<{ i
           </div>
           <div className="flex items-center gap-2">
             {defaultUser ? <VendorCreateMenu vendorId={vendor.id} userId={defaultUser.id} /> : null}
-            <EditButton
-              resource="vendors"
-              id={vendor.id}
-              fields={[
-                { name: 'name', label: 'Name', value: vendor.name },
-                { name: 'email', label: 'Email', value: vendor.email ?? '' },
-                { name: 'phone', label: 'Phone', value: normalizePhone(vendor.phone) ?? '' },
-                { name: 'address', label: 'Address', value: vendor.address ?? '' },
-                { name: 'taxId', label: 'Tax ID', value: vendor.taxId ?? '' },
-                {
-                  name: 'primarySubsidiaryId',
-                  label: 'Primary Subsidiary',
-                  value: vendor.entityId ?? '',
-                  type: 'select',
-                  placeholder: 'Select subsidiary',
-                  options: subsidiaries.map((subsidiary) => ({
-                    value: subsidiary.id,
-                    label: `${subsidiary.code} - ${subsidiary.name}`,
-                  })),
-                },
-                {
-                  name: 'primaryCurrencyId',
-                  label: 'Primary Currency',
-                  value: vendor.currencyId ?? '',
-                  type: 'select',
-                  placeholder: 'Select currency',
-                  options: currencies.map((currency) => ({
-                    value: currency.id,
-                    label: `${currency.code} - ${currency.name}`,
-                  })),
-                },
-              ]}
+            <VendorEditButton
+              vendorId={vendor.id}
+              values={{
+                name: vendor.name,
+                email: vendor.email ?? '',
+                phone: normalizePhone(vendor.phone) ?? '',
+                address: vendor.address ?? '',
+                taxId: vendor.taxId ?? '',
+                primarySubsidiaryId: vendor.entityId ?? '',
+                primaryCurrencyId: vendor.currencyId ?? '',
+                inactive: vendor.inactive,
+              }}
+              subsidiaries={subsidiaries}
+              currencies={currencies}
             />
             <DeleteButton resource="vendors" id={vendor.id} />
           </div>

@@ -19,7 +19,8 @@
     "customerId": true,
     "email": false,
     "phone": false,
-    "position": false
+    "position": false,
+    "address": false
   },
   "vendorCreate": {
     "name": true,

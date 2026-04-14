@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import EditButton from '@/components/EditButton'
 import DeleteButton from '@/components/DeleteButton'
+import { COUNTRY_OPTIONS } from '@/lib/address-country-config'
 
 export default async function SubsidiaryDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -64,6 +65,18 @@ export default async function SubsidiaryDetailPage({ params }: { params: Promise
                   placeholder: 'Select parent subsidiary',
                   options: parentEntities.map((candidate) => ({ value: candidate.id, label: `${candidate.code} - ${candidate.name}` })),
                 },
+                {
+                  name: 'country',
+                  label: 'Country',
+                  value: entity.country ?? '',
+                  type: 'select',
+                  placeholder: 'Select country',
+                  options: COUNTRY_OPTIONS.map((option) => ({
+                    value: option.code,
+                    label: option.label,
+                  })),
+                },
+                { name: 'address', label: 'Address', value: entity.address ?? '', type: 'address' },
                 { name: 'legalName', label: 'Legal Name', value: entity.legalName ?? '' },
                 { name: 'entityType', label: 'Type', value: entity.entityType ?? '' },
                 { name: 'taxId', label: 'Tax ID', value: entity.taxId ?? '' },
@@ -109,6 +122,8 @@ export default async function SubsidiaryDetailPage({ params }: { params: Promise
             <Field label="Code" value={entity.code} />
             <Field label="Name" value={entity.name} />
             <Field label="Parent Subsidiary" value={entity.parentEntity ? `${entity.parentEntity.code} – ${entity.parentEntity.name}` : null} />
+            <Field label="Country" value={entity.country} />
+            <Field label="Address" value={entity.address} />
             <Field label="Legal Name" value={entity.legalName} />
             <Field label="Type" value={entity.entityType} />
             <Field label="Tax ID" value={entity.taxId} />

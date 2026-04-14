@@ -9,9 +9,18 @@ type NavItem = {
   href: string
 }
 
+type NavSubgroup = {
+  label: string
+  items: NavItem[]
+}
+
 type NavGroup = {
   section: string
-  items: NavItem[]
+  items: Array<NavItem | NavSubgroup>
+}
+
+function isNavSubgroup(item: NavItem | NavSubgroup): item is NavSubgroup {
+  return 'items' in item
 }
 
 const NAV: NavGroup[] = [
@@ -28,12 +37,19 @@ const NAV: NavGroup[] = [
   },
   {
     section: 'CONFIGURATION',
-    items: [{ label: 'Configuration', href: '/configuration' }],
+    items: [],
+  },
+  {
+    section: 'UTILITIES',
+    items: [
+      { label: 'Manage Lists', href: '/lists' },
+      { label: 'Manage Integrations', href: '/integrations' },
+      { label: 'Import Master Data', href: '/master-data-import' },
+    ],
   },
   {
     section: 'MASTER DATA',
     items: [
-      { label: 'Import Master Data', href: '/master-data-import' },
       { label: 'Contacts', href: '/contacts' },
       { label: 'Customers', href: '/customers' },
       { label: 'Vendors', href: '/vendors' },
@@ -43,7 +59,6 @@ const NAV: NavGroup[] = [
       { label: 'Chart of Accounts', href: '/chart-of-accounts' },
       { label: 'Departments', href: '/departments' },
       { label: 'Employees', href: '/employees' },
-      { label: 'Lists', href: '/lists' },
     ],
   },
   {
@@ -81,7 +96,7 @@ export default function AppSidebar() {
   const initialExpanded = useMemo(() => {
     const expanded: Record<string, boolean> = {}
     for (const group of NAV) {
-      expanded[group.section] = true
+      expanded[group.section] = false
     }
     return expanded
   }, [])
@@ -101,7 +116,14 @@ export default function AppSidebar() {
   }
 
   useEffect(() => {
-    const activeGroup = NAV.find((group) => group.items.some((item) => isActive(item.href)))
+    const activeGroup = NAV.find((group) =>
+      group.items.some((item) => {
+        if (isNavSubgroup(item)) {
+          return item.items.some((subItem) => isActive(subItem.href))
+        }
+        return isActive(item.href)
+      })
+    )
     if (!activeGroup) return
     setExpandedSections((prev) =>
       prev[activeGroup.section] ? prev : { ...prev, [activeGroup.section]: true }
@@ -141,6 +163,33 @@ export default function AppSidebar() {
             </button>
             <div id={sectionId}>
             {expandedSections[group.section] && group.items.map((item) => {
+              if (isNavSubgroup(item)) {
+                return (
+                  <div key={`${group.section}-${item.label}`} className="mt-2">
+                    <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+                      {item.label}
+                    </p>
+                    {item.items.map((subItem) => {
+                      const active = isActive(subItem.href)
+                      return (
+                        <Link
+                          key={subItem.href}
+                          href={subItem.href}
+                          className={`ml-2 flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
+                            active
+                              ? 'border-l-2 pl-[10px] font-medium text-white'
+                              : 'hover:text-white'
+                          }`}
+                          style={active ? { borderColor: 'var(--accent-primary)', backgroundColor: 'rgba(59, 130, 246, 0.14)' } : { color: 'var(--text-secondary)' }}
+                        >
+                          {subItem.label}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )
+              }
+
               const active = isActive(item.href)
               return (
                 <Link

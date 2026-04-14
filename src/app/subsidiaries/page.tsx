@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import CreateModalButton from '@/components/CreateModalButton'
 import EntityCreateForm from '@/components/EntityCreateForm'
+import MasterDataCustomizeButton from '@/components/MasterDataCustomizeButton'
 import EditButton from '@/components/EditButton'
 import DeleteButton from '@/components/DeleteButton'
 import ColumnSelector from '@/components/ColumnSelector'
@@ -11,21 +12,24 @@ import { getPagination } from '@/lib/pagination'
 import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
 import { generateNextEntityCode } from '@/lib/entity-code'
+import { COUNTRY_OPTIONS } from '@/lib/address-country-config'
+import SubsidiaryHierarchyModal from '@/components/SubsidiaryHierarchyModal'
 
-type HierarchyEntity = {
+type SubsidiaryHierarchyEntity = {
   id: string
   code: string
   name: string
+  country: string | null
+  entityType: string | null
+  taxId: string | null
   parentEntityId: string | null
-}
-
-type HierarchyNode = HierarchyEntity & {
-  children: HierarchyNode[]
 }
 
 const COLS = [
   { id: 'code', label: 'Code' },
   { id: 'name', label: 'Name' },
+  { id: 'country', label: 'Country' },
+  { id: 'tax-id', label: 'Tax ID' },
   { id: 'parent-subsidiary', label: 'Parent Subsidiary' },
   { id: 'legal-name', label: 'Legal Name' },
   { id: 'type', label: 'Type' },
@@ -54,12 +58,12 @@ export default async function EntitiesPage({
   const [entities, currencies, allEntities, nextEntityCode, companySettings, cabinetFiles] = await Promise.all([
     prisma.entity.findMany({ where, include: { defaultCurrency: true, parentEntity: true }, orderBy: { code: 'asc' }, skip: pagination.skip, take: pagination.pageSize }),
     prisma.currency.findMany({ orderBy: { code: 'asc' } }),
-    prisma.entity.findMany({ orderBy: { code: 'asc' }, select: { id: true, code: true, name: true, parentEntityId: true } }),
+    prisma.entity.findMany({ orderBy: { code: 'asc' }, select: { id: true, code: true, name: true, country: true, entityType: true, taxId: true, parentEntityId: true } }),
     generateNextEntityCode(),
     loadCompanyInformationSettings(),
     loadCompanyCabinetFiles(),
   ])
-  const subsidiaryTree = buildSubsidiaryTree(allEntities)
+  const hierarchyEntities: SubsidiaryHierarchyEntity[] = allEntities
 
   const buildPageHref = (p: number) => {
     const s = new URLSearchParams()
@@ -90,30 +94,15 @@ export default async function EntitiesPage({
           <h1 className="text-xl font-semibold text-white">Subsidiaries</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{total} total</p>
         </div>
-        <CreateModalButton buttonLabel="New Subsidiary" title="New Subsidiary">
-          <EntityCreateForm initialCode={nextEntityCode} currencies={currencies} parentEntities={allEntities.map(({ id, code, name }) => ({ id, code, name }))} />
-        </CreateModalButton>
+        <div className="flex items-center gap-2">
+          <MasterDataCustomizeButton tableId="subsidiaries-list" columns={COLS} title="Subsidiaries" />
+          <CreateModalButton buttonLabel="New Subsidiary" title="New Subsidiary">
+            <EntityCreateForm initialCode={nextEntityCode} currencies={currencies} parentEntities={allEntities.map(({ id, code, name }) => ({ id, code, name }))} />
+          </CreateModalButton>
+        </div>
       </div>
 
-      <section className="mb-6 overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-        <div className="border-b px-6 py-4" style={{ borderColor: 'var(--border-muted)' }}>
-          <h2 className="text-base font-semibold text-white">Subsidiary Hierarchy</h2>
-          <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Consolidation roll-up view of parent and child subsidiaries.
-          </p>
-        </div>
-        <div className="px-6 py-5">
-          {subsidiaryTree.length === 0 ? (
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No subsidiaries available.</p>
-          ) : (
-            <div className="space-y-2">
-              {subsidiaryTree.map((node) => (
-                <HierarchyTreeNode key={node.id} node={node} depth={0} />
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
+      <SubsidiaryHierarchyModal entities={hierarchyEntities} />
 
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
@@ -141,6 +130,8 @@ export default async function EntitiesPage({
               <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
                 <th data-column="code" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Code</th>
                 <th data-column="name" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Name</th>
+                <th data-column="country" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Country</th>
+                <th data-column="tax-id" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Tax ID</th>
                 <th data-column="parent-subsidiary" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Parent Subsidiary</th>
                 <th data-column="legal-name" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Legal Name</th>
                 <th data-column="type" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Type</th>
@@ -154,7 +145,7 @@ export default async function EntitiesPage({
             <tbody>
               {entities.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                  <td colSpan={12} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
                     No subsidiaries found
                   </td>
                 </tr>
@@ -163,6 +154,8 @@ export default async function EntitiesPage({
                   <tr key={entity.id} style={index < entities.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
                     <td data-column="code" className="px-4 py-2 text-sm font-medium text-white"><Link href={`/subsidiaries/${entity.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>{entity.code}</Link></td>
                     <td data-column="name" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{entity.name}</td>
+                    <td data-column="country" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{entity.country ?? '—'}</td>
+                    <td data-column="tax-id" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{entity.taxId ?? '—'}</td>
                     <td data-column="parent-subsidiary" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{entity.parentEntity ? `${entity.parentEntity.code} - ${entity.parentEntity.name}` : '—'}</td>
                     <td data-column="legal-name" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{entity.legalName ?? '—'}</td>
                     <td data-column="type" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{entity.entityType ?? '—'}</td>
@@ -191,6 +184,16 @@ export default async function EntitiesPage({
                                   label: `${candidate.code} - ${candidate.name}`,
                                 })),
                             },
+                            {
+                              name: 'country',
+                              label: 'Country',
+                              value: entity.country ?? '',
+                              type: 'select',
+                              placeholder: 'Select country',
+                              options: COUNTRY_OPTIONS.map((option) => ({ value: option.code, label: option.label })),
+                            },
+                            { name: 'taxId', label: 'Tax ID', value: entity.taxId ?? '' },
+                            { name: 'address', label: 'Address', value: entity.address ?? '', type: 'address' },
                             { name: 'legalName', label: 'Legal Name', value: entity.legalName ?? '' },
                             { name: 'entityType', label: 'Type', value: entity.entityType ?? '' },
                           ]}
@@ -216,63 +219,6 @@ export default async function EntitiesPage({
           nextHref={buildPageHref(pagination.currentPage + 1)}
         />
       </section>
-    </div>
-  )
-}
-
-function buildSubsidiaryTree(entities: HierarchyEntity[]): HierarchyNode[] {
-  const byId = new Map(entities.map((entity) => [entity.id, entity]))
-  const childrenByParent = new Map<string | null, HierarchyEntity[]>()
-
-  for (const entity of entities) {
-    const parentId = entity.parentEntityId && byId.has(entity.parentEntityId) ? entity.parentEntityId : null
-    const group = childrenByParent.get(parentId) ?? []
-    group.push(entity)
-    childrenByParent.set(parentId, group)
-  }
-
-  const buildNodes = (parentId: string | null, lineage: Set<string>): HierarchyNode[] => {
-    const group = childrenByParent.get(parentId) ?? []
-    return group.map((entity) => {
-      if (lineage.has(entity.id)) {
-        return { ...entity, children: [] }
-      }
-
-      const nextLineage = new Set(lineage)
-      nextLineage.add(entity.id)
-      return {
-        ...entity,
-        children: buildNodes(entity.id, nextLineage),
-      }
-    })
-  }
-
-  return buildNodes(null, new Set())
-}
-
-function HierarchyTreeNode({ node, depth }: { node: HierarchyNode; depth: number }) {
-  return (
-    <div>
-      <div
-        className="flex items-center gap-3 rounded-lg border px-4 py-3"
-        style={{
-          marginLeft: `${depth * 24}px`,
-          borderColor: 'var(--border-muted)',
-          backgroundColor: depth === 0 ? 'rgba(59,130,246,0.08)' : 'transparent',
-        }}
-      >
-        <span className="text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{node.code}</span>
-        <Link href={`/subsidiaries/${node.id}`} className="text-sm font-medium hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-          {node.name}
-        </Link>
-      </div>
-      {node.children.length > 0 ? (
-        <div className="mt-2 space-y-2">
-          {node.children.map((child) => (
-            <HierarchyTreeNode key={child.id} node={child} depth={depth + 1} />
-          ))}
-        </div>
-      ) : null}
     </div>
   )
 }

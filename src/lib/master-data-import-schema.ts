@@ -1,6 +1,7 @@
 export const SUPPORTED_ENTITIES = [
   'currencies',
   'subsidiaries',
+  'chart-of-accounts',
   'departments',
   'items',
   'employees',
@@ -54,6 +55,27 @@ export const MASTER_DATA_IMPORT_SCHEMA: Record<SupportedEntity, EntitySchema> = 
     sampleRows: [
       ['SUB-001', 'Main Subsidiary', 'Main Corp Inc.', 'corporation', 'XX-1234567', 'REG-001', 'USD', 'true'],
       ['SUB-002', 'European Branch', 'European Operations Ltd.', 'branch', 'DE-9876543', 'REG-002', 'EUR', 'true'],
+    ],
+  },
+  'chart-of-accounts': {
+    label: 'Chart of Accounts',
+    fields: [
+      { key: 'accountNumber', required: true },
+      { key: 'name', required: true },
+      { key: 'accountType', required: true },
+      { key: 'description', required: false },
+      { key: 'inventory', required: false },
+      { key: 'revalueOpenBalance', required: false },
+      { key: 'eliminateIntercoTransactions', required: false },
+      { key: 'summary', required: false },
+      { key: 'scopeMode', required: false },
+      { key: 'parentSubsidiaryCode', required: false },
+      { key: 'includeChildren', required: false },
+      { key: 'subsidiaryCodes', required: false },
+    ],
+    sampleRows: [
+      ['1000', 'Cash', 'Asset', 'Cash and equivalents', 'false', 'false', 'false', 'false', 'selected', '', 'false', 'SUB-001,SUB-002'],
+      ['4000', 'Revenue', 'Revenue', 'Sales revenue', 'false', 'false', 'false', 'false', 'parent', 'SUB-001', 'true', ''],
     ],
   },
   departments: {

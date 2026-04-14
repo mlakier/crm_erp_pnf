@@ -3,8 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { fmtPhone, normalizePhone } from '@/lib/format'
 import VendorCreateForm from '@/components/VendorCreateForm'
 import DeleteButton from '@/components/DeleteButton'
-import EditButton from '@/components/EditButton'
+import VendorEditButton from '@/components/VendorEditButton'
 import CreateModalButton from '@/components/CreateModalButton'
+import MasterDataCustomizeButton from '@/components/MasterDataCustomizeButton'
 import ColumnSelector from '@/components/ColumnSelector'
 import ExportButton from '@/components/ExportButton'
 import PaginationFooter from '@/components/PaginationFooter'
@@ -102,9 +103,12 @@ export default async function VendorsPage({
           <h1 className="text-xl font-semibold text-white">Vendors</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{totalVendors} total</p>
         </div>
-        <CreateModalButton buttonLabel="New Vendor" title="New Vendor">
-          <VendorCreateForm subsidiaries={subsidiaries} currencies={currencies} />
-        </CreateModalButton>
+        <div className="flex items-center gap-2">
+          <MasterDataCustomizeButton tableId="vendors-list" columns={VENDOR_COLUMNS} title="Vendors" />
+          <CreateModalButton buttonLabel="New Vendor" title="New Vendor">
+            <VendorCreateForm subsidiaries={subsidiaries} currencies={currencies} />
+          </CreateModalButton>
+        </div>
       </div>
 
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
@@ -180,16 +184,20 @@ export default async function VendorsPage({
                   <td data-column="last-modified" className="whitespace-nowrap px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(vendor.updatedAt).toLocaleDateString()}</td>
                   <td data-column="actions" className="whitespace-nowrap px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
                     <div className="flex items-center gap-2">
-                      <EditButton
-                        resource="vendors"
-                        id={vendor.id}
-                        fields={[
-                          { name: 'name', label: 'Name', value: vendor.name },
-                          { name: 'email', label: 'Email', value: vendor.email ?? '' },
-                          { name: 'phone', label: 'Phone', value: normalizePhone(vendor.phone) ?? '' },
-                          { name: 'address', label: 'Address', value: vendor.address ?? '' },
-                          { name: 'taxId', label: 'Tax ID', value: vendor.taxId ?? '' },
-                        ]}
+                      <VendorEditButton
+                        vendorId={vendor.id}
+                        values={{
+                          name: vendor.name,
+                          email: vendor.email ?? '',
+                          phone: normalizePhone(vendor.phone) ?? '',
+                          address: vendor.address ?? '',
+                          taxId: vendor.taxId ?? '',
+                          primarySubsidiaryId: vendor.entityId ?? '',
+                          primaryCurrencyId: vendor.currencyId ?? '',
+                          inactive: vendor.inactive,
+                        }}
+                        subsidiaries={subsidiaries}
+                        currencies={currencies}
                       />
                       <DeleteButton resource="vendors" id={vendor.id} />
                     </div>

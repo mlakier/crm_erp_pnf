@@ -28,20 +28,27 @@ function opportunityNameFromLead(lead: {
 export default async function LeadConvertPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const lead = await prisma.lead.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      leadNumber: true,
-      company: true,
-      firstName: true,
-      lastName: true,
-      email: true,
-      title: true,
-      status: true,
-      opportunityId: true,
-    },
-  })
+  const [lead, items] = await Promise.all([
+    prisma.lead.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        leadNumber: true,
+        company: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        title: true,
+        status: true,
+        opportunityId: true,
+      },
+    }),
+    prisma.item.findMany({
+      where: { active: true },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, listPrice: true, itemNumber: true },
+    }),
+  ])
 
   if (!lead) notFound()
 
@@ -57,7 +64,7 @@ export default async function LeadConvertPage({ params }: { params: Promise<{ id
 
   return (
     <div className="min-h-full px-8 py-8">
-      <div className="max-w-3xl">
+      <div className="w-full max-w-6xl">
         <div className="mb-6">
           <Link href={`/leads/${lead.id}`} className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
             ← Back to Lead
@@ -73,6 +80,7 @@ export default async function LeadConvertPage({ params }: { params: Promise<{ id
             leadId={lead.id}
             defaultName={opportunityNameFromLead(lead)}
             defaultStage={defaultStage}
+            items={items}
           />
         </section>
       </div>

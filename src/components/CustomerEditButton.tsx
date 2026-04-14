@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { isValidEmail } from '@/lib/validation'
+import AddressModal, { parseAddress } from '@/components/AddressModal'
 
 type CustomerEditValues = {
   name: string
@@ -14,32 +15,6 @@ type CustomerEditValues = {
   primarySubsidiaryId: string
   primaryCurrencyId: string
   inactive: boolean
-}
-
-function parseAddress(raw: string) {
-  if (!raw.trim()) {
-    return { street1: '', street2: '', street3: '', city: '', stateProvince: '', postalCode: '', country: 'US' }
-  }
-  const parts = raw.split(', ')
-  if (parts.length < 3) {
-    return { street1: raw, street2: '', street3: '', city: '', stateProvince: '', postalCode: '', country: 'US' }
-  }
-  const country = parts[parts.length - 1]
-  const statePostal = parts[parts.length - 2]
-  const city = parts[parts.length - 3]
-  const streetParts = parts.slice(0, parts.length - 3)
-  const lastSpace = statePostal.lastIndexOf(' ')
-  const stateProvince = lastSpace !== -1 ? statePostal.slice(0, lastSpace) : statePostal
-  const postalCode = lastSpace !== -1 ? statePostal.slice(lastSpace + 1) : ''
-  return {
-    street1: streetParts[0] ?? '',
-    street2: streetParts[1] ?? '',
-    street3: streetParts[2] ?? '',
-    city,
-    stateProvince,
-    postalCode,
-    country,
-  }
 }
 
 export default function CustomerEditButton({
@@ -66,17 +41,6 @@ export default function CustomerEditButton({
 
   const [address, setAddress] = useState(values.address)
   const [addressModalOpen, setAddressModalOpen] = useState(false)
-  const [addressModalPrompt, setAddressModalPrompt] = useState('')
-  const [addressValidationError, setAddressValidationError] = useState('')
-  const [validatingAddress, setValidatingAddress] = useState(false)
-  const parsed = parseAddress(values.address)
-  const [street1, setStreet1] = useState(parsed.street1)
-  const [street2, setStreet2] = useState(parsed.street2)
-  const [street3, setStreet3] = useState(parsed.street3)
-  const [city, setCity] = useState(parsed.city)
-  const [stateProvince, setStateProvince] = useState(parsed.stateProvince)
-  const [postalCode, setPostalCode] = useState(parsed.postalCode)
-  const [country, setCountry] = useState(parsed.country || 'US')
 
   useEffect(() => {
     setMounted(true)
@@ -84,65 +48,10 @@ export default function CustomerEditButton({
 
   function resetFromProps() {
     setFormValues(values)
-    const p = parseAddress(values.address)
     setAddress(values.address)
-    setStreet1(p.street1)
-    setStreet2(p.street2)
-    setStreet3(p.street3)
-    setCity(p.city)
-    setStateProvince(p.stateProvince)
-    setPostalCode(p.postalCode)
-    setCountry(p.country || 'US')
     setAddressModalOpen(false)
-    setAddressModalPrompt('')
-    setAddressValidationError('')
-    setValidatingAddress(false)
     setError('')
     setDismissPrompt('')
-  }
-
-  function formatAddress(): string {
-    const lines = [street1.trim(), street2.trim(), street3.trim()].filter(Boolean)
-    const cityLine = `${city.trim()}, ${stateProvince.trim()} ${postalCode.trim()}`.trim()
-    return [...lines, cityLine, country.trim()].filter(Boolean).join(', ')
-  }
-
-  function validateAddressDraft(): string | null {
-    const hasAnyAddressPart = [street1, street2, street3, city, stateProvince, postalCode, country]
-      .some((v) => v.trim().length > 0)
-
-    if (!hasAnyAddressPart) return 'Enter at least one address value'
-    if (!street1.trim()) return 'Street Address 1 is required'
-    if (!city.trim()) return 'City is required'
-    if (!stateProvince.trim()) return 'State/Province is required'
-    if (!postalCode.trim()) return 'Zip/Postal Code is required'
-    if (!country.trim()) return 'Country is required'
-
-    const normalizedCountry = country.trim().toUpperCase()
-    const normalizedPostal = postalCode.trim()
-
-    if (normalizedCountry === 'US' && !/^\d{5}(-\d{4})?$/.test(normalizedPostal)) {
-      return 'US Zip Code must be 5 digits or ZIP+4 (e.g. 90210 or 90210-1234)'
-    }
-    if (normalizedCountry === 'CA' && !/^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/.test(normalizedPostal)) {
-      return 'Canadian Postal Code must match format A1A 1A1'
-    }
-    return null
-  }
-
-  function saveAddressFromModal() {
-    const validationError = validateAddressDraft()
-    if (validationError) {
-      setAddressValidationError(validationError)
-      return
-    }
-    setAddressValidationError('')
-    setValidatingAddress(false)
-    const formattedAddress = formatAddress()
-    setAddress(formattedAddress)
-    setFormValues((prev) => ({ ...prev, address: formattedAddress }))
-    setAddressModalPrompt('')
-    setAddressModalOpen(false)
   }
 
   async function submitForm(event: React.FormEvent<HTMLFormElement>) {
@@ -260,11 +169,7 @@ export default function CustomerEditButton({
                 <div className="mt-1 flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setAddressModalPrompt('')
-                      setAddressValidationError('')
-                      setAddressModalOpen(true)
-                    }}
+                    onClick={() => setAddressModalOpen(true)}
                     className="rounded-md border px-3 py-2 text-sm font-medium"
                     style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
                   >
@@ -343,132 +248,17 @@ export default function CustomerEditButton({
               </div>
             </form>
 
-            {addressModalOpen ? (
-              <div
-                className="fixed inset-0 z-[130] flex items-center justify-center bg-black/60 p-4"
-                onClick={(event) => {
-                  if (event.target === event.currentTarget) {
-                    setAddressModalPrompt('Use Save Address or Cancel to close this window.')
-                  }
-                }}
-              >
-                <div
-                  className="w-full max-w-2xl rounded-xl border p-6 shadow-2xl"
-                  style={{ backgroundColor: 'var(--card-elevated)', borderColor: 'var(--border-muted)' }}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-2xl font-semibold text-white">Validate Address</h2>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAddressModalPrompt('')
-                        setAddressModalOpen(false)
-                      }}
-                      className="rounded-md px-2 py-1 text-sm"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-
-                  {addressModalPrompt ? <p className="mb-3 text-xs" style={{ color: 'var(--text-secondary)' }}>{addressModalPrompt}</p> : null}
-
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Street Address 1 *</label>
-                      <input
-                        value={street1}
-                        onChange={(e) => setStreet1(e.target.value)}
-                        className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                        style={{ borderColor: 'var(--border-muted)' }}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Street Address 2</label>
-                      <input
-                        value={street2}
-                        onChange={(e) => setStreet2(e.target.value)}
-                        className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                        style={{ borderColor: 'var(--border-muted)' }}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Street Address 3</label>
-                      <input
-                        value={street3}
-                        onChange={(e) => setStreet3(e.target.value)}
-                        className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                        style={{ borderColor: 'var(--border-muted)' }}
-                      />
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div>
-                        <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>City *</label>
-                        <input
-                          value={city}
-                          onChange={(e) => setCity(e.target.value)}
-                          className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                          style={{ borderColor: 'var(--border-muted)' }}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>State/Province *</label>
-                        <input
-                          value={stateProvince}
-                          onChange={(e) => setStateProvince(e.target.value)}
-                          className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                          style={{ borderColor: 'var(--border-muted)' }}
-                        />
-                      </div>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div>
-                        <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Zip Code / Postal Code *</label>
-                        <input
-                          value={postalCode}
-                          onChange={(e) => setPostalCode(e.target.value)}
-                          className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                          style={{ borderColor: 'var(--border-muted)' }}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Country *</label>
-                        <input
-                          value={country}
-                          onChange={(e) => setCountry(e.target.value)}
-                          className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                          style={{ borderColor: 'var(--border-muted)' }}
-                        />
-                      </div>
-                    </div>
-
-                    {addressValidationError ? <p className="text-sm" style={{ color: 'var(--danger)' }}>{addressValidationError}</p> : null}
-
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setAddressModalOpen(false)}
-                        disabled={validatingAddress}
-                        className="rounded-md border px-3 py-2 text-sm"
-                        style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={saveAddressFromModal}
-                        disabled={validatingAddress}
-                        className="rounded-md px-3 py-2 text-sm font-medium text-white"
-                        style={{ backgroundColor: validatingAddress ? '#64748b' : 'var(--accent-primary-strong)' }}
-                      >
-                        {validatingAddress ? 'Validating...' : 'Validate and Save Address'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : null}
+            <AddressModal
+              open={addressModalOpen}
+              onClose={() => setAddressModalOpen(false)}
+              onSave={(formatted) => {
+                setAddress(formatted)
+                setFormValues((prev) => ({ ...prev, address: formatted }))
+                setAddressModalOpen(false)
+              }}
+              initialFields={parseAddress(address)}
+              zIndex={130}
+            />
           </div>
         </div>,
         document.body

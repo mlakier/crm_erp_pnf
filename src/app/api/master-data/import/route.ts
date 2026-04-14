@@ -351,6 +351,149 @@ async function importDepartments(rows: Array<Record<string, string>>, mode: Impo
   return succeeded
 }
 
+async function importChartOfAccounts(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[]) {
+  let succeeded = 0
+
+  const parentCodes = Array.from(
+    new Set(rows.map((row) => (row.parentsubsidiarycode ?? '').toUpperCase().trim()).filter(Boolean))
+  )
+  const selectedCodes = Array.from(
+    new Set(
+      rows
+        .flatMap((row) => (row.subsidiarycodes ?? '').split(','))
+        .map((value) => value.trim().toUpperCase())
+        .filter(Boolean)
+    )
+  )
+  const allCodes = Array.from(new Set([...parentCodes, ...selectedCodes]))
+
+  const subsidiaries = await prisma.entity.findMany({
+    where: { code: { in: allCodes } },
+    select: { id: true, code: true },
+  })
+  const subsidiaryMap = new Map(subsidiaries.map((subsidiary) => [subsidiary.code.toUpperCase(), subsidiary.id]))
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
+    const rowNumber = index + 2
+    const accountNumber = (row.accountnumber ?? '').trim()
+    const name = (row.name ?? '').trim()
+    const accountType = (row.accounttype ?? '').trim()
+    const scopeMode = ((row.scopemode ?? 'selected').trim().toLowerCase() || 'selected') as 'selected' | 'parent'
+    const parentSubsidiaryCode = (row.parentsubsidiarycode ?? '').toUpperCase().trim()
+    const selectedSubsidiaryCodes = (row.subsidiarycodes ?? '')
+      .split(',')
+      .map((value) => value.trim().toUpperCase())
+      .filter(Boolean)
+
+    if (!accountNumber) {
+      errors.push({ row: rowNumber, message: 'accountNumber is required (cannot be empty)' })
+      continue
+    }
+
+    if (!name) {
+      errors.push({ row: rowNumber, message: 'name is required (cannot be empty)' })
+      continue
+    }
+
+    if (!accountType) {
+      errors.push({ row: rowNumber, message: 'accountType is required (cannot be empty)' })
+      continue
+    }
+
+    if (scopeMode !== 'selected' && scopeMode !== 'parent') {
+      errors.push({ row: rowNumber, message: 'scopeMode must be selected or parent' })
+      continue
+    }
+
+    if (scopeMode === 'parent' && !parentSubsidiaryCode) {
+      errors.push({ row: rowNumber, message: 'parentSubsidiaryCode is required when scopeMode=parent' })
+      continue
+    }
+
+    if (scopeMode === 'parent' && parentSubsidiaryCode && !subsidiaryMap.has(parentSubsidiaryCode)) {
+      errors.push({ row: rowNumber, message: `parentSubsidiaryCode "${parentSubsidiaryCode}" not found` })
+      continue
+    }
+
+    if (scopeMode === 'selected' && selectedSubsidiaryCodes.length === 0) {
+      errors.push({ row: rowNumber, message: 'subsidiaryCodes is required when scopeMode=selected' })
+      continue
+    }
+
+    const missingSubsidiaries = selectedSubsidiaryCodes.filter((code) => !subsidiaryMap.has(code))
+    if (missingSubsidiaries.length > 0) {
+      errors.push({
+        row: rowNumber,
+        message: `Unknown subsidiaryCodes: ${missingSubsidiaries.join(', ')}`,
+      })
+      continue
+    }
+
+    if (!dryRun) {
+      const exists = await prisma.chartOfAccounts.findUnique({ where: { accountNumber } })
+
+      if (mode === 'add' && exists) {
+        errors.push({ row: rowNumber, message: `Chart account "${accountNumber}" already exists (add mode)` })
+        continue
+      }
+
+      if (mode === 'update' && !exists) {
+        errors.push({ row: rowNumber, message: `Chart account "${accountNumber}" does not exist (update mode)` })
+        continue
+      }
+
+      if (mode === 'addOrUpdate' || (mode === 'add' && !exists) || (mode === 'update' && exists)) {
+        const upserted = await prisma.chartOfAccounts.upsert({
+          where: { accountNumber },
+          update: {
+            name,
+            description: (row.description ?? '').trim() || null,
+            accountType,
+            inventory: parseBoolean(row.inventory, false),
+            revalueOpenBalance: parseBoolean(row.revalueopenbalance, false),
+            eliminateIntercoTransactions: parseBoolean(row.eliminateintercotransactions, false),
+            summary: parseBoolean(row.summary, false),
+            parentSubsidiaryId: scopeMode === 'parent' ? subsidiaryMap.get(parentSubsidiaryCode) ?? null : null,
+            includeChildren: scopeMode === 'parent' ? parseBoolean(row.includechildren, false) : false,
+          },
+          create: {
+            accountNumber,
+            name,
+            description: (row.description ?? '').trim() || null,
+            accountType,
+            inventory: parseBoolean(row.inventory, false),
+            revalueOpenBalance: parseBoolean(row.revalueopenbalance, false),
+            eliminateIntercoTransactions: parseBoolean(row.eliminateintercotransactions, false),
+            summary: parseBoolean(row.summary, false),
+            parentSubsidiaryId: scopeMode === 'parent' ? subsidiaryMap.get(parentSubsidiaryCode) ?? null : null,
+            includeChildren: scopeMode === 'parent' ? parseBoolean(row.includechildren, false) : false,
+          },
+        })
+
+        if (scopeMode === 'selected') {
+          await prisma.chartOfAccountSubsidiary.deleteMany({ where: { chartOfAccountId: upserted.id } })
+          if (selectedSubsidiaryCodes.length > 0) {
+            await prisma.chartOfAccountSubsidiary.createMany({
+              data: selectedSubsidiaryCodes.map((code) => ({
+                chartOfAccountId: upserted.id,
+                subsidiaryId: subsidiaryMap.get(code) ?? '',
+              })),
+              skipDuplicates: true,
+            })
+          }
+        } else {
+          await prisma.chartOfAccountSubsidiary.deleteMany({ where: { chartOfAccountId: upserted.id } })
+        }
+      }
+    }
+
+    succeeded += 1
+  }
+
+  return succeeded
+}
+
 async function importItems(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[]) {
   let succeeded = 0
 
@@ -987,6 +1130,8 @@ export async function POST(request: Request) {
       succeeded = await importContacts(rows, mode, dryRun, errors)
     } else if (entity === 'vendors') {
       succeeded = await importVendors(rows, mode, dryRun, errors)
+    } else if (entity === 'chart-of-accounts') {
+      succeeded = await importChartOfAccounts(rows, mode, dryRun, errors)
     }
 
     return NextResponse.json({

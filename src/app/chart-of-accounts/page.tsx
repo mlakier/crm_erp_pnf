@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import CreateModalButton from '@/components/CreateModalButton'
 import ChartOfAccountCreateForm from '@/components/ChartOfAccountCreateForm'
+import MasterDataCustomizeButton from '@/components/MasterDataCustomizeButton'
 import EditButton from '@/components/EditButton'
 import DeleteButton from '@/components/DeleteButton'
 import ColumnSelector from '@/components/ColumnSelector'
@@ -92,9 +93,12 @@ export default async function ChartOfAccountsPage({
           <h1 className="text-xl font-semibold text-white">Chart of Accounts</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{total} total</p>
         </div>
-        <CreateModalButton buttonLabel="New Account" title="New Chart Account" modalWidthClassName="max-w-3xl">
-          <ChartOfAccountCreateForm subsidiaries={subsidiaries} />
-        </CreateModalButton>
+        <div className="flex items-center gap-2">
+          <MasterDataCustomizeButton tableId="chart-of-accounts-list" columns={COLS} title="Chart of Accounts" />
+          <CreateModalButton buttonLabel="New Account" title="New Chart Account" modalWidthClassName="max-w-3xl">
+            <ChartOfAccountCreateForm subsidiaries={subsidiaries} />
+          </CreateModalButton>
+        </div>
       </div>
 
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>

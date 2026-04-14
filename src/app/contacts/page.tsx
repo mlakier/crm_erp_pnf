@@ -3,8 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { fmtPhone, normalizePhone } from '@/lib/format'
 import ContactCreateForm from '@/components/ContactCreateForm'
 import DeleteButton from '@/components/DeleteButton'
-import EditButton from '@/components/EditButton'
+import ContactEditButton from '@/components/ContactEditButton'
 import CreateModalButton from '@/components/CreateModalButton'
+import MasterDataCustomizeButton from '@/components/MasterDataCustomizeButton'
 import ColumnSelector from '@/components/ColumnSelector'
 import ExportButton from '@/components/ExportButton'
 import PaginationFooter from '@/components/PaginationFooter'
@@ -18,6 +19,7 @@ const CONTACT_COLUMNS = [
   { id: 'customer', label: 'Customer' },
   { id: 'email', label: 'Email' },
   { id: 'phone', label: 'Phone' },
+  { id: 'address', label: 'Address' },
   { id: 'position', label: 'Position' },
   { id: 'inactive', label: 'Inactive' },
   { id: 'created', label: 'Created' },
@@ -42,6 +44,7 @@ export default async function ContactsPage({
           { lastName: { contains: query } },
           { email: { contains: query } },
           { phone: { contains: query } },
+          { address: { contains: query } },
           { position: { contains: query } },
           { customer: { name: { contains: query } } },
         ],
@@ -103,11 +106,14 @@ export default async function ContactsPage({
           <h1 className="text-xl font-semibold text-white">Contacts</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{totalContacts} total</p>
         </div>
-        {adminUser ? (
-          <CreateModalButton buttonLabel="New Contact" title="New Contact">
-            <ContactCreateForm userId={adminUser.id} customers={customers} />
-          </CreateModalButton>
-        ) : null}
+        <div className="flex items-center gap-2">
+          <MasterDataCustomizeButton tableId="contacts-list" columns={CONTACT_COLUMNS} title="Contacts" />
+          {adminUser ? (
+            <CreateModalButton buttonLabel="New Contact" title="New Contact">
+              <ContactCreateForm userId={adminUser.id} customers={customers} />
+            </CreateModalButton>
+          ) : null}
+        </div>
       </div>
 
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
@@ -144,6 +150,7 @@ export default async function ContactsPage({
                 <th data-column="customer" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Customer</th>
                 <th data-column="email" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Email</th>
                 <th data-column="phone" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Phone</th>
+                <th data-column="address" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Address</th>
                 <th data-column="position" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Position</th>
                 <th data-column="inactive" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Inactive</th>
                 <th data-column="created" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Created</th>
@@ -169,32 +176,26 @@ export default async function ContactsPage({
                   <td data-column="customer" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{contact.customer.name}</td>
                   <td data-column="email" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{contact.email ?? '—'}</td>
                   <td data-column="phone" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtPhone(contact.phone)}</td>
+                  <td data-column="address" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{contact.address ?? '—'}</td>
                   <td data-column="position" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{contact.position ?? '—'}</td>
                   <td data-column="inactive" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{contact.active ? 'No' : 'Yes'}</td>
                   <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(contact.createdAt).toLocaleDateString()}</td>
                   <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(contact.updatedAt).toLocaleDateString()}</td>
                   <td data-column="actions" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
                     <div className="flex items-center gap-2">
-                      <EditButton
-                        resource="contacts"
-                        id={contact.id}
-                        fields={[
-                          { name: 'firstName', label: 'First Name', value: contact.firstName },
-                          { name: 'lastName', label: 'Last Name', value: contact.lastName },
-                          { name: 'email', label: 'Email', value: contact.email ?? '' },
-                          { name: 'phone', label: 'Phone', value: normalizePhone(contact.phone) ?? '' },
-                          { name: 'position', label: 'Position', value: contact.position ?? '' },
-                          {
-                            name: 'inactive',
-                            label: 'Inactive',
-                            value: String(!contact.active),
-                            type: 'select',
-                            options: [
-                              { value: 'false', label: 'No' },
-                              { value: 'true', label: 'Yes' },
-                            ],
-                          },
-                        ]}
+                      <ContactEditButton
+                        contactId={contact.id}
+                        values={{
+                          firstName: contact.firstName,
+                          lastName: contact.lastName,
+                          email: contact.email ?? '',
+                          phone: normalizePhone(contact.phone) ?? '',
+                          address: contact.address ?? '',
+                          position: contact.position ?? '',
+                          customerId: contact.customerId,
+                          inactive: !contact.active,
+                        }}
+                        customers={customers.map((customer) => ({ id: customer.id, name: customer.name }))}
                       />
                       <DeleteButton resource="contacts" id={contact.id} />
                     </div>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useListOptions } from '@/lib/list-options-client'
 import { isValidEmail } from '@/lib/validation'
+import AddressModal, { parseAddress } from '@/components/AddressModal'
 
 export default function LeadCreateForm({
   userId,
@@ -23,6 +24,8 @@ export default function LeadCreateForm({
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [address, setAddress] = useState('')
+  const [addressModalOpen, setAddressModalOpen] = useState(false)
   const [company, setCompany] = useState('')
   const [title, setTitle] = useState('')
   const [status, setStatus] = useState('new')
@@ -57,6 +60,7 @@ export default function LeadCreateForm({
           lastName,
           email,
           phone,
+          address,
           company,
           title,
           status,
@@ -112,6 +116,22 @@ export default function LeadCreateForm({
           <span>Phone</span>
           <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full rounded-md border px-3 py-2 text-white bg-transparent" style={{ borderColor: 'var(--border-muted)' }} />
         </label>
+      </div>
+      <div>
+        <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Address</label>
+        <div className="mt-1 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAddressModalOpen(true)}
+            className="rounded-md border px-3 py-2 text-sm font-medium"
+            style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+          >
+            {address ? 'Edit Address' : 'Enter Address'}
+          </button>
+          <p className="text-xs" style={{ color: address ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+            {address ? address : 'No address saved yet'}
+          </p>
+        </div>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
@@ -175,6 +195,17 @@ export default function LeadCreateForm({
         <button type="button" onClick={onCancel} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>Cancel</button>
         <button type="submit" disabled={saving} className="rounded-md px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: 'var(--accent-primary-strong)' }}>{saving ? 'Saving...' : 'Create Lead'}</button>
       </div>
+
+      <AddressModal
+        open={addressModalOpen}
+        onClose={() => setAddressModalOpen(false)}
+        onSave={(formatted) => {
+          setAddress(formatted)
+          setAddressModalOpen(false)
+        }}
+        initialFields={parseAddress(address)}
+        zIndex={60}
+      />
     </form>
   )
 }

@@ -35,6 +35,37 @@ export default function ColumnSelector({
   }, [storageKey])
 
   useEffect(() => {
+    function syncFromStorage() {
+      try {
+        const raw = window.localStorage.getItem(storageKey)
+        if (!raw) {
+          setHiddenColumns([])
+          return
+        }
+        const parsed = JSON.parse(raw)
+        if (!Array.isArray(parsed)) return
+        setHiddenColumns(parsed.filter((value): value is string => typeof value === 'string'))
+      } catch {
+        // Ignore invalid saved preferences.
+      }
+    }
+
+    function handleCustomizationUpdate(event: Event) {
+      const detail = (event as CustomEvent<{ tableId?: string }>).detail
+      if (!detail || detail.tableId === tableId) {
+        syncFromStorage()
+      }
+    }
+
+    window.addEventListener('column-selector:updated', handleCustomizationUpdate as EventListener)
+    window.addEventListener('storage', syncFromStorage)
+    return () => {
+      window.removeEventListener('column-selector:updated', handleCustomizationUpdate as EventListener)
+      window.removeEventListener('storage', syncFromStorage)
+    }
+  }, [storageKey, tableId])
+
+  useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (!containerRef.current?.contains(event.target as Node)) {
         setOpen(false)
