@@ -7,6 +7,21 @@ generator client {
   provider = "prisma-client-js"
 }
 
+  model ListOption {
+    id        String   @id @default(cuid())
+    key       String   // e.g. LIST-INDUSTRY
+    listId    String   // e.g. LIST-INDUSTRY-0001
+    value     String   // e.g. Quick Service Restaurant
+    label     String   // e.g. Quick Service Restaurant
+    sortOrder Int      @default(0)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([key, sortOrder])
+    @@unique([listId])
+    @@map("list_options")
+  }
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -466,6 +481,7 @@ model SalesOrder {
   quote      Quote?    @relation(fields: [quoteId], references: [id])
   invoices   Invoice[]
   lineItems  SalesOrderLineItem[]
+  fulfillments Fulfillment[]
   entity     Entity?   @relation(fields: [entityId], references: [id])
   currency   Currency? @relation(fields: [currencyId], references: [id])
 
@@ -668,6 +684,8 @@ model SalesOrderLineItem {
 
   @@index([salesOrderId])
   @@index([itemId])
+    fulfillmentLines FulfillmentLine[]
+
   @@map("sales_order_line_items")
 }
 
@@ -852,6 +870,7 @@ model Receipt {
   id        String   @id @default(cuid())
   quantity  Int
   date      DateTime
+  status    String   @default("pending")
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -896,6 +915,8 @@ model Bill {
   @@index([status])
   @@index([entityId])
   @@index([currencyId])
+    billPayments BillPayment[]
+
   @@map("bills")
 }
 
@@ -986,9 +1007,25 @@ model Role {
   updatedAt   DateTime @updatedAt
 
   // Relations
-  users User[]
+  users       User[]
+  permissions Permission[]
 
   @@map("roles")
+}
+model Permission {
+  id            String  @id @default(cuid())
+  page          String
+  canView       Boolean @default(false)
+  canCreate     Boolean @default(false)
+  canEdit       Boolean @default(false)
+  canDelete     Boolean @default(false)
+  blockedStates String?
+  roleId        String
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, page])
+  @@map("permissions")
 }
 
 model Currency {
@@ -1018,6 +1055,8 @@ model Currency {
   billCredits    BillCredit[]
   requisitions   Requisition[]
   journalEntries JournalEntry[]
+
+  fulfillments  Fulfillment[]
 
   @@map("currencies")
 }
@@ -1063,6 +1102,7 @@ model Entity {
 
   @@index([defaultCurrencyId])
   @@index([parentEntityId])
+  fulfillments    Fulfillment[]
   @@map("subsidiaries")
 }
 
@@ -1130,57 +1170,53 @@ model Employee {
   @@map("employees")
 }
 
-model CustomerIndustryOption {
-  id        String   @id @default(cuid())
-  value     String   @unique
-  sortOrder Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Fulfillment {
+  id           String   @id @default(cuid())
+  number       String   @unique
+  status       String   @default("pending")
+  date         DateTime @default(now())
+  notes        String?
+  entityId     String?
+  currencyId   String?
+  salesOrderId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  @@index([sortOrder])
-  @@map("customer_industry_options")
+  salesOrder SalesOrder? @relation(fields: [salesOrderId], references: [id])
+  entity     Entity?     @relation(fields: [entityId], references: [id])
+  currency   Currency?   @relation(fields: [currencyId], references: [id])
+  lines      FulfillmentLine[]
+
+  @@map("fulfillments")
 }
 
-model ItemTypeOption {
-  id        String   @id @default(cuid())
-  value     String   @unique
-  sortOrder Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model FulfillmentLine {
+  id                   String  @id @default(cuid())
+  quantity             Int     @default(1)
+  notes                String?
+  fulfillmentId        String
+  salesOrderLineItemId String?
 
-  @@index([sortOrder])
-  @@map("item_type_options")
+  fulfillment        Fulfillment         @relation(fields: [fulfillmentId], references: [id], onDelete: Cascade)
+  salesOrderLineItem SalesOrderLineItem? @relation(fields: [salesOrderLineItemId], references: [id])
+
+  @@map("fulfillment_lines")
 }
 
-model LeadSourceOption {
+model BillPayment {
   id        String   @id @default(cuid())
-  value     String   @unique
-  sortOrder Int
+  number    String   @unique
+  amount    Float    @default(0)
+  date      DateTime @default(now())
+  method    String?
+  reference String?
+  status    String   @default("pending")
+  notes     String?
+  billId    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([sortOrder])
-  @@map("lead_source_options")
-}
+  bill Bill @relation(fields: [billId], references: [id])
 
-model LeadRatingOption {
-  id        String   @id @default(cuid())
-  value     String   @unique
-  sortOrder Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([sortOrder])
-  @@map("lead_rating_options")
-}
-
-model OpportunityStageOption {
-  id        String   @id @default(cuid())
-  value     String   @unique
-  sortOrder Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([sortOrder])
-  @@map("opportunity_stage_options")
+  @@map("bill_payments")
 }

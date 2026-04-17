@@ -78,3 +78,31 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to delete receipt' }, { status: 500 })
   }
 }
+
+export async function PUT(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'Missing receipt id' }, { status: 400 })
+
+    const body = await request.json()
+    const data: Record<string, unknown> = {}
+    if (body.status !== undefined) data.status = body.status
+    if (body.quantity !== undefined) data.quantity = Number(body.quantity)
+    if (body.notes !== undefined) data.notes = body.notes || null
+    if (body.date !== undefined) data.date = new Date(body.date)
+
+    const receipt = await prisma.receipt.update({ where: { id }, data })
+
+    await logActivity({
+      entityType: 'receipt',
+      entityId: receipt.id,
+      action: 'update',
+      summary: 'Updated receipt ' + id,
+    })
+
+    return NextResponse.json(receipt)
+  } catch {
+    return NextResponse.json({ error: 'Failed to update receipt' }, { status: 500 })
+  }
+}

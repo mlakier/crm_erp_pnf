@@ -39,6 +39,7 @@ export default function LeadCreateForm({
   const [error, setError] = useState<string | null>(null)
   const leadSourceOptions = useListOptions('lead', 'source')
   const leadRatingOptions = useListOptions('lead', 'rating')
+  const leadStatusOptions = useListOptions('lead', 'status')
 
   async function submitForm(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -137,12 +138,9 @@ export default function LeadCreateForm({
         <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
           <span>Status</span>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full rounded-md border px-3 py-2 text-white bg-transparent" style={{ borderColor: 'var(--border-muted)' }}>
-            <option value="new">New</option>
-            <option value="working">Working</option>
-            <option value="qualified">Qualified</option>
-            <option value="nurturing">Nurturing</option>
-            <option value="converted">Converted</option>
-            <option value="unqualified">Unqualified</option>
+            {leadStatusOptions.map((option) => (
+              <option key={option} value={option.toLowerCase()}>{option}</option>
+            ))}
           </select>
         </label>
         <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>

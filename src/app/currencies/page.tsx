@@ -26,10 +26,11 @@ const COLS = [
 export default async function CurrenciesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>
+  searchParams: Promise<{ q?: string; sort?: string; page?: string }>
 }) {
   const params = await searchParams
   const query = (params.q ?? '').trim()
+  const sort = params.sort ?? 'newest'
 
   const where = query
     ? { OR: [{ currencyId: { contains: query } }, { name: { contains: query } }] }
@@ -38,7 +39,11 @@ export default async function CurrenciesPage({
   const total = await prisma.currency.count({ where })
   const pagination = getPagination(total, params.page)
   const [currencies, companySettings, cabinetFiles] = await Promise.all([
-    prisma.currency.findMany({ where, orderBy: { currencyId: 'asc' }, skip: pagination.skip, take: pagination.pageSize }),
+    prisma.currency.findMany({ where, orderBy: sort === 'oldest'
+      ? [{ createdAt: 'asc' as const }]
+      : sort === 'name'
+        ? [{ name: 'asc' as const }]
+        : [{ createdAt: 'desc' as const }], skip: pagination.skip, take: pagination.pageSize }),
     loadCompanyInformationSettings(),
     loadCompanyCabinetFiles(),
   ])
@@ -92,6 +97,16 @@ export default async function CurrenciesPage({
               style={{ borderColor: 'var(--border-muted)' }}
             />
             <input type="hidden" name="page" value="1" />
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="name">Name A-Z</option>
+            </select>
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="name">Name A-Z</option>
+            </select>
             <ExportButton tableId="currencies-list" fileName="currencies" />
             <ColumnSelector tableId="currencies-list" columns={COLS} />
           </div>

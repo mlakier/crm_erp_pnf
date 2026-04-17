@@ -28,10 +28,11 @@ const COLS = [
 export default async function EmployeesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>
+  searchParams: Promise<{ q?: string; sort?: string; page?: string }>
 }) {
   const params = await searchParams
   const query = (params.q ?? '').trim()
+  const sort = params.sort ?? 'newest'
 
   const where = query
     ? { OR: [{ firstName: { contains: query } }, { lastName: { contains: query } }, { email: { contains: query } }] }
@@ -41,7 +42,11 @@ export default async function EmployeesPage({
   const pagination = getPagination(total, params.page)
 
   const [employees, entities, departments, companySettings, cabinetFiles] = await Promise.all([
-    prisma.employee.findMany({ where, include: { entity: true, departmentRef: true }, orderBy: { createdAt: 'desc' }, skip: pagination.skip, take: pagination.pageSize }),
+    prisma.employee.findMany({ where, include: { entity: true, departmentRef: true }, orderBy: sort === 'oldest'
+      ? [{ createdAt: 'asc' as const }]
+      : sort === 'name'
+        ? [{ name: 'asc' as const }]
+        : [{ createdAt: 'desc' as const }], skip: pagination.skip, take: pagination.pageSize }),
     prisma.entity.findMany({ orderBy: { subsidiaryId: 'asc' } }),
     prisma.department.findMany({ orderBy: [{ departmentId: 'asc' }, { name: 'asc' }], select: { id: true, departmentId: true, name: true } }),
     loadCompanyInformationSettings(),
@@ -97,6 +102,16 @@ export default async function EmployeesPage({
               style={{ borderColor: 'var(--border-muted)' }}
             />
             <input type="hidden" name="page" value="1" />
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="name">Name A-Z</option>
+            </select>
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="name">Name A-Z</option>
+            </select>
             <ExportButton tableId="employees-list" fileName="employees" />
             <ColumnSelector tableId="employees-list" columns={COLS} />
           </div>

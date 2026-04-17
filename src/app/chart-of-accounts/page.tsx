@@ -26,10 +26,11 @@ const COLS = [
 export default async function ChartOfAccountsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>
+  searchParams: Promise<{ q?: string; sort?: string; page?: string }>
 }) {
   const params = await searchParams
   const query = (params.q ?? '').trim()
+  const sort = params.sort ?? 'newest'
 
   const where = query
     ? {
@@ -55,7 +56,11 @@ export default async function ChartOfAccountsPage({
           orderBy: { subsidiary: { subsidiaryId: 'asc' } },
         },
       },
-      orderBy: { accountId: 'asc' },
+      orderBy: sort === 'oldest'
+      ? [{ createdAt: 'asc' as const }]
+      : sort === 'account'
+        ? [{ accountId: 'asc' as const }]
+        : [{ createdAt: 'desc' as const }],
       skip: pagination.skip,
       take: pagination.pageSize,
     }),
@@ -113,6 +118,16 @@ export default async function ChartOfAccountsPage({
               className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
               style={{ borderColor: 'var(--border-muted)' }}
             />
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="account">Account #</option>
+            </select>
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="account">Account #</option>
+            </select>
             <ExportButton tableId="chart-of-accounts-list" fileName="chart_of_accounts" />
             <ColumnSelector tableId="chart-of-accounts-list" columns={COLS} />
           </div>

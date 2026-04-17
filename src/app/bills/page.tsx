@@ -11,6 +11,7 @@ import PaginationFooter from '@/components/PaginationFooter'
 import { getPagination } from '@/lib/pagination'
 import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
+import { loadListValues } from '@/lib/load-list-values'
 
 const BILL_COLUMNS = [
   { id: 'bill-number', label: 'Bill #' },
@@ -58,13 +59,16 @@ export default async function BillsPage({
             ? [{ dueDate: 'asc' as const }]
             : [{ createdAt: 'desc' as const }]
 
-  const [totalBills, vendors, totalAmountAgg, companySettings, cabinetFiles] = await Promise.all([
+  const [totalBills, vendors, totalAmountAgg, companySettings, cabinetFiles, statusValues] = await Promise.all([
     prisma.bill.count({ where }),
     prisma.vendor.findMany({ orderBy: { name: 'asc' }, where: { inactive: false } }),
     prisma.bill.aggregate({ where, _sum: { total: true } }),
     loadCompanyInformationSettings(),
     loadCompanyCabinetFiles(),
+    loadListValues('BILL-STATUS'),
   ])
+
+  const STATUS_OPTIONS = ['all', ...statusValues.map(v => v.toLowerCase())]
 
   const pagination = getPagination(totalBills, params.page)
 
@@ -116,9 +120,32 @@ export default async function BillsPage({
         ) : null}
       </div>
 
+      {/* Status tabs */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {STATUS_OPTIONS.map((s) => {
+          const active = statusFilter === s
+          const href = `/bills?${new URLSearchParams({ ...(params.q ? { q: params.q } : {}), status: s, page: '1' }).toString()}`
+          return (
+            <Link
+              key={s}
+              href={href}
+              className="rounded-full px-3 py-1 text-xs font-medium transition-colors"
+              style={
+                active
+                  ? { backgroundColor: 'var(--accent-primary-strong)', color: '#fff' }
+                  : { backgroundColor: 'var(--card)', color: 'var(--text-secondary)', border: '1px solid var(--border-muted)' }
+              }
+            >
+              {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+            </Link>
+          )
+        })}
+      </div>
+
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
           <input type="hidden" name="page" value="1" />
+          <input type="hidden" name="status" value={statusFilter} />
           <div className="flex gap-3 items-center flex-nowrap">
             <input
               type="text"
@@ -128,14 +155,6 @@ export default async function BillsPage({
               className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
               style={{ borderColor: 'var(--border-muted)' }}
             />
-            <select name="status" defaultValue={statusFilter} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-              <option value="all">All statuses</option>
-              <option value="received">Received</option>
-              <option value="pending approval">Pending approval</option>
-              <option value="approved">Approved</option>
-              <option value="paid">Paid</option>
-              <option value="void">Void</option>
-            </select>
             <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>

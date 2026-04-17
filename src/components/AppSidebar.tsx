@@ -44,6 +44,7 @@ const NAV: NavGroup[] = [
     items: [
       { label: 'Manage Lists', href: '/lists' },
       { label: 'Manage Integrations', href: '/integrations' },
+      { label: 'Manage Permissions', href: '/manage-permissions' },
       { label: 'Import Master Data', href: '/master-data-import' },
     ],
   },
@@ -68,14 +69,22 @@ const NAV: NavGroup[] = [
     items: [],
   },
   {
-    section: 'ORDER TO CASH',
+    section: 'WORKFLOWS',
     items: [
       { label: 'OTC Workflow', href: '/otc-workflow' },
+      { label: 'PTP Workflow', href: '/ptp-workflow' },
+    ],
+  },
+  {
+    section: 'ORDER TO CASH',
+    items: [
       { label: 'Leads', href: '/leads' },
       { label: 'Opportunities', href: '/opportunities' },
       { label: 'Quotes', href: '/quotes' },
       { label: 'Sales Orders', href: '/sales-orders' },
+      { label: 'Fulfillments', href: '/fulfillments' },
       { label: 'Invoices', href: '/invoices' },
+      { label: 'Invoice Receipts', href: '/invoice-receipts' },
     ],
   },
   {
@@ -84,12 +93,16 @@ const NAV: NavGroup[] = [
       { label: 'AP Portal', href: '/ap' },
       { label: 'Purchase Requisitions', href: '/purchase-requisitions' },
       { label: 'Purchase Orders', href: '/purchase-orders' },
+      { label: 'Receipts', href: '/receipts' },
       { label: 'Bills', href: '/bills' },
+      { label: 'Bill Payments', href: '/bill-payments' },
     ],
   },
   {
     section: 'RECORD TO REPORT',
-    items: [],
+    items: [
+      { label: 'Journals', href: '/journals' },
+    ],
   },
 ]
 

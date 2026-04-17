@@ -6,6 +6,8 @@ import EditButton from '@/components/EditButton'
 import DeleteButton from '@/components/DeleteButton'
 import PaginationFooter from '@/components/PaginationFooter'
 import MasterDataCustomizeButton from '@/components/MasterDataCustomizeButton'
+import CreateModalButton from '@/components/CreateModalButton'
+import UserCreateForm from '@/components/UserCreateForm'
 import { getPagination } from '@/lib/pagination'
 import { withMasterDataDefaults } from '@/lib/master-data-columns'
 import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
@@ -26,10 +28,11 @@ const COLS = withMasterDataDefaults([
 export default async function UsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>
+  searchParams: Promise<{ q?: string; sort?: string; page?: string }>
 }) {
   const params = await searchParams
   const query = (params.q ?? '').trim()
+  const sort = params.sort ?? 'newest'
 
   const where = query
     ? {
@@ -49,7 +52,11 @@ export default async function UsersPage({
     prisma.user.findMany({
       where,
       include: { department: { select: { departmentId: true, name: true } }, role: { select: { name: true } } },
-      orderBy: [{ createdAt: 'desc' }],
+      orderBy: sort === 'oldest'
+      ? [{ createdAt: 'asc' as const }]
+      : sort === 'name'
+        ? [{ name: 'asc' as const }]
+        : [{ createdAt: 'desc' as const }],
       skip: pagination.skip,
       take: pagination.pageSize,
     }),
@@ -90,6 +97,9 @@ export default async function UsersPage({
         </div>
         <div className="flex items-center gap-2">
           <MasterDataCustomizeButton tableId="users-list" columns={COLS} title="Users" />
+          <CreateModalButton buttonLabel="New User" title="New User">
+            <UserCreateForm />
+          </CreateModalButton>
         </div>
       </div>
 
@@ -105,6 +115,16 @@ export default async function UsersPage({
               style={{ borderColor: 'var(--border-muted)' }}
             />
             <input type="hidden" name="page" value="1" />
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="name">Name A-Z</option>
+            </select>
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="name">Name A-Z</option>
+            </select>
             <ExportButton tableId="users-list" fileName="users" />
             <ColumnSelector tableId="users-list" columns={COLS} />
           </div>

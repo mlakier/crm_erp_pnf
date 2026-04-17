@@ -13,6 +13,7 @@ import { loadCompanyInformationSettings } from '@/lib/company-information-settin
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
 import { loadDepartmentCustomization } from '@/lib/department-customization-store'
 import { loadCustomListState } from '@/lib/custom-list-store'
+import { loadListValues } from '@/lib/load-list-values'
 import {
   CUSTOM_FIELD_TYPES,
   CustomFieldDefinitionSummary,
@@ -59,7 +60,7 @@ export default async function DepartmentsPage({
   const total = await prisma.department.count({ where })
   const pagination = getPagination(total, params.page)
 
-  const [departments, managers, subsidiaries, companySettings, cabinetFiles, customization, customListState, customFields] = await Promise.all([
+  const [departments, managers, subsidiaries, companySettings, cabinetFiles, customization, customListState, customFields, divisionValues] = await Promise.all([
     prisma.department.findMany({ where, include: { entity: true }, orderBy: [{ departmentId: 'asc' }, { name: 'asc' }], skip: pagination.skip, take: pagination.pageSize }),
     prisma.employee.findMany({
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
@@ -75,6 +76,7 @@ export default async function DepartmentsPage({
       orderBy: [{ label: 'asc' }, { createdAt: 'asc' }],
       select: { id: true, name: true, label: true, type: true, required: true, defaultValue: true, options: true, entityType: true },
     }),
+    loadListValues('DIVISION'),
   ])
 
   const configuredColumnOrder = Array.isArray(customization.columnOrder) ? customization.columnOrder : []
@@ -99,9 +101,11 @@ export default async function DepartmentsPage({
     'actions',
   ]
 
-  const divisionCustomListId = customization.listBindings.divisionCustomListId
-  const divisionRows = divisionCustomListId ? customListState.customRows[divisionCustomListId] ?? [] : []
-  const divisionOptions = divisionRows.map((row) => row.value)
+  const divisionOptions = divisionValues.length > 0 ? divisionValues : (() => {
+    const divisionCustomListId = customization.listBindings.divisionCustomListId
+    const divisionRows = divisionCustomListId ? customListState.customRows[divisionCustomListId] ?? [] : []
+    return divisionRows.map((row) => row.value)
+  })()
   const customListOptions = customListState.customLists.map((list) => ({ id: list.id, label: list.label }))
   const normalizedCustomFields: CustomFieldDefinitionSummary[] = customFields.flatMap((field) => (
     CUSTOM_FIELD_TYPES.includes(field.type as (typeof CUSTOM_FIELD_TYPES)[number])

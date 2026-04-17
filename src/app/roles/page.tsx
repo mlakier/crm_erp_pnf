@@ -6,6 +6,8 @@ import EditButton from '@/components/EditButton'
 import DeleteButton from '@/components/DeleteButton'
 import PaginationFooter from '@/components/PaginationFooter'
 import MasterDataCustomizeButton from '@/components/MasterDataCustomizeButton'
+import CreateModalButton from '@/components/CreateModalButton'
+import RoleCreateForm from '@/components/RoleCreateForm'
 import { getPagination } from '@/lib/pagination'
 import { withMasterDataDefaults } from '@/lib/master-data-columns'
 import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
@@ -27,10 +29,11 @@ const COLS = withMasterDataDefaults([
 export default async function RolesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>
+  searchParams: Promise<{ q?: string; sort?: string; page?: string }>
 }) {
   const params = await searchParams
   const query = (params.q ?? '').trim()
+  const sort = params.sort ?? 'newest'
 
   const where = query
     ? { OR: [{ roleId: { contains: query, mode: 'insensitive' as const } }, { name: { contains: query, mode: 'insensitive' as const } }] }
@@ -46,7 +49,11 @@ export default async function RolesPage({
         _count: { select: { users: true } },
         users: { select: { inactive: true } },
       },
-      orderBy: { roleId: 'asc' },
+      orderBy: sort === 'oldest'
+      ? [{ createdAt: 'asc' as const }]
+      : sort === 'name'
+        ? [{ name: 'asc' as const }]
+        : [{ createdAt: 'desc' as const }],
       skip: pagination.skip,
       take: pagination.pageSize,
     }),
@@ -85,9 +92,11 @@ export default async function RolesPage({
         </div>
         <div className="flex items-center gap-2">
           <MasterDataCustomizeButton tableId="roles-list" columns={COLS} title="Roles" />
+          <CreateModalButton buttonLabel="New Role" title="New Role">
+            <RoleCreateForm />
+          </CreateModalButton>
         </div>
       </div>
-
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
           <div className="flex gap-3 items-center flex-nowrap">
@@ -100,6 +109,16 @@ export default async function RolesPage({
               style={{ borderColor: 'var(--border-muted)' }}
             />
             <input type="hidden" name="page" value="1" />
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="name">Name A-Z</option>
+            </select>
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="name">Name A-Z</option>
+            </select>
             <ExportButton tableId="roles-list" fileName="roles" />
             <ColumnSelector tableId="roles-list" columns={COLS} />
           </div>

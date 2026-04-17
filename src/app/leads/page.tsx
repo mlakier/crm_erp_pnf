@@ -11,6 +11,7 @@ import LeadCreateForm from '@/components/LeadCreateForm'
 import { getPagination } from '@/lib/pagination'
 import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
+import { loadListValues } from '@/lib/load-list-values'
 
 const LEAD_COLUMNS = [
   { id: 'lead-number', label: 'Lead #' },
@@ -65,13 +66,14 @@ export default async function LeadsPage({
           ? [{ company: 'asc' as const }, { createdAt: 'desc' as const }]
           : [{ createdAt: 'desc' as const }]
 
-  const [totalLeads, adminUser, entities, currencies, companySettings, cabinetFiles] = await Promise.all([
+  const [totalLeads, adminUser, entities, currencies, companySettings, cabinetFiles, leadStatusValues] = await Promise.all([
     prisma.lead.count({ where }),
     prisma.user.findUnique({ where: { email: 'admin@example.com' } }),
     prisma.entity.findMany({ orderBy: { subsidiaryId: 'asc' }, select: { id: true, subsidiaryId: true, name: true } }),
     prisma.currency.findMany({ orderBy: { currencyId: 'asc' }, select: { id: true, currencyId: true, name: true } }),
     loadCompanyInformationSettings(),
     loadCompanyCabinetFiles(),
+    loadListValues('LEAD-STATUS'),
   ])
 
   const pagination = getPagination(totalLeads, params.page)
@@ -115,11 +117,9 @@ export default async function LeadsPage({
           <h1 className="text-xl font-semibold text-white">Leads</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{totalLeads} total</p>
         </div>
-        {adminUser ? (
-          <CreateModalButton buttonLabel="New Lead" title="New Lead">
-            <LeadCreateForm userId={adminUser.id} entities={entities} currencies={currencies} />
+                  <CreateModalButton buttonLabel="New Lead" title="New Lead">
+          <LeadCreateForm userId={adminUser.id} entities={entities} currencies={currencies} />
           </CreateModalButton>
-        ) : null}
       </div>
 
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
@@ -136,12 +136,9 @@ export default async function LeadsPage({
             />
             <select name="status" defaultValue={statusFilter} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
               <option value="all">All statuses</option>
-              <option value="new">New</option>
-              <option value="working">Working</option>
-              <option value="qualified">Qualified</option>
-              <option value="nurturing">Nurturing</option>
-              <option value="converted">Converted</option>
-              <option value="unqualified">Unqualified</option>
+              {leadStatusValues.map((s) => (
+                <option key={s} value={s.toLowerCase()}>{s}</option>
+              ))}
             </select>
             <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
               <option value="newest">Newest</option>

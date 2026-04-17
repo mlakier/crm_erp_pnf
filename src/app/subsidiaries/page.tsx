@@ -44,10 +44,11 @@ const COLS = [
 export default async function EntitiesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>
+  searchParams: Promise<{ q?: string; sort?: string; page?: string }>
 }) {
   const params = await searchParams
   const query = (params.q ?? '').trim()
+  const sort = params.sort ?? 'newest'
 
   const where = query
     ? { OR: [{ subsidiaryId: { contains: query } }, { name: { contains: query } }] }
@@ -57,9 +58,17 @@ export default async function EntitiesPage({
   const pagination = getPagination(total, params.page)
 
   const [entities, currencies, allEntities, nextEntityCode, companySettings, cabinetFiles] = await Promise.all([
-    prisma.entity.findMany({ where, include: { defaultCurrency: true, parentEntity: true }, orderBy: { subsidiaryId: 'asc' }, skip: pagination.skip, take: pagination.pageSize }),
+    prisma.entity.findMany({ where, include: { defaultCurrency: true, parentEntity: true }, orderBy: sort === 'oldest'
+      ? [{ createdAt: 'asc' as const }]
+      : sort === 'name'
+        ? [{ name: 'asc' as const }]
+        : [{ createdAt: 'desc' as const }], skip: pagination.skip, take: pagination.pageSize }),
     prisma.currency.findMany({ orderBy: { currencyId: 'asc' } }),
-    prisma.entity.findMany({ orderBy: { subsidiaryId: 'asc' }, select: { id: true, subsidiaryId: true, name: true, country: true, entityType: true, taxId: true, parentEntityId: true } }),
+    prisma.entity.findMany({ orderBy: sort === 'oldest'
+      ? [{ createdAt: 'asc' as const }]
+      : sort === 'name'
+        ? [{ name: 'asc' as const }]
+        : [{ createdAt: 'desc' as const }], select: { id: true, subsidiaryId: true, name: true, country: true, entityType: true, taxId: true, parentEntityId: true } }),
     generateNextEntityCode(),
     loadCompanyInformationSettings(),
     loadCompanyCabinetFiles(),
@@ -121,6 +130,16 @@ export default async function EntitiesPage({
               style={{ borderColor: 'var(--border-muted)' }}
             />
             <input type="hidden" name="page" value="1" />
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="name">Name A-Z</option>
+            </select>
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="name">Name A-Z</option>
+            </select>
             <ExportButton tableId="subsidiaries-list" fileName="subsidiaries" compact />
             <ColumnSelector tableId="subsidiaries-list" columns={COLS} />
           </div>

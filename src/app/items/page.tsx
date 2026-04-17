@@ -30,10 +30,11 @@ const COLS = [
 export default async function ItemsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>
+  searchParams: Promise<{ q?: string; sort?: string; page?: string }>
 }) {
   const params = await searchParams
   const query = (params.q ?? '').trim()
+  const sort = params.sort ?? 'newest'
 
   const where = query
     ? { OR: [{ name: { contains: query } }, { itemId: { contains: query } }, { sku: { contains: query } }] }
@@ -43,7 +44,11 @@ export default async function ItemsPage({
   const pagination = getPagination(total, params.page)
 
   const [items, entities, currencies, listOptions, companySettings, cabinetFiles] = await Promise.all([
-    prisma.item.findMany({ where, include: { entity: true, currency: true }, orderBy: { createdAt: 'desc' }, skip: pagination.skip, take: pagination.pageSize }),
+    prisma.item.findMany({ where, include: { entity: true, currency: true }, orderBy: sort === 'oldest'
+      ? [{ createdAt: 'asc' as const }]
+      : sort === 'name'
+        ? [{ name: 'asc' as const }]
+        : [{ createdAt: 'desc' as const }], skip: pagination.skip, take: pagination.pageSize }),
     prisma.entity.findMany({ orderBy: { subsidiaryId: 'asc' } }),
     prisma.currency.findMany({ orderBy: { currencyId: 'asc' } }),
     loadListOptions(),
@@ -100,6 +105,16 @@ export default async function ItemsPage({
               className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
               style={{ borderColor: 'var(--border-muted)' }}
             />
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="name">Name A-Z</option>
+            </select>
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="name">Name A-Z</option>
+            </select>
             <ExportButton tableId="items-list" fileName="items" />
             <ColumnSelector tableId="items-list" columns={COLS} />
           </div>

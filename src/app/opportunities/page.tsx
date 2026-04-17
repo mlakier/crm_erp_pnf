@@ -10,6 +10,9 @@ import PaginationFooter from '@/components/PaginationFooter'
 import { getPagination } from '@/lib/pagination'
 import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
+import { loadListValues } from '@/lib/load-list-values'
+import CreateModalButton from '@/components/CreateModalButton'
+import OpportunityCreateForm from '@/components/OpportunityCreateForm'
 
 const STAGE_ORDER = ['prospecting', 'qualification', 'proposal', 'negotiation', 'won', 'lost'] as const
 
@@ -85,13 +88,17 @@ export default async function OpportunitiesPage({
           ? [{ amount: 'asc' as const }]
           : [{ createdAt: 'desc' as const }]
 
-  const [totalOpportunities, adminUser, pipelineAgg, companySettings, cabinetFiles] = await Promise.all([
+  const [totalOpportunities, adminUser, pipelineAgg, companySettings, cabinetFiles, stageValues, customers, items] = await Promise.all([
     prisma.opportunity.count({ where }),
     prisma.user.findUnique({ where: { email: 'admin@example.com' } }),
     prisma.opportunity.aggregate({ where, _sum: { amount: true } }),
     loadCompanyInformationSettings(),
     loadCompanyCabinetFiles(),
+    loadListValues('OPP-STAGE'),
+    prisma.customer.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    prisma.item.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, listPrice: true, itemId: true } }),
   ])
+  const STAGE_OPTIONS = stageValues.map(v => v.toLowerCase())
 
   const pagination = getPagination(totalOpportunities, params.page)
 
@@ -110,7 +117,7 @@ export default async function OpportunitiesPage({
 
   const pipelineValue = pipelineAgg._sum.amount ?? 0
   const filteredOpportunities = withNormalizedStage
-  const opportunitiesByStage = STAGE_ORDER.map((stage) => ({
+  const opportunitiesByStage = STAGE_OPTIONS.map((stage) => ({
     stage,
     items: filteredOpportunities.filter((opportunity) => opportunity.normalizedStage === stage),
   }))
@@ -148,18 +155,31 @@ export default async function OpportunitiesPage({
           <h1 className="text-xl font-semibold text-white">Opportunities</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{totalOpportunities} total</p>
         </div>
-        {adminUser ? (
-          <Link
-            href="/opportunities/new"
-            className="inline-flex items-center rounded-lg px-3.5 py-1.5 text-base font-semibold transition"
-            style={{ backgroundColor: 'var(--accent-primary-strong)', color: '#ffffff' }}
-          >
-            <span className="mr-1.5 text-lg leading-none">+</span>New Opportunity
-          </Link>
-        ) : null}
+                  <CreateModalButton buttonLabel="New Opportunity" title="New Opportunity">
+          <OpportunityCreateForm userId={adminUser.id} customers={customers} items={items} />
+          </CreateModalButton>
       </div>
-
-      <div className="mb-4 text-sm" style={{ color: 'var(--text-secondary)' }}>Pipeline value: {fmtCurrency(pipelineValue)}</div>
+      {/* Stage tabs */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {['all', ...STAGE_OPTIONS].map((s) => {
+          const active = stageFilter === s
+          const href = `/opportunities?${new URLSearchParams({ ...(params.q ? { q: params.q } : {}), stage: s, view, page: '1' }).toString()}`
+          return (
+            <Link
+              key={s}
+              href={href}
+              className="rounded-full px-3 py-1 text-xs font-medium transition-colors"
+              style={
+                active
+                  ? { backgroundColor: 'var(--accent-primary-strong)', color: '#fff' }
+                  : { backgroundColor: 'var(--card)', color: 'var(--text-secondary)', border: '1px solid var(--border-muted)' }
+              }
+            >
+              {s === 'all' ? 'All' : STAGE_LABELS[s] ?? s.charAt(0).toUpperCase() + s.slice(1)}
+            </Link>
+          )
+        })}
+      </div>
 
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
@@ -172,15 +192,7 @@ export default async function OpportunitiesPage({
                   className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
                   style={{ borderColor: 'var(--border-muted)' }}
                 />
-                <select name="stage" defaultValue={stageFilter} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-                  <option value="all">All stages</option>
-                  <option value="prospecting">Prospecting</option>
-                  <option value="qualification">Qualification</option>
-                  <option value="proposal">Proposal</option>
-                  <option value="negotiation">Negotiation</option>
-                  <option value="won">Won</option>
-                  <option value="lost">Lost</option>
-                </select>
+                <input type="hidden" name="stage" value={stageFilter} />
                 <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
                   <option value="newest">Newest</option>
                   <option value="oldest">Oldest</option>
@@ -212,9 +224,9 @@ export default async function OpportunitiesPage({
                             <p className="rounded-md border border-dashed px-2 py-3 text-center text-xs" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-muted)' }}>No opportunities</p>
                           ) : (
                             column.items.map((opportunity) => {
-                              const stageIndex = STAGE_ORDER.indexOf(column.stage)
-                              const prevStage = stageIndex > 0 ? STAGE_ORDER[stageIndex - 1] : null
-                              const nextStage = stageIndex < STAGE_ORDER.length - 1 ? STAGE_ORDER[stageIndex + 1] : null
+                              const stageIndex = STAGE_OPTIONS.indexOf(column.stage)
+                              const prevStage = stageIndex > 0 ? STAGE_OPTIONS[stageIndex - 1] : null
+                              const nextStage = stageIndex < STAGE_OPTIONS.length - 1 ? STAGE_OPTIONS[stageIndex + 1] : null
 
                               return (
                                 <div key={opportunity.id} className="rounded-lg border p-3" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>

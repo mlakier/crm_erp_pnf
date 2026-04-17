@@ -108,11 +108,9 @@ export default async function CRMPage({
         </div>
         <div className="flex items-center gap-2">
           <MasterDataCustomizeButton tableId="customers-list" columns={CUSTOMER_COLUMNS} title="Customers" />
-          {adminUser ? (
-            <CreateModalButton buttonLabel="New Customer" title="New Customer">
-              <CustomerCreateForm ownerUserId={adminUser.id} subsidiaries={subsidiaries} currencies={currencies} />
-            </CreateModalButton>
-          ) : null}
+                    <CreateModalButton buttonLabel="New Customer" title="New Customer">
+          <CustomerCreateForm ownerUserId={adminUser.id} subsidiaries={subsidiaries} currencies={currencies} />
+          </CreateModalButton>
         </div>
       </div>
 

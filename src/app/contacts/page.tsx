@@ -108,11 +108,9 @@ export default async function ContactsPage({
         </div>
         <div className="flex items-center gap-2">
           <MasterDataCustomizeButton tableId="contacts-list" columns={CONTACT_COLUMNS} title="Contacts" />
-          {adminUser ? (
-            <CreateModalButton buttonLabel="New Contact" title="New Contact">
-              <ContactCreateForm userId={adminUser.id} customers={customers} />
-            </CreateModalButton>
-          ) : null}
+                    <CreateModalButton buttonLabel="New Contact" title="New Contact">
+          <ContactCreateForm userId={adminUser.id} customers={customers} />
+          </CreateModalButton>
         </div>
       </div>
 

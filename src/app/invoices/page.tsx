@@ -9,6 +9,9 @@ import PaginationFooter from '@/components/PaginationFooter'
 import { getPagination } from '@/lib/pagination'
 import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
+import { loadListValues } from '@/lib/load-list-values'
+import EditButton from '@/components/EditButton'
+import DeleteButton from '@/components/DeleteButton'
 
 const INVOICE_COLUMNS = [
   { id: 'invoice-number', label: 'Invoice #' },
@@ -18,8 +21,11 @@ const INVOICE_COLUMNS = [
   { id: 'total', label: 'Total' },
   { id: 'due-date', label: 'Due Date' },
   { id: 'paid-date', label: 'Paid Date' },
+  { id: 'subsidiary', label: 'Subsidiary' },
+  { id: 'currency', label: 'Currency' },
   { id: 'created', label: 'Created' },
   { id: 'last-modified', label: 'Last Modified' },
+  { id: 'actions', label: 'Actions' },
 ]
 
 export default async function InvoicesPage({
@@ -57,7 +63,7 @@ export default async function InvoicesPage({
             ? [{ dueDate: 'asc' as const }]
             : [{ createdAt: 'desc' as const }]
 
-  const [totalInvoices, salesOrdersWithoutInvoices, companySettings, cabinetFiles] = await Promise.all([
+  const [totalInvoices, salesOrdersWithoutInvoices, companySettings, cabinetFiles, statusValues] = await Promise.all([
     prisma.invoice.count({ where }),
     prisma.salesOrder.findMany({
       where: { invoices: { none: {} } },
@@ -67,7 +73,10 @@ export default async function InvoicesPage({
     }),
     loadCompanyInformationSettings(),
     loadCompanyCabinetFiles(),
+    loadListValues('INV-STATUS'),
   ])
+
+  const STATUS_OPTIONS = ['all', ...statusValues.map(v => v.toLowerCase())]
 
   const pagination = getPagination(totalInvoices, params.page)
 
@@ -77,6 +86,8 @@ export default async function InvoicesPage({
       customer: true,
       salesOrder: true,
       cashReceipts: true,
+      entity: true,
+      currency: true,
     },
     orderBy,
     skip: pagination.skip,
@@ -124,9 +135,32 @@ export default async function InvoicesPage({
         </CreateModalButton>
       </div>
 
+      {/* Status tabs */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {STATUS_OPTIONS.map((s) => {
+          const active = statusFilter === s
+          const href = `/invoices?${new URLSearchParams({ ...(params.q ? { q: params.q } : {}), status: s, page: '1' }).toString()}`
+          return (
+            <Link
+              key={s}
+              href={href}
+              className="rounded-full px-3 py-1 text-xs font-medium transition-colors"
+              style={
+                active
+                  ? { backgroundColor: 'var(--accent-primary-strong)', color: '#fff' }
+                  : { backgroundColor: 'var(--card)', color: 'var(--text-secondary)', border: '1px solid var(--border-muted)' }
+              }
+            >
+              {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+            </Link>
+          )
+        })}
+      </div>
+
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
           <input type="hidden" name="page" value="1" />
+          <input type="hidden" name="status" value={statusFilter} />
           <div className="flex gap-3 items-center flex-nowrap">
             <input
               type="text"
@@ -136,13 +170,6 @@ export default async function InvoicesPage({
               className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
               style={{ borderColor: 'var(--border-muted)' }}
             />
-            <select name="status" defaultValue={statusFilter} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-              <option value="all">All statuses</option>
-              <option value="draft">Draft</option>
-              <option value="sent">Sent</option>
-              <option value="paid">Paid</option>
-              <option value="void">Void</option>
-            </select>
             <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>
@@ -166,14 +193,17 @@ export default async function InvoicesPage({
                 <th data-column="total" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Total</th>
                 <th data-column="due-date" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Due Date</th>
                 <th data-column="paid-date" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Paid Date</th>
+                <th data-column="subsidiary" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Subsidiary</th>
+                <th data-column="currency" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Currency</th>
                 <th data-column="created" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Created</th>
                 <th data-column="last-modified" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Last Modified</th>
+                              <th data-column="actions" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {invoices.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No invoices yet. Create one from a sales order.</td>
+                  <td colSpan={12} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No invoices yet. Create one from a sales order.</td>
                 </tr>
               ) : (
                 invoices.map((invoice, index) => (
@@ -189,8 +219,18 @@ export default async function InvoicesPage({
                     <td data-column="total" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtCurrency(invoice.total)}</td>
                     <td data-column="due-date" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : '—'}</td>
                     <td data-column="paid-date" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{invoice.paidDate ? new Date(invoice.paidDate).toLocaleDateString() : '—'}</td>
+                    <td data-column="subsidiary" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{(invoice).entity?.name ?? '—'}</td>
+                    <td data-column="currency" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{(invoice).currency?.currencyId ?? '—'}</td>
                     <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(invoice.createdAt).toLocaleDateString()}</td>
                     <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(invoice.updatedAt).toLocaleDateString()}</td>
+                                      <td data-column="actions" className="px-4 py-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <EditButton resource="invoices" id={inv.id} fields={[
+                          { name: 'status', label: 'Status', value: inv.status ?? '', type: 'select', options: statusValues.map(s => ({ value: s.toLowerCase(), label: s })) },
+                        ]} />
+                        <DeleteButton resource="invoices" id={inv.id} />
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}

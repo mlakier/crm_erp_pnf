@@ -8,6 +8,7 @@ export type ListOptionsConfig = {
   lead: {
     source: string[]
     rating: string[]
+    status: string[]
   }
   opportunity: {
     stage: string[]
@@ -47,11 +48,12 @@ export const LIST_LABELS: { [P in ListPageKey]: Record<keyof ListOptionsConfig[P
     type: 'Item Type',
   },
   lead: {
-    source: 'Source',
-    rating: 'Rating',
+    source: 'Lead Source',
+    rating: 'Lead Rating',
+    status: 'Lead Status',
   },
   opportunity: {
-    stage: 'Stage',
+    stage: 'Opportunity Stage',
   },
 }
 
@@ -64,7 +66,8 @@ export const LIST_OPTIONS_DEFAULTS: ListOptionsConfig = {
   },
   lead: {
     source: ['Website', 'Referral', 'Trade Show', 'Inbound Demo', 'Webinar'],
-    rating: ['hot', 'warm', 'cold'],
+    rating: ['Hot', 'Warm', 'Cold'],
+    status: ['New', 'Working', 'Qualified', 'Nurturing', 'Converted', 'Unqualified'],
   },
   opportunity: {
     stage: ['prospecting', 'qualification', 'proposal', 'negotiation', 'won', 'lost'],
@@ -81,6 +84,7 @@ export const LIST_ORDER_DEFAULTS: ListOrderConfig = {
   lead: {
     source: 'table',
     rating: 'table',
+    status: 'table',
   },
   opportunity: {
     stage: 'table',

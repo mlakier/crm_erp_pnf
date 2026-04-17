@@ -11,6 +11,7 @@ import { getPagination } from '@/lib/pagination'
 import { fmtCurrency } from '@/lib/format'
 import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
+import { loadListValues } from '@/lib/load-list-values'
 
 const COLS = [
   { id: 'number', label: 'Purchase Req #' },
@@ -25,16 +26,16 @@ const COLS = [
   { id: 'actions', label: 'Actions', locked: true },
 ]
 
-const STATUS_OPTIONS = ['all', 'draft', 'pending approval', 'approved', 'ordered', 'cancelled']
 const PRIORITY_LABELS: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' }
 
 export default async function PurchaseRequisitionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; page?: string }>
+  searchParams: Promise<{ q?: string; sort?: string; status?: string; page?: string }>
 }) {
   const params = await searchParams
   const query = (params.q ?? '').trim()
+  const sort = params.sort ?? 'newest'
   const statusFilter = params.status ?? 'all'
 
   const where = {
@@ -53,12 +54,16 @@ export default async function PurchaseRequisitionsPage({
   const total = await prisma.requisition.count({ where })
   const pagination = getPagination(total, params.page)
 
-  const [requisitions, vendors, departments, entities, currencies, adminUser, companySettings, cabinetFiles] =
+  const [requisitions, vendors, departments, entities, currencies, adminUser, companySettings, cabinetFiles, statusValues] =
     await Promise.all([
       prisma.requisition.findMany({
         where,
         include: { vendor: true, department: true, entity: true, currency: true },
-        orderBy: { createdAt: 'desc' },
+        orderBy: sort === 'oldest'
+      ? [{ createdAt: 'asc' as const }]
+      : sort === 'name'
+        ? [{ title: 'asc' as const }]
+        : [{ createdAt: 'desc' as const }],
         skip: pagination.skip,
         take: pagination.pageSize,
       }),
@@ -69,7 +74,10 @@ export default async function PurchaseRequisitionsPage({
       prisma.user.findUnique({ where: { email: 'admin@example.com' } }),
       loadCompanyInformationSettings(),
       loadCompanyCabinetFiles(),
+      loadListValues('REQ-STATUS'),
     ])
+
+  const STATUS_OPTIONS = ['all', ...statusValues.map(v => v.toLowerCase())]
 
   const buildPageHref = (p: number) => {
     const s = new URLSearchParams()
@@ -98,17 +106,15 @@ export default async function PurchaseRequisitionsPage({
           <h1 className="text-xl font-semibold text-white">Purchase Requisitions</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{total} total</p>
         </div>
-        {adminUser ? (
-          <CreateModalButton buttonLabel="New Requisition" title="New Purchase Requisition" modalWidthClassName="max-w-2xl">
-            <RequisitionCreateForm
-              userId={adminUser.id}
-              vendors={vendors}
-              departments={departments}
-              entities={entities.map(({ id, subsidiaryId, name }) => ({ id, subsidiaryId, name }))}
-              currencies={currencies.map(({ id, currencyId, name }) => ({ id, currencyId, name }))}
-            />
+                  <CreateModalButton buttonLabel="New Requisition" title="New Purchase Requisition" modalWidthClassName="max-w-2xl">
+          <RequisitionCreateForm
+          userId={adminUser.id}
+          vendors={vendors}
+          departments={departments}
+          entities={entities.map(({ id, subsidiaryId, name }) => ({ id, subsidiaryId, name }))}
+          currencies={currencies.map(({ id, currencyId, name }) => ({ id, currencyId, name }))}
+          />
           </CreateModalButton>
-        ) : null}
       </div>
 
       {/* Filters */}
@@ -146,6 +152,16 @@ export default async function PurchaseRequisitionsPage({
             />
             <input type="hidden" name="status" value={statusFilter} />
             <input type="hidden" name="page" value="1" />
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="name">Name A-Z</option>
+            </select>
+            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="name">Name A-Z</option>
+            </select>
             <ExportButton tableId="requisitions-list" fileName="purchase_requisitions" />
             <ColumnSelector tableId="requisitions-list" columns={COLS} />
           </form>

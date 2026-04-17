@@ -9,6 +9,9 @@ import PaginationFooter from '@/components/PaginationFooter'
 import { getPagination } from '@/lib/pagination'
 import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
+import { loadListValues } from '@/lib/load-list-values'
+import EditButton from '@/components/EditButton'
+import DeleteButton from '@/components/DeleteButton'
 
 const QUOTE_COLUMNS = [
   { id: 'quote-number', label: 'Quote #' },
@@ -18,8 +21,12 @@ const QUOTE_COLUMNS = [
   { id: 'status', label: 'Status' },
   { id: 'total', label: 'Total' },
   { id: 'valid-until', label: 'Valid Until' },
+  { id: 'subsidiary', label: 'Subsidiary' },
+  { id: 'currency', label: 'Currency' },
+  { id: 'notes', label: 'Notes' },
   { id: 'created', label: 'Created' },
   { id: 'last-modified', label: 'Last Modified' },
+  { id: 'actions', label: 'Actions' },
 ]
 
 export default async function QuotesPage({
@@ -55,7 +62,7 @@ export default async function QuotesPage({
           ? [{ total: 'asc' as const }]
           : [{ createdAt: 'desc' as const }]
 
-  const [totalQuotes, opportunitiesWithoutQuote, companySettings, cabinetFiles] = await Promise.all([
+  const [totalQuotes, opportunitiesWithoutQuote, companySettings, cabinetFiles, statusValues] = await Promise.all([
     prisma.quote.count({ where }),
     prisma.opportunity.findMany({
       where: { quote: null },
@@ -65,7 +72,10 @@ export default async function QuotesPage({
     }),
     loadCompanyInformationSettings(),
     loadCompanyCabinetFiles(),
+    loadListValues('QUOTE-STATUS'),
   ])
+
+  const STATUS_OPTIONS = ['all', ...statusValues.map(v => v.toLowerCase())]
 
   const pagination = getPagination(totalQuotes, params.page)
 
@@ -75,6 +85,8 @@ export default async function QuotesPage({
       customer: true,
       opportunity: true,
       salesOrder: true,
+      entity: true,
+      currency: true,
     },
     orderBy,
     skip: pagination.skip,
@@ -122,6 +134,28 @@ export default async function QuotesPage({
         </CreateModalButton>
       </div>
 
+      {/* Status tabs */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {STATUS_OPTIONS.map((s) => {
+          const active = statusFilter === s
+          const href = `/quotes?${new URLSearchParams({ ...(params.q ? { q: params.q } : {}), status: s, page: '1' }).toString()}`
+          return (
+            <Link
+              key={s}
+              href={href}
+              className="rounded-full px-3 py-1 text-xs font-medium transition-colors"
+              style={
+                active
+                  ? { backgroundColor: 'var(--accent-primary-strong)', color: '#fff' }
+                  : { backgroundColor: 'var(--card)', color: 'var(--text-secondary)', border: '1px solid var(--border-muted)' }
+              }
+            >
+              {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+            </Link>
+          )
+        })}
+      </div>
+
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
           <div className="flex gap-3 items-center flex-nowrap">
@@ -133,13 +167,7 @@ export default async function QuotesPage({
               className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
               style={{ borderColor: 'var(--border-muted)' }}
             />
-            <select name="status" defaultValue={statusFilter} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-              <option value="all">All statuses</option>
-              <option value="draft">Draft</option>
-              <option value="sent">Sent</option>
-              <option value="accepted">Accepted</option>
-              <option value="expired">Expired</option>
-            </select>
+            <input type="hidden" name="status" value={statusFilter} />
             <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>
@@ -163,14 +191,18 @@ export default async function QuotesPage({
                 <th data-column="status" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Status</th>
                 <th data-column="total" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Total</th>
                 <th data-column="valid-until" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Valid Until</th>
+                <th data-column="subsidiary" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Subsidiary</th>
+                <th data-column="currency" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Currency</th>
+                <th data-column="notes" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Notes</th>
                 <th data-column="created" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Created</th>
                 <th data-column="last-modified" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Last Modified</th>
+                              <th data-column="actions" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {quotes.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No quotes yet. Create one from an opportunity.</td>
+                  <td colSpan={13} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No quotes yet. Create one from an opportunity.</td>
                 </tr>
               ) : (
                 quotes.map((quote, index) => (
@@ -186,8 +218,19 @@ export default async function QuotesPage({
                     <td data-column="status" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{quote.status}</td>
                     <td data-column="total" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtCurrency(quote.total)}</td>
                     <td data-column="valid-until" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{quote.validUntil ? new Date(quote.validUntil).toLocaleDateString() : '—'}</td>
+                    <td data-column="subsidiary" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{(quote).entity?.name ?? '—'}</td>
+                    <td data-column="currency" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{(quote).currency?.currencyId ?? '—'}</td>
+                    <td data-column="notes" className="px-4 py-2 text-sm truncate max-w-[200px]" style={{ color: 'var(--text-secondary)' }}>{quote.notes ?? '—'}</td>
                     <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(quote.createdAt).toLocaleDateString()}</td>
                     <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(quote.updatedAt).toLocaleDateString()}</td>
+                                      <td data-column="actions" className="px-4 py-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <EditButton resource="quotes" id={quote.id} fields={[
+                          { name: 'status', label: 'Status', value: quote.status ?? '', type: 'select', options: statusValues.map(s => ({ value: s.toLowerCase(), label: s })) },
+                        ]} />
+                        <DeleteButton resource="quotes" id={quote.id} />
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
