@@ -2,30 +2,18 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import CreateModalButton from '@/components/CreateModalButton'
 import ItemCreateForm from '@/components/ItemCreateForm'
-import MasterDataCustomizeButton from '@/components/MasterDataCustomizeButton'
+import MasterDataPageHeader from '@/components/MasterDataPageHeader'
+import MasterDataListSection from '@/components/MasterDataListSection'
+import { MasterDataBodyCell, MasterDataEmptyStateRow, MasterDataHeaderCell, MasterDataMutedCell } from '@/components/MasterDataTableCells'
 import EditButton from '@/components/EditButton'
 import DeleteButton from '@/components/DeleteButton'
-import ColumnSelector from '@/components/ColumnSelector'
-import ExportButton from '@/components/ExportButton'
 import PaginationFooter from '@/components/PaginationFooter'
 import { getPagination } from '@/lib/pagination'
-import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
-import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
+import { MASTER_DATA_TABLE_DIVIDER_STYLE, getMasterDataRowStyle } from '@/lib/master-data-table'
+import { formatMasterDataDate } from '@/lib/master-data-display'
+import { loadCompanyPageLogo } from '@/lib/company-page-logo'
 import { loadListOptions } from '@/lib/list-options-store'
-
-const COLS = [
-  { id: 'item-id', label: 'Item Id' },
-  { id: 'name', label: 'Name' },
-  { id: 'sku', label: 'SKU' },
-  { id: 'type', label: 'Item Type' },
-  { id: 'price', label: 'Price' },
-  { id: 'subsidiary', label: 'Subsidiary' },
-  { id: 'currency', label: 'Currency' },
-  { id: 'inactive', label: 'Inactive' },
-  { id: 'created', label: 'Created' },
-  { id: 'last-modified', label: 'Last Modified' },
-  { id: 'actions', label: 'Actions', locked: true },
-]
+import { itemListDefinition } from '@/lib/master-data-list-definitions'
 
 export default async function ItemsPage({
   searchParams,
@@ -43,17 +31,42 @@ export default async function ItemsPage({
   const total = await prisma.item.count({ where })
   const pagination = getPagination(total, params.page)
 
-  const [items, entities, currencies, listOptions, companySettings, cabinetFiles] = await Promise.all([
-    prisma.item.findMany({ where, include: { entity: true, currency: true }, orderBy: sort === 'oldest'
-      ? [{ createdAt: 'asc' as const }]
-      : sort === 'name'
-        ? [{ name: 'asc' as const }]
-        : [{ createdAt: 'desc' as const }], skip: pagination.skip, take: pagination.pageSize }),
+  const [items, entities, currencies, glAccounts, revRecTemplates, listOptions, companyLogoPages] = await Promise.all([
+    prisma.item.findMany({
+      where,
+      include: {
+        entity: true,
+        currency: true,
+        defaultRevRecTemplate: true,
+        incomeAccount: true,
+        deferredRevenueAccount: true,
+        inventoryAccount: true,
+        cogsExpenseAccount: true,
+        deferredCostAccount: true,
+      },
+      orderBy:
+        sort === 'oldest'
+          ? [{ createdAt: 'asc' as const }]
+          : sort === 'name'
+            ? [{ name: 'asc' as const }]
+            : [{ createdAt: 'desc' as const }],
+      skip: pagination.skip,
+      take: pagination.pageSize,
+    }),
     prisma.entity.findMany({ orderBy: { subsidiaryId: 'asc' } }),
     prisma.currency.findMany({ orderBy: { currencyId: 'asc' } }),
+    prisma.chartOfAccounts.findMany({
+      where: { active: true },
+      orderBy: { accountId: 'asc' },
+      select: { id: true, accountId: true, name: true },
+    }),
+    prisma.revRecTemplate.findMany({
+      where: { active: true },
+      orderBy: { templateId: 'asc' },
+      select: { id: true, templateId: true, name: true },
+    }),
     loadListOptions(),
-    loadCompanyInformationSettings(),
-    loadCompanyCabinetFiles(),
+    loadCompanyPageLogo(),
   ])
 
   const buildPageHref = (p: number) => {
@@ -63,130 +76,138 @@ export default async function ItemsPage({
     return `/items?${s.toString()}`
   }
 
-  const selectedLogoValue = companySettings.companyLogoPagesFileId
-  const companyLogoPages =
-    cabinetFiles.find((file) => file.id === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.originalName === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.storedName === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.url === selectedLogoValue)
-    ?? (!selectedLogoValue ? cabinetFiles[0] : undefined)
+  const glOptions = glAccounts.map((account) => ({
+    value: account.id,
+    label: `${account.accountId} - ${account.name}`,
+  }))
+
+  const formatAccountLabel = (account: { accountId: string; name: string } | null) =>
+    account ? `${account.accountId} - ${account.name}` : '-'
 
   return (
     <div className="min-h-full px-8 py-8">
-      <div className="mb-6 flex items-center justify-between gap-4">
-        {companyLogoPages ? (
-          <img
-            src={companyLogoPages.url}
-            alt="Company logo"
-            className="h-16 w-auto rounded"
-          />
-        ) : null}
-        <div>
-          <h1 className="text-xl font-semibold text-white">Items</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{total} total</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <MasterDataCustomizeButton tableId="items-list" columns={COLS} title="Items" />
+      <MasterDataPageHeader
+        title="Items"
+        total={total}
+        logoUrl={companyLogoPages?.url}
+        actions={
           <CreateModalButton buttonLabel="New Item" title="New Item">
-            <ItemCreateForm entities={entities} currencies={currencies} />
+            <ItemCreateForm entities={entities} currencies={currencies} glAccounts={glAccounts} revRecTemplates={revRecTemplates} />
           </CreateModalButton>
-        </div>
-      </div>
+        }
+      />
 
-      <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-        <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
-          <input type="hidden" name="page" value="1" />
-          <div className="flex gap-3 items-center flex-nowrap">
-            <input
-              type="text"
-              name="q"
-              defaultValue={params.q ?? ''}
-              placeholder="Search name, Item Id, SKU"
-              className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            />
-            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="name">Name A-Z</option>
-            </select>
-            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="name">Name A-Z</option>
-            </select>
-            <ExportButton tableId="items-list" fileName="items" />
-            <ColumnSelector tableId="items-list" columns={COLS} />
-          </div>
-        </form>
-
-        <div className="overflow-x-auto" data-column-selector-table="items-list">
-          <table className="min-w-full" id="items-list">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                <th data-column="item-id" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Item Id</th>
-                <th data-column="name" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Name</th>
-                <th data-column="sku" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>SKU</th>
-                <th data-column="type" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Item Type</th>
-                <th data-column="price" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Price</th>
-                <th data-column="subsidiary" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Subsidiary</th>
-                <th data-column="currency" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Currency</th>
-                <th data-column="inactive" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Inactive</th>
-                <th data-column="created" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Created</th>
-                <th data-column="last-modified" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Last Modified</th>
-                <th data-column="actions" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-                    No items found
-                  </td>
+      <MasterDataListSection
+        query={params.q}
+        searchPlaceholder={itemListDefinition.searchPlaceholder}
+        tableId={itemListDefinition.tableId}
+        exportFileName={itemListDefinition.exportFileName}
+        columns={itemListDefinition.columns}
+        sort={sort}
+        sortOptions={itemListDefinition.sortOptions}
+      >
+        <table className="min-w-full" id={itemListDefinition.tableId}>
+          <thead>
+            <tr style={MASTER_DATA_TABLE_DIVIDER_STYLE}>
+              <MasterDataHeaderCell columnId="item-id">Item Id</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="name">Name</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="sku">SKU</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="type">Item Type</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="price">Price</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="subsidiary">Subsidiary</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="currency">Currency</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="revenue-stream">Revenue Stream</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="recognition-method">Recognition Method</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="rev-rec-template">Rev Rec Template</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="ssp">SSP</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="standard-cost">Standard Cost</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="income-account">Income Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="deferred-revenue-account">Deferred Revenue Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="inventory-account">Inventory Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="cogs-expense-account">COGS / Expense Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="deferred-cost-account">Deferred Cost Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="direct-revenue-posting">Direct Revenue Posting</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="inactive">Inactive</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="last-modified">Last Modified</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
+            </tr>
+          </thead>
+          <tbody>
+            {items.length === 0 ? (
+              <MasterDataEmptyStateRow colSpan={itemListDefinition.columns.length}>No items found</MasterDataEmptyStateRow>
+            ) : (
+              items.map((item, index) => (
+                <tr key={item.id} style={getMasterDataRowStyle(index, items.length)}>
+                  <MasterDataBodyCell columnId="item-id">
+                    <Link href={`/items/${item.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                      {item.itemId ?? '-'}
+                    </Link>
+                  </MasterDataBodyCell>
+                  <MasterDataBodyCell columnId="name" className="px-4 py-2 text-sm font-medium text-white">{item.name}</MasterDataBodyCell>
+                  <MasterDataMutedCell columnId="sku">{item.sku ?? '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="type" className="px-4 py-2 text-sm capitalize">{item.itemType}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="price">{item.listPrice.toFixed(2)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="subsidiary">{item.entity?.subsidiaryId ?? '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="currency">{item.currency?.currencyId ?? '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="revenue-stream">{item.revenueStream ?? '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="recognition-method">{item.recognitionMethod ?? '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="rev-rec-template">{item.defaultRevRecTemplate ? `${item.defaultRevRecTemplate.templateId} - ${item.defaultRevRecTemplate.name}` : '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="ssp">{item.standaloneSellingPrice != null ? item.standaloneSellingPrice.toFixed(2) : '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="standard-cost">{item.standardCost != null ? item.standardCost.toFixed(2) : '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="income-account">{formatAccountLabel(item.incomeAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="deferred-revenue-account">{formatAccountLabel(item.deferredRevenueAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="inventory-account">{formatAccountLabel(item.inventoryAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="cogs-expense-account">{formatAccountLabel(item.cogsExpenseAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="deferred-cost-account">{formatAccountLabel(item.deferredCostAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="direct-revenue-posting">{item.directRevenuePosting ? 'Yes' : 'No'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="inactive">{item.active ? 'No' : 'Yes'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="created">{formatMasterDataDate(item.createdAt)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(item.updatedAt)}</MasterDataMutedCell>
+                  <MasterDataBodyCell columnId="actions">
+                    <div className="flex items-center gap-2">
+                      <EditButton
+                        resource="items"
+                        id={item.id}
+                        fields={[
+                          { name: 'name', label: 'Name', value: item.name },
+                          { name: 'itemId', label: 'Item Id', value: item.itemId ?? '' },
+                          { name: 'sku', label: 'SKU', value: item.sku ?? '' },
+                          {
+                            name: 'itemType',
+                            label: 'Item Type',
+                            value: item.itemType,
+                            type: 'select',
+                            placeholder: 'Select item type',
+                            options: listOptions.item.type.map((value) => ({ value, label: value })),
+                          },
+                          { name: 'uom', label: 'UOM', value: item.uom ?? '' },
+                          { name: 'listPrice', label: 'List Price', value: String(item.listPrice), type: 'number' },
+                          { name: 'revenueStream', label: 'Revenue Stream', value: item.revenueStream ?? '' },
+                          { name: 'recognitionMethod', label: 'Recognition Method', value: item.recognitionMethod ?? '', type: 'select', options: [{ value: 'point_in_time', label: 'Point in Time' }, { value: 'over_time', label: 'Over Time' }] },
+                          { name: 'recognitionTrigger', label: 'Recognition Trigger', value: item.recognitionTrigger ?? '' },
+                          { name: 'defaultRevRecTemplateId', label: 'Rev Rec Template', value: item.defaultRevRecTemplateId ?? '', type: 'select', placeholder: 'Select template', options: revRecTemplates.map((template) => ({ value: template.id, label: `${template.templateId} - ${template.name}` })) },
+                          { name: 'defaultTermMonths', label: 'Default Term Months', value: item.defaultTermMonths != null ? String(item.defaultTermMonths) : '', type: 'number' },
+                          { name: 'standaloneSellingPrice', label: 'Standalone Selling Price', value: item.standaloneSellingPrice != null ? String(item.standaloneSellingPrice) : '', type: 'number' },
+                          { name: 'billingType', label: 'Billing Type', value: item.billingType ?? '' },
+                          { name: 'standardCost', label: 'Standard Cost', value: item.standardCost != null ? String(item.standardCost) : '', type: 'number' },
+                          { name: 'averageCost', label: 'Average Cost', value: item.averageCost != null ? String(item.averageCost) : '', type: 'number' },
+                          { name: 'incomeAccountId', label: 'Income Account', value: item.incomeAccountId ?? '', type: 'select', placeholder: 'Select GL account', options: glOptions },
+                          { name: 'deferredRevenueAccountId', label: 'Deferred Revenue Account', value: item.deferredRevenueAccountId ?? '', type: 'select', placeholder: 'Select GL account', options: glOptions },
+                          { name: 'inventoryAccountId', label: 'Inventory Account', value: item.inventoryAccountId ?? '', type: 'select', placeholder: 'Select GL account', options: glOptions },
+                          { name: 'cogsExpenseAccountId', label: 'COGS / Expense Account', value: item.cogsExpenseAccountId ?? '', type: 'select', placeholder: 'Select GL account', options: glOptions },
+                          { name: 'deferredCostAccountId', label: 'Deferred Cost Account', value: item.deferredCostAccountId ?? '', type: 'select', placeholder: 'Select GL account', options: glOptions },
+                          { name: 'directRevenuePosting', label: 'Direct Revenue Posting', value: item.directRevenuePosting ? 'true' : 'false', type: 'checkbox', placeholder: 'Direct Revenue Posting' },
+                        ]}
+                      />
+                      <DeleteButton resource="items" id={item.id} />
+                    </div>
+                  </MasterDataBodyCell>
                 </tr>
-              ) : (
-                items.map((item, index) => (
-                  <tr key={item.id} style={index < items.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                    <td data-column="item-id" className="px-4 py-2 text-sm"><Link href={`/items/${item.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>{item.itemId ?? '—'}</Link></td>
-                    <td data-column="name" className="px-4 py-2 text-sm font-medium text-white">{item.name}</td>
-                    <td data-column="sku" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{item.sku ?? '—'}</td>
-                    <td data-column="type" className="px-4 py-2 text-sm capitalize" style={{ color: 'var(--text-secondary)' }}>{item.itemType}</td>
-                    <td data-column="price" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{item.listPrice.toFixed(2)}</td>
-                    <td data-column="subsidiary" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{item.entity?.subsidiaryId ?? '—'}</td>
-                    <td data-column="currency" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{item.currency?.currencyId ?? '—'}</td>
-                    <td data-column="inactive" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{item.active ? 'No' : 'Yes'}</td>
-                    <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(item.createdAt).toLocaleDateString()}</td>
-                    <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(item.updatedAt).toLocaleDateString()}</td>
-                    <td data-column="actions" className="px-4 py-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <EditButton
-                          resource="items"
-                          id={item.id}
-                          fields={[
-                            { name: 'name', label: 'Name', value: item.name },
-                            { name: 'itemId', label: 'Item Id', value: item.itemId ?? '' },
-                            { name: 'sku', label: 'SKU', value: item.sku ?? '' },
-                            {
-                              name: 'itemType',
-                              label: 'Item Type',
-                              value: item.itemType,
-                              type: 'select',
-                              placeholder: 'Select item type',
-                              options: listOptions.item.type.map((value) => ({ value, label: value })),
-                            },
-                            { name: 'uom', label: 'UOM', value: item.uom ?? '' },
-                            { name: 'listPrice', label: 'List Price', value: String(item.listPrice), type: 'number' },
-                          ]}
-                        />
-                        <DeleteButton resource="items" id={item.id} />
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+              ))
+            )}
+          </tbody>
+        </table>
         <PaginationFooter
           startRow={pagination.startRow}
           endRow={pagination.endRow}
@@ -198,7 +219,7 @@ export default async function ItemsPage({
           prevHref={buildPageHref(pagination.currentPage - 1)}
           nextHref={buildPageHref(pagination.currentPage + 1)}
         />
-      </section>
+      </MasterDataListSection>
     </div>
   )
 }

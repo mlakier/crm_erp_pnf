@@ -9,9 +9,11 @@
     "build": "next build",
     "start": "next start --port 3003",
     "lint": "eslint",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "sync:exchange-rates": "node scripts/sync-exchange-rates.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
     "@types/bcryptjs": "^2.4.6",
     "bcryptjs": "^3.0.3",
     "dagre": "^0.8.5",

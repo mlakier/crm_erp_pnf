@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 const DISPLAY_ORDER_PATH = join(process.cwd(), 'config', 'list-display-order.json')
+const CUSTOM_LISTS_PATH = join(process.cwd(), 'config', 'custom-lists.json')
 
 function readDisplayOrder(): Record<string, string> {
   try {
@@ -15,6 +16,21 @@ function readDisplayOrder(): Record<string, string> {
 
 function writeDisplayOrder(data: Record<string, string>) {
   writeFileSync(DISPLAY_ORDER_PATH, JSON.stringify(data, null, 2))
+}
+
+type CustomList = { key: string; label: string; whereUsed: string[] }
+
+function readCustomLists(): CustomList[] {
+  try {
+    const data = JSON.parse(readFileSync(CUSTOM_LISTS_PATH, 'utf-8'))
+    return Array.isArray(data.lists) ? data.lists : []
+  } catch {
+    return []
+  }
+}
+
+function writeCustomLists(lists: CustomList[]) {
+  writeFileSync(CUSTOM_LISTS_PATH, JSON.stringify({ lists }, null, 2))
 }
 
 const LIST_KEY_LABELS: Record<string, string> = {
@@ -60,7 +76,17 @@ const WHERE_USED: Record<string, string[]> = {
 }
 
 function labelForKey(key: string): string {
-  return LIST_KEY_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1)
+  if (LIST_KEY_LABELS[key]) return LIST_KEY_LABELS[key]
+  const custom = readCustomLists().find((l) => l.key === key)
+  if (custom) return custom.label
+  return key.charAt(0).toUpperCase() + key.slice(1)
+}
+
+function whereUsedForKey(key: string): string[] {
+  if (WHERE_USED[key]) return WHERE_USED[key]
+  const custom = readCustomLists().find((l) => l.key === key)
+  if (custom) return custom.whereUsed
+  return []
 }
 
 async function buildResponsePayload() {
@@ -80,10 +106,17 @@ async function buildResponsePayload() {
 
   const displayOrderConfig = readDisplayOrder()
 
-  const lists = Array.from(listMap.keys()).map((key) => ({
+  // Include all keys from DB rows
+  const allKeys = new Set(listMap.keys())
+  // Also include custom lists (may have no rows yet)
+  for (const cl of readCustomLists()) {
+    allKeys.add(cl.key)
+  }
+
+  const lists = Array.from(allKeys).map((key) => ({
     key,
     label: labelForKey(key),
-    whereUsed: WHERE_USED[key] ?? [],
+    whereUsed: whereUsedForKey(key),
     displayOrder: displayOrderConfig[key] ?? 'list',
   }))
 
@@ -129,6 +162,27 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(await buildResponsePayload())
       }
     }
+
+    // Handle create-list action
+    const action = (body as { action?: string })?.action
+    if (action === 'create-list') {
+      const label = String((body as { label?: unknown })?.label ?? '').trim()
+      const whereUsed = Array.isArray((body as { whereUsed?: unknown })?.whereUsed)
+        ? (body as { whereUsed: string[] }).whereUsed
+        : []
+      if (!key) return NextResponse.json({ error: 'List key is required' }, { status: 400 })
+      if (!label) return NextResponse.json({ error: 'Display name is required' }, { status: 400 })
+      // Check if key already exists
+      const existing = readCustomLists()
+      if (LIST_KEY_LABELS[key] || existing.some((l) => l.key === key)) {
+        return NextResponse.json({ error: 'A list with this key already exists' }, { status: 409 })
+      }
+      existing.push({ key, label, whereUsed })
+      writeCustomLists(existing)
+      return NextResponse.json(await buildResponsePayload())
+    }
+
+
 
     if (!key) {
       return NextResponse.json({ error: 'Missing list key' }, { status: 400 })

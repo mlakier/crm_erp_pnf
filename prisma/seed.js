@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { PrismaClient } = require('@prisma/client')
 const bcrypt = require('bcryptjs')
 
@@ -10,6 +11,27 @@ function currencyDisplayName(code) {
   } catch {
     return code
   }
+}
+
+function deriveNormalBalance(accountType, category) {
+  if (accountType === 'Asset' || accountType === 'Expense') return 'debit'
+  if (category === 'Contra Asset' || category === 'Contra Revenue') return 'credit'
+  if (accountType === 'Liability' || accountType === 'Equity' || accountType === 'Revenue') return 'credit'
+  return null
+}
+
+function deriveFinancialStatementSection(accountType) {
+  if (accountType === 'Asset' || accountType === 'Liability' || accountType === 'Equity') return 'Balance Sheet'
+  if (accountType === 'Revenue' || accountType === 'Expense') return 'Income Statement'
+  return null
+}
+
+function deriveCashFlowCategory(accountId, accountType) {
+  if (accountType !== 'Asset' && accountType !== 'Liability' && accountType !== 'Equity') return null
+  if (['1000', '1010'].includes(accountId)) return 'Operating'
+  if (['1300', '1310'].includes(accountId)) return 'Investing'
+  if (['2500', '3000'].includes(accountId)) return 'Financing'
+  return 'Operating'
 }
 
 async function main() {
@@ -102,6 +124,10 @@ async function main() {
         legalName: subsidiary.legalName,
         entityType: subsidiary.entityType,
         defaultCurrencyId: currencyByCode.get(subsidiary.defaultCurrencyCode)?.id ?? null,
+        functionalCurrencyId: currencyByCode.get(subsidiary.defaultCurrencyCode)?.id ?? null,
+        reportingCurrencyId: currencyByCode.get('USD')?.id ?? null,
+        consolidationMethod: 'full',
+        retainedEarningsAccountId: null,
         active: true,
       },
       create: {
@@ -110,6 +136,10 @@ async function main() {
         legalName: subsidiary.legalName,
         entityType: subsidiary.entityType,
         defaultCurrencyId: currencyByCode.get(subsidiary.defaultCurrencyCode)?.id ?? null,
+        functionalCurrencyId: currencyByCode.get(subsidiary.defaultCurrencyCode)?.id ?? null,
+        reportingCurrencyId: currencyByCode.get('USD')?.id ?? null,
+        consolidationMethod: 'full',
+        retainedEarningsAccountId: null,
         active: true,
       },
     })
@@ -119,6 +149,137 @@ async function main() {
     where: { subsidiaryId: { in: subsidiarySeeds.map((subsidiary) => subsidiary.subsidiaryId) } },
   })
   const subsidiaryByCode = new Map(subsidiaryRecords.map((subsidiary) => [subsidiary.subsidiaryId, subsidiary]))
+
+  const chartOfAccountSeeds = [
+    { accountId: '1000', name: 'Cash - Operating', accountType: 'Asset', category: 'Current Asset' },
+    { accountId: '1010', name: 'Cash - Payroll', accountType: 'Asset', category: 'Current Asset' },
+    { accountId: '1100', name: 'Accounts Receivable', accountType: 'Asset', category: 'Current Asset' },
+    { accountId: '1110', name: 'Allowance for Doubtful Accounts', accountType: 'Asset', category: 'Contra Asset' },
+    { accountId: '1200', name: 'Inventory', accountType: 'Asset', category: 'Current Asset', inventory: true },
+    { accountId: '1210', name: 'Inventory - Finished Goods', accountType: 'Asset', category: 'Current Asset', inventory: true },
+    { accountId: '1220', name: 'Deferred Costs', accountType: 'Asset', category: 'Current Asset' },
+    { accountId: '1230', name: 'Prepaid Expenses', accountType: 'Asset', category: 'Current Asset' },
+    { accountId: '1300', name: 'Fixed Assets', accountType: 'Asset', category: 'Fixed Asset' },
+    { accountId: '1310', name: 'Accumulated Depreciation', accountType: 'Asset', category: 'Contra Asset' },
+    { accountId: '1400', name: 'Other Assets', accountType: 'Asset', category: 'Other Asset' },
+    { accountId: '2000', name: 'Accounts Payable', accountType: 'Liability', category: 'Current Liability' },
+    { accountId: '2100', name: 'Accrued Expenses', accountType: 'Liability', category: 'Current Liability' },
+    { accountId: '2200', name: 'Deferred Revenue', accountType: 'Liability', category: 'Current Liability' },
+    { accountId: '2210', name: 'Customer Deposits', accountType: 'Liability', category: 'Current Liability' },
+    { accountId: '2300', name: 'Sales Tax Payable', accountType: 'Liability', category: 'Current Liability' },
+    { accountId: '2400', name: 'Payroll Liabilities', accountType: 'Liability', category: 'Current Liability' },
+    { accountId: '2500', name: 'Long-Term Debt', accountType: 'Liability', category: 'Long Term Liability' },
+    { accountId: '3000', name: 'Common Stock', accountType: 'Equity', category: 'Equity' },
+    { accountId: '3100', name: 'Retained Earnings', accountType: 'Equity', category: 'Equity' },
+    { accountId: '3200', name: 'Current Year Earnings', accountType: 'Equity', category: 'Equity' },
+    { accountId: '4000', name: 'Product Revenue', accountType: 'Revenue', category: 'Operating Revenue' },
+    { accountId: '4010', name: 'Service Revenue', accountType: 'Revenue', category: 'Operating Revenue' },
+    { accountId: '4020', name: 'Subscription Revenue', accountType: 'Revenue', category: 'Operating Revenue' },
+    { accountId: '4030', name: 'Professional Services Revenue', accountType: 'Revenue', category: 'Operating Revenue' },
+    { accountId: '4040', name: 'Shipping Revenue', accountType: 'Revenue', category: 'Operating Revenue' },
+    { accountId: '4050', name: 'Discounts and Allowances', accountType: 'Revenue', category: 'Contra Revenue' },
+    { accountId: '5000', name: 'Cost of Goods Sold', accountType: 'Expense', category: 'Cost of Sales' },
+    { accountId: '5010', name: 'Cost of Services', accountType: 'Expense', category: 'Cost of Sales' },
+    { accountId: '5020', name: 'Deferred Cost Amortization', accountType: 'Expense', category: 'Cost of Sales' },
+    { accountId: '5030', name: 'Inventory Adjustments', accountType: 'Expense', category: 'Cost of Sales' },
+    { accountId: '6000', name: 'Payroll Expense', accountType: 'Expense', category: 'Operating Expense' },
+    { accountId: '6100', name: 'Rent Expense', accountType: 'Expense', category: 'Operating Expense' },
+    { accountId: '6200', name: 'Software Expense', accountType: 'Expense', category: 'Operating Expense' },
+    { accountId: '6300', name: 'Marketing Expense', accountType: 'Expense', category: 'Operating Expense' },
+    { accountId: '6400', name: 'Travel and Entertainment', accountType: 'Expense', category: 'Operating Expense' },
+    { accountId: '6500', name: 'Office Supplies Expense', accountType: 'Expense', category: 'Operating Expense' },
+    { accountId: '6600', name: 'Depreciation Expense', accountType: 'Expense', category: 'Operating Expense' },
+    { accountId: '6700', name: 'Bank Fees', accountType: 'Expense', category: 'Operating Expense' },
+    { accountId: '6800', name: 'Miscellaneous Expense', accountType: 'Expense', category: 'Operating Expense' },
+  ]
+
+  for (const account of chartOfAccountSeeds) {
+    await prisma.chartOfAccounts.upsert({
+      where: { accountId: account.accountId },
+      update: {
+        name: account.name,
+        accountType: account.accountType,
+        category: account.category,
+        normalBalance: deriveNormalBalance(account.accountType, account.category),
+        financialStatementSection: deriveFinancialStatementSection(account.accountType),
+        financialStatementGroup: account.category ?? null,
+        isPosting: !Boolean(account.summary),
+        isControlAccount: ['1100', '2000', '1200', '1210', '2200'].includes(account.accountId),
+        allowsManualPosting: !['1100', '2000', '1200', '1210', '2200'].includes(account.accountId),
+        requiresSubledgerType:
+          account.accountId === '1100'
+            ? 'customer'
+            : account.accountId === '2000'
+              ? 'vendor'
+              : account.inventory
+                ? 'item'
+                : null,
+        cashFlowCategory: deriveCashFlowCategory(account.accountId, account.accountType),
+        inventory: Boolean(account.inventory),
+        active: true,
+      },
+      create: {
+        accountId: account.accountId,
+        name: account.name,
+        accountType: account.accountType,
+        category: account.category,
+        normalBalance: deriveNormalBalance(account.accountType, account.category),
+        financialStatementSection: deriveFinancialStatementSection(account.accountType),
+        financialStatementGroup: account.category ?? null,
+        isPosting: !Boolean(account.summary),
+        isControlAccount: ['1100', '2000', '1200', '1210', '2200'].includes(account.accountId),
+        allowsManualPosting: !['1100', '2000', '1200', '1210', '2200'].includes(account.accountId),
+        requiresSubledgerType:
+          account.accountId === '1100'
+            ? 'customer'
+            : account.accountId === '2000'
+              ? 'vendor'
+              : account.inventory
+                ? 'item'
+                : null,
+        cashFlowCategory: deriveCashFlowCategory(account.accountId, account.accountType),
+        inventory: Boolean(account.inventory),
+        active: true,
+      },
+    })
+  }
+
+  const chartOfAccounts = await prisma.chartOfAccounts.findMany({
+    where: { accountId: { in: chartOfAccountSeeds.map((account) => account.accountId) } },
+  })
+  const glAccountByNumber = new Map(chartOfAccounts.map((account) => [account.accountId, account]))
+
+  const revRecTemplateSeeds = [
+    { templateId: 'RRT-POINT', name: 'Point in Time Delivery', recognitionMethod: 'point_in_time', scheduleType: 'delivery' },
+    { templateId: 'RRT-RATABLE-12', name: 'Ratable 12 Month', recognitionMethod: 'over_time', scheduleType: 'monthly', defaultTermMonths: 12 },
+    { templateId: 'RRT-RATABLE-MONTHLY', name: 'Monthly Service', recognitionMethod: 'over_time', scheduleType: 'monthly' },
+  ]
+
+  for (const template of revRecTemplateSeeds) {
+    await prisma.revRecTemplate.upsert({
+      where: { templateId: template.templateId },
+      update: {
+        name: template.name,
+        recognitionMethod: template.recognitionMethod,
+        scheduleType: template.scheduleType,
+        defaultTermMonths: template.defaultTermMonths ?? null,
+        active: true,
+      },
+      create: {
+        templateId: template.templateId,
+        name: template.name,
+        recognitionMethod: template.recognitionMethod,
+        scheduleType: template.scheduleType,
+        defaultTermMonths: template.defaultTermMonths ?? null,
+        active: true,
+      },
+    })
+  }
+
+  const revRecTemplates = await prisma.revRecTemplate.findMany({
+    where: { templateId: { in: revRecTemplateSeeds.map((template) => template.templateId) } },
+  })
+  const revRecTemplateByCode = new Map(revRecTemplates.map((template) => [template.templateId, template]))
 
   const departmentSeeds = [
     {
@@ -242,11 +403,12 @@ async function main() {
 
   for (const employee of employeeSeeds) {
     await prisma.employee.upsert({
-      where: { email: employee.email },
+      where: { employeeId: employee.employeeNumber },
       update: {
         employeeId: employee.employeeNumber,
         firstName: employee.firstName,
         lastName: employee.lastName,
+        email: employee.email,
         title: employee.title,
         departmentId: departmentByCode.get(employee.departmentCode)?.id ?? null,
         entityId: subsidiaryByCode.get(employee.subsidiaryCode)?.id ?? null,
@@ -292,7 +454,7 @@ async function main() {
     await prisma.department.update({
       where: { departmentId: departmentCode },
       data: {
-        managerId: employeeByNumber.get(managerEmployeeNumber)?.id ?? null,
+        managerEmployeeId: employeeByNumber.get(managerEmployeeNumber)?.id ?? null,
       },
     })
   }
@@ -488,10 +650,23 @@ async function main() {
       name: 'Implementation Package',
       description: 'Initial implementation services package',
       itemType: 'service',
+      revenueStream: 'professional_services',
+      recognitionMethod: 'point_in_time',
+      recognitionTrigger: 'delivery',
+      revRecTemplateCode: 'RRT-POINT',
+      isDistinctPerformanceObligation: true,
+      standaloneSellingPrice: 1500,
+      billingType: 'one_time',
       uom: 'EA',
       listPrice: 1500,
+      standardCost: 650,
       subsidiaryCode: 'SUB-001',
       currencyCode: 'USD',
+      incomeAccountNumber: '4030',
+      deferredRevenueAccountNumber: '2200',
+      cogsExpenseAccountNumber: '5010',
+      deferredCostAccountNumber: '1220',
+      directRevenuePosting: true,
     },
     {
       itemId: 'ITM-0002',
@@ -499,10 +674,24 @@ async function main() {
       name: 'Analytics Subscription',
       description: 'Annual analytics platform subscription',
       itemType: 'service',
+      revenueStream: 'subscription',
+      recognitionMethod: 'over_time',
+      recognitionTrigger: 'ratable',
+      revRecTemplateCode: 'RRT-RATABLE-12',
+      defaultTermMonths: 12,
+      isDistinctPerformanceObligation: true,
+      standaloneSellingPrice: 2400,
+      billingType: 'recurring',
       uom: 'YR',
       listPrice: 2400,
+      standardCost: 480,
       subsidiaryCode: 'SUB-002',
       currencyCode: 'EUR',
+      incomeAccountNumber: '4020',
+      deferredRevenueAccountNumber: '2200',
+      cogsExpenseAccountNumber: '5010',
+      deferredCostAccountNumber: '1220',
+      directRevenuePosting: false,
     },
     {
       itemId: 'ITM-0003',
@@ -510,10 +699,23 @@ async function main() {
       name: 'Warehouse Scanner',
       description: 'Mobile barcode scanning device',
       itemType: 'product',
+      revenueStream: 'product',
+      recognitionMethod: 'point_in_time',
+      recognitionTrigger: 'shipment',
+      revRecTemplateCode: 'RRT-POINT',
+      isDistinctPerformanceObligation: true,
+      standaloneSellingPrice: 425,
+      billingType: 'one_time',
       uom: 'EA',
       listPrice: 425,
+      standardCost: 240,
+      averageCost: 255,
       subsidiaryCode: 'SUB-003',
       currencyCode: 'GBP',
+      incomeAccountNumber: '4000',
+      inventoryAccountNumber: '1210',
+      cogsExpenseAccountNumber: '5000',
+      directRevenuePosting: false,
     },
     {
       itemId: 'ITM-0004',
@@ -521,10 +723,21 @@ async function main() {
       name: 'Support Retainer',
       description: 'Monthly support retainer',
       itemType: 'expense',
+      revenueStream: 'support',
+      recognitionMethod: 'over_time',
+      recognitionTrigger: 'ratable',
+      revRecTemplateCode: 'RRT-RATABLE-MONTHLY',
+      defaultTermMonths: 1,
+      isDistinctPerformanceObligation: true,
+      standaloneSellingPrice: 300,
+      billingType: 'recurring',
       uom: 'MO',
       listPrice: 300,
+      standardCost: 90,
       subsidiaryCode: 'SUB-001',
       currencyCode: 'USD',
+      cogsExpenseAccountNumber: '6800',
+      directRevenuePosting: false,
     },
   ]
 
@@ -536,10 +749,26 @@ async function main() {
         name: item.name,
         description: item.description,
         itemType: item.itemType,
+        revenueStream: item.revenueStream ?? null,
+        recognitionMethod: item.recognitionMethod ?? null,
+        recognitionTrigger: item.recognitionTrigger ?? null,
+        defaultRevRecTemplateId: revRecTemplateByCode.get(item.revRecTemplateCode)?.id ?? null,
+        defaultTermMonths: item.defaultTermMonths ?? null,
+        isDistinctPerformanceObligation: item.isDistinctPerformanceObligation !== false,
+        standaloneSellingPrice: item.standaloneSellingPrice ?? null,
+        billingType: item.billingType ?? null,
         uom: item.uom,
         listPrice: item.listPrice,
+        standardCost: item.standardCost ?? null,
+        averageCost: item.averageCost ?? null,
         entityId: subsidiaryByCode.get(item.subsidiaryCode)?.id ?? null,
         currencyId: currencyByCode.get(item.currencyCode)?.id ?? null,
+        incomeAccountId: glAccountByNumber.get(item.incomeAccountNumber)?.id ?? null,
+        deferredRevenueAccountId: glAccountByNumber.get(item.deferredRevenueAccountNumber)?.id ?? null,
+        inventoryAccountId: glAccountByNumber.get(item.inventoryAccountNumber)?.id ?? null,
+        cogsExpenseAccountId: glAccountByNumber.get(item.cogsExpenseAccountNumber)?.id ?? null,
+        deferredCostAccountId: glAccountByNumber.get(item.deferredCostAccountNumber)?.id ?? null,
+        directRevenuePosting: Boolean(item.directRevenuePosting),
         active: true,
       },
       create: {
@@ -548,16 +777,49 @@ async function main() {
         name: item.name,
         description: item.description,
         itemType: item.itemType,
+        revenueStream: item.revenueStream ?? null,
+        recognitionMethod: item.recognitionMethod ?? null,
+        recognitionTrigger: item.recognitionTrigger ?? null,
+        defaultRevRecTemplateId: revRecTemplateByCode.get(item.revRecTemplateCode)?.id ?? null,
+        defaultTermMonths: item.defaultTermMonths ?? null,
+        isDistinctPerformanceObligation: item.isDistinctPerformanceObligation !== false,
+        standaloneSellingPrice: item.standaloneSellingPrice ?? null,
+        billingType: item.billingType ?? null,
         uom: item.uom,
         listPrice: item.listPrice,
+        standardCost: item.standardCost ?? null,
+        averageCost: item.averageCost ?? null,
         entityId: subsidiaryByCode.get(item.subsidiaryCode)?.id ?? null,
         currencyId: currencyByCode.get(item.currencyCode)?.id ?? null,
+        incomeAccountId: glAccountByNumber.get(item.incomeAccountNumber)?.id ?? null,
+        deferredRevenueAccountId: glAccountByNumber.get(item.deferredRevenueAccountNumber)?.id ?? null,
+        inventoryAccountId: glAccountByNumber.get(item.inventoryAccountNumber)?.id ?? null,
+        cogsExpenseAccountId: glAccountByNumber.get(item.cogsExpenseAccountNumber)?.id ?? null,
+        deferredCostAccountId: glAccountByNumber.get(item.deferredCostAccountNumber)?.id ?? null,
+        directRevenuePosting: Boolean(item.directRevenuePosting),
         active: true,
       },
     })
   }
 
-  console.log('Seed completed: admin user plus currencies, subsidiaries, departments, employees, customers, contacts, vendors, and items')
+  const retainedEarningsAccountId = glAccountByNumber.get('3100')?.id ?? null
+  const deferredRevenueAccountId = glAccountByNumber.get('2200')?.id ?? null
+  const inventoryAccountId = glAccountByNumber.get('1210')?.id ?? null
+
+  for (const subsidiary of subsidiarySeeds) {
+    await prisma.entity.update({
+      where: { subsidiaryId: subsidiary.subsidiaryId },
+      data: {
+        retainedEarningsAccountId,
+        ctaAccountId: null,
+        intercompanyClearingAccountId: deferredRevenueAccountId,
+        dueToAccountId: deferredRevenueAccountId,
+        dueFromAccountId: inventoryAccountId,
+      },
+    })
+  }
+
+  console.log('Seed completed: admin user plus currencies, subsidiaries, chart of accounts, rev rec templates, departments, employees, customers, contacts, vendors, and items')
 }
 
 main()

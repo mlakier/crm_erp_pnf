@@ -1,172 +1,332 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { fmtCurrency, fmtPhone } from '@/lib/format'
+import { fmtPhone } from '@/lib/format'
 import DeleteButton from '@/components/DeleteButton'
-import EditButton from '@/components/EditButton'
+import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
 import PurchaseOrderLineItemForm from '@/components/PurchaseOrderLineItemForm'
+import PurchaseOrderLineItemsSection from '@/components/PurchaseOrderLineItemsSection'
+import PurchaseOrderRelatedDocuments from '@/components/PurchaseOrderRelatedDocuments'
 import PurchaseOrderReceiptForm from '@/components/PurchaseOrderReceiptForm'
+import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import { RecordDetailSection } from '@/components/RecordDetailPanels'
+import TransactionFieldSummarySection from '@/components/TransactionFieldSummarySection'
+import { buildReceiptDisplayNumberMap } from '@/lib/receipt-display-number'
 
-export default async function PurchaseOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+const PURCHASE_ORDER_STATUS_OPTIONS = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'received', label: 'Received' },
+  { value: 'cancelled', label: 'Cancelled' },
+]
+
+export default async function PurchaseOrderDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ edit?: string }>
+}) {
   const { id } = await params
-  const po = await prisma.purchaseOrder.findUnique({
-    where: { id },
-    include: {
-      lineItems: { orderBy: { createdAt: 'desc' } },
-      vendor: true,
-      receipts: { orderBy: { date: 'desc' } },
-    },
-  })
+  const { edit } = await searchParams
+  const isEditing = edit === '1'
+
+  const [po, vendors, allReceiptIds] = await Promise.all([
+    prisma.purchaseOrder.findUnique({
+      where: { id },
+      include: {
+        lineItems: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            item: {
+              select: { itemId: true },
+            },
+          },
+        },
+        vendor: true,
+        receipts: { orderBy: { date: 'desc' } },
+        requisition: true,
+        bills: {
+          orderBy: { date: 'desc' },
+          include: {
+            billPayments: {
+              orderBy: { date: 'desc' },
+            },
+          },
+        },
+      },
+    }),
+    prisma.vendor.findMany({
+      orderBy: { vendorNumber: 'asc' },
+      select: { id: true, vendorNumber: true, name: true },
+    }),
+    prisma.receipt.findMany({
+      select: { id: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    }),
+  ])
 
   if (!po) notFound()
 
   const orderedQuantity = po.lineItems.reduce((sum, item) => sum + item.quantity, 0)
   const receivedQuantity = po.receipts.reduce((sum, receipt) => sum + receipt.quantity, 0)
   const openQuantity = Math.max(orderedQuantity - receivedQuantity, 0)
+  const detailHref = `/purchase-orders/${po.id}`
+  const receiptNumberMap = buildReceiptDisplayNumberMap(allReceiptIds)
+  const derivedLineRows = po.lineItems.reduce<Array<{
+    id: string
+    itemId: string | null
+    description: string
+    quantity: number
+    receivedQuantity: number
+    openQuantity: number
+    unitPrice: number
+    lineTotal: number
+  }>>((acc, item) => {
+    const allocatedReceived = acc.reduce((sum, row) => sum + row.receivedQuantity, 0)
+    const remainingReceived = Math.max(0, receivedQuantity - allocatedReceived)
+    const lineReceivedQuantity = Math.min(item.quantity, remainingReceived)
+
+    acc.push({
+      id: item.id,
+      itemId: item.item?.itemId ?? null,
+      description: item.description,
+      quantity: item.quantity,
+      receivedQuantity: lineReceivedQuantity,
+      openQuantity: Math.max(0, item.quantity - lineReceivedQuantity),
+      unitPrice: item.unitPrice,
+      lineTotal: item.lineTotal,
+    })
+
+    return acc
+  }, [])
+
+  const detailSections: InlineRecordSection[] = [
+    {
+      title: 'Purchase Order Details',
+      description: 'Core purchase order fields and procurement lifecycle status.',
+      fields: [
+        {
+          name: 'number',
+          label: 'Purchase Order #',
+          value: po.number,
+          helpText: 'Unique document number used to identify the purchase order across procurement workflows and reporting.',
+          column: 1,
+          order: 0,
+        },
+        {
+          name: 'vendorId',
+          label: 'Vendor',
+          value: po.vendorId,
+          type: 'select',
+          options: vendors.map((vendor) => ({
+            value: vendor.id,
+            label: `${vendor.vendorNumber} - ${vendor.name}`,
+          })),
+          helpText: 'Vendor record linked to this purchase order.',
+          sourceText: 'Vendors master data',
+          column: 2,
+          order: 0,
+        },
+        {
+          name: 'status',
+          label: 'Status',
+          value: po.status ?? '',
+          type: 'select',
+          options: PURCHASE_ORDER_STATUS_OPTIONS,
+          helpText: 'Current lifecycle stage of the purchase order.',
+          sourceText: 'System purchase order statuses',
+          column: 1,
+          order: 1,
+        },
+        {
+          name: 'total',
+          label: 'Total',
+          value: po.total.toString(),
+          type: 'number',
+          helpText: 'Current document total based on all purchase order line amounts.',
+          column: 2,
+          order: 1,
+        },
+      ],
+    },
+  ]
 
   return (
-    <div className="min-h-full px-8 py-8">
-      <div className="max-w-4xl">
-
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <Link href="/purchase-orders" className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-              ← Back to Purchase Orders
+    <RecordDetailPageShell
+      backHref="/purchase-orders"
+      backLabel="<- Back to Purchase Orders"
+      meta={po.number}
+      title={po.vendor.name}
+      badge={
+        <div className="flex flex-wrap gap-2">
+          <StatusBadge status={po.status} />
+          <span
+            className="inline-block rounded-full px-3 py-0.5 text-sm"
+            style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}
+          >
+            Purchase Order
+          </span>
+        </div>
+      }
+      widthClassName="max-w-4xl"
+      actions={
+        <>
+          {!isEditing ? (
+            <Link
+              href={`${detailHref}?edit=1`}
+              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
+              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
+            >
+              Edit
             </Link>
-            <h1 className="mt-2 text-2xl font-semibold text-white">PO #{po.number}</h1>
-            <StatusBadge status={po.status} />
+          ) : null}
+          {isEditing ? <DeleteButton resource="purchase-orders" id={po.id} /> : null}
+        </>
+      }
+    >
+      <InlineRecordDetails
+        resource="purchase-orders"
+        id={po.id}
+        title="Purchase Order Details"
+        sections={detailSections}
+        editing={isEditing}
+        columns={2}
+      />
+
+      <TransactionFieldSummarySection
+        title="Vendor"
+        count={4}
+        fields={[
+          {
+            label: 'Vendor #',
+            value: po.vendor.vendorNumber ?? '-',
+            helpText: 'Internal vendor identifier from the vendor master record.',
+            fieldId: 'vendor.vendorNumber',
+            fieldType: 'text',
+          },
+          {
+            label: 'Email',
+            value: po.vendor.email ?? '-',
+            helpText: 'Primary email address for the linked vendor.',
+            fieldId: 'vendor.email',
+            fieldType: 'email',
+          },
+          {
+            label: 'Phone',
+            value: fmtPhone(po.vendor.phone),
+            helpText: 'Primary phone number for the linked vendor.',
+            fieldId: 'vendor.phone',
+            fieldType: 'text',
+          },
+          {
+            label: 'Tax ID',
+            value: po.vendor.taxId ?? '-',
+            helpText: 'Tax registration or identification number stored on the vendor record.',
+            fieldId: 'vendor.taxId',
+            fieldType: 'text',
+          },
+        ]}
+      />
+
+      <TransactionFieldSummarySection
+        title="Receiving Summary"
+        count={4}
+        fields={[
+          {
+            label: 'Ordered Quantity',
+            value: String(orderedQuantity),
+            helpText: 'Sum of quantities across all purchase order lines.',
+            fieldId: 'orderedQuantity',
+            fieldType: 'number',
+          },
+          {
+            label: 'Received Quantity',
+            value: String(receivedQuantity),
+            helpText: 'Total quantity already received against this purchase order.',
+            fieldId: 'receivedQuantity',
+            fieldType: 'number',
+          },
+          {
+            label: 'Open Quantity',
+            value: String(openQuantity),
+            helpText: 'Remaining quantity still expected to be received.',
+            fieldId: 'openQuantity',
+            fieldType: 'number',
+          },
+          {
+            label: 'Created',
+            value: new Date(po.createdAt).toLocaleDateString(),
+            helpText: 'Date the purchase order record was created.',
+            fieldId: 'createdAt',
+            fieldType: 'date',
+          },
+        ]}
+      />
+
+      <PurchaseOrderLineItemsSection
+        editing={isEditing}
+        rows={derivedLineRows}
+      />
+
+      <PurchaseOrderRelatedDocuments
+        requisitions={
+          po.requisition
+            ? [
+                {
+                  id: po.requisition.id,
+                  number: po.requisition.number,
+                  status: po.requisition.status,
+                  total: po.requisition.total,
+                  title: po.requisition.title ?? null,
+                  priority: po.requisition.priority ?? null,
+                  createdAt: po.requisition.createdAt.toISOString(),
+                },
+              ]
+            : []
+        }
+        receipts={po.receipts.map((receipt) => ({
+          id: receipt.id,
+          number: receiptNumberMap.get(receipt.id) ?? receipt.id,
+          date: receipt.date.toISOString(),
+          status: receipt.status,
+          quantity: receipt.quantity,
+          createdAt: receipt.createdAt.toISOString(),
+          notes: receipt.notes ?? null,
+        }))}
+        bills={po.bills.map((bill) => ({
+          id: bill.id,
+          number: bill.number,
+          status: bill.status,
+          total: bill.total,
+          date: bill.date.toISOString(),
+          dueDate: bill.dueDate ? bill.dueDate.toISOString() : null,
+          notes: bill.notes ?? null,
+        }))}
+        billPayments={po.bills.flatMap((bill) =>
+          bill.billPayments.map((payment) => ({
+            id: payment.id,
+            number: payment.number,
+            amount: payment.amount,
+            date: payment.date.toISOString(),
+            method: payment.method ?? null,
+            status: payment.status,
+            billNumber: bill.number,
+            reference: payment.reference ?? null,
+          }))
+        )}
+      />
+
+      {isEditing ? (
+        <RecordDetailSection title="Add Activity" count={2}>
+          <div className="grid gap-4 px-6 py-6 lg:grid-cols-2">
+            <PurchaseOrderLineItemForm purchaseOrderId={po.id} userId={po.userId} />
+            <PurchaseOrderReceiptForm purchaseOrderId={po.id} userId={po.userId} />
           </div>
-          <div className="flex items-center gap-2">
-            <EditButton
-              resource="purchase-orders"
-              id={po.id}
-              fields={[
-                { name: 'status', label: 'Status', value: po.status ?? '' },
-                { name: 'total', label: 'Total', value: po.total?.toString() ?? '', type: 'number' },
-              ]}
-            />
-            <DeleteButton resource="purchase-orders" id={po.id} />
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid gap-4 sm:grid-cols-4 mb-8">
-          <StatCard label="Total" value={fmtCurrency(po.total)} accent />
-          <StatCard label="Line items" value={po.lineItems.length} />
-          <StatCard label="Receipts" value={po.receipts.length} />
-          <StatCard label="Open qty" value={openQuantity} />
-        </div>
-
-        <div className="mb-8 grid gap-4 lg:grid-cols-2">
-          <PurchaseOrderLineItemForm purchaseOrderId={po.id} userId={po.userId} />
-          <PurchaseOrderReceiptForm purchaseOrderId={po.id} userId={po.userId} />
-        </div>
-
-        {/* Details */}
-        <div className="mb-8 rounded-xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Order details</h2>
-          <dl className="grid gap-3 sm:grid-cols-2">
-            <Field label="Purchase Order #" value={po.number} />
-            <Field label="Status" value={po.status} />
-            <Field label="Total" value={fmtCurrency(po.total)} />
-            <Field label="Ordered quantity" value={String(orderedQuantity)} />
-            <Field label="Received quantity" value={String(receivedQuantity)} />
-            <Field label="Created" value={new Date(po.createdAt).toLocaleDateString()} />
-          </dl>
-        </div>
-
-        <div className="mb-8 overflow-hidden rounded-xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-          <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-muted)' }}>
-            <h2 className="text-base font-semibold text-white">Line Items</h2>
-            <span className="rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>{po.lineItems.length}</span>
-          </div>
-          {po.lineItems.length === 0 ? (
-            <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>No line items yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead>
-                  <tr>
-                    <Th>Description</Th>
-                    <Th>Qty</Th>
-                    <Th>Unit Price</Th>
-                    <Th>Line Total</Th>
-                    <Th>Actions</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {po.lineItems.map((item, index) => (
-                    <tr key={item.id} id={`line-item-${item.id}`} tabIndex={-1} className="focus:outline-none transition-shadow" style={index < po.lineItems.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                      <Td>{item.description}</Td>
-                      <Td>{item.quantity}</Td>
-                      <Td>{fmtCurrency(item.unitPrice)}</Td>
-                      <Td>{fmtCurrency(item.lineTotal)}</Td>
-                      <Td>
-                        <DeleteButton resource="purchase-order-line-items" id={item.id} />
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Vendor */}
-        <div className="mb-8 rounded-xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Vendor</h2>
-            <Link href={`/vendors/${po.vendor.id}`} className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-              View vendor →
-            </Link>
-          </div>
-          <p className="text-lg font-semibold text-white">{po.vendor.name}</p>
-          <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Field label="Email" value={po.vendor.email} />
-            <Field label="Phone" value={fmtPhone(po.vendor.phone)} />
-            <Field label="Tax ID" value={po.vendor.taxId} />
-          </dl>
-        </div>
-
-        {/* Receipts */}
-        <div className="mb-6 overflow-hidden rounded-xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-          <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-muted)' }}>
-            <h2 className="text-base font-semibold text-white">Receipts</h2>
-            <span className="rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>{po.receipts.length}</span>
-          </div>
-          {po.receipts.length === 0 ? (
-            <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>No receipts recorded yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead>
-                  <tr>
-                    <Th>Date</Th>
-                    <Th>Quantity</Th>
-                    <Th>Notes</Th>
-                    <Th>Actions</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {po.receipts.map((r, index) => (
-                    <tr key={r.id} id={`receipt-${r.id}`} tabIndex={-1} className="focus:outline-none transition-shadow" style={index < po.receipts.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                      <Td>{new Date(r.date).toLocaleDateString()}</Td>
-                      <Td>{r.quantity}</Td>
-                      <Td>{r.notes ?? '—'}</Td>
-                      <Td>
-                        <DeleteButton resource="receipts" id={r.id} />
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-      </div>
-    </div>
+        </RecordDetailSection>
+      ) : null}
+    </RecordDetailPageShell>
   )
 }
 
@@ -180,34 +340,10 @@ function StatusBadge({ status }: { status: string | null }) {
   }
   const key = (status ?? '').toLowerCase()
   return (
-    <span className={`mt-2 inline-block rounded-full px-3 py-0.5 text-sm font-medium ${colors[key] ?? 'bg-gray-100 text-gray-700'}`}>
+    <span
+      className={`inline-block rounded-full px-3 py-0.5 text-sm font-medium ${colors[key] ?? 'bg-gray-100 text-gray-700'}`}
+    >
       {status ?? 'Unknown'}
     </span>
   )
-}
-
-function StatCard({ label, value, accent }: { label: string; value: string | number; accent?: boolean }) {
-  return (
-    <div className="rounded-2xl border p-5" style={{ backgroundColor: accent ? 'var(--card-elevated)' : 'var(--card)', borderColor: 'var(--border-muted)' }}>
-      <p className="text-sm font-medium" style={{ color: accent ? 'var(--accent-primary-strong)' : 'var(--text-muted)' }}>{label}</p>
-      <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
-    </div>
-  )
-}
-
-function Field({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{label}</dt>
-      <dd className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{value ?? '—'}</dd>
-    </div>
-  )
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-muted)' }}>{children}</th>
-}
-
-function Td({ children }: { children: React.ReactNode }) {
-  return <td className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{children}</td>
 }

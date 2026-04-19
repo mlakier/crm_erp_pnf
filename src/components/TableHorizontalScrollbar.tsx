@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export default function TableHorizontalScrollbar({
   targetId,
+  alwaysShow = false,
 }: {
   targetId: string
+  alwaysShow?: boolean
 }) {
   const [maxScroll, setMaxScroll] = useState(0)
   const [scrollLeft, setScrollLeft] = useState(0)
@@ -28,6 +30,11 @@ export default function TableHorizontalScrollbar({
     }
 
     updateWidth()
+    const rafOne = window.requestAnimationFrame(updateWidth)
+    const rafTwo = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(updateWidth)
+    })
+    const timeoutId = window.setTimeout(updateWidth, 120)
 
     tableContainer.addEventListener('scroll', syncFromTable)
     window.addEventListener('resize', updateWidth)
@@ -41,14 +48,21 @@ export default function TableHorizontalScrollbar({
       resizeObserver?.observe(table)
     }
 
+    const mutationObserver = new MutationObserver(updateWidth)
+    mutationObserver.observe(tableContainer, { childList: true, subtree: true, attributes: true, characterData: true })
+
     return () => {
       tableContainer.removeEventListener('scroll', syncFromTable)
       window.removeEventListener('resize', updateWidth)
       resizeObserver?.disconnect()
+      mutationObserver.disconnect()
+      window.cancelAnimationFrame(rafOne)
+      window.cancelAnimationFrame(rafTwo)
+      window.clearTimeout(timeoutId)
     }
   }, [targetId])
 
-  if (maxScroll <= 0) {
+  if (!alwaysShow && maxScroll <= 0) {
     return null
   }
 
@@ -57,9 +71,9 @@ export default function TableHorizontalScrollbar({
       <input
         type="range"
         min={0}
-        max={maxScroll}
+        max={Math.max(1, maxScroll)}
         step={1}
-        value={Math.min(scrollLeft, maxScroll)}
+        value={Math.min(scrollLeft, Math.max(1, maxScroll))}
         onChange={(event) => {
           const tableContainer = document.getElementById(targetId)
           const nextScrollLeft = Number(event.target.value)

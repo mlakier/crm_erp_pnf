@@ -3,11 +3,33 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { fmtCurrency, fmtPhone, normalizePhone } from '@/lib/format'
 import DeleteButton from '@/components/DeleteButton'
-import ContactEditButton from '@/components/ContactEditButton'
+import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
+import ContactDetailCustomizeMode from '@/components/ContactDetailCustomizeMode'
+import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import {
+  RecordDetailCell,
+  RecordDetailField,
+  RecordDetailHeaderCell,
+  RecordDetailSection,
+  RecordDetailStatCard,
+} from '@/components/RecordDetailPanels'
+import { loadContactFormCustomization } from '@/lib/contact-form-customization-store'
+import { CONTACT_FORM_FIELDS, type ContactFormFieldKey } from '@/lib/contact-form-customization'
+import { loadFormRequirements } from '@/lib/form-requirements-store'
 
-export default async function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ContactDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ edit?: string; customize?: string }>
+}) {
   const { id } = await params
-  const [contact, customers] = await Promise.all([
+  const { edit, customize } = await searchParams
+  const isEditing = edit === '1'
+  const isCustomizing = customize === '1'
+
+  const [contact, customers, formCustomization, formRequirements] = await Promise.all([
     prisma.contact.findUnique({
       where: { id },
       include: {
@@ -23,89 +45,206 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       },
     }),
     prisma.customer.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    loadContactFormCustomization(),
+    loadFormRequirements(),
   ])
 
   if (!contact) notFound()
 
+  const detailHref = `/contacts/${contact.id}`
+  const sectionDescriptions: Record<string, string> = {
+    Core: 'Primary identity fields for the contact record.',
+    Contact: 'Communication channels and mailing information.',
+    Relationship: 'Customer ownership and job-context fields.',
+    Status: 'Availability and active-state controls.',
+  }
+
+  const fieldDefinitions: Record<ContactFormFieldKey, InlineRecordSection['fields'][number]> = {
+    contactNumber: {
+      name: 'contactNumber',
+      label: 'Contact ID',
+      value: contact.contactNumber ?? '',
+      helpText: 'System-generated contact identifier.',
+    },
+    firstName: {
+      name: 'firstName',
+      label: 'First Name',
+      value: contact.firstName,
+      helpText: 'Contact given name.',
+    },
+    lastName: {
+      name: 'lastName',
+      label: 'Last Name',
+      value: contact.lastName,
+      helpText: 'Contact family name.',
+    },
+    email: {
+      name: 'email',
+      label: 'Email',
+      value: contact.email ?? '',
+      type: 'email',
+      helpText: 'Primary contact email address.',
+    },
+    phone: {
+      name: 'phone',
+      label: 'Phone',
+      value: normalizePhone(contact.phone) ?? '',
+      helpText: 'Primary contact phone number.',
+    },
+    address: {
+      name: 'address',
+      label: 'Address',
+      value: contact.address ?? '',
+      type: 'address',
+      helpText: 'Mailing or business address for the contact.',
+    },
+    position: {
+      name: 'position',
+      label: 'Position',
+      value: contact.position ?? '',
+      helpText: 'Job title or role for the contact.',
+    },
+    customerId: {
+      name: 'customerId',
+      label: 'Customer',
+      value: contact.customerId,
+      type: 'select',
+      options: customers.map((customer) => ({ value: customer.id, label: customer.name })),
+      helpText: 'Customer account this contact belongs to.',
+      sourceText: 'Customers master data',
+    },
+    inactive: {
+      name: 'inactive',
+      label: 'Inactive',
+      value: contact.active ? 'false' : 'true',
+      type: 'select',
+      options: [{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }],
+      helpText: 'Marks the contact unavailable for new activity while preserving history.',
+      sourceText: 'System status values',
+    },
+  }
+
+  const customizeFields = CONTACT_FORM_FIELDS.map((field) => {
+    const definition = fieldDefinitions[field.id]
+    const rawValue = definition.value ?? ''
+    const previewValue = definition.options?.find((option) => option.value === rawValue)?.label ?? rawValue
+    return {
+      id: field.id,
+      label: definition.label,
+      fieldType: field.fieldType,
+      source: field.source,
+      description: field.description,
+      previewValue,
+    }
+  })
+
+  const detailSections: InlineRecordSection[] = formCustomization.sections
+    .map((sectionTitle) => {
+      const configuredFields = CONTACT_FORM_FIELDS
+        .filter((field) => {
+          const config = formCustomization.fields[field.id]
+          return config.visible && config.section === sectionTitle
+        })
+        .sort((a, b) => {
+          const left = formCustomization.fields[a.id]
+          const right = formCustomization.fields[b.id]
+          if (left.column !== right.column) return left.column - right.column
+          return left.order - right.order
+        })
+        .map((field) => ({
+          ...fieldDefinitions[field.id],
+          column: formCustomization.fields[field.id].column,
+          order: formCustomization.fields[field.id].order,
+        }))
+
+      if (configuredFields.length === 0) return null
+
+      return {
+        title: sectionTitle,
+        description: sectionDescriptions[sectionTitle],
+        collapsible: true,
+        defaultExpanded: true,
+        fields: configuredFields,
+      }
+    })
+    .filter((section): section is InlineRecordSection => Boolean(section))
+
   return (
-    <div className="min-h-full px-8 py-8">
-      <div className="max-w-5xl">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <Link href="/contacts" className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-              ← Back to Contacts
+    <RecordDetailPageShell
+      backHref={isCustomizing ? detailHref : '/contacts'}
+      backLabel={isCustomizing ? '<- Back to Contact Detail' : '<- Back to Contacts'}
+      meta={contact.contactNumber ?? 'Pending'}
+      title={`${contact.firstName} ${contact.lastName}`}
+      badge={
+        contact.position ? (
+          <span className="inline-block rounded-full px-3 py-0.5 text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>
+            {contact.position}
+          </span>
+        ) : null
+      }
+      actions={
+        <>
+          {!isEditing && !isCustomizing ? (
+            <Link href={`${detailHref}?customize=1`} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
+              Customize
             </Link>
-            <p className="mt-2 text-sm font-medium tracking-wide" style={{ color: 'var(--text-muted)' }}>{contact.contactNumber ?? 'Pending'}</p>
-            <h1 className="mt-2 text-2xl font-semibold text-white">
-              {contact.firstName} {contact.lastName}
-            </h1>
-            {contact.position ? (
-              <span className="mt-2 inline-block rounded-full px-3 py-0.5 text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>
-                {contact.position}
-              </span>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2">
-            <ContactEditButton
-              contactId={contact.id}
-              values={{
-                firstName: contact.firstName,
-                lastName: contact.lastName,
-                email: contact.email ?? '',
-                phone: normalizePhone(contact.phone) ?? '',
-                address: contact.address ?? '',
-                position: contact.position ?? '',
-                customerId: contact.customerId,
-                inactive: !contact.active,
-              }}
-              customers={customers}
-            />
-            <DeleteButton resource="contacts" id={contact.id} />
-          </div>
+          ) : null}
+          {!isEditing ? (
+            <Link
+              href={`${detailHref}?edit=1`}
+              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
+              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
+            >
+              Edit
+            </Link>
+          ) : null}
+          {!isCustomizing ? <DeleteButton resource="contacts" id={contact.id} /> : null}
+        </>
+      }
+    >
+        {isCustomizing ? (
+          <ContactDetailCustomizeMode
+            detailHref={detailHref}
+            initialLayout={formCustomization}
+            initialRequirements={{ ...formRequirements.contactCreate }}
+            fields={customizeFields}
+            sectionDescriptions={sectionDescriptions}
+          />
+        ) : (
+          <InlineRecordDetails
+            resource="contacts"
+            id={contact.id}
+            title="Contact details"
+            sections={detailSections}
+            editing={isEditing}
+            columns={formCustomization.formColumns}
+          />
+        )}
+
+        <div className="mb-8 grid gap-4 sm:grid-cols-3">
+          <RecordDetailStatCard label="Customer" value={contact.customer.name} />
+          <RecordDetailStatCard label="Owner" value={contact.user.name ?? contact.user.email} />
+          <RecordDetailStatCard label="Open opportunities" value={contact.customer.opportunities.length} accent />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3 mb-8">
-          <StatCard label="Customer" value={contact.customer.name} />
-          <StatCard label="Owner" value={contact.user.name ?? contact.user.email} />
-          <StatCard label="Open opportunities" value={contact.customer.opportunities.length} accent />
-        </div>
-
-        <div className="mb-8 rounded-xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Contact details</h2>
-          <dl className="grid gap-4 sm:grid-cols-2">
-            <Field label="Contact Id" value={contact.contactNumber} />
-            <Field label="Email" value={contact.email} />
-            <Field label="Phone" value={fmtPhone(contact.phone)} />
-            <Field label="Address" value={contact.address} />
-            <Field label="Position" value={contact.position} />
-            <Field label="Inactive" value={contact.active ? 'No' : 'Yes'} />
-            <Field label="Created" value={new Date(contact.createdAt).toLocaleDateString()} />
-          </dl>
-        </div>
-
-        <div className="mb-8 rounded-xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Linked customer</h2>
+        <RecordDetailSection title="Linked customer" count={1}>
+          <div className="mb-4 flex items-center justify-between px-6 pt-6">
             <Link href={`/customers/${contact.customer.id}`} className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-              View customer →
+              {'View customer ->'}
             </Link>
           </div>
-          <p className="text-lg font-semibold text-white">{contact.customer.name}</p>
-          <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field label="Industry" value={contact.customer.industry} />
-            <Field label="Customer email" value={contact.customer.email} />
-            <Field label="Customer phone" value={fmtPhone(contact.customer.phone)} />
-            <Field label="Address" value={contact.customer.address} />
-          </dl>
-        </div>
-
-        <div className="overflow-hidden rounded-xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-          <div className="flex items-center justify-between border-b px-6 py-4" style={{ borderColor: 'var(--border-muted)' }}>
-            <h2 className="text-base font-semibold text-white">Recent customer opportunities</h2>
-            <span className="rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>
-              {contact.customer.opportunities.length}
-            </span>
+          <div className="px-6 pb-6">
+            <p className="text-lg font-semibold text-white">{contact.customer.name}</p>
+            <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+              <RecordDetailField label="Industry">{contact.customer.industry ?? '-'}</RecordDetailField>
+              <RecordDetailField label="Customer email">{contact.customer.email ?? '-'}</RecordDetailField>
+              <RecordDetailField label="Customer phone">{fmtPhone(contact.customer.phone)}</RecordDetailField>
+              <RecordDetailField label="Address">{contact.customer.address ?? '-'}</RecordDetailField>
+            </dl>
           </div>
+        </RecordDetailSection>
+
+        <RecordDetailSection title="Recent customer opportunities" count={contact.customer.opportunities.length}>
           {contact.customer.opportunities.length === 0 ? (
             <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>No opportunities for this customer yet.</p>
           ) : (
@@ -113,49 +252,30 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
               <table className="min-w-full">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Name</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Stage</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Amount</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Close Date</th>
+                    <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
+                    <RecordDetailHeaderCell>Stage</RecordDetailHeaderCell>
+                    <RecordDetailHeaderCell>Amount</RecordDetailHeaderCell>
+                    <RecordDetailHeaderCell>Close Date</RecordDetailHeaderCell>
                   </tr>
                 </thead>
                 <tbody>
                   {contact.customer.opportunities.map((opportunity, index) => (
                     <tr key={opportunity.id} style={index < contact.customer.opportunities.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                      <td className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                      <RecordDetailCell>
                         <Link href={`/opportunities/${opportunity.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                           {opportunity.name}
                         </Link>
-                      </td>
-                      <td className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{opportunity.stage}</td>
-                      <td className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtCurrency(opportunity.amount)}</td>
-                      <td className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{opportunity.closeDate ? new Date(opportunity.closeDate).toLocaleDateString() : '—'}</td>
+                      </RecordDetailCell>
+                      <RecordDetailCell>{opportunity.stage}</RecordDetailCell>
+                      <RecordDetailCell>{fmtCurrency(opportunity.amount)}</RecordDetailCell>
+                      <RecordDetailCell>{opportunity.closeDate ? new Date(opportunity.closeDate).toLocaleDateString() : '-'}</RecordDetailCell>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function StatCard({ label, value, accent }: { label: string; value: string | number; accent?: boolean }) {
-  return (
-    <div className="rounded-2xl border p-5" style={{ backgroundColor: accent ? 'var(--card-elevated)' : 'var(--card)', borderColor: 'var(--border-muted)' }}>
-      <p className="text-sm font-medium" style={{ color: accent ? 'var(--accent-primary-strong)' : 'var(--text-muted)' }}>{label}</p>
-      <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
-    </div>
-  )
-}
-
-function Field({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{label}</dt>
-      <dd className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{value ?? '—'}</dd>
-    </div>
+        </RecordDetailSection>
+    </RecordDetailPageShell>
   )
 }

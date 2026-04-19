@@ -88,6 +88,7 @@ model Customer {
   salesOrders   SalesOrder[]
   invoices      Invoice[]
   creditMemos   CreditMemo[]
+  journalEntryLineItems JournalEntryLineItem[]
   entity        Entity?       @relation(fields: [entityId], references: [id])
   currency      Currency?     @relation(fields: [currencyId], references: [id])
 
@@ -139,6 +140,9 @@ model Project {
   userId String
   user   User   @relation(fields: [userId], references: [id])
   tasks  Task[]
+  invoiceLineItems InvoiceLineItem[]
+  billLineItems BillLineItem[]
+  journalEntryLineItems JournalEntryLineItem[]
 
   @@index([userId])
   @@map("projects")
@@ -185,6 +189,7 @@ model Vendor {
   purchaseOrders PurchaseOrder[]
   bills          Bill[]
   billCredits    BillCredit[]
+  journalEntryLineItems JournalEntryLineItem[]
   entity         Entity?         @relation(fields: [entityId], references: [id])
   currency       Currency?       @relation(fields: [currencyId], references: [id])
 
@@ -200,8 +205,13 @@ model Department {
   description String?
   division  String?
   entityId  String?
+  parentDepartmentId String?
+  costCenterCode String?
+  departmentType String?
+  segmentReportingGroup String?
+  sharedServicesFlag Boolean @default(false)
   active    Boolean  @default(true)
-  managerId String?
+  managerEmployeeId String? @map("managerId")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -209,9 +219,17 @@ model Department {
   users        User[]
   requisitions Requisition[]
   employees    Employee[]
+  invoiceLineItems InvoiceLineItem[]
+  billLineItems BillLineItem[]
+  journalEntryLineItems JournalEntryLineItem[]
   entity       Entity? @relation(fields: [entityId], references: [id])
+  parentDepartment Department? @relation("DepartmentHierarchy", fields: [parentDepartmentId], references: [id])
+  childDepartments Department[] @relation("DepartmentHierarchy")
+  manager Employee? @relation("DepartmentManager", fields: [managerEmployeeId], references: [id])
 
   @@index([entityId])
+  @@index([parentDepartmentId])
+  @@index([managerEmployeeId])
   @@map("departments")
 }
 
@@ -225,6 +243,11 @@ model Location {
   inactive  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  employees Employee[]
+  invoiceLineItems InvoiceLineItem[]
+  billLineItems BillLineItem[]
+  journalEntryLineItems JournalEntryLineItem[]
 
   @@map("locations")
 }
@@ -246,11 +269,21 @@ model ChartOfAccounts {
   name                          String
   description                   String?
   accountType                   String // List/select value (Asset, Liability, Equity, Revenue, Expense, etc.)
+  normalBalance                 String?
+  financialStatementSection     String?
+  financialStatementGroup       String?
   inventory                     Boolean  @default(false)
   revalueOpenBalance            Boolean  @default(false)
   eliminateIntercoTransactions  Boolean  @default(false)
   summary                       Boolean  @default(false)
+  isPosting                     Boolean  @default(true)
+  isControlAccount              Boolean  @default(false)
+  allowsManualPosting           Boolean  @default(true)
+  requiresSubledgerType         String?
+  cashFlowCategory              String?
   parentSubsidiaryId            String?
+  parentAccountId               String?
+  closeToAccountId              String?
   includeChildren               Boolean  @default(false)
   category                      String?
   active                        Boolean  @default(true)
@@ -261,8 +294,24 @@ model ChartOfAccounts {
   journalEntryLineItems  JournalEntryLineItem[]
   parentSubsidiary       Entity?                    @relation("ChartOfAccountParentSubsidiary", fields: [parentSubsidiaryId], references: [id])
   subsidiaryAssignments  ChartOfAccountSubsidiary[]
+  parentAccount          ChartOfAccounts?          @relation("ChartOfAccountsHierarchy", fields: [parentAccountId], references: [id])
+  childAccounts          ChartOfAccounts[]         @relation("ChartOfAccountsHierarchy")
+  closeToAccount         ChartOfAccounts?          @relation("ChartOfAccountsCloseTo", fields: [closeToAccountId], references: [id])
+  closingSourceAccounts  ChartOfAccounts[]         @relation("ChartOfAccountsCloseTo")
+  incomeItems            Item[]                     @relation("ItemIncomeAccount")
+  deferredRevenueItems   Item[]                     @relation("ItemDeferredRevenueAccount")
+  inventoryItems         Item[]                     @relation("ItemInventoryAccount")
+  cogsExpenseItems       Item[]                     @relation("ItemCogsExpenseAccount")
+  deferredCostItems      Item[]                     @relation("ItemDeferredCostAccount")
+  retainedEarningsEntities      Entity[]           @relation("EntityRetainedEarningsAccount")
+  ctaEntities                   Entity[]           @relation("EntityCtaAccount")
+  intercompanyClearingEntities  Entity[]           @relation("EntityIntercompanyClearingAccount")
+  dueToEntities                 Entity[]           @relation("EntityDueToAccount")
+  dueFromEntities               Entity[]           @relation("EntityDueFromAccount")
 
   @@index([parentSubsidiaryId])
+  @@index([parentAccountId])
+  @@index([closeToAccountId])
 
   @@map("chart_of_accounts")
 }
@@ -696,6 +745,15 @@ model InvoiceLineItem {
   unitPrice   Float    @default(0)
   lineTotal   Float    @default(0)
   notes       String?
+  departmentId String?
+  locationId String?
+  projectId String?
+  serviceStartDate DateTime?
+  serviceEndDate DateTime?
+  revRecTemplateId String?
+  performanceObligationCode String?
+  standaloneSellingPrice Float?
+  allocatedAmount Float?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -703,9 +761,17 @@ model InvoiceLineItem {
   invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   itemId    String?
   item      Item?   @relation(fields: [itemId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+  location Location? @relation(fields: [locationId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
+  revRecTemplate RevRecTemplate? @relation(fields: [revRecTemplateId], references: [id])
 
   @@index([invoiceId])
   @@index([itemId])
+  @@index([departmentId])
+  @@index([locationId])
+  @@index([projectId])
+  @@index([revRecTemplateId])
   @@map("invoice_line_items")
 }
 
@@ -716,6 +782,15 @@ model BillLineItem {
   unitPrice   Float    @default(0)
   lineTotal   Float    @default(0)
   notes       String?
+  departmentId String?
+  locationId String?
+  projectId String?
+  serviceStartDate DateTime?
+  serviceEndDate DateTime?
+  revRecTemplateId String?
+  performanceObligationCode String?
+  standaloneSellingPrice Float?
+  allocatedAmount Float?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -723,9 +798,17 @@ model BillLineItem {
   bill   Bill   @relation(fields: [billId], references: [id], onDelete: Cascade)
   itemId String?
   item   Item?  @relation(fields: [itemId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+  location Location? @relation(fields: [locationId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
+  revRecTemplate RevRecTemplate? @relation(fields: [revRecTemplateId], references: [id])
 
   @@index([billId])
   @@index([itemId])
+  @@index([departmentId])
+  @@index([locationId])
+  @@index([projectId])
+  @@index([revRecTemplateId])
   @@map("bill_line_items")
 }
 
@@ -838,6 +921,7 @@ model JournalEntryLineItem {
   description String?
   debit       Float    @default(0)
   credit      Float    @default(0)
+  memo        String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -845,9 +929,30 @@ model JournalEntryLineItem {
   journalEntry   JournalEntry    @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
   accountId      String
   account        ChartOfAccounts @relation(fields: [accountId], references: [id])
+  departmentId   String?
+  department     Department?     @relation(fields: [departmentId], references: [id])
+  locationId     String?
+  location       Location?       @relation(fields: [locationId], references: [id])
+  projectId      String?
+  project        Project?        @relation(fields: [projectId], references: [id])
+  customerId     String?
+  customer       Customer?       @relation(fields: [customerId], references: [id])
+  vendorId       String?
+  vendor         Vendor?         @relation(fields: [vendorId], references: [id])
+  itemId         String?
+  item           Item?           @relation(fields: [itemId], references: [id])
+  employeeId     String?
+  employee       Employee?       @relation(fields: [employeeId], references: [id])
 
   @@index([journalEntryId])
   @@index([accountId])
+  @@index([departmentId])
+  @@index([locationId])
+  @@index([projectId])
+  @@index([customerId])
+  @@index([vendorId])
+  @@index([itemId])
+  @@index([employeeId])
   @@map("journal_entry_line_items")
 }
 
@@ -927,6 +1032,9 @@ model JournalEntry {
   description String?
   status      String   @default("draft")
   total       Float
+  accountingPeriodId String?
+  sourceType  String?
+  sourceId    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -937,11 +1045,19 @@ model JournalEntry {
   currency   Currency?            @relation(fields: [currencyId], references: [id])
   userId     String?
   user       User?                @relation(fields: [userId], references: [id])
+  postedByEmployeeId String?
+  postedByEmployee Employee?      @relation("JournalEntryPostedByEmployee", fields: [postedByEmployeeId], references: [id])
+  approvedByEmployeeId String?
+  approvedByEmployee Employee?    @relation("JournalEntryApprovedByEmployee", fields: [approvedByEmployeeId], references: [id])
+  accountingPeriod AccountingPeriod? @relation(fields: [accountingPeriodId], references: [id])
   lineItems  JournalEntryLineItem[]
 
   @@index([entityId])
   @@index([currencyId])
   @@index([userId])
+  @@index([postedByEmployeeId])
+  @@index([approvedByEmployeeId])
+  @@index([accountingPeriodId])
   @@map("journal_entries")
 }
 
@@ -951,8 +1067,19 @@ model AccountingPeriod {
   startDate DateTime
   endDate   DateTime
   closed    Boolean  @default(false)
+  entityId  String?
+  status    String   @default("open")
+  arLocked  Boolean  @default(false)
+  apLocked  Boolean  @default(false)
+  inventoryLocked Boolean @default(false)
+  closedAt  DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  entity Entity? @relation(fields: [entityId], references: [id])
+  journalEntries JournalEntry[]
+
+  @@index([entityId])
 
   @@map("accounting_periods")
 }
@@ -1055,10 +1182,37 @@ model Currency {
   billCredits    BillCredit[]
   requisitions   Requisition[]
   journalEntries JournalEntry[]
+  baseExchangeRates  ExchangeRate[] @relation("ExchangeRateBaseCurrency")
+  quoteExchangeRates ExchangeRate[] @relation("ExchangeRateQuoteCurrency")
+  functionalCurrencyEntities Entity[] @relation("EntityFunctionalCurrency")
+  reportingCurrencyEntities Entity[] @relation("EntityReportingCurrency")
 
   fulfillments  Fulfillment[]
 
   @@map("currencies")
+}
+
+model ExchangeRate {
+  id              String   @id @default(cuid())
+  effectiveDate   DateTime
+  rate            Float
+  rateType        String   @default("spot")
+  source          String?
+  notes           String?
+  active          Boolean  @default(true)
+  baseCurrencyId  String
+  quoteCurrencyId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  baseCurrency  Currency @relation("ExchangeRateBaseCurrency", fields: [baseCurrencyId], references: [id], onDelete: Cascade)
+  quoteCurrency Currency @relation("ExchangeRateQuoteCurrency", fields: [quoteCurrencyId], references: [id], onDelete: Cascade)
+
+  @@unique([baseCurrencyId, quoteCurrencyId, effectiveDate, rateType])
+  @@index([effectiveDate])
+  @@index([baseCurrencyId, quoteCurrencyId])
+  @@index([quoteCurrencyId])
+  @@map("exchange_rates")
 }
 
 model Entity {
@@ -1072,6 +1226,17 @@ model Entity {
   taxId              String?
   registrationNumber String?
   parentEntityId     String?
+  functionalCurrencyId String?
+  reportingCurrencyId String?
+  fiscalCalendarId   String?
+  consolidationMethod String?
+  ownershipPercent   Float?
+  retainedEarningsAccountId String?
+  ctaAccountId       String?
+  intercompanyClearingAccountId String?
+  dueToAccountId     String?
+  dueFromAccountId   String?
+  periodLockDate     DateTime?
   active             Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -1079,8 +1244,15 @@ model Entity {
   // Relations
   defaultCurrencyId String?
   defaultCurrency   Currency?       @relation("EntityDefaultCurrency", fields: [defaultCurrencyId], references: [id])
+  functionalCurrency Currency?      @relation("EntityFunctionalCurrency", fields: [functionalCurrencyId], references: [id])
+  reportingCurrency Currency?       @relation("EntityReportingCurrency", fields: [reportingCurrencyId], references: [id])
   parentEntity      Entity?         @relation("EntityHierarchy", fields: [parentEntityId], references: [id])
   childEntities     Entity[]        @relation("EntityHierarchy")
+  retainedEarningsAccount ChartOfAccounts? @relation("EntityRetainedEarningsAccount", fields: [retainedEarningsAccountId], references: [id])
+  ctaAccount              ChartOfAccounts? @relation("EntityCtaAccount", fields: [ctaAccountId], references: [id])
+  intercompanyClearingAccount ChartOfAccounts? @relation("EntityIntercompanyClearingAccount", fields: [intercompanyClearingAccountId], references: [id])
+  dueToAccount            ChartOfAccounts? @relation("EntityDueToAccount", fields: [dueToAccountId], references: [id])
+  dueFromAccount          ChartOfAccounts? @relation("EntityDueFromAccount", fields: [dueFromAccountId], references: [id])
   departments       Department[]
   employees         Employee[]
   items             Item[]
@@ -1097,11 +1269,19 @@ model Entity {
   billCredits       BillCredit[]
   requisitions      Requisition[]
   journalEntries    JournalEntry[]
+  accountingPeriods AccountingPeriod[]
   chartOfAccountsAsParent      ChartOfAccounts[]          @relation("ChartOfAccountParentSubsidiary")
   chartOfAccountAssignments    ChartOfAccountSubsidiary[] @relation("ChartOfAccountSubsidiaryAssignment")
 
   @@index([defaultCurrencyId])
+  @@index([functionalCurrencyId])
+  @@index([reportingCurrencyId])
   @@index([parentEntityId])
+  @@index([retainedEarningsAccountId])
+  @@index([ctaAccountId])
+  @@index([intercompanyClearingAccountId])
+  @@index([dueToAccountId])
+  @@index([dueFromAccountId])
   fulfillments    Fulfillment[]
   @@map("subsidiaries")
 }
@@ -1113,8 +1293,25 @@ model Item {
   name        String
   description String?
   itemType    String   @default("service")
+  revenueStream String?
+  recognitionMethod String?
+  recognitionTrigger String?
+  defaultRevRecTemplateId String?
+  defaultTermMonths Int?
+  isDistinctPerformanceObligation Boolean @default(true)
+  standaloneSellingPrice Float?
+  billingType String?
+  taxCode String?
   uom         String? // unit of measure
   listPrice   Float    @default(0)
+  standardCost Float?
+  averageCost Float?
+  incomeAccountId           String?
+  deferredRevenueAccountId  String?
+  inventoryAccountId        String?
+  cogsExpenseAccountId      String?
+  deferredCostAccountId     String?
+  directRevenuePosting      Boolean  @default(false)
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -1124,6 +1321,12 @@ model Item {
   currency               Currency?               @relation(fields: [currencyId], references: [id])
   entityId               String?
   entity                 Entity?                 @relation(fields: [entityId], references: [id])
+  defaultRevRecTemplate  RevRecTemplate?         @relation(fields: [defaultRevRecTemplateId], references: [id])
+  incomeAccount          ChartOfAccounts?        @relation("ItemIncomeAccount", fields: [incomeAccountId], references: [id])
+  deferredRevenueAccount ChartOfAccounts?        @relation("ItemDeferredRevenueAccount", fields: [deferredRevenueAccountId], references: [id])
+  inventoryAccount       ChartOfAccounts?        @relation("ItemInventoryAccount", fields: [inventoryAccountId], references: [id])
+  cogsExpenseAccount     ChartOfAccounts?        @relation("ItemCogsExpenseAccount", fields: [cogsExpenseAccountId], references: [id])
+  deferredCostAccount    ChartOfAccounts?        @relation("ItemDeferredCostAccount", fields: [deferredCostAccountId], references: [id])
   opportunityLineItems   OpportunityLineItem[]
   purchaseOrderLineItems PurchaseOrderLineItem[]
   requisitionLineItems   RequisitionLineItem[]
@@ -1133,10 +1336,36 @@ model Item {
   billLineItems          BillLineItem[]
   creditMemoLineItems    CreditMemoLineItem[]
   billCreditLineItems    BillCreditLineItem[]
+  journalEntryLineItems  JournalEntryLineItem[]
 
   @@index([currencyId])
   @@index([entityId])
+  @@index([defaultRevRecTemplateId])
+  @@index([incomeAccountId])
+  @@index([deferredRevenueAccountId])
+  @@index([inventoryAccountId])
+  @@index([cogsExpenseAccountId])
+  @@index([deferredCostAccountId])
   @@map("items")
+}
+
+model RevRecTemplate {
+  id                String   @id @default(cuid())
+  templateId        String   @unique @map("code")
+  name              String
+  recognitionMethod String
+  scheduleType      String
+  defaultTermMonths Int?
+  catchUpAllowed    Boolean  @default(false)
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  items            Item[]
+  invoiceLineItems InvoiceLineItem[]
+  billLineItems    BillLineItem[]
+
+  @@map("rev_rec_templates")
 }
 
 model Employee {
@@ -1144,12 +1373,20 @@ model Employee {
   employeeId      String?   @unique @map("employeeNumber")
   firstName       String
   lastName        String
+  displayName     String?
   email           String?   @unique
   phone           String?
   title           String?
+  status          String    @default("active")
   active          Boolean   @default(true)
   hireDate        DateTime?
   terminationDate DateTime?
+  locationId      String?
+  approverEmployeeId String?
+  expenseApproverEmployeeId String?
+  billableFlag    Boolean   @default(false)
+  laborCostRate   Float?
+  billingRate     Float?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -1158,15 +1395,27 @@ model Employee {
   entity        Entity?     @relation(fields: [entityId], references: [id])
   departmentId  String?
   departmentRef Department? @relation(fields: [departmentId], references: [id])
+  location      Location?   @relation(fields: [locationId], references: [id])
   userId        String?     @unique
   user          User?       @relation(fields: [userId], references: [id])
   managerId     String?
   manager       Employee?   @relation("EmployeeManager", fields: [managerId], references: [id])
   directReports Employee[]  @relation("EmployeeManager")
+  approver      Employee?   @relation("EmployeeApprover", fields: [approverEmployeeId], references: [id])
+  approvedEmployees Employee[] @relation("EmployeeApprover")
+  expenseApprover Employee? @relation("EmployeeExpenseApprover", fields: [expenseApproverEmployeeId], references: [id])
+  expenseApprovedEmployees Employee[] @relation("EmployeeExpenseApprover")
+  postedJournalEntries JournalEntry[] @relation("JournalEntryPostedByEmployee")
+  approvedJournalEntries JournalEntry[] @relation("JournalEntryApprovedByEmployee")
+  journalEntryLineItems JournalEntryLineItem[]
+  managedDepartments Department[] @relation("DepartmentManager")
 
   @@index([entityId])
   @@index([departmentId])
+  @@index([locationId])
   @@index([managerId])
+  @@index([approverEmployeeId])
+  @@index([expenseApproverEmployeeId])
   @@map("employees")
 }
 

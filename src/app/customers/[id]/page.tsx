@@ -2,15 +2,37 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import DeleteButton from '@/components/DeleteButton'
-import CustomerEditButton from '@/components/CustomerEditButton'
 import CustomerCreateMenu from '@/components/CustomerCreateMenu'
 import CustomerRelatedDocs from '@/components/CustomerRelatedDocs'
+import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
+import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import {
+  RecordDetailCell,
+  RecordDetailEmptyState,
+  RecordDetailHeaderCell,
+  RecordDetailSection,
+  RecordDetailStatCard,
+} from '@/components/RecordDetailPanels'
 import { fmtCurrency, fmtPhone, normalizePhone } from '@/lib/format'
 import { loadListOptions } from '@/lib/list-options-store'
+import CustomerDetailCustomizeMode from '@/components/CustomerDetailCustomizeMode'
+import { loadCustomerFormCustomization } from '@/lib/customer-form-customization-store'
+import { CUSTOMER_FORM_FIELDS, type CustomerFormFieldKey } from '@/lib/customer-form-customization'
+import { loadFormRequirements } from '@/lib/form-requirements-store'
 
-export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CustomerDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ edit?: string; customize?: string }>
+}) {
   const { id } = await params
-  const [customer, subsidiaries, currencies, listOptions] = await Promise.all([
+  const { edit, customize } = await searchParams
+  const isEditing = edit === '1'
+  const isCustomizing = customize === '1'
+
+  const [customer, subsidiaries, currencies, listOptions, formCustomization, formRequirements] = await Promise.all([
     prisma.customer.findUnique({
       where: { id },
       include: {
@@ -32,31 +54,153 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       select: { id: true, currencyId: true, name: true },
     }),
     loadListOptions(),
+    loadCustomerFormCustomization(),
+    loadFormRequirements(),
   ])
 
   if (!customer) notFound()
 
-  const pipelineValue = customer.opportunities.reduce((s, o) => s + (o.amount ?? 0), 0)
+  const pipelineValue = customer.opportunities.reduce((sum, opportunity) => sum + (opportunity.amount ?? 0), 0)
+  const detailHref = `/customers/${customer.id}`
+  const sectionDescriptions: Record<string, string> = {
+    Core: 'Primary identity fields for the customer record.',
+    Contact: 'Contact channels and billing address.',
+    Financial: 'Default industry, subsidiary, and currency settings.',
+    Status: 'Availability and active-state controls.',
+  }
+
+  const fieldDefinitions: Record<CustomerFormFieldKey, InlineRecordSection['fields'][number]> = {
+    customerId: {
+      name: 'customerId',
+      label: 'Customer ID',
+      value: customer.customerId ?? '',
+      helpText: 'System-generated customer identifier.',
+    },
+    name: {
+      name: 'name',
+      label: 'Name',
+      value: customer.name,
+      helpText: 'Primary customer or account name.',
+    },
+    email: {
+      name: 'email',
+      label: 'Email',
+      value: customer.email ?? '',
+      type: 'email',
+      helpText: 'Primary customer email address.',
+    },
+    phone: {
+      name: 'phone',
+      label: 'Phone',
+      value: normalizePhone(customer.phone) ?? '',
+      helpText: 'Primary customer phone number.',
+    },
+    address: {
+      name: 'address',
+      label: 'Billing Address',
+      value: customer.address ?? '',
+      type: 'address',
+      helpText: 'Main billing address for the customer.',
+    },
+    industry: {
+      name: 'industry',
+      label: 'Industry',
+      value: customer.industry ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...listOptions.customer.industry.map((option) => ({ value: option, label: option }))],
+      helpText: 'Customer industry or segment classification.',
+      sourceText: 'Customer industry list',
+    },
+    primarySubsidiaryId: {
+      name: 'primarySubsidiaryId',
+      label: 'Primary Subsidiary',
+      value: customer.entityId ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...subsidiaries.map((subsidiary) => ({ value: subsidiary.id, label: `${subsidiary.subsidiaryId} - ${subsidiary.name}` }))],
+      helpText: 'Default legal entity context for this customer.',
+      sourceText: 'Subsidiaries master data',
+    },
+    primaryCurrencyId: {
+      name: 'primaryCurrencyId',
+      label: 'Primary Currency',
+      value: customer.currencyId ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...currencies.map((currency) => ({ value: currency.id, label: `${currency.currencyId} - ${currency.name}` }))],
+      helpText: 'Default transaction currency for this customer.',
+      sourceText: 'Currencies master data',
+    },
+    inactive: {
+      name: 'inactive',
+      label: 'Inactive',
+      value: customer.inactive ? 'true' : 'false',
+      type: 'select',
+      options: [{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }],
+      helpText: 'Marks the customer unavailable for new activity while preserving history.',
+      sourceText: 'System status values',
+    },
+  }
+
+  const customizeFields = CUSTOMER_FORM_FIELDS.map((field) => {
+    const definition = fieldDefinitions[field.id]
+    const rawValue = definition.value ?? ''
+    const previewValue = definition.options?.find((option) => option.value === rawValue)?.label ?? rawValue
+    return {
+      id: field.id,
+      label: definition.label,
+      fieldType: field.fieldType,
+      source: field.source,
+      description: field.description,
+      previewValue,
+    }
+  })
+
+  const detailSections: InlineRecordSection[] = formCustomization.sections
+    .map((sectionTitle) => {
+      const configuredFields = CUSTOMER_FORM_FIELDS
+        .filter((field) => {
+          const config = formCustomization.fields[field.id]
+          return config.visible && config.section === sectionTitle
+        })
+        .sort((a, b) => {
+          const left = formCustomization.fields[a.id]
+          const right = formCustomization.fields[b.id]
+          if (left.column !== right.column) return left.column - right.column
+          return left.order - right.order
+        })
+        .map((field) => ({
+          ...fieldDefinitions[field.id],
+          column: formCustomization.fields[field.id].column,
+          order: formCustomization.fields[field.id].order,
+        }))
+
+      if (configuredFields.length === 0) return null
+
+      return {
+        title: sectionTitle,
+        description: sectionDescriptions[sectionTitle],
+        collapsible: true,
+        defaultExpanded: true,
+        fields: configuredFields,
+      }
+    })
+    .filter((section): section is InlineRecordSection => Boolean(section))
 
   return (
-    <div className="min-h-full px-8 py-8">
-      <div className="max-w-5xl">
-
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <Link href="/customers" className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-              ← Back to CRM
-            </Link>
-            <p className="mt-2 text-sm font-medium tracking-wide" style={{ color: 'var(--text-muted)' }}>{customer.customerId ?? 'Pending'}</p>
-            <h1 className="mt-2 text-2xl font-semibold text-white">{customer.name}</h1>
-            {customer.industry && (
-              <span className="mt-2 inline-block rounded-full px-3 py-0.5 text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>
-                {customer.industry}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+    <RecordDetailPageShell
+      backHref={isCustomizing ? detailHref : '/customers'}
+      backLabel={isCustomizing ? '<- Back to Customer Detail' : '<- Back to Customers'}
+      meta={customer.customerId ?? 'Pending'}
+      title={customer.name}
+      badge={
+        customer.industry ? (
+          <span className="inline-block rounded-full px-3 py-0.5 text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>
+            {customer.industry}
+          </span>
+        ) : null
+      }
+      actions={
+        <>
+          {!isCustomizing ? (
             <CustomerCreateMenu
               customerId={customer.id}
               userId={customer.userId}
@@ -69,160 +213,116 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                 label: salesOrder.number,
               }))}
             />
-            <CustomerEditButton
-              customerId={customer.id}
-              entities={subsidiaries}
-              currencies={currencies}
-              industryOptions={listOptions.customer.industry}
-              values={{
-                name: customer.name,
-                email: customer.email ?? '',
-                phone: normalizePhone(customer.phone) ?? '',
-                address: customer.address ?? '',
-                industry: customer.industry ?? '',
-                primarySubsidiaryId: customer.entityId ?? '',
-                primaryCurrencyId: customer.currencyId ?? '',
-                inactive: customer.inactive,
-              }}
-            />
-            <DeleteButton resource="customers" id={customer.id} />
-          </div>
+          ) : null}
+          {!isEditing && !isCustomizing ? (
+            <Link href={`${detailHref}?customize=1`} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
+              Customize
+            </Link>
+          ) : null}
+          {!isEditing ? (
+            <Link
+              href={`${detailHref}?edit=1`}
+              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
+              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
+            >
+              Edit
+            </Link>
+          ) : null}
+          {!isCustomizing ? <DeleteButton resource="customers" id={customer.id} /> : null}
+        </>
+      }
+    >
+        {isCustomizing ? (
+          <CustomerDetailCustomizeMode
+            detailHref={detailHref}
+            initialLayout={formCustomization}
+            initialRequirements={{ ...formRequirements.customerCreate }}
+            fields={customizeFields}
+            sectionDescriptions={sectionDescriptions}
+          />
+        ) : (
+          <InlineRecordDetails
+            resource="customers"
+            id={customer.id}
+            title="Customer details"
+            sections={detailSections}
+            editing={isEditing}
+            columns={formCustomization.formColumns}
+          />
+        )}
+
+        <div className="mb-8 grid gap-4 sm:grid-cols-3">
+          <RecordDetailStatCard label="Contacts" value={customer.contacts.length} />
+          <RecordDetailStatCard label="Opportunities" value={customer.opportunities.length} />
+          <RecordDetailStatCard label="Pipeline value" value={fmtCurrency(pipelineValue)} accent />
         </div>
 
-        {/* Stats */}
-        <div className="grid gap-4 sm:grid-cols-3 mb-8">
-          <StatCard label="Contacts" value={customer.contacts.length} />
-          <StatCard label="Opportunities" value={customer.opportunities.length} />
-          <StatCard label="Pipeline value" value={fmtCurrency(pipelineValue)} accent />
-        </div>
-
-        {/* Details */}
-        <div className="mb-8 rounded-xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Customer details</h2>
-          <dl className="grid gap-3 sm:grid-cols-2">
-            <Field label="Customer Id" value={customer.customerId} />
-            <Field label="Email" value={customer.email} />
-            <Field label="Phone" value={fmtPhone(customer.phone)} />
-            <Field label="Billing Address" value={customer.address} />
-            <Field label="Primary Subsidiary" value={customer.entity ? `${customer.entity.subsidiaryId} - ${customer.entity.name}` : null} />
-            <Field label="Primary Currency" value={customer.currency?.currencyId ?? null} />
-            <Field label="Inactive" value={customer.inactive ? 'Yes' : 'No'} />
-            <Field label="Customer since" value={new Date(customer.createdAt).toLocaleDateString()} />
-          </dl>
-        </div>
-
-        {/* Contacts */}
-        <Section title="Contacts" count={customer.contacts.length}>
+        <RecordDetailSection title="Contacts" count={customer.contacts.length}>
           {customer.contacts.length === 0 ? (
-            <EmptyRow message="No contacts yet" />
+            <RecordDetailEmptyState message="No contacts yet" />
           ) : (
             <table className="min-w-full">
               <thead>
                 <tr>
-                  <Th>Contact #</Th>
-                  <Th>Name</Th>
-                  <Th>Email</Th>
-                  <Th>Phone</Th>
-                  <Th>Position</Th>
+                  <RecordDetailHeaderCell>Contact #</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Email</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Phone</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Position</RecordDetailHeaderCell>
                 </tr>
               </thead>
               <tbody>
-                {customer.contacts.map((c) => (
-                  <tr key={c.id} id={`contact-${c.id}`} tabIndex={-1} className="focus:outline-none transition-shadow">
-                    <Td>
-                      <Link href={`/contacts/${c.id}`} style={{ color: 'var(--accent-primary-strong)' }} className="hover:underline">
-                        {c.contactNumber ?? 'Pending'}
+                {customer.contacts.map((contact) => (
+                  <tr key={contact.id} id={`contact-${contact.id}`} tabIndex={-1} className="focus:outline-none transition-shadow">
+                    <RecordDetailCell>
+                      <Link href={`/contacts/${contact.id}`} style={{ color: 'var(--accent-primary-strong)' }} className="hover:underline">
+                        {contact.contactNumber ?? 'Pending'}
                       </Link>
-                    </Td>
-                    <Td>{c.firstName} {c.lastName}</Td>
-                    <Td>{c.email ?? '—'}</Td>
-                    <Td>{fmtPhone(c.phone)}</Td>
-                    <Td>{c.position ?? '—'}</Td>
+                    </RecordDetailCell>
+                    <RecordDetailCell>{contact.firstName} {contact.lastName}</RecordDetailCell>
+                    <RecordDetailCell>{contact.email ?? '-'}</RecordDetailCell>
+                    <RecordDetailCell>{fmtPhone(contact.phone)}</RecordDetailCell>
+                    <RecordDetailCell>{contact.position ?? '-'}</RecordDetailCell>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-        </Section>
+        </RecordDetailSection>
 
-        {/* Related Documents */}
         <CustomerRelatedDocs
-          opportunities={customer.opportunities.map((o) => ({
-            id: o.id,
-            name: o.name,
-            stage: o.stage,
-            amount: o.amount,
-            closeDate: o.closeDate ? o.closeDate.toISOString() : null,
+          opportunities={customer.opportunities.map((opportunity) => ({
+            id: opportunity.id,
+            name: opportunity.name,
+            stage: opportunity.stage,
+            amount: opportunity.amount,
+            closeDate: opportunity.closeDate ? opportunity.closeDate.toISOString() : null,
           }))}
-          quotes={customer.quotes.map((q) => ({
-            id: q.id,
-            number: q.number,
-            status: q.status,
-            total: q.total,
-            validUntil: q.validUntil ? q.validUntil.toISOString() : null,
-            createdAt: q.createdAt.toISOString(),
+          quotes={customer.quotes.map((quote) => ({
+            id: quote.id,
+            number: quote.number,
+            status: quote.status,
+            total: quote.total,
+            validUntil: quote.validUntil ? quote.validUntil.toISOString() : null,
+            createdAt: quote.createdAt.toISOString(),
           }))}
-          salesOrders={customer.salesOrders.map((so) => ({
-            id: so.id,
-            number: so.number,
-            status: so.status,
-            total: so.total,
-            createdAt: so.createdAt.toISOString(),
+          salesOrders={customer.salesOrders.map((salesOrder) => ({
+            id: salesOrder.id,
+            number: salesOrder.number,
+            status: salesOrder.status,
+            total: salesOrder.total,
+            createdAt: salesOrder.createdAt.toISOString(),
           }))}
-          invoices={customer.invoices.map((inv) => ({
-            id: inv.id,
-            number: inv.number,
-            status: inv.status,
-            total: inv.total,
-            dueDate: inv.dueDate ? inv.dueDate.toISOString() : null,
-            paidDate: inv.paidDate ? inv.paidDate.toISOString() : null,
-            createdAt: inv.createdAt.toISOString(),
+          invoices={customer.invoices.map((invoice) => ({
+            id: invoice.id,
+            number: invoice.number,
+            status: invoice.status,
+            total: invoice.total,
+            dueDate: invoice.dueDate ? invoice.dueDate.toISOString() : null,
+            paidDate: invoice.paidDate ? invoice.paidDate.toISOString() : null,
+            createdAt: invoice.createdAt.toISOString(),
           }))}
         />
-
-      </div>
-    </div>
+    </RecordDetailPageShell>
   )
-}
-
-function StatCard({ label, value, accent }: { label: string; value: string | number; accent?: boolean }) {
-  return (
-    <div className="rounded-2xl border p-5" style={{ backgroundColor: accent ? 'var(--card-elevated)' : 'var(--card)', borderColor: 'var(--border-muted)' }}>
-      <p className="text-sm font-medium" style={{ color: accent ? 'var(--accent-primary-strong)' : 'var(--text-muted)' }}>{label}</p>
-      <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
-    </div>
-  )
-}
-
-function Field({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{label}</dt>
-      <dd className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{value ?? '—'}</dd>
-    </div>
-  )
-}
-
-function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
-  return (
-    <div className="mb-6 overflow-hidden rounded-xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-      <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-muted)' }}>
-        <h2 className="text-base font-semibold text-white">{title}</h2>
-        <span className="rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>{count}</span>
-      </div>
-      <div className="overflow-x-auto">{children}</div>
-    </div>
-  )
-}
-
-function EmptyRow({ message }: { message: string }) {
-  return <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>{message}</p>
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-muted)' }}>{children}</th>
-}
-
-function Td({ children }: { children: React.ReactNode }) {
-  return <td className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{children}</td>
 }

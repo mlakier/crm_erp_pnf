@@ -1,14 +1,34 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import EditButton from '@/components/EditButton'
 import DeleteButton from '@/components/DeleteButton'
+import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
 import { formatCustomFieldValue } from '@/lib/custom-fields'
+import DepartmentDetailCustomizeMode from '@/components/DepartmentDetailCustomizeMode'
+import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import {
+  RecordDetailCell,
+  RecordDetailField,
+  RecordDetailHeaderCell,
+  RecordDetailSection,
+} from '@/components/RecordDetailPanels'
+import { loadDepartmentFormCustomization } from '@/lib/department-form-customization-store'
+import { DEPARTMENT_FORM_FIELDS, type DepartmentFormFieldKey } from '@/lib/department-form-customization'
+import { loadFormRequirements } from '@/lib/form-requirements-store'
 
-export default async function DepartmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function DepartmentDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ edit?: string; customize?: string }>
+}) {
   const { id } = await params
+  const { edit, customize } = await searchParams
+  const isEditing = edit === '1'
+  const isCustomizing = customize === '1'
 
-  const [department, managers, subsidiaries, customFields, customFieldValues] = await Promise.all([
+  const [department, managers, subsidiaries, customFields, customFieldValues, formCustomization, formRequirements] = await Promise.all([
     prisma.department.findUnique({
       where: { id },
       include: {
@@ -30,152 +50,191 @@ export default async function DepartmentDetailPage({ params }: { params: Promise
       where: { entityType: 'department', recordId: id },
       select: { fieldId: true, value: true },
     }),
+    loadDepartmentFormCustomization(),
+    loadFormRequirements(),
   ])
 
   if (!department) notFound()
 
-  const selectedManager = managers.find((manager) => manager.id === department.managerId)
   const customFieldValueMap = new Map(customFieldValues.map((entry) => [entry.fieldId, entry.value]))
+  const detailHref = `/departments/${department.id}`
+  const sectionDescriptions: Record<string, string> = {
+    Core: 'Identity and descriptive details for the department.',
+    Organization: 'Organizational ownership and reporting relationships.',
+    Status: 'Availability and active-state controls for the department.',
+  }
+
+  const fieldDefinitions: Record<DepartmentFormFieldKey, InlineRecordSection['fields'][number]> = {
+    departmentId: { name: 'departmentId', label: 'Department Id', value: department.departmentId, helpText: 'Unique department code used across the company.' },
+    name: { name: 'name', label: 'Name', value: department.name, helpText: 'Display name of the department.' },
+    description: { name: 'description', label: 'Description', value: department.description ?? '', helpText: 'Longer explanation of the department purpose or scope.' },
+    division: { name: 'division', label: 'Division', value: department.division ?? '', helpText: 'Higher-level grouping for management reporting or organizational structure.', sourceText: 'Division custom list or free text' },
+    entityId: {
+      name: 'entityId',
+      label: 'Subsidiary',
+      value: department.entityId ?? '',
+      type: 'select',
+      placeholder: 'Select subsidiary',
+      options: subsidiaries.map((subsidiary) => ({ value: subsidiary.id, label: `${subsidiary.subsidiaryId} - ${subsidiary.name}` })),
+      helpText: 'Legal entity or subsidiary associated with the department.',
+      sourceText: 'Subsidiaries master data',
+    },
+    managerId: {
+      name: 'managerId',
+      label: 'Manager',
+      value: department.managerId ?? '',
+      type: 'select',
+      placeholder: 'Select manager',
+      options: managers.map((manager) => ({ value: manager.id, label: `${manager.firstName} ${manager.lastName}${manager.employeeId ? ` (${manager.employeeId})` : ''}` })),
+      helpText: 'Employee responsible for leading the department.',
+      sourceText: 'Employees master data',
+    },
+    inactive: {
+      name: 'inactive',
+      label: 'Inactive',
+      value: String(!department.active),
+      type: 'select',
+      options: [{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }],
+      helpText: 'Marks the department unavailable for new activity while preserving history.',
+      sourceText: 'System status values',
+    },
+  }
+
+  const customizeFields = DEPARTMENT_FORM_FIELDS.map((field) => {
+    const definition = fieldDefinitions[field.id]
+    const rawValue = definition.value ?? ''
+    const previewValue = definition.options?.find((option) => option.value === rawValue)?.label ?? rawValue
+    return {
+      id: field.id,
+      label: definition.label,
+      fieldType: field.fieldType,
+      source: field.source,
+      description: field.description,
+      previewValue,
+    }
+  })
+
+  const detailSections: InlineRecordSection[] = formCustomization.sections
+    .map((sectionTitle) => {
+      const configuredFields = DEPARTMENT_FORM_FIELDS
+        .filter((field) => {
+          const config = formCustomization.fields[field.id]
+          return config.visible && config.section === sectionTitle
+        })
+        .sort((a, b) => {
+          const left = formCustomization.fields[a.id]
+          const right = formCustomization.fields[b.id]
+          if (left.column !== right.column) return left.column - right.column
+          return left.order - right.order
+        })
+        .map((field) => ({
+          ...fieldDefinitions[field.id],
+          column: formCustomization.fields[field.id].column,
+          order: formCustomization.fields[field.id].order,
+        }))
+
+      if (configuredFields.length === 0) return null
+
+      return {
+        title: sectionTitle,
+        description: sectionDescriptions[sectionTitle],
+        collapsible: true,
+        defaultExpanded: true,
+        fields: configuredFields,
+      }
+    })
+    .filter((section): section is InlineRecordSection => Boolean(section))
 
   return (
-    <div className="min-h-full px-8 py-8">
-      <div className="max-w-5xl">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <Link href="/departments" className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-              ← Back to Departments
+    <RecordDetailPageShell
+      backHref={isCustomizing ? detailHref : '/departments'}
+      backLabel={isCustomizing ? '<- Back to Department Detail' : '<- Back to Departments'}
+      meta={department.departmentId}
+      title={department.name}
+      badge={
+        <span className="inline-block rounded-full px-3 py-0.5 text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>
+          {department.active ? 'Active' : 'Inactive'}
+        </span>
+      }
+      actions={
+        <>
+          {!isEditing && !isCustomizing ? (
+            <Link href={`${detailHref}?customize=1`} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
+              Customize
             </Link>
-            <p className="mt-2 text-sm font-medium tracking-wide" style={{ color: 'var(--text-muted)' }}>{department.departmentId}</p>
-            <h1 className="mt-2 text-2xl font-semibold text-white">{department.name}</h1>
-            <span className="mt-1 inline-block rounded-full px-3 py-0.5 text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>
-              {department.active ? 'Active' : 'Inactive'}
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <EditButton
-              resource="departments"
-              id={department.id}
-              fields={[
-                { name: 'departmentId', label: 'Department Id', value: department.departmentId },
-                { name: 'name', label: 'Name', value: department.name },
-                { name: 'description', label: 'Description', value: department.description ?? '' },
-                { name: 'division', label: 'Division', value: department.division ?? '' },
-                {
-                  name: 'entityId',
-                  label: 'Subsidiary',
-                  value: department.entityId ?? '',
-                  type: 'select',
-                  placeholder: 'Select subsidiary',
-                  options: subsidiaries.map((subsidiary) => ({ value: subsidiary.id, label: `${subsidiary.subsidiaryId} - ${subsidiary.name}` })),
-                },
-                {
-                  name: 'managerId',
-                  label: 'Manager',
-                  value: department.managerId ?? '',
-                  type: 'select',
-                  placeholder: 'Select manager',
-                  options: managers.map((m) => ({ value: m.id, label: `${m.firstName} ${m.lastName}${m.employeeId ? ` (${m.employeeId})` : ''}` })),
-                },
-                {
-                  name: 'inactive',
-                  label: 'Inactive',
-                  value: String(!department.active),
-                  type: 'select',
-                  options: [
-                    { value: 'false', label: 'No' },
-                    { value: 'true', label: 'Yes' },
-                  ],
-                },
-              ]}
-            />
-            <DeleteButton resource="departments" id={department.id} />
-          </div>
-        </div>
+          ) : null}
+          {!isEditing ? (
+            <Link
+              href={`${detailHref}?edit=1`}
+              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
+              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
+            >
+              Edit
+            </Link>
+          ) : null}
+          {!isCustomizing ? <DeleteButton resource="departments" id={department.id} /> : null}
+        </>
+      }
+    >
+        {isCustomizing ? (
+          <DepartmentDetailCustomizeMode
+            detailHref={detailHref}
+            initialLayout={formCustomization}
+            initialRequirements={{ ...formRequirements.departmentCreate }}
+            fields={customizeFields}
+            sectionDescriptions={sectionDescriptions}
+          />
+        ) : (
+          <InlineRecordDetails
+            resource="departments"
+            id={department.id}
+            title="Department details"
+            sections={detailSections}
+            editing={isEditing}
+            columns={formCustomization.formColumns}
+          />
+        )}
 
-        <div className="mb-8 rounded-xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Department details</h2>
-          <dl className="grid gap-3 sm:grid-cols-2">
-            <Field label="Department Id" value={department.departmentId} />
-            <Field label="Name" value={department.name} />
-            <Field label="Description" value={department.description} />
-            <Field label="Division" value={department.division} />
-            <Field label="Subsidiary" value={department.entity ? `${department.entity.subsidiaryId} - ${department.entity.name}` : null} />
-            <Field label="Manager" value={selectedManager ? `${selectedManager.firstName} ${selectedManager.lastName}${selectedManager.employeeId ? ` (${selectedManager.employeeId})` : ''}` : null} />
-            <Field label="Inactive" value={department.active ? 'No' : 'Yes'} />
-            <Field label="Created" value={new Date(department.createdAt).toLocaleDateString()} />
-            <Field label="Last Modified" value={new Date(department.updatedAt).toLocaleDateString()} />
-            {customFields.map((field) => (
-              <Field
-                key={field.id}
-                label={field.label}
-                value={formatCustomFieldValue(field.type as 'text' | 'textarea' | 'number' | 'date' | 'select' | 'checkbox', customFieldValueMap.get(field.id) ?? field.defaultValue)}
-              />
-            ))}
-          </dl>
-        </div>
+        {customFields.length > 0 ? (
+          <RecordDetailSection title="Custom fields" count={customFields.length}>
+            <dl className="grid gap-3 sm:grid-cols-2">
+              {customFields.map((field) => (
+                <RecordDetailField key={field.id} label={field.label}>
+                    {formatCustomFieldValue(field.type as 'text' | 'textarea' | 'number' | 'date' | 'select' | 'checkbox', customFieldValueMap.get(field.id) ?? field.defaultValue) ?? '-'}
+                </RecordDetailField>
+              ))}
+            </dl>
+          </RecordDetailSection>
+        ) : null}
 
-        <Section title="Employees" count={department.employees.length}>
+        <RecordDetailSection title="Employees" count={department.employees.length}>
           {department.employees.length === 0 ? (
-            <EmptyRow message="No employees in this department" />
+            <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>No employees in this department</p>
           ) : (
             <table className="min-w-full">
               <thead>
                 <tr>
-                  <Th>Employee Id</Th>
-                  <Th>Name</Th>
-                  <Th>Title</Th>
+                  <RecordDetailHeaderCell>Employee Id</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Title</RecordDetailHeaderCell>
                 </tr>
               </thead>
               <tbody>
                 {department.employees.map((employee) => (
                   <tr key={employee.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <Td>
+                    <RecordDetailCell>
                       <Link href={`/employees/${employee.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                         {employee.employeeId ?? 'Pending'}
                       </Link>
-                    </Td>
-                    <Td>{employee.firstName} {employee.lastName}</Td>
-                    <Td>{employee.title ?? '—'}</Td>
+                    </RecordDetailCell>
+                    <RecordDetailCell>{employee.firstName} {employee.lastName}</RecordDetailCell>
+                    <RecordDetailCell>{employee.title ?? '-'}</RecordDetailCell>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-        </Section>
-      </div>
-    </div>
+        </RecordDetailSection>
+    </RecordDetailPageShell>
   )
-}
-
-function Field({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{label}</dt>
-      <dd className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{value ?? '—'}</dd>
-    </div>
-  )
-}
-
-function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
-  return (
-    <div className="mb-6 overflow-hidden rounded-xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-      <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-muted)' }}>
-        <h2 className="text-base font-semibold text-white">{title}</h2>
-        <span className="rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>{count}</span>
-      </div>
-      <div className="overflow-x-auto">{children}</div>
-    </div>
-  )
-}
-
-function EmptyRow({ message }: { message: string }) {
-  return <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>{message}</p>
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-muted)' }}>{children}</th>
-}
-
-function Td({ children }: { children: React.ReactNode }) {
-  return <td className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{children}</td>
 }

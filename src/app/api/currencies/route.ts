@@ -12,6 +12,8 @@ export async function POST(request: Request) {
     const code = String(body?.currencyId ?? '').trim().toUpperCase()
     const name = String(body?.name ?? '').trim()
     const symbol = String(body?.symbol ?? '').trim() || null
+    const decimals = body?.decimals !== undefined ? Number(body.decimals) : 2
+    const isBase = String(body?.isBase ?? 'false').trim().toLowerCase() === 'true'
     const inactive = String(body?.inactive ?? 'false').trim().toLowerCase() === 'true'
 
     if (!code || !name) {
@@ -23,13 +25,14 @@ export async function POST(request: Request) {
         currencyId: code,
         name,
         symbol,
-        decimals: 2,
+        decimals: Number.isFinite(decimals) ? decimals : 2,
+        isBase,
         active: !inactive,
       },
     })
 
     return NextResponse.json(created, { status: 201 })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Unable to create currency.' }, { status: 500 })
   }
 }

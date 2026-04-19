@@ -2,26 +2,17 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import CreateModalButton from '@/components/CreateModalButton'
 import ChartOfAccountCreateForm from '@/components/ChartOfAccountCreateForm'
-import MasterDataCustomizeButton from '@/components/MasterDataCustomizeButton'
+import MasterDataPageHeader from '@/components/MasterDataPageHeader'
+import MasterDataListSection from '@/components/MasterDataListSection'
+import { MasterDataBodyCell, MasterDataEmptyStateRow, MasterDataHeaderCell, MasterDataMutedCell } from '@/components/MasterDataTableCells'
 import EditButton from '@/components/EditButton'
 import DeleteButton from '@/components/DeleteButton'
-import ColumnSelector from '@/components/ColumnSelector'
-import ExportButton from '@/components/ExportButton'
 import PaginationFooter from '@/components/PaginationFooter'
 import { getPagination } from '@/lib/pagination'
-import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
-import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
-
-const COLS = [
-  { id: 'account-id', label: 'Account Id' },
-  { id: 'name', label: 'Name' },
-  { id: 'type', label: 'Account Type' },
-  { id: 'inventory', label: 'Inventory' },
-  { id: 'summary', label: 'Summary' },
-  { id: 'subsidiaries', label: 'Subsidiaries' },
-  { id: 'created', label: 'Created' },
-  { id: 'actions', label: 'Actions', locked: true },
-]
+import { MASTER_DATA_TABLE_DIVIDER_STYLE, getMasterDataRowStyle } from '@/lib/master-data-table'
+import { formatMasterDataDate } from '@/lib/master-data-display'
+import { loadCompanyPageLogo } from '@/lib/company-page-logo'
+import { chartOfAccountsListDefinition } from '@/lib/master-data-list-definitions'
 
 export default async function ChartOfAccountsPage({
   searchParams,
@@ -46,7 +37,7 @@ export default async function ChartOfAccountsPage({
   const total = await prisma.chartOfAccounts.count({ where })
   const pagination = getPagination(total, params.page)
 
-  const [accounts, subsidiaries, companySettings, cabinetFiles] = await Promise.all([
+  const [accounts, subsidiaries, accountOptions, companyLogoPages] = await Promise.all([
     prisma.chartOfAccounts.findMany({
       where,
       include: {
@@ -56,17 +47,18 @@ export default async function ChartOfAccountsPage({
           orderBy: { subsidiary: { subsidiaryId: 'asc' } },
         },
       },
-      orderBy: sort === 'oldest'
-      ? [{ createdAt: 'asc' as const }]
-      : sort === 'account'
-        ? [{ accountId: 'asc' as const }]
-        : [{ createdAt: 'desc' as const }],
+      orderBy:
+        sort === 'oldest'
+          ? [{ createdAt: 'asc' as const }]
+          : sort === 'account'
+            ? [{ accountId: 'asc' as const }]
+            : [{ createdAt: 'desc' as const }],
       skip: pagination.skip,
       take: pagination.pageSize,
     }),
     prisma.entity.findMany({ orderBy: { subsidiaryId: 'asc' }, select: { id: true, subsidiaryId: true, name: true } }),
-    loadCompanyInformationSettings(),
-    loadCompanyCabinetFiles(),
+    prisma.chartOfAccounts.findMany({ orderBy: { accountId: 'asc' }, select: { id: true, accountId: true, name: true } }),
+    loadCompanyPageLogo(),
   ])
 
   const buildPageHref = (nextPage: number) => {
@@ -76,143 +68,119 @@ export default async function ChartOfAccountsPage({
     return `/chart-of-accounts?${search.toString()}`
   }
 
-  const selectedLogoValue = companySettings.companyLogoPagesFileId
-  const companyLogoPages =
-    cabinetFiles.find((file) => file.id === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.originalName === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.storedName === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.url === selectedLogoValue)
-    ?? (!selectedLogoValue ? cabinetFiles[0] : undefined)
-
   return (
     <div className="min-h-full px-8 py-8">
-      <div className="mb-6 flex items-center justify-between gap-4">
-        {companyLogoPages ? (
-          <img
-            src={companyLogoPages.url}
-            alt="Company logo"
-            className="h-16 w-auto rounded"
-          />
-        ) : null}
-        <div>
-          <h1 className="text-xl font-semibold text-white">Chart of Accounts</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{total} total</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <MasterDataCustomizeButton tableId="chart-of-accounts-list" columns={COLS} title="Chart of Accounts" />
+      <MasterDataPageHeader
+        title="Chart of Accounts"
+        total={total}
+        logoUrl={companyLogoPages?.url}
+        actions={
           <CreateModalButton buttonLabel="New Account" title="New Chart Account" modalWidthClassName="max-w-3xl">
-            <ChartOfAccountCreateForm subsidiaries={subsidiaries} />
+            <ChartOfAccountCreateForm subsidiaries={subsidiaries} accountOptions={accountOptions} />
           </CreateModalButton>
-        </div>
-      </div>
+        }
+      />
 
-      <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-        <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
-          <input type="hidden" name="page" value="1" />
-          <div className="flex gap-3 items-center flex-nowrap">
-            <input
-              type="text"
-              name="q"
-              defaultValue={params.q ?? ''}
-              placeholder="Search Account Id, name, type"
-              className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            />
-            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="account">Account #</option>
-            </select>
-            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="account">Account #</option>
-            </select>
-            <ExportButton tableId="chart-of-accounts-list" fileName="chart_of_accounts" />
-            <ColumnSelector tableId="chart-of-accounts-list" columns={COLS} />
-          </div>
-        </form>
-
-        <div className="overflow-x-auto" data-column-selector-table="chart-of-accounts-list">
-          <table className="min-w-full" id="chart-of-accounts-list">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                <th data-column="account-id" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Account Id</th>
-                <th data-column="name" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Name</th>
-                <th data-column="type" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Account Type</th>
-                <th data-column="inventory" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Inventory</th>
-                <th data-column="summary" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Summary</th>
-                <th data-column="subsidiaries" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Subsidiaries</th>
-                <th data-column="created" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Created</th>
-                <th data-column="actions" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accounts.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-                    No chart accounts found
-                  </td>
+      <MasterDataListSection
+        query={params.q}
+        searchPlaceholder={chartOfAccountsListDefinition.searchPlaceholder}
+        tableId={chartOfAccountsListDefinition.tableId}
+        exportFileName={chartOfAccountsListDefinition.exportFileName}
+        columns={chartOfAccountsListDefinition.columns}
+        sort={sort}
+        sortOptions={chartOfAccountsListDefinition.sortOptions}
+      >
+        <table className="min-w-full" id={chartOfAccountsListDefinition.tableId}>
+          <thead>
+            <tr style={MASTER_DATA_TABLE_DIVIDER_STYLE}>
+              <MasterDataHeaderCell columnId="account-id">Account Id</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="name">Name</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="type">Account Type</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="normal-balance">Normal Balance</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="fs-group">FS Group</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="posting">Posting</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="control">Control</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="inventory">Inventory</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="summary">Summary</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="subsidiaries">Subsidiaries</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
+            </tr>
+          </thead>
+          <tbody>
+            {accounts.length === 0 ? (
+              <MasterDataEmptyStateRow colSpan={chartOfAccountsListDefinition.columns.length}>No chart accounts found</MasterDataEmptyStateRow>
+            ) : (
+              accounts.map((account, index) => (
+                <tr key={account.id} style={getMasterDataRowStyle(index, accounts.length)}>
+                  <MasterDataBodyCell columnId="account-id">
+                    <Link href={`/chart-of-accounts/${account.id}`} className="font-medium hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                      {account.accountId}
+                    </Link>
+                  </MasterDataBodyCell>
+                  <MasterDataBodyCell columnId="name" className="px-4 py-2 text-sm text-white">{account.name}</MasterDataBodyCell>
+                  <MasterDataMutedCell columnId="type">{account.accountType}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="normal-balance">{account.normalBalance ?? '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="fs-group">{account.financialStatementGroup ?? '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="posting">{account.isPosting ? 'Yes' : 'No'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="control">{account.isControlAccount ? 'Yes' : 'No'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="inventory">{account.inventory ? 'Yes' : 'No'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="summary">{account.summary ? 'Yes' : 'No'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="subsidiaries">
+                    {account.parentSubsidiary
+                      ? `${account.parentSubsidiary.subsidiaryId}${account.includeChildren ? ' (+children)' : ''}`
+                      : account.subsidiaryAssignments.length > 0
+                        ? account.subsidiaryAssignments.map((entry) => entry.subsidiary.subsidiaryId).join(', ')
+                        : '-'}
+                  </MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="created">{formatMasterDataDate(account.createdAt)}</MasterDataMutedCell>
+                  <MasterDataBodyCell columnId="actions">
+                    <div className="flex items-center gap-2">
+                      <EditButton
+                        resource="chart-of-accounts"
+                        id={account.id}
+                        fields={[
+                          { name: 'accountId', label: 'Account Id', value: account.accountId },
+                          { name: 'name', label: 'Name', value: account.name },
+                          { name: 'description', label: 'Description', value: account.description ?? '' },
+                          {
+                            name: 'accountType',
+                            label: 'Account Type',
+                            value: account.accountType,
+                            type: 'select',
+                            options: [
+                              { value: 'Asset', label: 'Asset' },
+                              { value: 'Liability', label: 'Liability' },
+                              { value: 'Equity', label: 'Equity' },
+                              { value: 'Revenue', label: 'Revenue' },
+                              { value: 'Expense', label: 'Expense' },
+                              { value: 'Other', label: 'Other' },
+                            ],
+                          },
+                          { name: 'normalBalance', label: 'Normal Balance', value: account.normalBalance ?? '', type: 'select', options: [{ value: 'debit', label: 'Debit' }, { value: 'credit', label: 'Credit' }] },
+                          { name: 'financialStatementSection', label: 'FS Section', value: account.financialStatementSection ?? '' },
+                          { name: 'financialStatementGroup', label: 'FS Group', value: account.financialStatementGroup ?? '' },
+                          { name: 'isPosting', label: 'Posting Account', value: String(account.isPosting), type: 'checkbox' },
+                          { name: 'isControlAccount', label: 'Control Account', value: String(account.isControlAccount), type: 'checkbox' },
+                          { name: 'allowsManualPosting', label: 'Allow Manual Posting', value: String(account.allowsManualPosting), type: 'checkbox' },
+                          { name: 'requiresSubledgerType', label: 'Requires Subledger Type', value: account.requiresSubledgerType ?? '' },
+                          { name: 'cashFlowCategory', label: 'Cash Flow Category', value: account.cashFlowCategory ?? '' },
+                          { name: 'parentAccountId', label: 'Parent Account', value: account.parentAccountId ?? '', type: 'select', placeholder: 'Select parent account', options: accountOptions.filter((option) => option.id !== account.id).map((option) => ({ value: option.id, label: `${option.accountId} - ${option.name}` })) },
+                          { name: 'closeToAccountId', label: 'Close To Account', value: account.closeToAccountId ?? '', type: 'select', placeholder: 'Select close-to account', options: accountOptions.filter((option) => option.id !== account.id).map((option) => ({ value: option.id, label: `${option.accountId} - ${option.name}` })) },
+                          { name: 'inventory', label: 'Inventory', value: String(account.inventory), type: 'checkbox' },
+                          { name: 'revalueOpenBalance', label: 'Revalue Open Balance', value: String(account.revalueOpenBalance), type: 'checkbox' },
+                          { name: 'eliminateIntercoTransactions', label: 'Eliminate Interco Transactions', value: String(account.eliminateIntercoTransactions), type: 'checkbox' },
+                          { name: 'summary', label: 'Summary', value: String(account.summary), type: 'checkbox' },
+                        ]}
+                      />
+                      <DeleteButton resource="chart-of-accounts" id={account.id} />
+                    </div>
+                  </MasterDataBodyCell>
                 </tr>
-              ) : (
-                accounts.map((account, index) => (
-                  <tr key={account.id} style={index < accounts.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                    <td data-column="account-id" className="px-4 py-2 text-sm">
-                      <Link href={`/chart-of-accounts/${account.id}`} className="font-medium hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {account.accountId}
-                      </Link>
-                    </td>
-                    <td data-column="name" className="px-4 py-2 text-sm text-white">{account.name}</td>
-                    <td data-column="type" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{account.accountType}</td>
-                    <td data-column="inventory" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{account.inventory ? 'Yes' : 'No'}</td>
-                    <td data-column="summary" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{account.summary ? 'Yes' : 'No'}</td>
-                    <td data-column="subsidiaries" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {account.parentSubsidiary
-                        ? `${account.parentSubsidiary.subsidiaryId}${account.includeChildren ? ' (+children)' : ''}`
-                        : account.subsidiaryAssignments.length > 0
-                          ? account.subsidiaryAssignments.map((entry) => entry.subsidiary.subsidiaryId).join(', ')
-                          : '—'}
-                    </td>
-                    <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(account.createdAt).toLocaleDateString()}</td>
-                    <td data-column="actions" className="px-4 py-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <EditButton
-                          resource="chart-of-accounts"
-                          id={account.id}
-                          fields={[
-                            { name: 'accountId', label: 'Account Id', value: account.accountId },
-                            { name: 'name', label: 'Name', value: account.name },
-                            { name: 'description', label: 'Description', value: account.description ?? '' },
-                            {
-                              name: 'accountType',
-                              label: 'Account Type',
-                              value: account.accountType,
-                              type: 'select',
-                              options: [
-                                { value: 'Asset', label: 'Asset' },
-                                { value: 'Liability', label: 'Liability' },
-                                { value: 'Equity', label: 'Equity' },
-                                { value: 'Revenue', label: 'Revenue' },
-                                { value: 'Expense', label: 'Expense' },
-                                { value: 'Other', label: 'Other' },
-                              ],
-                            },
-                            { name: 'inventory', label: 'Inventory', value: String(account.inventory), type: 'checkbox' },
-                            { name: 'revalueOpenBalance', label: 'Revalue Open Balance', value: String(account.revalueOpenBalance), type: 'checkbox' },
-                            { name: 'eliminateIntercoTransactions', label: 'Eliminate Interco Transactions', value: String(account.eliminateIntercoTransactions), type: 'checkbox' },
-                            { name: 'summary', label: 'Summary', value: String(account.summary), type: 'checkbox' },
-                          ]}
-                        />
-                        <DeleteButton resource="chart-of-accounts" id={account.id} />
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
+              ))
+            )}
+          </tbody>
+        </table>
         <PaginationFooter
           startRow={pagination.startRow}
           endRow={pagination.endRow}
@@ -224,7 +192,7 @@ export default async function ChartOfAccountsPage({
           prevHref={buildPageHref(pagination.currentPage - 1)}
           nextHref={buildPageHref(pagination.currentPage + 1)}
         />
-      </section>
+      </MasterDataListSection>
     </div>
   )
 }

@@ -3,29 +3,18 @@ import { prisma } from '@/lib/prisma'
 import { fmtPhone, normalizePhone } from '@/lib/format'
 import ContactCreateForm from '@/components/ContactCreateForm'
 import DeleteButton from '@/components/DeleteButton'
-import ContactEditButton from '@/components/ContactEditButton'
 import CreateModalButton from '@/components/CreateModalButton'
-import MasterDataCustomizeButton from '@/components/MasterDataCustomizeButton'
-import ColumnSelector from '@/components/ColumnSelector'
-import ExportButton from '@/components/ExportButton'
+import MasterDataPageHeader from '@/components/MasterDataPageHeader'
+import MasterDataListSection from '@/components/MasterDataListSection'
+import { MasterDataBodyCell, MasterDataEmptyStateRow, MasterDataHeaderCell, MasterDataMutedCell } from '@/components/MasterDataTableCells'
 import PaginationFooter from '@/components/PaginationFooter'
+import EditButton from '@/components/EditButton'
 import { getPagination } from '@/lib/pagination'
-import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
-import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
-
-const CONTACT_COLUMNS = [
-  { id: 'contact-number', label: 'Contact Id' },
-  { id: 'name', label: 'Name' },
-  { id: 'customer', label: 'Customer' },
-  { id: 'email', label: 'Email' },
-  { id: 'phone', label: 'Phone' },
-  { id: 'address', label: 'Address' },
-  { id: 'position', label: 'Position' },
-  { id: 'inactive', label: 'Inactive' },
-  { id: 'created', label: 'Created' },
-  { id: 'last-modified', label: 'Last Modified' },
-  { id: 'actions', label: 'Actions', locked: true },
-]
+import { MASTER_DATA_TABLE_DIVIDER_STYLE, getMasterDataRowStyle } from '@/lib/master-data-table'
+import { formatMasterDataDate } from '@/lib/master-data-display'
+import { loadCompanyPageLogo } from '@/lib/company-page-logo'
+import { loadContactFormCustomization } from '@/lib/contact-form-customization-store'
+import { contactListDefinition } from '@/lib/master-data-list-definitions'
 
 export default async function ContactsPage({
   searchParams,
@@ -55,15 +44,15 @@ export default async function ContactsPage({
     sort === 'oldest'
       ? [{ createdAt: 'asc' as const }]
       : sort === 'name'
-        ? [{ firstName: 'asc' as const }, { lastName: 'asc' as const }]
+        ? [{ lastName: 'asc' as const }, { firstName: 'asc' as const }]
         : [{ createdAt: 'desc' as const }]
 
-  const [totalContacts, customers, adminUser, companySettings, cabinetFiles] = await Promise.all([
+  const [totalContacts, customers, adminUser, companyLogoPages, formCustomization] = await Promise.all([
     prisma.contact.count({ where }),
     prisma.customer.findMany({ orderBy: { name: 'asc' } }),
     prisma.user.findUnique({ where: { email: 'admin@example.com' } }),
-    loadCompanyInformationSettings(),
-    loadCompanyCabinetFiles(),
+    loadCompanyPageLogo(),
+    loadContactFormCustomization(),
   ])
 
   const pagination = getPagination(totalContacts, params.page)
@@ -84,123 +73,102 @@ export default async function ContactsPage({
     return `/contacts?${search.toString()}`
   }
 
-  const selectedLogoValue = companySettings.companyLogoPagesFileId
-  const companyLogoPages =
-    cabinetFiles.find((file) => file.id === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.originalName === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.storedName === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.url === selectedLogoValue)
-    ?? (!selectedLogoValue ? cabinetFiles[0] : undefined)
-
   return (
     <div className="min-h-full px-8 py-8">
-      <div className="mb-6 flex items-center justify-between gap-4">
-        {companyLogoPages ? (
-          <img
-            src={companyLogoPages.url}
-            alt="Company logo"
-            className="h-16 w-auto rounded"
-          />
-        ) : null}
-        <div>
-          <h1 className="text-xl font-semibold text-white">Contacts</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{totalContacts} total</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <MasterDataCustomizeButton tableId="contacts-list" columns={CONTACT_COLUMNS} title="Contacts" />
-                    <CreateModalButton buttonLabel="New Contact" title="New Contact">
-          <ContactCreateForm userId={adminUser.id} customers={customers} />
+      <MasterDataPageHeader
+        title="Contacts"
+        total={totalContacts}
+        logoUrl={companyLogoPages?.url}
+        actions={
+          <CreateModalButton buttonLabel="New Contact" title="New Contact">
+            <ContactCreateForm userId={adminUser.id} customers={customers} />
           </CreateModalButton>
-        </div>
-      </div>
+        }
+      />
 
-      <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-        <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
-          <input type="hidden" name="page" value="1" />
-          <div className="flex gap-3 items-center flex-nowrap">
-            <input
-              type="text"
-              name="q"
-              defaultValue={params.q ?? ''}
-              placeholder="Search contact ID, name, customer, email, phone"
-              className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            />
-            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="name">Name A-Z</option>
-            </select>
-            <ExportButton tableId="contacts-list" fileName="contacts" />
-            <ColumnSelector tableId="contacts-list" columns={CONTACT_COLUMNS} />
-          </div>
-        </form>
-
-        <div className="overflow-x-auto" data-column-selector-table="contacts-list">
-          <table className="min-w-full" id="contacts-list">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                <th data-column="contact-number" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Contact Id</th>
-                <th data-column="name" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Name</th>
-                <th data-column="customer" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Customer</th>
-                <th data-column="email" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Email</th>
-                <th data-column="phone" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Phone</th>
-                <th data-column="address" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Address</th>
-                <th data-column="position" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Position</th>
-                <th data-column="inactive" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Inactive</th>
-                <th data-column="created" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Created</th>
-                <th data-column="last-modified" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Last Modified</th>
-                <th data-column="actions" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Actions</th>
+      <MasterDataListSection
+        query={params.q}
+        searchPlaceholder={contactListDefinition.searchPlaceholder}
+        tableId={contactListDefinition.tableId}
+        exportFileName={contactListDefinition.exportFileName}
+        columns={contactListDefinition.columns}
+        sort={sort}
+        sortOptions={contactListDefinition.sortOptions}
+      >
+        <table className="min-w-full" id={contactListDefinition.tableId}>
+          <thead>
+            <tr style={MASTER_DATA_TABLE_DIVIDER_STYLE}>
+              <MasterDataHeaderCell columnId="contact-number">Contact Id</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="name">Name</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="customer">Customer</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="email">Email</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="phone">Phone</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="address">Address</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="position">Position</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="inactive">Inactive</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="last-modified">Last Modified</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
+            </tr>
+          </thead>
+          <tbody>
+            {contacts.length === 0 ? (
+              <MasterDataEmptyStateRow colSpan={11}>No contacts found</MasterDataEmptyStateRow>
+            ) : contacts.map((contact, index) => (
+              <tr key={contact.id} style={getMasterDataRowStyle(index, contacts.length)}>
+                <MasterDataBodyCell columnId="contact-number" className="px-4 py-2 text-sm font-medium">
+                  <Link href={`/contacts/${contact.id}`} className="font-medium hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                    {contact.contactNumber ?? 'Pending'}
+                  </Link>
+                </MasterDataBodyCell>
+                <MasterDataBodyCell columnId="name" className="px-4 py-2 text-sm text-white">{contact.firstName} {contact.lastName}</MasterDataBodyCell>
+                <MasterDataMutedCell columnId="customer">{contact.customer.name}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="email">{contact.email ?? '-'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="phone">{fmtPhone(contact.phone)}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="address">{contact.address ?? '-'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="position">{contact.position ?? '-'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="inactive">{contact.active ? 'No' : 'Yes'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="created">{formatMasterDataDate(contact.createdAt)}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(contact.updatedAt)}</MasterDataMutedCell>
+                <MasterDataBodyCell columnId="actions" style={{ color: 'var(--text-secondary)' }}>
+                  <div className="flex items-center gap-2">
+                    <EditButton
+                      resource="contacts"
+                      id={contact.id}
+                      fields={[
+                        ...(formCustomization.fields.firstName.visible ? [{ name: 'firstName', label: 'First Name', value: contact.firstName }] : []),
+                        ...(formCustomization.fields.lastName.visible ? [{ name: 'lastName', label: 'Last Name', value: contact.lastName }] : []),
+                        ...(formCustomization.fields.email.visible ? [{ name: 'email', label: 'Email', value: contact.email ?? '', type: 'email' as const }] : []),
+                        ...(formCustomization.fields.phone.visible ? [{ name: 'phone', label: 'Phone', value: normalizePhone(contact.phone) ?? '' }] : []),
+                        ...(formCustomization.fields.address.visible ? [{ name: 'address', label: 'Address', value: contact.address ?? '', type: 'address' as const }] : []),
+                        ...(formCustomization.fields.position.visible ? [{ name: 'position', label: 'Position', value: contact.position ?? '' }] : []),
+                        ...(formCustomization.fields.customerId.visible
+                          ? [{
+                              name: 'customerId',
+                              label: 'Customer',
+                              value: contact.customerId,
+                              type: 'select' as const,
+                              options: customers.map((customer) => ({ value: customer.id, label: customer.name })),
+                            }]
+                          : []),
+                        ...(formCustomization.fields.inactive.visible
+                          ? [{
+                              name: 'inactive',
+                              label: 'Inactive',
+                              value: contact.active ? 'false' : 'true',
+                              type: 'checkbox' as const,
+                              placeholder: 'Inactive',
+                            }]
+                          : []),
+                      ]}
+                    />
+                    <DeleteButton resource="contacts" id={contact.id} />
+                  </div>
+                </MasterDataBodyCell>
               </tr>
-            </thead>
-            <tbody>
-              {contacts.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-                    No contacts found
-                  </td>
-                </tr>
-              ) : contacts.map((contact, index) => (
-                <tr key={contact.id} style={index < contacts.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                  <td data-column="contact-number" className="px-4 py-2 text-sm font-medium">
-                    <Link href={`/contacts/${contact.id}`} className="font-medium hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                      {contact.contactNumber ?? 'Pending'}
-                    </Link>
-                  </td>
-                  <td data-column="name" className="px-4 py-2 text-sm text-white">{contact.firstName} {contact.lastName}</td>
-                  <td data-column="customer" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{contact.customer.name}</td>
-                  <td data-column="email" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{contact.email ?? '—'}</td>
-                  <td data-column="phone" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtPhone(contact.phone)}</td>
-                  <td data-column="address" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{contact.address ?? '—'}</td>
-                  <td data-column="position" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{contact.position ?? '—'}</td>
-                  <td data-column="inactive" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{contact.active ? 'No' : 'Yes'}</td>
-                  <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(contact.createdAt).toLocaleDateString()}</td>
-                  <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(contact.updatedAt).toLocaleDateString()}</td>
-                  <td data-column="actions" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    <div className="flex items-center gap-2">
-                      <ContactEditButton
-                        contactId={contact.id}
-                        values={{
-                          firstName: contact.firstName,
-                          lastName: contact.lastName,
-                          email: contact.email ?? '',
-                          phone: normalizePhone(contact.phone) ?? '',
-                          address: contact.address ?? '',
-                          position: contact.position ?? '',
-                          customerId: contact.customerId,
-                          inactive: !contact.active,
-                        }}
-                        customers={customers.map((customer) => ({ id: customer.id, name: customer.name }))}
-                      />
-                      <DeleteButton resource="contacts" id={contact.id} />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
+            ))}
+          </tbody>
+        </table>
         <PaginationFooter
           startRow={pagination.startRow}
           endRow={pagination.endRow}
@@ -212,7 +180,7 @@ export default async function ContactsPage({
           prevHref={buildPageHref(pagination.currentPage - 1)}
           nextHref={buildPageHref(pagination.currentPage + 1)}
         />
-      </section>
+      </MasterDataListSection>
     </div>
   )
 }

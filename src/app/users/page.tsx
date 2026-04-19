@@ -1,29 +1,19 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
-import ColumnSelector from '@/components/ColumnSelector'
-import ExportButton from '@/components/ExportButton'
 import EditButton from '@/components/EditButton'
 import DeleteButton from '@/components/DeleteButton'
 import PaginationFooter from '@/components/PaginationFooter'
-import MasterDataCustomizeButton from '@/components/MasterDataCustomizeButton'
 import CreateModalButton from '@/components/CreateModalButton'
+import MasterDataPageHeader from '@/components/MasterDataPageHeader'
+import MasterDataListSection from '@/components/MasterDataListSection'
+import { MasterDataBodyCell, MasterDataEmptyStateRow, MasterDataHeaderCell, MasterDataMutedCell } from '@/components/MasterDataTableCells'
 import UserCreateForm from '@/components/UserCreateForm'
 import { getPagination } from '@/lib/pagination'
-import { withMasterDataDefaults } from '@/lib/master-data-columns'
-import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
-import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
-
-const COLS = withMasterDataDefaults([
-  { id: 'id', label: 'User ID' },
-  { id: 'name', label: 'Name' },
-  { id: 'email', label: 'Email' },
-  { id: 'role', label: 'Role' },
-  { id: 'department', label: 'Department' },
-  { id: 'inactive', label: 'Inactive' },
-  { id: 'created', label: 'Created' },
-  { id: 'last-modified', label: 'Last Modified' },
-  { id: 'actions', label: 'Actions', locked: true },
-])
+import { MASTER_DATA_TABLE_DIVIDER_STYLE, getMasterDataRowStyle } from '@/lib/master-data-table'
+import { formatMasterDataDate } from '@/lib/master-data-display'
+import { loadCompanyPageLogo } from '@/lib/company-page-logo'
+import { loadUserFormCustomization } from '@/lib/user-form-customization-store'
+import { userListDefinition } from '@/lib/master-data-list-definitions'
 
 export default async function UsersPage({
   searchParams,
@@ -36,173 +26,172 @@ export default async function UsersPage({
 
   const where = query
     ? {
-      OR: [
-        { userId: { contains: query, mode: 'insensitive' as const } },
-        { name: { contains: query, mode: 'insensitive' as const } },
-        { email: { contains: query, mode: 'insensitive' as const } },
-        { role: { name: { contains: query, mode: 'insensitive' as const } } },
-      ],
-    }
+        OR: [
+          { userId: { contains: query, mode: 'insensitive' as const } },
+          { name: { contains: query, mode: 'insensitive' as const } },
+          { email: { contains: query, mode: 'insensitive' as const } },
+          { role: { name: { contains: query, mode: 'insensitive' as const } } },
+        ],
+      }
     : {}
 
   const total = await prisma.user.count({ where })
   const pagination = getPagination(total, params.page)
 
-  const [users, companySettings, cabinetFiles, roles, departments] = await Promise.all([
+  const [users, companyLogoPages, roles, departments, employees, formCustomization] = await Promise.all([
     prisma.user.findMany({
       where,
       include: { department: { select: { departmentId: true, name: true } }, role: { select: { name: true } } },
-      orderBy: sort === 'oldest'
-      ? [{ createdAt: 'asc' as const }]
-      : sort === 'name'
-        ? [{ name: 'asc' as const }]
-        : [{ createdAt: 'desc' as const }],
+      orderBy:
+        sort === 'oldest'
+          ? [{ createdAt: 'asc' as const }]
+          : sort === 'name'
+            ? [{ name: 'asc' as const }]
+            : [{ createdAt: 'desc' as const }],
       skip: pagination.skip,
       take: pagination.pageSize,
     }),
-    loadCompanyInformationSettings(),
-    loadCompanyCabinetFiles(),
+    loadCompanyPageLogo(),
     prisma.role.findMany({ orderBy: { name: 'asc' } }),
-    prisma.department.findMany({ orderBy: { name: 'asc' } }),
+    prisma.department.findMany({ orderBy: [{ departmentId: 'asc' }, { name: 'asc' }] }),
+    prisma.employee.findMany({
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      select: { id: true, firstName: true, lastName: true, employeeId: true, userId: true },
+    }),
+    loadUserFormCustomization(),
   ])
+
+  const employeeByUserId = new Map(
+    employees.filter((employee) => employee.userId).map((employee) => [employee.userId as string, employee])
+  )
 
   const buildPageHref = (p: number) => {
     const s = new URLSearchParams()
     if (params.q) s.set('q', params.q)
+    if (sort) s.set('sort', sort)
     s.set('page', String(p))
     return `/users?${s.toString()}`
   }
 
-  const selectedLogoValue = companySettings.companyLogoPagesFileId
-  const companyLogoPages =
-    cabinetFiles.find((file) => file.id === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.originalName === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.storedName === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.url === selectedLogoValue)
-    ?? (!selectedLogoValue ? cabinetFiles[0] : undefined)
-
   return (
     <div className="min-h-full px-8 py-8">
-      <div className="mb-6 flex items-center justify-between gap-4">
-        {companyLogoPages ? (
-          <img
-            src={companyLogoPages.url}
-            alt="Company logo"
-            className="h-16 w-auto rounded"
-          />
-        ) : null}
-        <div>
-          <h1 className="text-xl font-semibold text-white">Users</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{total} total</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <MasterDataCustomizeButton tableId="users-list" columns={COLS} title="Users" />
+      <MasterDataPageHeader
+        title="Users"
+        total={total}
+        logoUrl={companyLogoPages?.url}
+        actions={
           <CreateModalButton buttonLabel="New User" title="New User">
-            <UserCreateForm />
-          </CreateModalButton>
-        </div>
-      </div>
-
-      <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-        <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
-          <div className="flex gap-3 items-center flex-nowrap">
-            <input
-              type="text"
-              name="q"
-              defaultValue={params.q ?? ''}
-              placeholder="Search user #, name, email or role"
-              className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
+            <UserCreateForm
+              roles={roles}
+              departments={departments}
+              employees={employees.filter((employee) => !employee.userId)}
             />
-            <input type="hidden" name="page" value="1" />
-            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="name">Name A-Z</option>
-            </select>
-            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="name">Name A-Z</option>
-            </select>
-            <ExportButton tableId="users-list" fileName="users" />
-            <ColumnSelector tableId="users-list" columns={COLS} />
-          </div>
-        </form>
+          </CreateModalButton>
+        }
+      />
 
-        <div className="overflow-x-auto" data-column-selector-table="users-list">
-          <table className="min-w-full" id="users-list">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                <th data-column="id" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>User ID</th>
-                <th data-column="name" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Name</th>
-                <th data-column="email" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Email</th>
-                <th data-column="role" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Role</th>
-                <th data-column="department" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Department</th>
-                <th data-column="inactive" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Inactive</th>
-                <th data-column="created" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Created</th>
-                <th data-column="last-modified" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Last Modified</th>
-                <th data-column="actions" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-                    No users found
-                  </td>
-                </tr>
-              ) : (
-                users.map((user, index) => (
-                  <tr key={user.id} style={index < users.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                    <td data-column="id" className="px-4 py-2 text-sm">
+      <MasterDataListSection
+        query={params.q}
+        searchPlaceholder={userListDefinition.searchPlaceholder}
+        tableId={userListDefinition.tableId}
+        exportFileName={userListDefinition.exportFileName}
+        columns={userListDefinition.columns}
+        sort={sort}
+        sortOptions={userListDefinition.sortOptions}
+      >
+        <table className="min-w-full" id={userListDefinition.tableId}>
+          <thead>
+            <tr style={MASTER_DATA_TABLE_DIVIDER_STYLE}>
+              <MasterDataHeaderCell columnId="id">User ID</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="name">Name</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="email">Email</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="role">Role</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="department">Department</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="employee">Linked Employee</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="inactive">Inactive</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="last-modified">Last Modified</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
+            </tr>
+          </thead>
+          <tbody>
+            {users.length === 0 ? (
+              <MasterDataEmptyStateRow colSpan={10}>No users found</MasterDataEmptyStateRow>
+            ) : (
+              users.map((user, index) => {
+                const linkedEmployee = employeeByUserId.get(user.id)
+                return (
+                  <tr key={user.id} style={getMasterDataRowStyle(index, users.length)}>
+                    <MasterDataBodyCell columnId="id">
                       <Link href={`/users/${user.id}`} className="font-medium hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                         {user.userId ?? 'Pending'}
                       </Link>
-                    </td>
-                    <td data-column="name" className="px-4 py-2 text-sm font-medium text-white">{user.name ?? '—'}</td>
-                    <td data-column="email" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{user.email || '—'}</td>
-                    <td data-column="role" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{user.role?.name ?? '—'}</td>
-                    <td data-column="department" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{user.department ? `${user.department.departmentId} - ${user.department.name}` : '—'}</td>
-                    <td data-column="inactive" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{user.inactive ? 'Yes' : 'No'}</td>
-                    <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(user.createdAt).toLocaleDateString()}</td>
-                    <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(user.updatedAt).toLocaleDateString()}</td>
-                    <td data-column="actions" className="px-4 py-2 text-sm">
+                    </MasterDataBodyCell>
+                    <MasterDataBodyCell columnId="name" className="px-4 py-2 text-sm font-medium text-white">{user.name ?? '-'}</MasterDataBodyCell>
+                    <MasterDataMutedCell columnId="email">{user.email || '-'}</MasterDataMutedCell>
+                    <MasterDataMutedCell columnId="role">{user.role?.name ?? '-'}</MasterDataMutedCell>
+                    <MasterDataMutedCell columnId="department">{user.department ? `${user.department.departmentId} - ${user.department.name}` : '-'}</MasterDataMutedCell>
+                    <MasterDataMutedCell columnId="employee">{linkedEmployee ? `${linkedEmployee.firstName} ${linkedEmployee.lastName}${linkedEmployee.employeeId ? ` (${linkedEmployee.employeeId})` : ''}` : '-'}</MasterDataMutedCell>
+                    <MasterDataMutedCell columnId="inactive">{user.inactive ? 'Yes' : 'No'}</MasterDataMutedCell>
+                    <MasterDataMutedCell columnId="created">{formatMasterDataDate(user.createdAt)}</MasterDataMutedCell>
+                    <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(user.updatedAt)}</MasterDataMutedCell>
+                    <MasterDataBodyCell columnId="actions">
                       <div className="flex items-center gap-2">
                         <EditButton
                           resource="users"
                           id={user.id}
                           fields={[
-                            { name: 'name', label: 'Name', value: user.name ?? '' },
-                            { name: 'email', label: 'Email', value: user.email, type: 'email' },
-                            {
-                              name: 'roleId',
-                              label: 'Role',
-                              value: user.roleId ?? '',
-                              type: 'select',
-                              placeholder: 'Select role',
-                              options: roles.map((r) => ({ value: r.id, label: r.name })),
-                            },
-                            {
-                              name: 'departmentId',
-                              label: 'Department',
-                              value: user.departmentId ?? '',
-                              type: 'select',
-                              placeholder: 'Select department',
-                              options: departments.map((d) => ({ value: d.id, label: `${d.departmentId} - ${d.name}` })),
-                            },
-                            { name: 'inactive', label: 'Inactive', value: user.inactive ? 'true' : 'false', type: 'select', options: [{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }] },
+                            ...(formCustomization.fields.name.visible ? [{ name: 'name', label: 'Name', value: user.name ?? '' }] : []),
+                            ...(formCustomization.fields.email.visible ? [{ name: 'email', label: 'Email', value: user.email, type: 'email' as const }] : []),
+                            ...(formCustomization.fields.roleId.visible
+                              ? [{
+                                  name: 'roleId',
+                                  label: 'Role',
+                                  value: user.roleId ?? '',
+                                  type: 'select' as const,
+                                  placeholder: 'Select role',
+                                  options: roles.map((r) => ({ value: r.id, label: r.name })),
+                                }]
+                              : []),
+                            ...(formCustomization.fields.departmentId.visible
+                              ? [{
+                                  name: 'departmentId',
+                                  label: 'Department',
+                                  value: user.departmentId ?? '',
+                                  type: 'select' as const,
+                                  placeholder: 'Select department',
+                                  options: departments.map((d) => ({ value: d.id, label: `${d.departmentId} - ${d.name}` })),
+                                }]
+                              : []),
+                            ...(formCustomization.fields.employeeId.visible
+                              ? [{
+                                  name: 'employeeId',
+                                  label: 'Linked Employee',
+                                  value: linkedEmployee?.id ?? '',
+                                  type: 'select' as const,
+                                  placeholder: 'Select employee',
+                                  options: employees
+                                    .filter((employee) => !employee.userId || employee.userId === user.id)
+                                    .map((employee) => ({
+                                      value: employee.id,
+                                      label: `${employee.firstName} ${employee.lastName}${employee.employeeId ? ` (${employee.employeeId})` : ''}`,
+                                    })),
+                                }]
+                              : []),
+                            ...(formCustomization.fields.inactive.visible
+                              ? [{ name: 'inactive', label: 'Inactive', value: user.inactive ? 'true' : 'false', type: 'select' as const, options: [{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }] }]
+                              : []),
                           ]}
                         />
                         <DeleteButton resource="users" id={user.id} />
                       </div>
-                    </td>
+                    </MasterDataBodyCell>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                )
+              })
+            )}
+          </tbody>
+        </table>
         <PaginationFooter
           startRow={pagination.startRow}
           endRow={pagination.endRow}
@@ -214,7 +203,7 @@ export default async function UsersPage({
           prevHref={buildPageHref(pagination.currentPage - 1)}
           nextHref={buildPageHref(pagination.currentPage + 1)}
         />
-      </section>
+      </MasterDataListSection>
     </div>
   )
 }

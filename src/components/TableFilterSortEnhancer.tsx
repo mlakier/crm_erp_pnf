@@ -428,7 +428,9 @@ function enhanceLiveSearchForm(form: HTMLFormElement) {
 export default function TableFilterSortEnhancer() {
   useEffect(() => {
     const run = () => {
-      const tables = document.querySelectorAll<HTMLTableElement>('[data-column-selector-table] table')
+      const tables = Array.from(
+        document.querySelectorAll<HTMLTableElement>('[data-column-selector-table] table')
+      ).filter((table) => table.dataset.disableFilterSort !== 'true')
       tables.forEach((table) => {
         try {
           enhanceTable(table)

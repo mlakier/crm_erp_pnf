@@ -19,8 +19,7 @@
     "customerId": true,
     "email": false,
     "phone": false,
-    "position": false,
-    "address": false
+    "position": false
   },
   "vendorCreate": {
     "name": true,
@@ -35,5 +34,57 @@
     "amount": false,
     "stage": false,
     "closeDate": false
+  },
+  "itemCreate": {
+    "name": true,
+    "itemId": false,
+    "sku": false,
+    "itemType": false,
+    "uom": false,
+    "listPrice": false,
+    "revenueStream": false,
+    "recognitionMethod": false,
+    "recognitionTrigger": false,
+    "defaultRevRecTemplateId": false,
+    "defaultTermMonths": false,
+    "standaloneSellingPrice": false,
+    "billingType": false,
+    "standardCost": false,
+    "averageCost": false,
+    "entityId": false,
+    "currencyId": false,
+    "incomeAccountId": false,
+    "deferredRevenueAccountId": false,
+    "inventoryAccountId": false,
+    "cogsExpenseAccountId": false,
+    "deferredCostAccountId": false
+  },
+  "currencyCreate": {
+    "currencyId": true,
+    "name": true,
+    "symbol": false,
+    "decimals": false,
+    "isBase": false,
+    "inactive": false
+  },
+  "chartOfAccountCreate": {
+    "accountId": true,
+    "name": true,
+    "description": false,
+    "accountType": true,
+    "normalBalance": false,
+    "financialStatementSection": false,
+    "financialStatementGroup": false,
+    "parentAccountId": false,
+    "closeToAccountId": false,
+    "isPosting": false,
+    "isControlAccount": false,
+    "allowsManualPosting": false,
+    "requiresSubledgerType": false,
+    "cashFlowCategory": false,
+    "inventory": false,
+    "revalueOpenBalance": false,
+    "eliminateIntercoTransactions": false,
+    "summary": false
   }
 }

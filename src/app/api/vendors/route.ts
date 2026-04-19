@@ -10,7 +10,7 @@ export async function GET() {
   try {
     const vendors = await prisma.vendor.findMany()
     return NextResponse.json(vendors)
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to fetch vendors' }, { status: 500 })
   }
 }
@@ -19,7 +19,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, email, phone, address, taxId, primarySubsidiaryId, primaryCurrencyId } = body
+    const { name, email, phone, address, taxId, primarySubsidiaryId, primaryCurrencyId, inactive } = body
 
     const missing: string[] = []
     if ((await isFieldRequiredServer('vendorCreate', 'name')) && !name) missing.push('name')
@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
         taxId,
         entityId: primarySubsidiaryId || null,
         currencyId: primaryCurrencyId || null,
+        inactive: String(inactive).trim().toLowerCase() === 'true',
       },
     })
 
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json(vendor, { status: 201 })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to create vendor' }, { status: 500 })
   }
 }
@@ -68,7 +69,7 @@ export async function PUT(request: NextRequest) {
     if (!id) return NextResponse.json({ error: 'Missing vendor id' }, { status: 400 })
 
     const body = await request.json()
-    const { name, email, phone, address, taxId, primarySubsidiaryId, primaryCurrencyId } = body
+    const { name, email, phone, address, taxId, primarySubsidiaryId, primaryCurrencyId, inactive } = body
     if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
 
     const vendor = await prisma.vendor.update({
@@ -81,6 +82,7 @@ export async function PUT(request: NextRequest) {
         taxId: taxId || null,
         entityId: primarySubsidiaryId || null,
         currencyId: primaryCurrencyId || null,
+        inactive: String(inactive).trim().toLowerCase() === 'true',
       },
     })
 
@@ -92,7 +94,7 @@ export async function PUT(request: NextRequest) {
     })
 
     return NextResponse.json(vendor)
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to update vendor' }, { status: 500 })
   }
 }
@@ -118,7 +120,7 @@ export async function DELETE(request: NextRequest) {
     })
 
     return NextResponse.json({ success: true })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to delete vendor' }, { status: 500 })
   }
 }

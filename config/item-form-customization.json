@@ -1,0 +1,167 @@
+{
+  "formColumns": 3,
+  "sections": [
+    "Core",
+    "Pricing And Costing",
+    "Revenue Recognition",
+    "Accounting"
+  ],
+  "sectionRows": {
+    "Core": 3,
+    "Pricing And Costing": 3,
+    "Revenue Recognition": 2,
+    "Accounting": 3
+  },
+  "fields": {
+    "name": {
+      "visible": true,
+      "section": "Core",
+      "order": 1,
+      "column": 1
+    },
+    "itemId": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 2
+    },
+    "sku": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 1
+    },
+    "description": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 3
+    },
+    "inactive": {
+      "visible": true,
+      "section": "Core",
+      "order": 1,
+      "column": 3
+    },
+    "itemType": {
+      "visible": true,
+      "section": "Core",
+      "order": 1,
+      "column": 2
+    },
+    "uom": {
+      "visible": true,
+      "section": "Pricing And Costing",
+      "order": 0,
+      "column": 3
+    },
+    "listPrice": {
+      "visible": true,
+      "section": "Pricing And Costing",
+      "order": 0,
+      "column": 2
+    },
+    "revenueStream": {
+      "visible": true,
+      "section": "Revenue Recognition",
+      "order": 0,
+      "column": 2
+    },
+    "recognitionMethod": {
+      "visible": true,
+      "section": "Revenue Recognition",
+      "order": 0,
+      "column": 3
+    },
+    "recognitionTrigger": {
+      "visible": true,
+      "section": "Revenue Recognition",
+      "order": 1,
+      "column": 1
+    },
+    "defaultRevRecTemplateId": {
+      "visible": true,
+      "section": "Revenue Recognition",
+      "order": 1,
+      "column": 2
+    },
+    "defaultTermMonths": {
+      "visible": true,
+      "section": "Revenue Recognition",
+      "order": 1,
+      "column": 3
+    },
+    "standaloneSellingPrice": {
+      "visible": true,
+      "section": "Pricing And Costing",
+      "order": 1,
+      "column": 3
+    },
+    "billingType": {
+      "visible": true,
+      "section": "Revenue Recognition",
+      "order": 0,
+      "column": 1
+    },
+    "standardCost": {
+      "visible": true,
+      "section": "Pricing And Costing",
+      "order": 1,
+      "column": 1
+    },
+    "averageCost": {
+      "visible": true,
+      "section": "Pricing And Costing",
+      "order": 1,
+      "column": 2
+    },
+    "entityId": {
+      "visible": true,
+      "section": "Accounting",
+      "order": 0,
+      "column": 1
+    },
+    "currencyId": {
+      "visible": true,
+      "section": "Pricing And Costing",
+      "order": 0,
+      "column": 1
+    },
+    "incomeAccountId": {
+      "visible": true,
+      "section": "Accounting",
+      "order": 1,
+      "column": 1
+    },
+    "deferredRevenueAccountId": {
+      "visible": true,
+      "section": "Accounting",
+      "order": 2,
+      "column": 1
+    },
+    "inventoryAccountId": {
+      "visible": true,
+      "section": "Accounting",
+      "order": 1,
+      "column": 3
+    },
+    "cogsExpenseAccountId": {
+      "visible": true,
+      "section": "Accounting",
+      "order": 1,
+      "column": 2
+    },
+    "deferredCostAccountId": {
+      "visible": true,
+      "section": "Accounting",
+      "order": 2,
+      "column": 2
+    },
+    "directRevenuePosting": {
+      "visible": true,
+      "section": "Accounting",
+      "order": 0,
+      "column": 2
+    }
+  }
+}

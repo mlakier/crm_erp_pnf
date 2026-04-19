@@ -9,7 +9,7 @@ export async function GET() {
   try {
     const contacts = await prisma.contact.findMany({ include: { customer: true } })
     return NextResponse.json(contacts)
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to fetch contacts' }, { status: 500 })
   }
 }
@@ -29,6 +29,8 @@ export async function POST(request: NextRequest) {
     if ((await isFieldRequiredServer('contactCreate', 'lastName')) && !lastName) missing.push('lastName')
     if ((await isFieldRequiredServer('contactCreate', 'email')) && !email) missing.push('email')
     if ((await isFieldRequiredServer('contactCreate', 'phone')) && !phone) missing.push('phone')
+    if ((await isFieldRequiredServer('contactCreate', 'address')) && !address) missing.push('address')
+    if ((await isFieldRequiredServer('contactCreate', 'position')) && !position) missing.push('position')
     if ((await isFieldRequiredServer('contactCreate', 'customerId')) && !customerId) missing.push('customerId')
 
     if (missing.length > 0) {
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json(contact, { status: 201 })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to create contact' }, { status: 500 })
   }
 }
@@ -107,7 +109,7 @@ export async function PUT(request: NextRequest) {
     })
 
     return NextResponse.json(contact)
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to update contact' }, { status: 500 })
   }
 }
@@ -133,7 +135,7 @@ export async function DELETE(request: NextRequest) {
     })
 
     return NextResponse.json({ success: true })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to delete contact' }, { status: 500 })
   }
 }

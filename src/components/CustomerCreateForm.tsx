@@ -1,12 +1,21 @@
 'use client'
 
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { isFieldRequired } from '@/lib/form-requirements'
-import { useEffect } from 'react'
 import { useListOptions } from '@/lib/list-options-client'
 import { isValidEmail } from '@/lib/validation'
 import AddressModal, { parseAddress } from '@/components/AddressModal'
+import {
+  defaultCustomerFormCustomization,
+  CUSTOMER_FORM_FIELDS,
+  type CustomerFormCustomizationConfig,
+  type CustomerFormFieldKey,
+} from '@/lib/customer-form-customization'
+
+type CustomerFormCustomizationResponse = {
+  config?: CustomerFormCustomizationConfig
+}
 
 export default function CustomerCreateForm({
   ownerUserId,
@@ -37,6 +46,7 @@ export default function CustomerCreateForm({
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [runtimeRequirements, setRuntimeRequirements] = useState<Record<string, boolean> | null>(null)
+  const [layoutConfig, setLayoutConfig] = useState<CustomerFormCustomizationConfig>(() => defaultCustomerFormCustomization())
   const router = useRouter()
   const industryOptions = useListOptions('customer', 'industry')
 
@@ -44,10 +54,15 @@ export default function CustomerCreateForm({
     let mounted = true
     async function loadRequirements() {
       try {
-        const response = await fetch('/api/config/form-requirements', { cache: 'no-store' })
-        const body = await response.json()
-        if (!response.ok) return
-        if (mounted) setRuntimeRequirements(body?.config?.customerCreate ?? null)
+        const [requirementsResponse, layoutResponse] = await Promise.all([
+          fetch('/api/config/form-requirements', { cache: 'no-store' }),
+          fetch('/api/config/customer-form-customization', { cache: 'no-store' }),
+        ])
+        const requirementsBody = await requirementsResponse.json()
+        const layoutBody = (await layoutResponse.json()) as CustomerFormCustomizationResponse
+        if (!mounted) return
+        if (requirementsResponse.ok) setRuntimeRequirements(requirementsBody?.config?.customerCreate ?? null)
+        if (layoutResponse.ok && layoutBody.config) setLayoutConfig(layoutBody.config)
       } catch {
         // Keep static defaults when config API is unavailable.
       }
@@ -72,6 +87,133 @@ export default function CustomerCreateForm({
         {text} <span style={{ color: 'var(--danger)' }}>*</span>
       </>
     )
+  }
+
+  const groupedVisibleFields = useMemo(() => {
+    return layoutConfig.sections
+      .map((section) => ({
+        section,
+        fields: CUSTOMER_FORM_FIELDS
+          .filter((field) => {
+            const config = layoutConfig.fields[field.id]
+            return config?.visible !== false && config?.section === section
+          })
+          .sort((a, b) => {
+            const left = layoutConfig.fields[a.id]
+            const right = layoutConfig.fields[b.id]
+            if ((left?.column ?? 1) !== (right?.column ?? 1)) return (left?.column ?? 1) - (right?.column ?? 1)
+            return (left?.order ?? 0) - (right?.order ?? 0)
+          }),
+      }))
+      .filter((group) => group.fields.length > 0)
+  }, [layoutConfig])
+
+  const formColumns = Math.min(4, Math.max(1, layoutConfig.formColumns || 2))
+
+  function getSectionGridStyle(): React.CSSProperties {
+    return { gridTemplateColumns: `repeat(${formColumns}, minmax(0, 1fr))` }
+  }
+
+  function getFieldPlacementStyle(fieldId: CustomerFormFieldKey): React.CSSProperties {
+    const config = layoutConfig.fields[fieldId]
+    return {
+      gridColumnStart: Math.min(formColumns, Math.max(1, config?.column ?? 1)),
+      gridRowStart: Math.max(1, (config?.order ?? 0) + 1),
+    }
+  }
+
+  function renderField(fieldId: CustomerFormFieldKey) {
+    switch (fieldId) {
+      case 'customerId':
+        return (
+          <FieldInput label={requiredLabel('Customer ID', req('customerId'))}>
+            <input value="Generated automatically" readOnly disabled className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white opacity-80" style={{ borderColor: 'var(--border-muted)' }} />
+          </FieldInput>
+        )
+      case 'name':
+        return (
+          <FieldInput label={requiredLabel('Name', req('name'))}>
+            <input value={name} onChange={(e) => setName(e.target.value)} required={req('name')} className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+          </FieldInput>
+        )
+      case 'email':
+        return (
+          <FieldInput label={requiredLabel('Email', req('email'))}>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required={req('email')} className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+          </FieldInput>
+        )
+      case 'phone':
+        return (
+          <FieldInput label={requiredLabel('Phone', req('phone'))}>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} required={req('phone')} className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+          </FieldInput>
+        )
+      case 'address':
+        return (
+          <FieldInput label={requiredLabel('Billing Address', req('address'))}>
+            <div className="mt-1 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setAddressModalOpen(true)}
+                className="rounded-md border px-3 py-2 text-sm font-medium"
+                style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+              >
+                {address ? 'Edit Address' : 'Enter Address'}
+              </button>
+              <p className="text-xs" style={{ color: address ? 'var(--text-secondary)' : 'var(--danger)' }}>
+                {address ? address : 'No validated address saved yet'}
+              </p>
+            </div>
+          </FieldInput>
+        )
+      case 'industry':
+        return (
+          <FieldInput label={requiredLabel('Industry', req('industry'))}>
+            <select value={industry} onChange={(e) => setIndustry(e.target.value)} required={req('industry')} className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm" style={{ borderColor: 'var(--border-muted)' }}>
+              <option value="">None</option>
+              {industryOptions.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </FieldInput>
+        )
+      case 'primarySubsidiaryId':
+        return (
+          <FieldInput label={requiredLabel('Primary Subsidiary', req('primarySubsidiaryId'))}>
+            <select value={primarySubsidiaryId} onChange={(e) => setPrimarySubsidiaryId(e.target.value)} required={req('primarySubsidiaryId')} className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)', backgroundColor: 'var(--card)' }}>
+              <option value="" style={{ backgroundColor: 'var(--card-elevated)', color: 'var(--text-muted)' }}>None</option>
+              {subsidiaries.map((subsidiary) => (
+                <option key={subsidiary.id} value={subsidiary.id} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
+                  {subsidiary.subsidiaryId} - {subsidiary.name}
+                </option>
+              ))}
+            </select>
+          </FieldInput>
+        )
+      case 'primaryCurrencyId':
+        return (
+          <FieldInput label={requiredLabel('Primary Currency', req('primaryCurrencyId'))}>
+            <select value={primaryCurrencyId} onChange={(e) => setPrimaryCurrencyId(e.target.value)} required={req('primaryCurrencyId')} className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)', backgroundColor: 'var(--card)' }}>
+              <option value="" style={{ backgroundColor: 'var(--card-elevated)', color: 'var(--text-muted)' }}>None</option>
+              {currencies.map((currency) => (
+                <option key={currency.id} value={currency.id} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
+                  {currency.currencyId} - {currency.name}
+                </option>
+              ))}
+            </select>
+          </FieldInput>
+        )
+      case 'inactive':
+        return (
+          <FieldInput label={requiredLabel('Inactive', req('inactive'))}>
+            <select value="false" disabled className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm opacity-80" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)', backgroundColor: 'var(--card)' }}>
+              <option value="false">No</option>
+            </select>
+          </FieldInput>
+        )
+      default:
+        return null
+    }
   }
 
   const handleSubmit = async (event: FormEvent) => {
@@ -125,6 +267,7 @@ export default function CustomerCreateForm({
           industry,
           primarySubsidiaryId,
           primaryCurrencyId,
+          inactive: false,
           userId: ownerUserId,
           contacts: [
             {
@@ -161,7 +304,7 @@ export default function CustomerCreateForm({
       setSaving(false)
       onSuccess?.()
       router.refresh()
-    } catch (err) {
+    } catch {
       setError('Unable to create customer')
       setSaving(false)
     }
@@ -169,110 +312,15 @@ export default function CustomerCreateForm({
 
   return (
     <section className="rounded-lg p-2">
-      <p className="mb-4 text-sm" style={{ color: 'var(--text-muted)' }}>Customer ID is generated automatically when the record is created.</p>
       <form className="space-y-4" onSubmit={handleSubmit}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Name', req('name'))}</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required={req('name')}
-              className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Email', req('email'))}</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required={req('email')}
-              className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Phone', req('phone'))}</label>
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required={req('phone')}
-              className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Industry</label>
-            <select
-              value={industry}
-              onChange={(e) => setIndustry(e.target.value)}
-              className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              <option value="">None</option>
-              {industryOptions.map((option) => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-          <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Primary Subsidiary</label>
-          <select
-            value={primarySubsidiaryId}
-            onChange={(e) => setPrimarySubsidiaryId(e.target.value)}
-            className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm"
-            style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)', backgroundColor: 'var(--card)' }}
-          >
-            <option value="" style={{ backgroundColor: 'var(--card-elevated)', color: 'var(--text-muted)' }}>None</option>
-            {subsidiaries.map((subsidiary) => (
-              <option key={subsidiary.id} value={subsidiary.id} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                {subsidiary.subsidiaryId} - {subsidiary.name}
-              </option>
-            ))}
-          </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Primary Currency</label>
-            <select
-              value={primaryCurrencyId}
-              onChange={(e) => setPrimaryCurrencyId(e.target.value)}
-              className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm"
-              style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)', backgroundColor: 'var(--card)' }}
-            >
-              <option value="" style={{ backgroundColor: 'var(--card-elevated)', color: 'var(--text-muted)' }}>None</option>
-              {currencies.map((currency) => (
-                <option key={currency.id} value={currency.id} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                  {currency.currencyId} - {currency.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Billing Address', req('address'))}</label>
-          <div className="mt-1 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setAddressModalOpen(true)}
-              className="rounded-md border px-3 py-2 text-sm font-medium"
-              style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-            >
-              {address ? 'Edit Address' : 'Enter Address'}
-            </button>
-            <p className="text-xs" style={{ color: address ? 'var(--text-secondary)' : 'var(--danger)' }}>
-              {address ? address : 'No validated address saved yet'}
-            </p>
-          </div>
-        </div>
+        {groupedVisibleFields.map(({ section, fields }) => (
+          <section key={section} className="rounded-lg border p-4" style={{ borderColor: 'var(--border-muted)' }}>
+            <div className="mb-4"><h3 className="text-sm font-semibold text-white">{section}</h3></div>
+            <div className="grid gap-4" style={getSectionGridStyle()}>
+              {fields.map((field) => <div key={field.id} style={getFieldPlacementStyle(field.id)}>{renderField(field.id)}</div>)}
+            </div>
+          </section>
+        ))}
 
         <div className="rounded-md border p-4" style={{ borderColor: 'var(--border-muted)' }}>
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
@@ -365,5 +413,14 @@ export default function CustomerCreateForm({
         </div>
       </form>
     </section>
+  )
+}
+
+function FieldInput({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+      <span>{label}</span>
+      {children}
+    </label>
   )
 }

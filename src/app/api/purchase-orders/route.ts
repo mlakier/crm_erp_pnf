@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const purchaseOrders = await prisma.purchaseOrder.findMany({ include: { vendor: true } })
     return NextResponse.json(purchaseOrders)
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to fetch purchase orders' }, { status: 500 })
   }
 }
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json(purchaseOrder, { status: 201 })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to create purchase order' }, { status: 500 })
   }
 }
@@ -54,11 +54,13 @@ export async function PUT(request: NextRequest) {
     if (!id) return NextResponse.json({ error: 'Missing purchase order id' }, { status: 400 })
 
     const body = await request.json()
-    const { status, total } = body
+    const { number, status, total, vendorId } = body
 
     const po = await prisma.purchaseOrder.update({
       where: { id },
       data: {
+        number: number?.trim() || undefined,
+        vendorId: vendorId || undefined,
         status: status || null,
         total: total !== '' && total != null ? parseFloat(total) : 0,
       },
@@ -73,7 +75,7 @@ export async function PUT(request: NextRequest) {
     })
 
     return NextResponse.json(po)
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to update purchase order' }, { status: 500 })
   }
 }
@@ -99,7 +101,7 @@ export async function DELETE(request: NextRequest) {
     })
 
     return NextResponse.json({ success: true })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to delete purchase order' }, { status: 500 })
   }
 }

@@ -108,6 +108,30 @@ const AI_SUGGESTIONS: Record<string, Partial<Record<string, { canView: boolean; 
   viewer: Object.fromEntries(ALL_PAGES.map(p => [p.key, { canView: true, canCreate: false, canEdit: false, canDelete: false }])),
 }
 
+/* ── AI BLOCKED-STATE SUGGESTIONS (keyed by role → page key → blocked statuses) ── */
+const AI_BLOCKED_STATES: Record<string, Partial<Record<string, string[]>>> = {
+  admin: {},
+  manager: {},
+  'sales rep': {
+    'leads':          ['Converted', 'Unqualified'],
+    'opportunities':  ['Won', 'Lost'],
+    'quotes':         ['Closed', 'Cancelled'],
+    'sales-orders':   ['Closed', 'Cancelled', 'Shipped'],
+    'invoices':       ['Paid', 'Void', 'Closed'],
+  },
+  'purchasing agent': {
+    'purchase-requisitions': ['Closed', 'Cancelled'],
+    'purchase-orders':       ['Closed', 'Cancelled', 'Received'],
+    'receipts':              ['Closed', 'Cancelled'],
+    'bills':                 ['Paid', 'Void', 'Closed'],
+  },
+  accountant: {
+    'invoices':        ['Void'],
+    'bills':           ['Void'],
+  },
+  viewer: {},
+}
+
 export default function ManagePermissionsPage() {
   const [roles, setRoles] = useState<Role[]>([])
   const [selectedRoleId, setSelectedRoleId] = useState('')
@@ -116,6 +140,7 @@ export default function ManagePermissionsPage() {
   const [statusOptions, setStatusOptions] = useState<Record<string, string[]>>({})
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
 
   // Load roles
   useEffect(() => {
@@ -185,21 +210,65 @@ export default function ManagePermissionsPage() {
     finally { setSaving(false) }
   }
 
-  const applySuggestion = () => {
+  const applyStaticFallback = () => {
     const name = selectedRoleName.toLowerCase()
-    // Find best match
     let suggestion = AI_SUGGESTIONS[name]
     if (!suggestion) {
       for (const [key, val] of Object.entries(AI_SUGGESTIONS)) {
         if (name.includes(key) || key.includes(name)) { suggestion = val; break }
       }
     }
-    if (!suggestion) suggestion = AI_SUGGESTIONS['viewer'] // fallback
+    if (!suggestion) suggestion = AI_SUGGESTIONS['viewer']
+    const blockedSuggestion = AI_BLOCKED_STATES[name] ?? AI_BLOCKED_STATES[Object.keys(AI_BLOCKED_STATES).find(k => name.includes(k) || k.includes(name)) ?? ''] ?? {}
     setGrid(prev => prev.map(row => {
       const s = suggestion![row.page]
-      return s ? { ...row, ...s } : row
+      const blocked = blockedSuggestion[row.page]
+      let newBlocked = row.blockedStates
+      if (blocked !== undefined) { newBlocked = blocked } else if (s) { newBlocked = [] }
+      return s ? { ...row, ...s, blockedStates: newBlocked } : row
     }))
-    setMessage('AI suggestion applied for "' + selectedRoleName + '". Review and Save.')
+    setMessage('Suggestion applied (static rules). Review and Save.')
+  }
+
+  const applySuggestion = async () => {
+    setAiLoading(true)
+    setMessage('')
+    try {
+      const role = roles.find(r => r.id === selectedRoleId)
+      const res = await fetch('/api/ai-permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roleName: role?.name ?? selectedRoleName,
+          roleDescription: role?.description ?? '',
+          statusOptions,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.permissions) {
+        console.warn('AI API failed, falling back to static rules:', data.error)
+        applyStaticFallback()
+        setAiLoading(false)
+        return
+      }
+      setGrid(prev => prev.map(row => {
+        const aiPerm = data.permissions.find((p: any) => p.page === row.page)
+        if (!aiPerm) return row
+        return {
+          ...row,
+          canView: aiPerm.canView,
+          canCreate: aiPerm.canCreate,
+          canEdit: aiPerm.canEdit,
+          canDelete: aiPerm.canDelete,
+          blockedStates: aiPerm.blockedStates ?? [],
+        }
+      }))
+      setMessage('AI suggestion applied for "' + selectedRoleName + '" (powered by Claude). Review and Save.')
+    } catch (err) {
+      console.warn('AI API error, falling back to static rules:', err)
+      applyStaticFallback()
+    }
+    setAiLoading(false)
   }
 
   const handleRoleChange = (roleId: string) => {
@@ -222,9 +291,9 @@ export default function ManagePermissionsPage() {
         <select value={selectedRoleId} onChange={e => handleRoleChange(e.target.value)} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
           {roles.map(role => <option key={role.id} value={role.id} style={{ backgroundColor: "#1e1e2e", color: "#fff" }}>{role.name} ({role.roleId})</option>)}
         </select>
-        <button onClick={applySuggestion} disabled={!selectedRoleId} className="rounded-md px-3 py-2 text-sm font-medium text-white transition-colors flex items-center gap-1.5" style={{ backgroundColor: '#7c3aed' }} title="AI will suggest permissions based on the role name">
+        <button onClick={applySuggestion} disabled={!selectedRoleId || aiLoading} className="rounded-md px-3 py-2 text-sm font-medium text-white transition-colors flex items-center gap-1.5" style={{ backgroundColor: '#7c3aed' }} title="AI will suggest permissions based on the role name">
           <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" /></svg>
-          AI Suggest
+          {aiLoading ? 'Thinking...' : 'AI Suggest'}
         </button>
       </div>
 

@@ -20,6 +20,10 @@ const JE_COLUMNS = [
   { id: 'total', label: 'Total' },
   { id: 'subsidiary', label: 'Subsidiary' },
   { id: 'currency', label: 'Currency' },
+  { id: 'period', label: 'Accounting Period' },
+  { id: 'source-type', label: 'Source Type' },
+  { id: 'posted-by', label: 'Posted By' },
+  { id: 'approved-by', label: 'Approved By' },
   { id: 'created', label: 'Created' },
   { id: 'last-modified', label: 'Last Modified' },
   { id: 'actions', label: 'Actions', locked: true },
@@ -32,21 +36,25 @@ export default async function JournalsPage({ searchParams }: { searchParams: Pro
   const sort = params.sort ?? 'newest'
   const STATUS_OPTIONS = ['all', 'draft', 'posted', 'void']
 
-  const where: any = {
+  const where = {
     ...(query ? { OR: [{ number: { contains: query } }, { description: { contains: query } }, { status: { contains: query } }] } : {}),
     ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
   }
 
   const orderBy = sort === 'oldest' ? [{ createdAt: 'asc' as const }] : sort === 'total-desc' ? [{ total: 'desc' as const }] : sort === 'total-asc' ? [{ total: 'asc' as const }] : [{ createdAt: 'desc' as const }]
 
-  const [totalRows, companySettings, cabinetFiles] = await Promise.all([
+  const [totalRows, entities, currencies, accountingPeriods, employees, companySettings, cabinetFiles] = await Promise.all([
     prisma.journalEntry.count({ where }),
+    prisma.entity.findMany({ orderBy: { subsidiaryId: 'asc' }, select: { id: true, subsidiaryId: true, name: true } }),
+    prisma.currency.findMany({ orderBy: { currencyId: 'asc' }, select: { id: true, currencyId: true, name: true } }),
+    prisma.accountingPeriod.findMany({ orderBy: { startDate: 'desc' }, select: { id: true, name: true } }),
+    prisma.employee.findMany({ orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }], select: { id: true, employeeId: true, firstName: true, lastName: true } }),
     loadCompanyInformationSettings(),
     loadCompanyCabinetFiles(),
   ])
 
   const pagination = getPagination(totalRows, params.page)
-  const rows = await prisma.journalEntry.findMany({ where, include: { entity: true, currency: true, user: true, lineItems: true }, orderBy, skip: pagination.skip, take: pagination.pageSize })
+  const rows = await prisma.journalEntry.findMany({ where, include: { entity: true, currency: true, user: true, accountingPeriod: true, postedByEmployee: true, approvedByEmployee: true, lineItems: true }, orderBy, skip: pagination.skip, take: pagination.pageSize })
 
   const buildPageHref = (p: number) => {
     const s = new URLSearchParams()
@@ -58,7 +66,7 @@ export default async function JournalsPage({ searchParams }: { searchParams: Pro
   }
 
   const selectedLogoValue = companySettings.companyLogoPagesFileId
-  const companyLogoPages = cabinetFiles.find((f: any) => f.id === selectedLogoValue) ?? cabinetFiles.find((f: any) => f.originalName === selectedLogoValue) ?? cabinetFiles.find((f: any) => f.storedName === selectedLogoValue) ?? (!selectedLogoValue ? cabinetFiles[0] : undefined)
+  const companyLogoPages = cabinetFiles.find((file) => file.id === selectedLogoValue) ?? cabinetFiles.find((file) => file.originalName === selectedLogoValue) ?? cabinetFiles.find((file) => file.storedName === selectedLogoValue) ?? (!selectedLogoValue ? cabinetFiles[0] : undefined)
 
   return (
     <div className="min-h-full px-8 py-8">
@@ -69,7 +77,7 @@ export default async function JournalsPage({ searchParams }: { searchParams: Pro
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{totalRows} total</p>
         </div>
         <CreateModalButton buttonLabel="New Journal Entry" title="New Journal Entry">
-          <JournalEntryCreateForm />
+          <JournalEntryCreateForm entities={entities} currencies={currencies} accountingPeriods={accountingPeriods} employees={employees} />
         </CreateModalButton>
       </div>
 
@@ -98,8 +106,8 @@ export default async function JournalsPage({ searchParams }: { searchParams: Pro
             </tr></thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No journal entries yet.</td></tr>
-              ) : rows.map((row: any, i: number) => (
+                <tr><td colSpan={14} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No journal entries yet.</td></tr>
+              ) : rows.map((row, i) => (
                 <tr key={row.id} style={i < rows.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
                   <td data-column="number" className="px-4 py-2 text-sm font-medium" style={{ color: 'var(--accent-primary-strong)' }}>{row.number}</td>
                   <td data-column="date" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(row.date).toLocaleDateString()}</td>
@@ -108,10 +116,14 @@ export default async function JournalsPage({ searchParams }: { searchParams: Pro
                   <td data-column="total" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtCurrency(row.total)}</td>
                   <td data-column="subsidiary" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.entity?.name ?? '\u2014'}</td>
                   <td data-column="currency" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.currency?.currencyId ?? '\u2014'}</td>
+                  <td data-column="period" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.accountingPeriod?.name ?? '\u2014'}</td>
+                  <td data-column="source-type" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.sourceType ?? '\u2014'}</td>
+                  <td data-column="posted-by" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.postedByEmployee ? `${row.postedByEmployee.firstName} ${row.postedByEmployee.lastName}` : '\u2014'}</td>
+                  <td data-column="approved-by" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.approvedByEmployee ? `${row.approvedByEmployee.firstName} ${row.approvedByEmployee.lastName}` : '\u2014'}</td>
                   <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(row.createdAt).toLocaleDateString()}</td>
                   <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(row.updatedAt).toLocaleDateString()}</td>
                   <td data-column="actions" className="px-4 py-2 text-sm"><span className="flex items-center gap-2">
-                    <EditButton id={row.id} endpoint="/api/journals" fields={[{ name: 'status', label: 'Status', type: 'select', value: row.status, options: ['draft','posted','void'] }, { name: 'total', label: 'Total', type: 'number', value: row.total }, { name: 'description', label: 'Description', type: 'text', value: row.description ?? '' }]} />
+                    <EditButton id={row.id} endpoint="/api/journals" fields={[{ name: 'status', label: 'Status', type: 'select', value: row.status, options: ['draft','posted','void'] }, { name: 'total', label: 'Total', type: 'number', value: row.total }, { name: 'description', label: 'Description', type: 'text', value: row.description ?? '' }, { name: 'entityId', label: 'Subsidiary', value: row.entityId ?? '', type: 'select', placeholder: 'Select subsidiary', options: entities.map((entity) => ({ value: entity.id, label: `${entity.subsidiaryId} - ${entity.name}` })) }, { name: 'currencyId', label: 'Currency', value: row.currencyId ?? '', type: 'select', placeholder: 'Select currency', options: currencies.map((currency) => ({ value: currency.id, label: `${currency.currencyId} - ${currency.name}` })) }, { name: 'accountingPeriodId', label: 'Accounting Period', value: row.accountingPeriodId ?? '', type: 'select', placeholder: 'Select period', options: accountingPeriods.map((period) => ({ value: period.id, label: period.name })) }, { name: 'sourceType', label: 'Source Type', type: 'text', value: row.sourceType ?? '' }, { name: 'sourceId', label: 'Source Id', type: 'text', value: row.sourceId ?? '' }, { name: 'postedByEmployeeId', label: 'Posted By', value: row.postedByEmployeeId ?? '', type: 'select', placeholder: 'Select employee', options: employees.map((employee) => ({ value: employee.id, label: `${employee.employeeId ?? 'EMP'} - ${employee.firstName} ${employee.lastName}` })) }, { name: 'approvedByEmployeeId', label: 'Approved By', value: row.approvedByEmployeeId ?? '', type: 'select', placeholder: 'Select employee', options: employees.map((employee) => ({ value: employee.id, label: `${employee.employeeId ?? 'EMP'} - ${employee.firstName} ${employee.lastName}` })) }]} />
                     <DeleteButton id={row.id} endpoint="/api/journals" label={row.number} />
                   </span></td>
                 </tr>

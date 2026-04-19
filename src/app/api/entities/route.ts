@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { generateNextEntityCode } from '@/lib/entity-code'
 
 export async function GET() {
-  const data = await prisma.entity.findMany({ include: { defaultCurrency: true, parentEntity: true }, orderBy: { subsidiaryId: 'asc' } })
+  const data = await prisma.entity.findMany({ include: { defaultCurrency: true, functionalCurrency: true, reportingCurrency: true, parentEntity: true, retainedEarningsAccount: true, ctaAccount: true, intercompanyClearingAccount: true, dueToAccount: true, dueFromAccount: true }, orderBy: { subsidiaryId: 'asc' } })
   return NextResponse.json(data)
 }
 
@@ -16,8 +16,19 @@ export async function POST(request: Request) {
     const country = String(body?.country ?? '').trim() || null
     const address = String(body?.address ?? '').trim() || null
     const taxId = String(body?.taxId ?? '').trim() || null
+    const registrationNumber = String(body?.registrationNumber ?? '').trim() || null
     const defaultCurrencyId = String(body?.defaultCurrencyId ?? '').trim() || null
+    const functionalCurrencyId = String(body?.functionalCurrencyId ?? '').trim() || null
+    const reportingCurrencyId = String(body?.reportingCurrencyId ?? '').trim() || null
     const parentEntityId = String(body?.parentEntityId ?? '').trim() || null
+    const consolidationMethod = String(body?.consolidationMethod ?? '').trim() || null
+    const ownershipPercentRaw = String(body?.ownershipPercent ?? '').trim()
+    const ownershipPercent = ownershipPercentRaw ? Number(body?.ownershipPercent) : null
+    const retainedEarningsAccountId = String(body?.retainedEarningsAccountId ?? '').trim() || null
+    const ctaAccountId = String(body?.ctaAccountId ?? '').trim() || null
+    const intercompanyClearingAccountId = String(body?.intercompanyClearingAccountId ?? '').trim() || null
+    const dueToAccountId = String(body?.dueToAccountId ?? '').trim() || null
+    const dueFromAccountId = String(body?.dueFromAccountId ?? '').trim() || null
     const inactive = String(body?.inactive ?? 'false').trim().toLowerCase() === 'true'
     const code = await generateNextEntityCode()
 
@@ -34,11 +45,21 @@ export async function POST(request: Request) {
         country,
         address,
         taxId,
+        registrationNumber,
         defaultCurrencyId,
+        functionalCurrencyId,
+        reportingCurrencyId,
         parentEntityId,
+        consolidationMethod,
+        ownershipPercent,
+        retainedEarningsAccountId,
+        ctaAccountId,
+        intercompanyClearingAccountId,
+        dueToAccountId,
+        dueFromAccountId,
         active: !inactive,
       },
-      include: { defaultCurrency: true, parentEntity: true },
+      include: { defaultCurrency: true, functionalCurrency: true, reportingCurrency: true, parentEntity: true, retainedEarningsAccount: true, ctaAccount: true, intercompanyClearingAccount: true, dueToAccount: true, dueFromAccount: true },
     })
 
     return NextResponse.json(created, { status: 201 })
@@ -61,9 +82,18 @@ export async function PUT(request: Request) {
     const country = body?.country !== undefined ? (String(body.country).trim() || null) : undefined
     const address = body?.address !== undefined ? (String(body.address).trim() || null) : undefined
     const defaultCurrencyId = body?.defaultCurrencyId !== undefined ? (String(body.defaultCurrencyId).trim() || null) : undefined
+    const functionalCurrencyId = body?.functionalCurrencyId !== undefined ? (String(body.functionalCurrencyId).trim() || null) : undefined
+    const reportingCurrencyId = body?.reportingCurrencyId !== undefined ? (String(body.reportingCurrencyId).trim() || null) : undefined
     const parentEntityId = body?.parentEntityId !== undefined ? (String(body.parentEntityId).trim() || null) : undefined
     const taxId = body?.taxId !== undefined ? (String(body.taxId).trim() || null) : undefined
     const registrationNumber = body?.registrationNumber !== undefined ? (String(body.registrationNumber).trim() || null) : undefined
+    const consolidationMethod = body?.consolidationMethod !== undefined ? (String(body.consolidationMethod).trim() || null) : undefined
+    const ownershipPercent = body?.ownershipPercent !== undefined ? (String(body.ownershipPercent).trim() ? Number(body.ownershipPercent) : null) : undefined
+    const retainedEarningsAccountId = body?.retainedEarningsAccountId !== undefined ? (String(body.retainedEarningsAccountId).trim() || null) : undefined
+    const ctaAccountId = body?.ctaAccountId !== undefined ? (String(body.ctaAccountId).trim() || null) : undefined
+    const intercompanyClearingAccountId = body?.intercompanyClearingAccountId !== undefined ? (String(body.intercompanyClearingAccountId).trim() || null) : undefined
+    const dueToAccountId = body?.dueToAccountId !== undefined ? (String(body.dueToAccountId).trim() || null) : undefined
+    const dueFromAccountId = body?.dueFromAccountId !== undefined ? (String(body.dueFromAccountId).trim() || null) : undefined
     const inactive = body?.inactive !== undefined
       ? String(body.inactive).trim().toLowerCase() === 'true'
       : undefined
@@ -80,9 +110,9 @@ export async function PUT(request: Request) {
     const updated = await prisma.entity.update({
       where: { id },
       data: Object.fromEntries(
-        Object.entries({ subsidiaryId: code, name, legalName, entityType, country, address, defaultCurrencyId, parentEntityId, taxId, registrationNumber, active }).filter(([, v]) => v !== undefined)
+        Object.entries({ subsidiaryId: code, name, legalName, entityType, country, address, defaultCurrencyId, functionalCurrencyId, reportingCurrencyId, parentEntityId, taxId, registrationNumber, consolidationMethod, ownershipPercent, retainedEarningsAccountId, ctaAccountId, intercompanyClearingAccountId, dueToAccountId, dueFromAccountId, active }).filter(([, v]) => v !== undefined)
       ),
-      include: { defaultCurrency: true, parentEntity: true },
+      include: { defaultCurrency: true, functionalCurrency: true, reportingCurrency: true, parentEntity: true, retainedEarningsAccount: true, ctaAccount: true, intercompanyClearingAccount: true, dueToAccount: true, dueFromAccount: true },
     })
     return NextResponse.json(updated)
   } catch (error) {

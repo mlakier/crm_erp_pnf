@@ -29,6 +29,15 @@ export default function ListsPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [displayOrder, setDisplayOrder] = useState<DisplayOrder>('list')
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+
+  const [showNewListForm, setShowNewListForm] = useState(false)
+  const [newListKey, setNewListKey] = useState('')
+  const [newListLabel, setNewListLabel] = useState('')
+  const [newListWhereUsed, setNewListWhereUsed] = useState('')
+  const [creatingList, setCreatingList] = useState(false)
+
 
   const selectedList = lists.find((l) => l.key === selectedKey)
 
@@ -50,6 +59,68 @@ export default function ListsPage() {
     load()
     return () => { mounted = false }
   }, [])
+
+  function handleDragStart(index: number) {
+    setDragIndex(index)
+  }
+
+  function handleDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault()
+    setDragOverIndex(index)
+  }
+
+  function handleDragEnd() {
+    setDragIndex(null)
+    setDragOverIndex(null)
+  }
+
+  async function handleDrop(targetIndex: number) {
+    if (dragIndex === null || dragIndex === targetIndex) {
+      handleDragEnd()
+      return
+    }
+    const updated = [...rows]
+    const [moved] = updated.splice(dragIndex, 1)
+    updated.splice(targetIndex, 0, moved)
+    const reordered = updated.map((r, i) => ({ ...r, sortOrder: i }))
+    setRows(reordered)
+    handleDragEnd()
+    await persistRows(reordered, 'Order updated')
+  }
+
+
+  async function createList() {
+    const key = newListKey.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '')
+    const label = newListLabel.trim()
+    if (!key || !label) { setError('Key and Display Name are required'); return }
+    setCreatingList(true)
+    setError('')
+    try {
+      const res = await fetch('/api/config/lists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create-list',
+          key,
+          label,
+          whereUsed: newListWhereUsed.trim() ? newListWhereUsed.split(',').map((s) => s.trim()).filter(Boolean) : [],
+        }),
+      })
+      const body = await res.json()
+      if (!res.ok) { setError(body?.error || 'Unable to create list'); setCreatingList(false); return }
+      setLists(body.lists ?? [])
+      setRowsByKey(body.rowsByKey ?? {})
+      setSelectedKey(key)
+      setNewListKey('')
+      setNewListLabel('')
+      setNewListWhereUsed('')
+      setShowNewListForm(false)
+      setSuccess('List created')
+    } catch {
+      setError('Unable to create list')
+    }
+    setCreatingList(false)
+  }
 
   useEffect(() => {
     setEditingIndex(null)
@@ -152,12 +223,79 @@ export default function ListsPage() {
   return (
     <div className="min-h-full px-8 py-8">
       <div className="max-w-4xl">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-white">Master Data Lists</h1>
-        <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
-          Manage dropdown values used across create forms.
-        </p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-white">Master Data Lists</h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            Manage dropdown values used across create forms.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowNewListForm((v) => !v)}
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-white"
+          style={{ backgroundColor: 'var(--accent-primary-strong)' }}
+        >
+          <span className="text-base leading-none">+</span> New List
+        </button>
       </div>
+
+      {showNewListForm && (
+        <div className="mb-4 rounded-2xl border px-6 py-4" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
+          <h2 className="mb-3 text-sm font-semibold text-white">Create New List</h2>
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <span>Key</span>
+              <input
+                value={newListKey}
+                onChange={(e) => setNewListKey(e.target.value)}
+                placeholder="e.g. MY-STATUS"
+                className="w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white uppercase"
+                style={{ borderColor: 'var(--border-muted)' }}
+              />
+            </label>
+            <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <span>Display Name</span>
+              <input
+                value={newListLabel}
+                onChange={(e) => setNewListLabel(e.target.value)}
+                placeholder="e.g. My Status"
+                className="w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
+                style={{ borderColor: 'var(--border-muted)' }}
+              />
+            </label>
+            <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <span>Where Used <span className="text-xs opacity-60">(optional, comma-separated)</span></span>
+              <input
+                value={newListWhereUsed}
+                onChange={(e) => setNewListWhereUsed(e.target.value)}
+                placeholder="e.g. Customers, Vendors"
+                className="w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
+                style={{ borderColor: 'var(--border-muted)' }}
+              />
+            </label>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={createList}
+              disabled={creatingList}
+              className="rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
+            >
+              {creatingList ? 'Creating...' : 'Create List'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowNewListForm(false); setNewListKey(''); setNewListLabel(''); setNewListWhereUsed('') }}
+              className="rounded-md px-4 py-2 text-sm font-medium text-white"
+              style={{ backgroundColor: 'var(--border-muted)' }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <div className="border-b px-6 py-4" style={{ borderColor: 'var(--border-muted)' }}>
@@ -243,13 +381,35 @@ export default function ListsPage() {
 
           {/* Rows */}
           <div className="space-y-2">
-            <div className="grid grid-cols-[220px_1fr_auto] gap-2 px-1 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+            <div className="grid grid-cols-[24px_220px_1fr_auto] gap-2 px-1 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+              <span></span>
               <span>List ID</span>
               <span>Value</span>
               <span className="text-right">Actions</span>
             </div>
-            {displayRows.map((row, index) => (
-              <div key={row.id ?? index} className="grid grid-cols-[220px_1fr_auto] gap-2">
+            {displayRows.map((row, index) => {
+              const isDragging = dragIndex === index
+              const isDragOver = dragOverIndex === index && dragIndex !== index
+              const canDrag = displayOrder === 'list'
+              return (
+              <div
+                key={row.id ?? index}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDrop={() => handleDrop(index)}
+                onDragEnd={handleDragEnd}
+                className="grid grid-cols-[24px_220px_1fr_auto] gap-2 rounded-md transition-colors"
+                style={{
+                  opacity: isDragging ? 0.5 : 1,
+                  borderTop: isDragOver ? '2px solid var(--accent-primary-strong)' : '2px solid transparent',
+                }}
+              >
+                <span
+                  draggable={canDrag}
+                  onDragStart={() => handleDragStart(index)}
+                  className="flex items-center justify-center text-xs select-none"
+                  style={{ color: canDrag ? 'var(--text-muted)' : 'transparent', cursor: canDrag ? 'grab' : 'default' }}
+                  aria-hidden
+                >⠇</span>
                 <input
                   value={row.id ?? 'Auto-generated on save'}
                   readOnly
@@ -277,7 +437,8 @@ export default function ListsPage() {
                   )}
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
 
           {error ? <p className="mt-3 text-sm" style={{ color: 'var(--danger)' }}>{error}</p> : null}

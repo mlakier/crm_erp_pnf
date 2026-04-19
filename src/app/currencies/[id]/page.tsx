@@ -1,223 +1,248 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import EditButton from '@/components/EditButton'
 import DeleteButton from '@/components/DeleteButton'
+import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
+import CurrencyDetailCustomizeMode from '@/components/CurrencyDetailCustomizeMode'
+import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import {
+  RecordDetailCell,
+  RecordDetailEmptyState,
+  RecordDetailHeaderCell,
+  RecordDetailSection,
+  RecordDetailStatCard,
+} from '@/components/RecordDetailPanels'
+import { loadCurrencyFormCustomization } from '@/lib/currency-form-customization-store'
+import { CURRENCY_FORM_FIELDS, type CurrencyFormFieldKey } from '@/lib/currency-form-customization'
+import { loadFormRequirements } from '@/lib/form-requirements-store'
 
-export default async function CurrencyDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CurrencyDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ edit?: string; customize?: string }>
+}) {
   const { id } = await params
-  const currency = await prisma.currency.findUnique({
-    where: { id },
-    include: {
-      entities: { orderBy: { subsidiaryId: 'asc' }, select: { id: true, subsidiaryId: true, name: true } },
-      customers: { orderBy: { name: 'asc' }, select: { id: true, name: true, customerId: true } },
-      vendors: { orderBy: { name: 'asc' }, select: { id: true, name: true, vendorNumber: true } },
-    },
-  })
+  const { edit, customize } = await searchParams
+  const isEditing = edit === '1'
+  const isCustomizing = customize === '1'
+
+  const [currency, currencyFormCustomization, formRequirements] = await Promise.all([
+    prisma.currency.findUnique({
+      where: { id },
+      include: {
+        entities: { orderBy: { subsidiaryId: 'asc' }, select: { id: true, subsidiaryId: true, name: true } },
+        customers: { orderBy: { name: 'asc' }, select: { id: true, name: true, customerId: true } },
+        vendors: { orderBy: { name: 'asc' }, select: { id: true, name: true, vendorNumber: true } },
+      },
+    }),
+    loadCurrencyFormCustomization(),
+    loadFormRequirements(),
+  ])
 
   if (!currency) notFound()
 
-  return (
-    <div className="min-h-full px-8 py-8">
-      <div className="max-w-5xl">
+  const detailHref = `/currencies/${currency.id}`
+  const sectionDescriptions: Record<string, string> = {
+    Core: 'Primary identity and presentation fields for the currency.',
+    Settings: 'Rounding, status, and base-currency behavior.',
+  }
+  const fieldDefinitions: Record<CurrencyFormFieldKey, InlineRecordSection['fields'][number]> = {
+    currencyId: { name: 'currencyId', label: 'Currency Id', value: currency.currencyId, helpText: 'Unique ISO or internal code for the currency.' },
+    name: { name: 'name', label: 'Name', value: currency.name, helpText: 'Display name for the currency.' },
+    symbol: { name: 'symbol', label: 'Symbol', value: currency.symbol ?? '', helpText: 'Printed symbol used on forms and reports.' },
+    decimals: { name: 'decimals', label: 'Decimal Places', value: String(currency.decimals), type: 'number', helpText: 'Number of decimal places used for this currency.' },
+    isBase: { name: 'isBase', label: 'Base Currency', value: String(currency.isBase), type: 'select', options: [{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }], helpText: 'Marks whether this is the primary company currency.', sourceText: 'System base currency flag' },
+    inactive: { name: 'inactive', label: 'Inactive', value: String(!currency.active), type: 'select', options: [{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }], helpText: 'Marks the currency unavailable for new records while preserving history.', sourceText: 'System status values' },
+  }
+  const customizeFields = CURRENCY_FORM_FIELDS.map((field) => ({
+    id: field.id,
+    label: fieldDefinitions[field.id].label,
+    fieldType: field.fieldType,
+    source: field.source,
+    description: field.description,
+    previewValue:
+      fieldDefinitions[field.id].options?.find((option) => option.value === fieldDefinitions[field.id].value)?.label
+      ?? fieldDefinitions[field.id].value
+      ?? '',
+  }))
+  const detailSections: InlineRecordSection[] = currencyFormCustomization.sections
+    .map((sectionTitle) => {
+      const configuredFields = CURRENCY_FORM_FIELDS
+        .filter((field) => {
+          const config = currencyFormCustomization.fields[field.id]
+          return config.visible && config.section === sectionTitle
+        })
+        .sort((a, b) => {
+          const left = currencyFormCustomization.fields[a.id]
+          const right = currencyFormCustomization.fields[b.id]
+          if (left.column !== right.column) return left.column - right.column
+          return left.order - right.order
+        })
+        .map((field) => ({
+          ...fieldDefinitions[field.id],
+          column: currencyFormCustomization.fields[field.id].column,
+          order: currencyFormCustomization.fields[field.id].order,
+        }))
 
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <Link href="/currencies" className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-              ← Back to Currencies
+      if (configuredFields.length === 0) return null
+
+      return {
+        title: sectionTitle,
+        description: sectionDescriptions[sectionTitle],
+        collapsible: true,
+        defaultExpanded: true,
+        fields: configuredFields,
+      }
+    })
+    .filter((section): section is InlineRecordSection => Boolean(section))
+
+  return (
+    <RecordDetailPageShell
+      backHref={isCustomizing ? detailHref : '/currencies'}
+      backLabel={isCustomizing ? '<- Back to Currency Detail' : '<- Back to Currencies'}
+      meta={currency.currencyId}
+      title={currency.name}
+      badge={
+        currency.symbol ? (
+          <span
+            className="inline-block rounded-full px-3 py-0.5 text-sm"
+            style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}
+          >
+            {currency.symbol}
+          </span>
+        ) : null
+      }
+      actions={
+        <>
+          {!isEditing && !isCustomizing ? (
+            <Link
+              href={`${detailHref}?customize=1`}
+              className="rounded-md border px-3 py-2 text-sm"
+              style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+            >
+              Customize
             </Link>
-            <p className="mt-2 text-sm font-medium tracking-wide" style={{ color: 'var(--text-muted)' }}>{currency.currencyId}</p>
-            <h1 className="mt-2 text-2xl font-semibold text-white">{currency.name}</h1>
-            {currency.symbol && (
-              <span className="mt-1 inline-block rounded-full px-3 py-0.5 text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>
-                {currency.symbol}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <EditButton
-              resource="currencies"
-              id={currency.id}
-              fields={[
-                { name: 'currencyId', label: 'Currency Id', value: currency.currencyId },
-                { name: 'name', label: 'Name', value: currency.name },
-                { name: 'symbol', label: 'Symbol', value: currency.symbol ?? '' },
-                { name: 'decimals', label: 'Decimal Places', value: String(currency.decimals), type: 'number' },
-                {
-                  name: 'isBase',
-                  label: 'Base Currency',
-                  value: String(currency.isBase),
-                  type: 'select',
-                  options: [
-                    { value: 'false', label: 'No' },
-                    { value: 'true', label: 'Yes' },
-                  ],
-                },
-                {
-                  name: 'inactive',
-                  label: 'Inactive',
-                  value: String(!currency.active),
-                  type: 'select',
-                  options: [
-                    { value: 'false', label: 'No' },
-                    { value: 'true', label: 'Yes' },
-                  ],
-                },
-              ]}
-            />
-            <DeleteButton resource="currencies" id={currency.id} />
-          </div>
+          ) : null}
+          {!isEditing ? (
+            <Link
+              href={`${detailHref}?edit=1`}
+              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
+              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
+            >
+              Edit
+            </Link>
+          ) : null}
+          {!isCustomizing ? <DeleteButton resource="currencies" id={currency.id} /> : null}
+        </>
+      }
+    >
+        <div className="mb-8 grid gap-4 sm:grid-cols-3">
+          <RecordDetailStatCard label="Subsidiaries" value={currency.entities.length} />
+          <RecordDetailStatCard label="Customers" value={currency.customers.length} />
+          <RecordDetailStatCard label="Vendors" value={currency.vendors.length} />
         </div>
 
-        {/* Stats */}
-        <div className="grid gap-4 sm:grid-cols-3 mb-8">
-          <StatCard label="Subsidiaries" value={currency.entities.length} />
-          <StatCard label="Customers" value={currency.customers.length} />
-          <StatCard label="Vendors" value={currency.vendors.length} />
-        </div>
+        {isCustomizing ? (
+          <CurrencyDetailCustomizeMode
+            detailHref={detailHref}
+            initialLayout={currencyFormCustomization}
+            initialRequirements={{ ...formRequirements.currencyCreate }}
+            fields={customizeFields}
+            sectionDescriptions={sectionDescriptions}
+          />
+        ) : (
+          <InlineRecordDetails
+            resource="currencies"
+            id={currency.id}
+            title="Currency details"
+            sections={detailSections}
+            editing={isEditing}
+            columns={currencyFormCustomization.formColumns}
+          />
+        )}
 
-        {/* Details */}
-        <div className="mb-8 rounded-xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Currency details</h2>
-          <dl className="grid gap-3 sm:grid-cols-2">
-            <Field label="Currency Id" value={currency.currencyId} />
-            <Field label="Name" value={currency.name} />
-            <Field label="Symbol" value={currency.symbol} />
-            <Field label="Decimal Places" value={String(currency.decimals)} />
-            <Field label="Base Currency" value={currency.isBase ? 'Yes' : 'No'} />
-            <Field label="Active" value={currency.active ? 'Yes' : 'No'} />
-            <Field label="Created" value={new Date(currency.createdAt).toLocaleDateString()} />
-          </dl>
-        </div>
-
-        {/* Subsidiaries using this currency */}
-        <Section title="Subsidiaries (Default Currency)" count={currency.entities.length}>
+        <RecordDetailSection title="Subsidiaries (Default Currency)" count={currency.entities.length}>
           {currency.entities.length === 0 ? (
-            <EmptyRow message="No subsidiaries use this as default currency" />
+            <RecordDetailEmptyState message="No subsidiaries use this as default currency" />
           ) : (
             <table className="min-w-full">
               <thead>
                 <tr>
-                  <Th>Code</Th>
-                  <Th>Name</Th>
+                  <RecordDetailHeaderCell>Code</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
                 </tr>
               </thead>
               <tbody>
-                {currency.entities.map((e) => (
-                  <tr key={e.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <Td>
-                      <Link href={`/subsidiaries/${e.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {e.subsidiaryId}
+                {currency.entities.map((entity) => (
+                  <tr key={entity.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
+                    <RecordDetailCell>
+                      <Link href={`/subsidiaries/${entity.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                        {entity.subsidiaryId}
                       </Link>
-                    </Td>
-                    <Td>{e.name}</Td>
+                    </RecordDetailCell>
+                    <RecordDetailCell>{entity.name}</RecordDetailCell>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-        </Section>
+        </RecordDetailSection>
 
-        {/* Customers */}
-        <Section title="Customers" count={currency.customers.length}>
+        <RecordDetailSection title="Customers" count={currency.customers.length}>
           {currency.customers.length === 0 ? (
-            <EmptyRow message="No customers with this primary currency" />
+            <RecordDetailEmptyState message="No customers with this primary currency" />
           ) : (
             <table className="min-w-full">
               <thead>
                 <tr>
-                  <Th>Customer #</Th>
-                  <Th>Name</Th>
+                  <RecordDetailHeaderCell>Customer #</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
                 </tr>
               </thead>
               <tbody>
-                {currency.customers.map((c) => (
-                  <tr key={c.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <Td>
-                      <Link href={`/customers/${c.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {c.customerId ?? 'Pending'}
+                {currency.customers.map((customer) => (
+                  <tr key={customer.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
+                    <RecordDetailCell>
+                      <Link href={`/customers/${customer.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                        {customer.customerId ?? 'Pending'}
                       </Link>
-                    </Td>
-                    <Td>{c.name}</Td>
+                    </RecordDetailCell>
+                    <RecordDetailCell>{customer.name}</RecordDetailCell>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-        </Section>
+        </RecordDetailSection>
 
-        {/* Vendors */}
-        <Section title="Vendors" count={currency.vendors.length}>
+        <RecordDetailSection title="Vendors" count={currency.vendors.length}>
           {currency.vendors.length === 0 ? (
-            <EmptyRow message="No vendors with this primary currency" />
+            <RecordDetailEmptyState message="No vendors with this primary currency" />
           ) : (
             <table className="min-w-full">
               <thead>
                 <tr>
-                  <Th>Vendor Id</Th>
-                  <Th>Name</Th>
+                  <RecordDetailHeaderCell>Vendor Id</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
                 </tr>
               </thead>
               <tbody>
-                {currency.vendors.map((v) => (
-                  <tr key={v.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <Td>
-                      <Link href={`/vendors/${v.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {v.vendorNumber ?? 'Pending'}
+                {currency.vendors.map((vendor) => (
+                  <tr key={vendor.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
+                    <RecordDetailCell>
+                      <Link href={`/vendors/${vendor.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                        {vendor.vendorNumber ?? 'Pending'}
                       </Link>
-                    </Td>
-                    <Td>{v.name}</Td>
+                    </RecordDetailCell>
+                    <RecordDetailCell>{vendor.name}</RecordDetailCell>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-        </Section>
-
-      </div>
-    </div>
+        </RecordDetailSection>
+    </RecordDetailPageShell>
   )
-}
-
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-2xl border p-5" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-      <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>{label}</p>
-      <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
-    </div>
-  )
-}
-
-function Field({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{label}</dt>
-      <dd className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{value ?? '—'}</dd>
-    </div>
-  )
-}
-
-function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
-  return (
-    <div className="mb-6 overflow-hidden rounded-xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-      <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-muted)' }}>
-        <h2 className="text-base font-semibold text-white">{title}</h2>
-        <span className="rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>{count}</span>
-      </div>
-      <div className="overflow-x-auto">{children}</div>
-    </div>
-  )
-}
-
-function EmptyRow({ message }: { message: string }) {
-  return <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>{message}</p>
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-muted)' }}>{children}</th>
-}
-
-function Td({ children }: { children: React.ReactNode }) {
-  return <td className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{children}</td>
 }

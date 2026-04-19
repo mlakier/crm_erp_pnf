@@ -3,30 +3,18 @@ import { prisma } from '@/lib/prisma'
 import { fmtPhone, normalizePhone } from '@/lib/format'
 import VendorCreateForm from '@/components/VendorCreateForm'
 import DeleteButton from '@/components/DeleteButton'
-import VendorEditButton from '@/components/VendorEditButton'
+import EditButton from '@/components/EditButton'
 import CreateModalButton from '@/components/CreateModalButton'
-import MasterDataCustomizeButton from '@/components/MasterDataCustomizeButton'
-import ColumnSelector from '@/components/ColumnSelector'
-import ExportButton from '@/components/ExportButton'
+import MasterDataPageHeader from '@/components/MasterDataPageHeader'
+import MasterDataListSection from '@/components/MasterDataListSection'
+import { MasterDataBodyCell, MasterDataEmptyStateRow, MasterDataHeaderCell, MasterDataMutedCell } from '@/components/MasterDataTableCells'
 import PaginationFooter from '@/components/PaginationFooter'
 import { getPagination } from '@/lib/pagination'
-import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
-import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
-
-const VENDOR_COLUMNS = [
-  { id: 'vendor-number', label: 'Vendor Id' },
-  { id: 'name', label: 'Name' },
-  { id: 'subsidiary', label: 'Primary Subsidiary' },
-  { id: 'currency', label: 'Primary Currency' },
-  { id: 'email', label: 'Email' },
-  { id: 'phone', label: 'Phone' },
-  { id: 'address', label: 'Address' },
-  { id: 'tax-id', label: 'Tax ID' },
-  { id: 'inactive', label: 'Inactive' },
-  { id: 'created', label: 'Created' },
-  { id: 'last-modified', label: 'Last Modified' },
-  { id: 'actions', label: 'Actions', locked: true },
-]
+import { MASTER_DATA_TABLE_DIVIDER_STYLE, getMasterDataRowStyle } from '@/lib/master-data-table'
+import { formatMasterDataDate } from '@/lib/master-data-display'
+import { loadCompanyPageLogo } from '@/lib/company-page-logo'
+import { loadVendorFormCustomization } from '@/lib/vendor-form-customization-store'
+import { vendorListDefinition } from '@/lib/master-data-list-definitions'
 
 export default async function VendorsPage({
   searchParams,
@@ -56,12 +44,12 @@ export default async function VendorsPage({
         ? [{ name: 'asc' as const }]
         : [{ createdAt: 'desc' as const }]
 
-  const [totalVendors, subsidiaries, currencies, companySettings, cabinetFiles] = await Promise.all([
+  const [totalVendors, subsidiaries, currencies, companyLogoPages, formCustomization] = await Promise.all([
     prisma.vendor.count({ where }),
     prisma.entity.findMany({ orderBy: { subsidiaryId: 'asc' }, select: { id: true, subsidiaryId: true, name: true } }),
     prisma.currency.findMany({ orderBy: { currencyId: 'asc' }, select: { id: true, currencyId: true, name: true } }),
-    loadCompanyInformationSettings(),
-    loadCompanyCabinetFiles(),
+    loadCompanyPageLogo(),
+    loadVendorFormCustomization(),
   ])
   const pagination = getPagination(totalVendors, params.page)
 
@@ -81,130 +69,113 @@ export default async function VendorsPage({
     return `/vendors?${search.toString()}`
   }
 
-  const selectedLogoValue = companySettings.companyLogoPagesFileId
-  const companyLogoPages =
-    cabinetFiles.find((file) => file.id === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.originalName === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.storedName === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.url === selectedLogoValue)
-    ?? (!selectedLogoValue ? cabinetFiles[0] : undefined)
-
   return (
     <div className="min-h-full px-8 py-8">
-      <div className="mb-6 flex items-center justify-between gap-4">
-        {companyLogoPages ? (
-          <img
-            src={companyLogoPages.url}
-            alt="Company logo"
-            className="h-16 w-auto rounded"
-          />
-        ) : null}
-        <div>
-          <h1 className="text-xl font-semibold text-white">Vendors</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{totalVendors} total</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <MasterDataCustomizeButton tableId="vendors-list" columns={VENDOR_COLUMNS} title="Vendors" />
+      <MasterDataPageHeader
+        title="Vendors"
+        total={totalVendors}
+        logoUrl={companyLogoPages?.url}
+        actions={
           <CreateModalButton buttonLabel="New Vendor" title="New Vendor">
             <VendorCreateForm subsidiaries={subsidiaries} currencies={currencies} />
           </CreateModalButton>
-        </div>
-      </div>
+        }
+      />
 
-      <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-        <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
-          <input type="hidden" name="page" value="1" />
-          <div className="flex gap-3 items-center flex-nowrap">
-            <input
-              type="text"
-              name="q"
-              defaultValue={params.q ?? ''}
-              placeholder="Search vendor id, name, email, phone, tax id"
-              className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            />
-            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="name">Name A-Z</option>
-            </select>
-            <ExportButton tableId="vendors-list" fileName="vendors" />
-            <ColumnSelector tableId="vendors-list" columns={VENDOR_COLUMNS} />
-          </div>
-        </form>
-
-        <div className="overflow-x-auto" data-column-selector-table="vendors-list">
-          <table className="min-w-full" id="vendors-list">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                <th data-column="vendor-number" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Vendor Id</th>
-                <th data-column="name" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Name</th>
-                <th data-column="subsidiary" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Primary Subsidiary</th>
-                <th data-column="currency" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Primary Currency</th>
-                <th data-column="email" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Email</th>
-                <th data-column="phone" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Phone</th>
-                <th data-column="address" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Address</th>
-                <th data-column="tax-id" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Tax ID</th>
-                <th data-column="inactive" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Inactive</th>
-                <th data-column="created" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Created</th>
-                <th data-column="last-modified" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Last Modified</th>
-                <th data-column="actions" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Actions</th>
+      <MasterDataListSection
+        query={params.q}
+        searchPlaceholder={vendorListDefinition.searchPlaceholder}
+        tableId={vendorListDefinition.tableId}
+        exportFileName={vendorListDefinition.exportFileName}
+        columns={vendorListDefinition.columns}
+        sort={sort}
+        sortOptions={vendorListDefinition.sortOptions}
+      >
+        <table className="min-w-full" id={vendorListDefinition.tableId}>
+          <thead>
+            <tr style={MASTER_DATA_TABLE_DIVIDER_STYLE}>
+              <MasterDataHeaderCell columnId="vendor-number" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Vendor Id</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="name" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Name</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="subsidiary" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Primary Subsidiary</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="currency" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Primary Currency</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="email" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Email</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="phone" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Phone</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="address" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Address</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="tax-id" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Tax ID</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="inactive" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Inactive</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="created" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Created</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="last-modified" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Last Modified</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="actions" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Actions</MasterDataHeaderCell>
+            </tr>
+          </thead>
+          <tbody>
+            {vendors.length === 0 ? (
+              <MasterDataEmptyStateRow colSpan={12}>No vendors found</MasterDataEmptyStateRow>
+            ) : vendors.map((vendor, index) => (
+              <tr key={vendor.id} style={getMasterDataRowStyle(index, vendors.length)}>
+                <MasterDataBodyCell columnId="vendor-number" className="whitespace-nowrap px-4 py-2 text-sm font-medium">
+                  <Link href={`/vendors/${vendor.id}`} className="hover:underline font-medium" style={{ color: 'var(--accent-primary-strong)' }}>
+                    {vendor.vendorNumber ?? 'Pending'}
+                  </Link>
+                </MasterDataBodyCell>
+                <MasterDataBodyCell columnId="name" className="whitespace-nowrap px-4 py-2 text-sm text-white">{vendor.name}</MasterDataBodyCell>
+                <MasterDataMutedCell columnId="subsidiary" className="whitespace-nowrap px-4 py-2 text-sm">{vendor.entity ? `${vendor.entity.subsidiaryId} (${vendor.entity.name})` : '-'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="currency" className="whitespace-nowrap px-4 py-2 text-sm">{vendor.currency?.currencyId ?? '-'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="email" className="whitespace-nowrap px-4 py-2 text-sm">{vendor.email ?? '-'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="phone" className="whitespace-nowrap px-4 py-2 text-sm">{fmtPhone(vendor.phone)}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="address" className="whitespace-nowrap px-4 py-2 text-sm">{vendor.address ?? '-'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="tax-id" className="whitespace-nowrap px-4 py-2 text-sm">{vendor.taxId ?? '-'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="inactive" className="whitespace-nowrap px-4 py-2 text-sm">{vendor.inactive ? 'Yes' : 'No'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="created" className="whitespace-nowrap px-4 py-2 text-sm">{formatMasterDataDate(vendor.createdAt)}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="last-modified" className="whitespace-nowrap px-4 py-2 text-sm">{formatMasterDataDate(vendor.updatedAt)}</MasterDataMutedCell>
+                <MasterDataBodyCell columnId="actions" className="whitespace-nowrap px-4 py-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <EditButton
+                      resource="vendors"
+                      id={vendor.id}
+                      fields={[
+                        ...(formCustomization.fields.vendorNumber.visible ? [{ name: 'vendorNumber', label: 'Vendor ID', value: vendor.vendorNumber ?? '' }] : []),
+                        ...(formCustomization.fields.name.visible ? [{ name: 'name', label: 'Name', value: vendor.name }] : []),
+                        ...(formCustomization.fields.email.visible ? [{ name: 'email', label: 'Email', value: vendor.email ?? '', type: 'email' as const }] : []),
+                        ...(formCustomization.fields.phone.visible ? [{ name: 'phone', label: 'Phone', value: normalizePhone(vendor.phone) ?? '' }] : []),
+                        ...(formCustomization.fields.address.visible ? [{ name: 'address', label: 'Address', value: vendor.address ?? '', type: 'address' as const }] : []),
+                        ...(formCustomization.fields.taxId.visible ? [{ name: 'taxId', label: 'Tax ID', value: vendor.taxId ?? '' }] : []),
+                        ...(formCustomization.fields.primarySubsidiaryId.visible
+                          ? [{
+                              name: 'primarySubsidiaryId',
+                              label: 'Primary Subsidiary',
+                              value: vendor.entityId ?? '',
+                              type: 'select' as const,
+                              options: [{ value: '', label: 'None' }, ...subsidiaries.map((subsidiary) => ({ value: subsidiary.id, label: `${subsidiary.subsidiaryId} - ${subsidiary.name}` }))],
+                            }]
+                          : []),
+                        ...(formCustomization.fields.primaryCurrencyId.visible
+                          ? [{
+                              name: 'primaryCurrencyId',
+                              label: 'Primary Currency',
+                              value: vendor.currencyId ?? '',
+                              type: 'select' as const,
+                              options: [{ value: '', label: 'None' }, ...currencies.map((currency) => ({ value: currency.id, label: `${currency.currencyId} - ${currency.name}` }))],
+                            }]
+                          : []),
+                        ...(formCustomization.fields.inactive.visible
+                          ? [{
+                              name: 'inactive',
+                              label: 'Inactive',
+                              value: String(vendor.inactive),
+                              type: 'select' as const,
+                              options: [{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }],
+                            }]
+                          : []),
+                      ]}
+                    />
+                    <DeleteButton resource="vendors" id={vendor.id} />
+                  </div>
+                </MasterDataBodyCell>
               </tr>
-            </thead>
-            <tbody>
-              {vendors.length === 0 ? (
-                <tr>
-                  <td colSpan={11} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-                    No vendors found
-                  </td>
-                </tr>
-              ) : vendors.map((vendor, index) => (
-                <tr key={vendor.id} style={index < vendors.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                  <td data-column="vendor-number" className="whitespace-nowrap px-4 py-2 text-sm font-medium">
-                    <Link href={`/vendors/${vendor.id}`} className="hover:underline font-medium" style={{ color: 'var(--accent-primary-strong)' }}>
-                      {vendor.vendorNumber ?? 'Pending'}
-                    </Link>
-                  </td>
-                  <td data-column="name" className="whitespace-nowrap px-4 py-2 text-sm text-white">{vendor.name}</td>
-                  <td data-column="subsidiary" className="whitespace-nowrap px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    {vendor.entity ? `${vendor.entity.subsidiaryId} (${vendor.entity.name})` : '—'}
-                  </td>
-                  <td data-column="currency" className="whitespace-nowrap px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    {vendor.currency?.currencyId ?? '—'}
-                  </td>
-                  <td data-column="email" className="whitespace-nowrap px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{vendor.email ?? '—'}</td>
-                  <td data-column="phone" className="whitespace-nowrap px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtPhone(vendor.phone)}</td>
-                  <td data-column="address" className="whitespace-nowrap px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{vendor.address ?? '—'}</td>
-                  <td data-column="tax-id" className="whitespace-nowrap px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{vendor.taxId ?? '—'}</td>
-                  <td data-column="inactive" className="whitespace-nowrap px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{vendor.inactive ? 'Yes' : 'No'}</td>
-                  <td data-column="created" className="whitespace-nowrap px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(vendor.createdAt).toLocaleDateString()}</td>
-                  <td data-column="last-modified" className="whitespace-nowrap px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(vendor.updatedAt).toLocaleDateString()}</td>
-                  <td data-column="actions" className="whitespace-nowrap px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    <div className="flex items-center gap-2">
-                      <VendorEditButton
-                        vendorId={vendor.id}
-                        values={{
-                          name: vendor.name,
-                          email: vendor.email ?? '',
-                          phone: normalizePhone(vendor.phone) ?? '',
-                          address: vendor.address ?? '',
-                          taxId: vendor.taxId ?? '',
-                          primarySubsidiaryId: vendor.entityId ?? '',
-                          primaryCurrencyId: vendor.currencyId ?? '',
-                          inactive: vendor.inactive,
-                        }}
-                        subsidiaries={subsidiaries}
-                        currencies={currencies}
-                      />
-                      <DeleteButton resource="vendors" id={vendor.id} />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
+            ))}
+          </tbody>
+        </table>
         <PaginationFooter
           startRow={pagination.startRow}
           endRow={pagination.endRow}
@@ -216,7 +187,7 @@ export default async function VendorsPage({
           prevHref={buildPageHref(pagination.currentPage - 1)}
           nextHref={buildPageHref(pagination.currentPage + 1)}
         />
-      </section>
+      </MasterDataListSection>
     </div>
   )
 }

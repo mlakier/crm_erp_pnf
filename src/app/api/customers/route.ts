@@ -15,7 +15,7 @@ export async function GET() {
       },
     })
     return NextResponse.json(customers)
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to fetch customers' }, { status: 500 })
   }
 }
@@ -24,7 +24,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, email, phone, address, industry, userId, contacts, primarySubsidiaryId, primaryCurrencyId } = body
+    const { name, email, phone, address, industry, userId, contacts, primarySubsidiaryId, primaryCurrencyId, inactive } = body
 
     if (!userId) {
       return NextResponse.json({ error: 'userId is required' }, { status: 400 })
@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
         industry,
         entityId: primarySubsidiaryId || null,
         currencyId: primaryCurrencyId || null,
+        inactive: String(inactive).trim().toLowerCase() === 'true',
         userId,
         ...(primaryContact
           ? {
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json(customer, { status: 201 })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to create customer' }, { status: 500 })
   }
 }
@@ -137,7 +138,7 @@ export async function PUT(request: NextRequest) {
     })
 
     return NextResponse.json(customer)
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to update customer' }, { status: 500 })
   }
 }
@@ -164,7 +165,7 @@ export async function DELETE(request: NextRequest) {
     })
 
     return NextResponse.json({ success: true })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to delete customer' }, { status: 500 })
   }
 }

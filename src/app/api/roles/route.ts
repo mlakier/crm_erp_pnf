@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { isFieldRequiredServer } from '@/lib/form-requirements-store'
 
 export async function GET() {
   const data = await prisma.role.findMany({ orderBy: { roleId: 'asc' } })
@@ -13,8 +14,12 @@ export async function POST(request: Request) {
     const description = body?.description !== undefined ? String(body.description).trim() || null : null
     const inactive = String(body?.inactive ?? 'false').trim().toLowerCase() === 'true'
 
-    if (!name) {
-      return NextResponse.json({ error: 'Name is required.' }, { status: 400 })
+    const missing: string[] = []
+    if ((await isFieldRequiredServer('roleCreate', 'name')) && !name) missing.push('name')
+    if ((await isFieldRequiredServer('roleCreate', 'description')) && !description) missing.push('description')
+
+    if (missing.length > 0) {
+      return NextResponse.json({ error: `Missing required fields: ${missing.join(', ')}` }, { status: 400 })
     }
 
     // Auto-generate roleId

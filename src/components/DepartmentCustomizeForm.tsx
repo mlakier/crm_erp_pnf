@@ -3,21 +3,11 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import DepartmentCustomFieldForm from '@/components/DepartmentCustomFieldForm'
-import {
-  DepartmentCustomizationConfig,
-  DepartmentOptionalFieldKey,
-} from '@/lib/department-customization'
+import { DepartmentCustomizationConfig } from '@/lib/department-customization'
 import {
   CustomFieldDefinitionSummary,
   formatCustomFieldValue,
 } from '@/lib/custom-fields'
-
-const FIELD_LABELS: Record<DepartmentOptionalFieldKey, string> = {
-  description: 'Description',
-  division: 'Division',
-  entityId: 'Subsidiary',
-  managerId: 'Manager',
-}
 
 type CustomListOption = {
   id: string
@@ -29,29 +19,23 @@ type CustomListRow = {
   value: string
 }
 
-type FieldRow = {
+type ColumnRow = {
   key: string
   label: string
-  typeLabel: string
-  fieldId: string
-  settingsKey?: DepartmentOptionalFieldKey
+  source: string
   tableVisibilityKey?: keyof DepartmentCustomizationConfig['tableVisibility']
-  showLocked?: boolean
-  requiredLocked?: boolean
-  requiredValue?: boolean
-  allowsSourcing?: boolean
 }
 
-const FIELD_ROWS: FieldRow[] = [
-  { key: 'department-id', label: 'Department Id', typeLabel: 'Text', fieldId: 'departmentId', showLocked: true, requiredLocked: true, requiredValue: true },
-  { key: 'name', label: 'Name', typeLabel: 'Text', fieldId: 'name', tableVisibilityKey: 'name', requiredLocked: true, requiredValue: true },
-  { key: 'description', label: 'Description', typeLabel: 'Textarea', fieldId: 'description', settingsKey: 'description', tableVisibilityKey: 'description' },
-  { key: 'division', label: 'Division', typeLabel: 'Text/Select', fieldId: 'division', settingsKey: 'division', tableVisibilityKey: 'division', allowsSourcing: true },
-  { key: 'subsidiary', label: 'Subsidiary', typeLabel: 'Select', fieldId: 'entityId', settingsKey: 'entityId', tableVisibilityKey: 'subsidiary' },
-  { key: 'manager', label: 'Manager', typeLabel: 'Select', fieldId: 'managerId', settingsKey: 'managerId', tableVisibilityKey: 'manager' },
-  { key: 'status', label: 'Inactive', typeLabel: 'Boolean', fieldId: 'inactive', tableVisibilityKey: 'status' },
-  { key: 'created', label: 'Created', typeLabel: 'Date', fieldId: 'createdAt', showLocked: true },
-  { key: 'last-modified', label: 'Last Modified', typeLabel: 'Date', fieldId: 'updatedAt', showLocked: true },
+const COLUMN_ROWS: ColumnRow[] = [
+  { key: 'department-id', label: 'Department Id', source: 'System field' },
+  { key: 'name', label: 'Name', source: 'System field', tableVisibilityKey: 'name' },
+  { key: 'description', label: 'Description', source: 'Department form layout', tableVisibilityKey: 'description' },
+  { key: 'division', label: 'Division', source: 'Department form layout', tableVisibilityKey: 'division' },
+  { key: 'subsidiary', label: 'Subsidiary', source: 'Department form layout', tableVisibilityKey: 'subsidiary' },
+  { key: 'manager', label: 'Manager', source: 'Department form layout', tableVisibilityKey: 'manager' },
+  { key: 'status', label: 'Inactive', source: 'Department form layout', tableVisibilityKey: 'status' },
+  { key: 'created', label: 'Created', source: 'System field' },
+  { key: 'last-modified', label: 'Last Modified', source: 'System field' },
 ]
 
 export default function DepartmentCustomizeForm({
@@ -78,6 +62,7 @@ export default function DepartmentCustomizeForm({
   const [error, setError] = useState('')
   const [customFieldModalOpen, setCustomFieldModalOpen] = useState(false)
   const [customFieldPrompt, setCustomFieldPrompt] = useState('')
+
   const divisionDefaultOptions = useMemo(() => {
     const listId = config.listBindings.divisionCustomListId
     if (!listId) return []
@@ -85,8 +70,8 @@ export default function DepartmentCustomizeForm({
   }, [config.listBindings.divisionCustomListId, customListRows])
 
   const orderedRows = useMemo(() => {
-    const byKey = new Map(FIELD_ROWS.map((row) => [row.key, row]))
-    const ordered: FieldRow[] = []
+    const byKey = new Map(COLUMN_ROWS.map((row) => [row.key, row]))
+    const ordered: ColumnRow[] = []
 
     config.columnOrder.forEach((columnId) => {
       if (columnId === 'actions') return
@@ -96,10 +81,8 @@ export default function DepartmentCustomizeForm({
       byKey.delete(columnId)
     })
 
-    for (const row of FIELD_ROWS) {
-      if (byKey.has(row.key)) {
-        ordered.push(row)
-      }
+    for (const row of COLUMN_ROWS) {
+      if (byKey.has(row.key)) ordered.push(row)
     }
 
     return ordered
@@ -109,63 +92,12 @@ export default function DepartmentCustomizeForm({
     return columnId !== 'department-id' && columnId !== 'name' && columnId !== 'actions'
   }
 
-  function toggleVisible(field: DepartmentOptionalFieldKey) {
-    setConfig((prev) => ({
-      ...prev,
-      fields: {
-        ...prev.fields,
-        [field]: {
-          ...prev.fields[field],
-          visible: !prev.fields[field].visible,
-        },
-      },
-    }))
-  }
-
-  function toggleTableVisible(field: keyof DepartmentCustomizationConfig['tableVisibility']) {
-    setConfig((prev) => ({
-      ...prev,
-      tableVisibility: {
-        ...prev.tableVisibility,
-        [field]: !prev.tableVisibility[field],
-      },
-    }))
-  }
-
-  function toggleRowShow(row: FieldRow) {
-    setConfig((prev) => {
-      const next: DepartmentCustomizationConfig = {
-        ...prev,
-        fields: {
-          ...prev.fields,
-        },
-        tableVisibility: {
-          ...prev.tableVisibility,
-        },
-      }
-
-      if (row.settingsKey) {
-        next.fields[row.settingsKey] = {
-          ...prev.fields[row.settingsKey],
-          visible: !prev.fields[row.settingsKey].visible,
-        }
-      }
-
-      if (row.tableVisibilityKey) {
-        next.tableVisibility[row.tableVisibilityKey] = !prev.tableVisibility[row.tableVisibilityKey]
-      }
-
-      return next
-    })
-  }
-
   function reorderColumnsByDrag(sourceColumn: string, targetColumn: string) {
     if (!sourceColumn || !targetColumn || sourceColumn === targetColumn) return
 
     setConfig((prev) => {
       const fixedFirst = ['department-id', 'name']
       const movable = prev.columnOrder.filter((id) => id !== 'actions' && !fixedFirst.includes(id))
-
       const sourceIndex = movable.indexOf(sourceColumn)
       const targetIndex = movable.indexOf(targetColumn)
       if (sourceIndex < 0 || targetIndex < 0) return prev
@@ -181,15 +113,12 @@ export default function DepartmentCustomizeForm({
     })
   }
 
-  function toggleRequired(field: DepartmentOptionalFieldKey) {
+  function toggleTableVisible(field: keyof DepartmentCustomizationConfig['tableVisibility']) {
     setConfig((prev) => ({
       ...prev,
-      fields: {
-        ...prev.fields,
-        [field]: {
-          ...prev.fields[field],
-          required: !prev.fields[field].required,
-        },
+      tableVisibility: {
+        ...prev.tableVisibility,
+        [field]: !prev.tableVisibility[field],
       },
     }))
   }
@@ -223,13 +152,12 @@ export default function DepartmentCustomizeForm({
   return (
     <div className="space-y-5">
       <section className="rounded-lg border p-4" style={{ borderColor: 'var(--border-muted)' }}>
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-white">Department custom fields</h3>
-            <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Custom fields created here are stored in the shared custom field schema and will appear on department create and detail screens.
-            </p>
-          </div>
+        <h3 className="text-sm font-semibold text-white">Department custom fields</h3>
+        <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Custom fields created here are stored in the shared custom field schema and appear on department create and detail screens.
+        </p>
+
+        <div className="mt-4 flex justify-end">
           <button
             type="button"
             onClick={() => {
@@ -280,40 +208,96 @@ export default function DepartmentCustomizeForm({
       </section>
 
       <section className="rounded-lg border p-4" style={{ borderColor: 'var(--border-muted)' }}>
-        <h3 className="text-sm font-semibold text-white">Department field customization</h3>
+        <h3 className="text-sm font-semibold text-white">Division sourcing</h3>
+        <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+          The live detail-page customize mode now controls department form layout and required fields. This area only controls how `Division` is sourced.
+        </p>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            <span>Division Source</span>
+            <select
+              value={config.listBindings.divisionCustomListId ?? ''}
+              onChange={(event) => {
+                const next = event.target.value.trim()
+                const nextOptions = next ? (customListRows[next] ?? []).map((row) => row.value).filter(Boolean) : []
+                setConfig((prev) => ({
+                  ...prev,
+                  listBindings: {
+                    ...prev.listBindings,
+                    divisionCustomListId: next || null,
+                    divisionDefaultValue: nextOptions.includes(prev.listBindings.divisionDefaultValue ?? '')
+                      ? prev.listBindings.divisionDefaultValue
+                      : null,
+                  },
+                }))
+              }}
+              className="w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
+              style={{ borderColor: 'var(--border-muted)' }}
+            >
+              <option value="">Free text</option>
+              {customLists.map((list) => (
+                <option key={list.id} value={list.id}>
+                  {list.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            <span>Division Default Value</span>
+            <select
+              value={config.listBindings.divisionDefaultValue ?? ''}
+              disabled={!config.listBindings.divisionCustomListId}
+              onChange={(event) => {
+                const next = event.target.value.trim()
+                setConfig((prev) => ({
+                  ...prev,
+                  listBindings: {
+                    ...prev.listBindings,
+                    divisionDefaultValue: next || null,
+                  },
+                }))
+              }}
+              className="w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ borderColor: 'var(--border-muted)' }}
+            >
+              <option value="">None</option>
+              {divisionDefaultOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section className="rounded-lg border p-4" style={{ borderColor: 'var(--border-muted)' }}>
+        <h3 className="text-sm font-semibold text-white">Department list columns</h3>
+        <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Controls only the department list page. Drag rows to reorder columns and hide list-only columns where useful.
+        </p>
+
         <div className="mt-3 overflow-x-auto">
           <table className="min-w-full">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                <th className="px-2 py-2 text-left text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Field Name</th>
-                <th className="px-2 py-2 text-left text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Field Type</th>
-                <th className="px-2 py-2 text-left text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Field Id</th>
-                <th className="px-2 py-2 text-left text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Show</th>
-                <th className="px-2 py-2 text-left text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Required</th>
-                <th className="px-2 py-2 text-left text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Sourcing (List fields)</th>
-                <th className="px-2 py-2 text-left text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Default Value</th>
+                <th className="px-2 py-2 text-left text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Column</th>
+                <th className="px-2 py-2 text-left text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Source</th>
+                <th className="px-2 py-2 text-left text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Show On List</th>
                 <th className="px-2 py-2 text-left text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Column Order</th>
                 <th className="px-2 py-2 text-left text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Drag</th>
               </tr>
             </thead>
             <tbody>
               {orderedRows.map((row) => {
-                const fieldKey = row.settingsKey
                 const columnId = row.key
                 const isFixedFirst = columnId === 'department-id' || columnId === 'name'
                 const isDraggableColumn = isMovableColumn(columnId)
                 const isDropTarget = draggingColumnId !== null && draggingColumnId !== columnId && isDraggableColumn
                 const currentRank = config.columnOrder.indexOf(columnId)
-                const showValue = row.showLocked
-                  ? true
-                  : row.tableVisibilityKey
-                    ? config.tableVisibility[row.tableVisibilityKey]
-                    : fieldKey
-                      ? config.fields[fieldKey].visible
-                      : true
-                const requiredValue = fieldKey
-                  ? config.fields[fieldKey].required
-                  : (row.requiredValue ?? false)
+                const showValue = row.tableVisibilityKey ? config.tableVisibility[row.tableVisibilityKey] : true
 
                 return (
                   <tr
@@ -342,9 +326,7 @@ export default function DepartmentCustomizeForm({
                       setDragOverColumnId(columnId)
                     }}
                     onDragLeave={() => {
-                      if (dragOverColumnId === columnId) {
-                        setDragOverColumnId(null)
-                      }
+                      if (dragOverColumnId === columnId) setDragOverColumnId(null)
                     }}
                     onDrop={(event) => {
                       if (!isDropTarget) return
@@ -357,103 +339,19 @@ export default function DepartmentCustomizeForm({
                       setDraggingColumnId(null)
                     }}
                   >
+                    <td className="px-2 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.label}</td>
+                    <td className="px-2 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.source}</td>
+                    <td className="px-2 py-2 text-sm">
+                      {row.tableVisibilityKey ? (
+                        <label className="inline-flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
+                          <input type="checkbox" checked={showValue} onChange={() => toggleTableVisible(row.tableVisibilityKey as keyof DepartmentCustomizationConfig['tableVisibility'])} />
+                        </label>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)' }}>Always shown</span>
+                      )}
+                    </td>
                     <td className="px-2 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {fieldKey ? FIELD_LABELS[fieldKey] : row.label}
-                    </td>
-                    <td className="px-2 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.typeLabel}</td>
-                    <td className="px-2 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.fieldId}</td>
-                    <td className="px-2 py-2 text-sm">
-                      <label className="inline-flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
-                        <input
-                          type="checkbox"
-                          checked={showValue}
-                          disabled={row.showLocked}
-                          onChange={() => {
-                            toggleRowShow(row)
-                          }}
-                        />
-                      </label>
-                    </td>
-                    <td className="px-2 py-2 text-sm">
-                      <label className="inline-flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
-                        <input
-                          type="checkbox"
-                          checked={requiredValue}
-                          disabled={row.requiredLocked || !fieldKey}
-                          onChange={() => {
-                            if (fieldKey) toggleRequired(fieldKey)
-                          }}
-                        />
-                      </label>
-                    </td>
-                    <td className="px-2 py-2 text-sm">
-                      {row.allowsSourcing ? (
-                        <select
-                          value={config.listBindings.divisionCustomListId ?? ''}
-                          onChange={(event) => {
-                            const next = event.target.value.trim()
-                            const nextOptions = next ? (customListRows[next] ?? []).map((row) => row.value).filter(Boolean) : []
-                            setConfig((prev) => ({
-                              ...prev,
-                              listBindings: {
-                                ...prev.listBindings,
-                                divisionCustomListId: next || null,
-                                divisionDefaultValue: nextOptions.includes(prev.listBindings.divisionDefaultValue ?? '')
-                                  ? prev.listBindings.divisionDefaultValue
-                                  : null,
-                              },
-                            }))
-                          }}
-                          className="w-full rounded-md border bg-transparent px-2 py-1 text-sm text-white"
-                          style={{ borderColor: 'var(--border-muted)' }}
-                        >
-                          <option value="">None (free text)</option>
-                          {customLists.map((list) => (
-                            <option key={list.id} value={list.id}>
-                              {list.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : row.key === 'subsidiary' ? (
-                        <span style={{ color: 'var(--text-secondary)' }}>Subsidiaries</span>
-                      ) : row.key === 'manager' ? (
-                        <span style={{ color: 'var(--text-secondary)' }}>Employees</span>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>-</span>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 text-sm">
-                      {row.key === 'division' && config.listBindings.divisionCustomListId ? (
-                        <select
-                          value={config.listBindings.divisionDefaultValue ?? ''}
-                          onChange={(event) => {
-                            const next = event.target.value.trim()
-                            setConfig((prev) => ({
-                              ...prev,
-                              listBindings: {
-                                ...prev.listBindings,
-                                divisionDefaultValue: next || null,
-                              },
-                            }))
-                          }}
-                          className="w-full rounded-md border bg-transparent px-2 py-1 text-sm text-white"
-                          style={{ borderColor: 'var(--border-muted)' }}
-                        >
-                          <option value="">None</option>
-                          {divisionDefaultOptions.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>-</span>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 text-sm">
-                      <span style={{ color: 'var(--text-secondary)' }}>
-                        {currentRank > -1 ? currentRank + 1 : '-'}
-                      </span>
+                      {currentRank > -1 ? currentRank + 1 : '-'}
                     </td>
                     <td className="px-2 py-2 text-sm">
                       {isFixedFirst ? (
@@ -465,7 +363,7 @@ export default function DepartmentCustomizeForm({
                           title="Drag the row to reorder"
                           aria-label="Drag handle"
                         >
-                          <span aria-hidden="true">☰</span>
+                          <span aria-hidden="true">::</span>
                         </div>
                       )}
                     </td>
@@ -480,21 +378,10 @@ export default function DepartmentCustomizeForm({
       {error ? <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p> : null}
 
       <div className="flex items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-md border px-3 py-2 text-sm"
-          style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-        >
+        <button type="button" onClick={onCancel} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
           Cancel
         </button>
-        <button
-          type="button"
-          onClick={() => void save()}
-          disabled={saving}
-          className="rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-        >
+        <button type="button" onClick={() => void save()} disabled={saving} className="rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ backgroundColor: 'var(--accent-primary-strong)' }}>
           {saving ? 'Saving...' : 'Save customization'}
         </button>
       </div>

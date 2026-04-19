@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { isValidEmail } from '@/lib/validation'
 import AddressModal, { parseAddress } from '@/components/AddressModal'
 
@@ -34,6 +34,24 @@ export default function EditButton({
   const [addressFieldBeingEdited, setAddressFieldBeingEdited] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
+  const pathname = usePathname()
+
+  const masterDataDetailRoutes: Record<string, string> = {
+    'chart-of-accounts': '/chart-of-accounts',
+    entities: '/subsidiaries',
+    items: '/items',
+    customers: '/customers',
+    vendors: '/vendors',
+    employees: '/employees',
+    departments: '/departments',
+    currencies: '/currencies',
+    roles: '/roles',
+    contacts: '/contacts',
+    users: '/users',
+  }
+
+  const detailBasePath = masterDataDetailRoutes[resource]
+  const useFullPageDetail = Boolean(detailBasePath && pathname === detailBasePath)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -94,6 +112,10 @@ export default function EditButton({
       <button
         type="button"
         onClick={() => {
+          if (useFullPageDetail && detailBasePath) {
+            router.push(`${detailBasePath}/${id}`)
+            return
+          }
           setValues(Object.fromEntries(fields.map((f) => [f.name, f.value])))
           setDismissPrompt('')
           setOpen(true)
@@ -101,7 +123,7 @@ export default function EditButton({
         className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
         style={{ backgroundColor: 'var(--accent-primary-strong)' }}
       >
-        Edit
+        {useFullPageDetail ? 'Open' : 'Edit'}
       </button>
       {open && mounted && createPortal(
         <div

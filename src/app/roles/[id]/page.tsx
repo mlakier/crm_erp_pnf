@@ -1,128 +1,220 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import EditButton from '@/components/EditButton'
 import DeleteButton from '@/components/DeleteButton'
+import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
+import RoleDetailCustomizeMode from '@/components/RoleDetailCustomizeMode'
+import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import {
+  RecordDetailCell,
+  RecordDetailEmptyState,
+  RecordDetailHeaderCell,
+  RecordDetailSection,
+} from '@/components/RecordDetailPanels'
+import { loadRoleFormCustomization } from '@/lib/role-form-customization-store'
+import { ROLE_FORM_FIELDS, type RoleFormFieldKey } from '@/lib/role-form-customization'
+import { loadFormRequirements } from '@/lib/form-requirements-store'
 
-export default async function RoleDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function RoleDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ edit?: string; customize?: string }>
+}) {
   const { id } = await params
-  const role = await prisma.role.findUnique({
-    where: { id },
-    include: {
-      users: {
-        orderBy: { name: 'asc' },
-        select: { id: true, userId: true, name: true, email: true, inactive: true },
+  const { edit, customize } = await searchParams
+  const isEditing = edit === '1'
+  const isCustomizing = customize === '1'
+
+  const [role, formCustomization, formRequirements] = await Promise.all([
+    prisma.role.findUnique({
+      where: { id },
+      include: {
+        users: {
+          orderBy: { name: 'asc' },
+          select: { id: true, userId: true, name: true, email: true, inactive: true },
+        },
       },
-    },
-  })
+    }),
+    loadRoleFormCustomization(),
+    loadFormRequirements(),
+  ])
 
   if (!role) notFound()
 
-  const activeUsers = role.users.filter((u) => !u.inactive)
-  const inactiveUsers = role.users.filter((u) => u.inactive)
+  const activeUsers = role.users.filter((user) => !user.inactive)
+  const inactiveUsers = role.users.filter((user) => user.inactive)
+  const detailHref = `/roles/${role.id}`
+  const sectionDescriptions: Record<string, string> = {
+    Core: 'Primary identity fields for the role record.',
+    Status: 'Availability and active-state controls.',
+  }
+
+  const fieldDefinitions: Record<RoleFormFieldKey, InlineRecordSection['fields'][number]> = {
+    roleId: {
+      name: 'roleId',
+      label: 'Role ID',
+      value: role.roleId,
+      helpText: 'System-generated role identifier.',
+    },
+    name: {
+      name: 'name',
+      label: 'Name',
+      value: role.name,
+      helpText: 'Role name shown to admins and users.',
+    },
+    description: {
+      name: 'description',
+      label: 'Description',
+      value: role.description ?? '',
+      helpText: 'Short explanation of the role purpose.',
+    },
+    inactive: {
+      name: 'inactive',
+      label: 'Inactive',
+      value: role.active ? 'false' : 'true',
+      type: 'select',
+      options: [{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }],
+      helpText: 'Marks the role unavailable for new assignments while preserving history.',
+      sourceText: 'System status values',
+    },
+  }
+
+  const customizeFields = ROLE_FORM_FIELDS.map((field) => {
+    const definition = fieldDefinitions[field.id]
+    const rawValue = definition.value ?? ''
+    const previewValue = definition.options?.find((option) => option.value === rawValue)?.label ?? rawValue
+    return {
+      id: field.id,
+      label: definition.label,
+      fieldType: field.fieldType,
+      source: field.source,
+      description: field.description,
+      previewValue,
+    }
+  })
+
+  const detailSections: InlineRecordSection[] = formCustomization.sections
+    .map((sectionTitle) => {
+      const configuredFields = ROLE_FORM_FIELDS
+        .filter((field) => {
+          const config = formCustomization.fields[field.id]
+          return config.visible && config.section === sectionTitle
+        })
+        .sort((a, b) => {
+          const left = formCustomization.fields[a.id]
+          const right = formCustomization.fields[b.id]
+          if (left.column !== right.column) return left.column - right.column
+          return left.order - right.order
+        })
+        .map((field) => ({
+          ...fieldDefinitions[field.id],
+          column: formCustomization.fields[field.id].column,
+          order: formCustomization.fields[field.id].order,
+        }))
+
+      if (configuredFields.length === 0) return null
+
+      return {
+        title: sectionTitle,
+        description: sectionDescriptions[sectionTitle],
+        collapsible: true,
+        defaultExpanded: true,
+        fields: configuredFields,
+      }
+    })
+    .filter((section): section is InlineRecordSection => Boolean(section))
 
   return (
-    <div className="min-h-full px-8 py-8">
-      <div className="max-w-5xl">
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <Link href="/roles" className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-              ← Back to Roles
+    <RecordDetailPageShell
+      backHref={isCustomizing ? detailHref : '/roles'}
+      backLabel={isCustomizing ? '<- Back to Role Detail' : '<- Back to Roles'}
+      meta={role.roleId}
+      title={role.name}
+      badge={
+        !role.active ? (
+          <span className="inline-block rounded-full px-3 py-0.5 text-xs font-medium" style={{ backgroundColor: 'rgba(239,68,68,0.18)', color: 'var(--danger)' }}>
+            Inactive
+          </span>
+        ) : null
+      }
+      actions={
+        <>
+          {!isEditing && !isCustomizing ? (
+            <Link href={`${detailHref}?customize=1`} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
+              Customize
             </Link>
-            <p className="mt-2 text-sm font-medium tracking-wide" style={{ color: 'var(--text-muted)' }}>{role.roleId}</p>
-            <h1 className="mt-2 text-2xl font-semibold text-white">{role.name}</h1>
-            {!role.active && (
-              <span className="mt-1 inline-block rounded-full px-3 py-0.5 text-xs font-medium" style={{ backgroundColor: 'rgba(239,68,68,0.18)', color: 'var(--danger)' }}>
-                Inactive
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <EditButton
-              resource="roles"
-              id={role.id}
-              fields={[
-                { name: 'name', label: 'Name', value: role.name },
-                { name: 'description', label: 'Description', value: role.description ?? '' },
-                { name: 'inactive', label: 'Inactive', value: role.active ? 'false' : 'true', type: 'select', options: [{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }] },
-              ]}
-            />
-            <DeleteButton resource="roles" id={role.id} />
-          </div>
-        </div>
+          ) : null}
+          {!isEditing ? (
+            <Link
+              href={`${detailHref}?edit=1`}
+              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
+              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
+            >
+              Edit
+            </Link>
+          ) : null}
+          {!isCustomizing ? <DeleteButton resource="roles" id={role.id} /> : null}
+        </>
+      }
+    >
+        {isCustomizing ? (
+          <RoleDetailCustomizeMode
+            detailHref={detailHref}
+            initialLayout={formCustomization}
+            initialRequirements={{ ...formRequirements.roleCreate }}
+            fields={customizeFields}
+            sectionDescriptions={sectionDescriptions}
+          />
+        ) : (
+          <InlineRecordDetails
+            resource="roles"
+            id={role.id}
+            title="Role details"
+            sections={detailSections}
+            editing={isEditing}
+            columns={formCustomization.formColumns}
+          />
+        )}
 
-        {/* Details */}
-        <section className="rounded-2xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Role Details</h2>
-          <dl className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <dt className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Role ID</dt>
-              <dd className="mt-1 text-sm text-white">{role.roleId}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Name</dt>
-              <dd className="mt-1 text-sm text-white">{role.name}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Description</dt>
-              <dd className="mt-1 text-sm text-white">{role.description ?? '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Status</dt>
-              <dd className="mt-1 text-sm text-white">{role.active ? 'Active' : 'Inactive'}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Created</dt>
-              <dd className="mt-1 text-sm text-white">{new Date(role.createdAt).toLocaleDateString()}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Last Modified</dt>
-              <dd className="mt-1 text-sm text-white">{new Date(role.updatedAt).toLocaleDateString()}</dd>
-            </div>
-          </dl>
-        </section>
-
-        {/* Users in this role */}
-        <section className="mt-6 rounded-2xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-            Users ({role.users.length})
-            {inactiveUsers.length > 0 && (
-              <span className="ml-2 text-xs font-normal" style={{ color: 'var(--text-muted)' }}>
+        <RecordDetailSection title="Users" count={role.users.length}>
+          <div className="px-6 pt-6">
+            {inactiveUsers.length > 0 ? (
+              <p className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>
                 {activeUsers.length} active, {inactiveUsers.length} inactive
-              </span>
-            )}
-          </h2>
+              </p>
+            ) : null}
+          </div>
           {role.users.length === 0 ? (
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No users assigned to this role.</p>
+            <RecordDetailEmptyState message="No users assigned to this role." />
           ) : (
             <table className="min-w-full">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>User ID</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Name</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Email</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Status</th>
+                  <RecordDetailHeaderCell>User ID</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Email</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Status</RecordDetailHeaderCell>
                 </tr>
               </thead>
               <tbody>
-                {role.users.map((user, idx) => (
-                  <tr key={user.id} style={idx < role.users.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                    <td className="px-4 py-2 text-sm">
+                {role.users.map((user, index) => (
+                  <tr key={user.id} style={index < role.users.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
+                    <RecordDetailCell>
                       <Link href={`/users/${user.id}`} className="font-medium hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                         {user.userId ?? 'Pending'}
                       </Link>
-                    </td>
-                    <td className="px-4 py-2 text-sm font-medium text-white">{user.name ?? '—'}</td>
-                    <td className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{user.email}</td>
-                    <td className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{user.inactive ? 'Inactive' : 'Active'}</td>
+                    </RecordDetailCell>
+                    <RecordDetailCell>{user.name ?? '-'}</RecordDetailCell>
+                    <RecordDetailCell>{user.email}</RecordDetailCell>
+                    <RecordDetailCell>{user.inactive ? 'Inactive' : 'Active'}</RecordDetailCell>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-        </section>
-      </div>
-    </div>
+        </RecordDetailSection>
+    </RecordDetailPageShell>
   )
 }

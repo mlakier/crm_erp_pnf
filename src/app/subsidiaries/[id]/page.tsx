@@ -1,22 +1,50 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import EditButton from '@/components/EditButton'
 import DeleteButton from '@/components/DeleteButton'
+import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
 import { COUNTRY_OPTIONS } from '@/lib/address-country-config'
+import SubsidiaryDetailCustomizeMode from '@/components/SubsidiaryDetailCustomizeMode'
+import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import {
+  RecordDetailCell,
+  RecordDetailEmptyState,
+  RecordDetailHeaderCell,
+  RecordDetailSection,
+} from '@/components/RecordDetailPanels'
+import { loadSubsidiaryFormCustomization } from '@/lib/subsidiary-form-customization-store'
+import { SUBSIDIARY_FORM_FIELDS, type SubsidiaryFormFieldKey } from '@/lib/subsidiary-form-customization'
+import { loadFormRequirements } from '@/lib/form-requirements-store'
 
-export default async function SubsidiaryDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function SubsidiaryDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ edit?: string; customize?: string }>
+}) {
   const { id } = await params
-  const [entity, currencies, parentEntities] = await Promise.all([
+  const { edit, customize } = await searchParams
+  const isEditing = edit === '1'
+  const isCustomizing = customize === '1'
+
+  const [entity, currencies, parentEntities, glAccounts, formCustomization, formRequirements] = await Promise.all([
     prisma.entity.findUnique({
       where: { id },
       include: {
         defaultCurrency: true,
+        functionalCurrency: true,
+        reportingCurrency: true,
         parentEntity: true,
         childEntities: { orderBy: { subsidiaryId: 'asc' }, select: { id: true, subsidiaryId: true, name: true } },
         employees: { orderBy: { lastName: 'asc' }, select: { id: true, firstName: true, lastName: true, title: true, email: true } },
         customers: { orderBy: { name: 'asc' }, select: { id: true, name: true, customerId: true } },
         vendors: { orderBy: { name: 'asc' }, select: { id: true, name: true, vendorNumber: true } },
+        retainedEarningsAccount: { select: { id: true, accountId: true, name: true } },
+        ctaAccount: { select: { id: true, accountId: true, name: true } },
+        intercompanyClearingAccount: { select: { id: true, accountId: true, name: true } },
+        dueToAccount: { select: { id: true, accountId: true, name: true } },
+        dueFromAccount: { select: { id: true, accountId: true, name: true } },
       },
     }),
     prisma.currency.findMany({
@@ -28,268 +56,359 @@ export default async function SubsidiaryDetailPage({ params }: { params: Promise
       orderBy: { subsidiaryId: 'asc' },
       select: { id: true, subsidiaryId: true, name: true },
     }),
+    prisma.chartOfAccounts.findMany({
+      where: { active: true },
+      orderBy: { accountId: 'asc' },
+      select: { id: true, accountId: true, name: true },
+    }),
+    loadSubsidiaryFormCustomization(),
+    loadFormRequirements(),
   ])
 
   if (!entity) notFound()
 
+  const detailHref = `/subsidiaries/${entity.id}`
+  const sectionDescriptions: Record<string, string> = {
+    Core: 'Primary identity and operating name for the subsidiary.',
+    Registration: 'Legal registration, country, and statutory identifiers.',
+    Hierarchy: 'Parent-child relationships used for organization and consolidation.',
+    Currency: 'Default, functional, and reporting currency settings.',
+    Consolidation: 'Consolidation ownership and group reporting configuration.',
+    Accounting: 'Default account mappings used for close and intercompany activity.',
+    Status: 'Availability and active-state controls.',
+  }
+
+  const currencyOptions = currencies.map((currency) => ({ value: currency.id, label: `${currency.currencyId} - ${currency.name}` }))
+  const parentOptions = parentEntities.map((candidate) => ({ value: candidate.id, label: `${candidate.subsidiaryId} - ${candidate.name}` }))
+  const glOptions = glAccounts.map((account) => ({ value: account.id, label: `${account.accountId} - ${account.name}` }))
+
+  const fieldDefinitions: Record<SubsidiaryFormFieldKey, InlineRecordSection['fields'][number]> = {
+    subsidiaryId: { name: 'subsidiaryId', label: 'Subsidiary ID', value: entity.subsidiaryId, helpText: 'System-generated legal entity code.' },
+    name: { name: 'name', label: 'Name', value: entity.name, helpText: 'Operating name of the subsidiary.' },
+    legalName: { name: 'legalName', label: 'Legal Name', value: entity.legalName ?? '', helpText: 'Registered legal entity name.' },
+    entityType: { name: 'entityType', label: 'Type', value: entity.entityType ?? '', helpText: 'Entity classification such as corporation, LLC, or branch.' },
+    country: {
+      name: 'country',
+      label: 'Country',
+      value: entity.country ?? '',
+      type: 'select',
+      placeholder: 'Select country',
+      options: COUNTRY_OPTIONS.map((option) => ({ value: option.code, label: option.label })),
+      helpText: 'Country of registration or primary operation.',
+      sourceText: 'Country reference list',
+    },
+    address: { name: 'address', label: 'Address', value: entity.address ?? '', type: 'address', helpText: 'Mailing or registered office address.' },
+    taxId: { name: 'taxId', label: 'Tax ID', value: entity.taxId ?? '', helpText: 'Primary tax registration or identification number.' },
+    registrationNumber: { name: 'registrationNumber', label: 'Registration Number', value: entity.registrationNumber ?? '', helpText: 'Corporate registration number where applicable.' },
+    parentEntityId: {
+      name: 'parentEntityId',
+      label: 'Parent Subsidiary',
+      value: entity.parentEntityId ?? '',
+      type: 'select',
+      placeholder: 'Select parent subsidiary',
+      options: parentOptions,
+      helpText: 'Parent entity used for hierarchy and consolidation.',
+      sourceText: 'Subsidiaries master data',
+    },
+    defaultCurrencyId: {
+      name: 'defaultCurrencyId',
+      label: 'Primary Currency',
+      value: entity.defaultCurrencyId ?? '',
+      type: 'select',
+      placeholder: 'Select currency',
+      options: currencyOptions,
+      helpText: 'Default transaction currency for the subsidiary.',
+      sourceText: 'Currencies master data',
+    },
+    functionalCurrencyId: {
+      name: 'functionalCurrencyId',
+      label: 'Functional Currency',
+      value: entity.functionalCurrencyId ?? '',
+      type: 'select',
+      placeholder: 'Select currency',
+      options: currencyOptions,
+      helpText: 'Currency of the primary economic environment.',
+      sourceText: 'Currencies master data',
+    },
+    reportingCurrencyId: {
+      name: 'reportingCurrencyId',
+      label: 'Reporting Currency',
+      value: entity.reportingCurrencyId ?? '',
+      type: 'select',
+      placeholder: 'Select currency',
+      options: currencyOptions,
+      helpText: 'Currency used for group or reporting presentation.',
+      sourceText: 'Currencies master data',
+    },
+    consolidationMethod: { name: 'consolidationMethod', label: 'Consolidation Method', value: entity.consolidationMethod ?? '', helpText: 'How the entity is consolidated into group reporting.' },
+    ownershipPercent: { name: 'ownershipPercent', label: 'Ownership Percent', value: entity.ownershipPercent?.toString() ?? '', type: 'number', helpText: 'Ownership percentage held in the subsidiary.' },
+    retainedEarningsAccountId: {
+      name: 'retainedEarningsAccountId',
+      label: 'Retained Earnings Account',
+      value: entity.retainedEarningsAccountId ?? '',
+      type: 'select',
+      placeholder: 'Select account',
+      options: glOptions,
+      helpText: 'Default retained earnings account for close activity.',
+      sourceText: 'Chart of Accounts',
+    },
+    ctaAccountId: {
+      name: 'ctaAccountId',
+      label: 'CTA Account',
+      value: entity.ctaAccountId ?? '',
+      type: 'select',
+      placeholder: 'Select account',
+      options: glOptions,
+      helpText: 'Cumulative translation adjustment account.',
+      sourceText: 'Chart of Accounts',
+    },
+    intercompanyClearingAccountId: {
+      name: 'intercompanyClearingAccountId',
+      label: 'Intercompany Clearing Account',
+      value: entity.intercompanyClearingAccountId ?? '',
+      type: 'select',
+      placeholder: 'Select account',
+      options: glOptions,
+      helpText: 'Clearing account for intercompany activity.',
+      sourceText: 'Chart of Accounts',
+    },
+    dueToAccountId: {
+      name: 'dueToAccountId',
+      label: 'Due To Account',
+      value: entity.dueToAccountId ?? '',
+      type: 'select',
+      placeholder: 'Select account',
+      options: glOptions,
+      helpText: 'Default due-to intercompany account.',
+      sourceText: 'Chart of Accounts',
+    },
+    dueFromAccountId: {
+      name: 'dueFromAccountId',
+      label: 'Due From Account',
+      value: entity.dueFromAccountId ?? '',
+      type: 'select',
+      placeholder: 'Select account',
+      options: glOptions,
+      helpText: 'Default due-from intercompany account.',
+      sourceText: 'Chart of Accounts',
+    },
+    inactive: {
+      name: 'inactive',
+      label: 'Inactive',
+      value: String(!entity.active),
+      type: 'select',
+      options: [{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }],
+      helpText: 'Marks the subsidiary unavailable for new activity while preserving history.',
+      sourceText: 'System status values',
+    },
+  }
+
+  const customizeFields = SUBSIDIARY_FORM_FIELDS.map((field) => {
+    const definition = fieldDefinitions[field.id]
+    const rawValue = definition.value ?? ''
+    const previewValue = definition.options?.find((option) => option.value === rawValue)?.label ?? rawValue
+    return {
+      id: field.id,
+      label: definition.label,
+      fieldType: field.fieldType,
+      source: field.source,
+      description: field.description,
+      previewValue,
+    }
+  })
+
+  const detailSections: InlineRecordSection[] = formCustomization.sections
+    .map((sectionTitle) => {
+      const configuredFields = SUBSIDIARY_FORM_FIELDS
+        .filter((field) => {
+          const config = formCustomization.fields[field.id]
+          return config.visible && config.section === sectionTitle
+        })
+        .sort((a, b) => {
+          const left = formCustomization.fields[a.id]
+          const right = formCustomization.fields[b.id]
+          if (left.column !== right.column) return left.column - right.column
+          return left.order - right.order
+        })
+        .map((field) => ({
+          ...fieldDefinitions[field.id],
+          column: formCustomization.fields[field.id].column,
+          order: formCustomization.fields[field.id].order,
+        }))
+
+      if (configuredFields.length === 0) return null
+
+      return {
+        title: sectionTitle,
+        description: sectionDescriptions[sectionTitle],
+        collapsible: true,
+        defaultExpanded: true,
+        fields: configuredFields,
+      }
+    })
+    .filter((section): section is InlineRecordSection => Boolean(section))
+
   return (
-    <div className="min-h-full px-8 py-8">
-      <div className="max-w-5xl">
-
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <Link href="/subsidiaries" className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-              ← Back to Subsidiaries
+    <RecordDetailPageShell
+      backHref={isCustomizing ? detailHref : '/subsidiaries'}
+      backLabel={isCustomizing ? '<- Back to Subsidiary Detail' : '<- Back to Subsidiaries'}
+      meta={entity.subsidiaryId}
+      title={entity.name}
+      badge={
+        entity.entityType ? (
+          <span className="inline-block rounded-full px-3 py-0.5 text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>
+            {entity.entityType}
+          </span>
+        ) : null
+      }
+      actions={
+        <>
+          {!isEditing && !isCustomizing ? (
+            <Link href={`${detailHref}?customize=1`} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
+              Customize
             </Link>
-            <p className="mt-2 text-sm font-medium tracking-wide" style={{ color: 'var(--text-muted)' }}>{entity.subsidiaryId}</p>
-            <h1 className="mt-2 text-2xl font-semibold text-white">{entity.name}</h1>
-            {entity.entityType && (
-              <span className="mt-1 inline-block rounded-full px-3 py-0.5 text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>
-                {entity.entityType}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <EditButton
-              resource="entities"
-              id={entity.id}
-              fields={[
-                { name: 'subsidiaryId', label: 'Subsidiary Id', value: entity.subsidiaryId },
-                { name: 'name', label: 'Name', value: entity.name },
-                {
-                  name: 'parentEntityId',
-                  label: 'Parent Subsidiary',
-                  value: entity.parentEntityId ?? '',
-                  type: 'select',
-                  placeholder: 'Select parent subsidiary',
-                  options: parentEntities.map((candidate) => ({ value: candidate.id, label: `${candidate.subsidiaryId} - ${candidate.name}` })),
-                },
-                {
-                  name: 'country',
-                  label: 'Country',
-                  value: entity.country ?? '',
-                  type: 'select',
-                  placeholder: 'Select country',
-                  options: COUNTRY_OPTIONS.map((option) => ({
-                    value: option.code,
-                    label: option.label,
-                  })),
-                },
-                { name: 'address', label: 'Address', value: entity.address ?? '', type: 'address' },
-                { name: 'legalName', label: 'Legal Name', value: entity.legalName ?? '' },
-                { name: 'entityType', label: 'Type', value: entity.entityType ?? '' },
-                { name: 'taxId', label: 'Tax ID', value: entity.taxId ?? '' },
-                { name: 'registrationNumber', label: 'Registration #', value: entity.registrationNumber ?? '' },
-                {
-                  name: 'defaultCurrencyId',
-                  label: 'Default Currency',
-                  value: entity.defaultCurrencyId ?? '',
-                  type: 'select',
-                  placeholder: 'Select currency',
-                  options: currencies.map((currency) => ({
-                    value: currency.id,
-                    label: `${currency.currencyId} - ${currency.name}`,
-                  })),
-                },
-                {
-                  name: 'inactive',
-                  label: 'Inactive',
-                  value: String(!entity.active),
-                  type: 'select',
-                  options: [
-                    { value: 'false', label: 'No' },
-                    { value: 'true', label: 'Yes' },
-                  ],
-                },
-              ]}
-            />
-            <DeleteButton resource="entities" id={entity.id} />
-          </div>
-        </div>
+          ) : null}
+          {!isEditing ? (
+            <Link
+              href={`${detailHref}?edit=1`}
+              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
+              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
+            >
+              Edit
+            </Link>
+          ) : null}
+          {!isCustomizing ? <DeleteButton resource="entities" id={entity.id} /> : null}
+        </>
+      }
+    >
+        {isCustomizing ? (
+          <SubsidiaryDetailCustomizeMode
+            detailHref={detailHref}
+            initialLayout={formCustomization}
+            initialRequirements={{ ...formRequirements.subsidiaryCreate }}
+            fields={customizeFields}
+            sectionDescriptions={sectionDescriptions}
+          />
+        ) : (
+          <InlineRecordDetails
+            resource="entities"
+            id={entity.id}
+            title="Subsidiary details"
+            sections={detailSections}
+            editing={isEditing}
+            columns={formCustomization.formColumns}
+          />
+        )}
 
-        {/* Stats */}
-        <div className="grid gap-4 sm:grid-cols-3 mb-8">
-          <StatCard label="Employees" value={entity.employees.length} />
-          <StatCard label="Customers" value={entity.customers.length} />
-          <StatCard label="Vendors" value={entity.vendors.length} />
-        </div>
-
-        {/* Details */}
-        <div className="mb-8 rounded-xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Subsidiary details</h2>
-          <dl className="grid gap-3 sm:grid-cols-2">
-            <Field label="Subsidiary Id" value={entity.subsidiaryId} />
-            <Field label="Name" value={entity.name} />
-            <Field label="Parent Subsidiary" value={entity.parentEntity ? `${entity.parentEntity.subsidiaryId} – ${entity.parentEntity.name}` : null} />
-            <Field label="Country" value={entity.country} />
-            <Field label="Address" value={entity.address} />
-            <Field label="Legal Name" value={entity.legalName} />
-            <Field label="Type" value={entity.entityType} />
-            <Field label="Tax ID" value={entity.taxId} />
-            <Field label="Registration #" value={entity.registrationNumber} />
-            <Field label="Default Currency" value={entity.defaultCurrency ? `${entity.defaultCurrency.currencyId} – ${entity.defaultCurrency.name}` : null} />
-            <Field label="Active" value={entity.active ? 'Yes' : 'No'} />
-            <Field label="Created" value={new Date(entity.createdAt).toLocaleDateString()} />
-          </dl>
-        </div>
-
-        <Section title="Child Subsidiaries" count={entity.childEntities.length}>
+        <RecordDetailSection title="Child Subsidiaries" count={entity.childEntities.length}>
           {entity.childEntities.length === 0 ? (
-            <EmptyRow message="No child subsidiaries" />
+            <RecordDetailEmptyState message="No child subsidiaries" />
           ) : (
             <table className="min-w-full">
               <thead>
                 <tr>
-                  <Th>Subsidiary Id</Th>
-                  <Th>Name</Th>
+                  <RecordDetailHeaderCell>Subsidiary ID</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
                 </tr>
               </thead>
               <tbody>
                 {entity.childEntities.map((child) => (
                   <tr key={child.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <Td>
+                    <RecordDetailCell>
                       <Link href={`/subsidiaries/${child.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                         {child.subsidiaryId}
                       </Link>
-                    </Td>
-                    <Td>{child.name}</Td>
+                    </RecordDetailCell>
+                    <RecordDetailCell>{child.name}</RecordDetailCell>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-        </Section>
+        </RecordDetailSection>
 
-        {/* Employees */}
-        <Section title="Employees" count={entity.employees.length}>
+        <RecordDetailSection title="Employees" count={entity.employees.length}>
           {entity.employees.length === 0 ? (
-            <EmptyRow message="No employees in this subsidiary" />
+            <RecordDetailEmptyState message="No employees in this subsidiary" />
           ) : (
             <table className="min-w-full">
               <thead>
                 <tr>
-                  <Th>Name</Th>
-                  <Th>Title</Th>
-                  <Th>Email</Th>
+                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Title</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Email</RecordDetailHeaderCell>
                 </tr>
               </thead>
               <tbody>
-                {entity.employees.map((e) => (
-                  <tr key={e.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <Td>
-                      <Link href={`/employees/${e.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {e.firstName} {e.lastName}
+                {entity.employees.map((employee) => (
+                  <tr key={employee.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
+                    <RecordDetailCell>
+                      <Link href={`/employees/${employee.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                        {employee.firstName} {employee.lastName}
                       </Link>
-                    </Td>
-                    <Td>{e.title ?? '—'}</Td>
-                    <Td>{e.email ?? '—'}</Td>
+                    </RecordDetailCell>
+                    <RecordDetailCell>{employee.title ?? '-'}</RecordDetailCell>
+                    <RecordDetailCell>{employee.email ?? '-'}</RecordDetailCell>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-        </Section>
+        </RecordDetailSection>
 
-        {/* Customers */}
-        <Section title="Customers" count={entity.customers.length}>
+        <RecordDetailSection title="Customers" count={entity.customers.length}>
           {entity.customers.length === 0 ? (
-            <EmptyRow message="No customers in this subsidiary" />
+            <RecordDetailEmptyState message="No customers in this subsidiary" />
           ) : (
             <table className="min-w-full">
               <thead>
                 <tr>
-                  <Th>Customer #</Th>
-                  <Th>Name</Th>
+                  <RecordDetailHeaderCell>Customer #</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
                 </tr>
               </thead>
               <tbody>
-                {entity.customers.map((c) => (
-                  <tr key={c.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <Td>
-                      <Link href={`/customers/${c.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {c.customerId ?? 'Pending'}
+                {entity.customers.map((customer) => (
+                  <tr key={customer.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
+                    <RecordDetailCell>
+                      <Link href={`/customers/${customer.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                        {customer.customerId ?? 'Pending'}
                       </Link>
-                    </Td>
-                    <Td>{c.name}</Td>
+                    </RecordDetailCell>
+                    <RecordDetailCell>{customer.name}</RecordDetailCell>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-        </Section>
+        </RecordDetailSection>
 
-        {/* Vendors */}
-        <Section title="Vendors" count={entity.vendors.length}>
+        <RecordDetailSection title="Vendors" count={entity.vendors.length}>
           {entity.vendors.length === 0 ? (
-            <EmptyRow message="No vendors in this subsidiary" />
+            <RecordDetailEmptyState message="No vendors in this subsidiary" />
           ) : (
             <table className="min-w-full">
               <thead>
                 <tr>
-                  <Th>Vendor Id</Th>
-                  <Th>Name</Th>
+                  <RecordDetailHeaderCell>Vendor ID</RecordDetailHeaderCell>
+                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
                 </tr>
               </thead>
               <tbody>
-                {entity.vendors.map((v) => (
-                  <tr key={v.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <Td>
-                      <Link href={`/vendors/${v.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {v.vendorNumber ?? 'Pending'}
+                {entity.vendors.map((vendor) => (
+                  <tr key={vendor.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
+                    <RecordDetailCell>
+                      <Link href={`/vendors/${vendor.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                        {vendor.vendorNumber ?? 'Pending'}
                       </Link>
-                    </Td>
-                    <Td>{v.name}</Td>
+                    </RecordDetailCell>
+                    <RecordDetailCell>{vendor.name}</RecordDetailCell>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-        </Section>
-
-      </div>
-    </div>
+        </RecordDetailSection>
+    </RecordDetailPageShell>
   )
-}
-
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-2xl border p-5" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-      <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>{label}</p>
-      <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
-    </div>
-  )
-}
-
-function Field({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{label}</dt>
-      <dd className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{value ?? '—'}</dd>
-    </div>
-  )
-}
-
-function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
-  return (
-    <div className="mb-6 overflow-hidden rounded-xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-      <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-muted)' }}>
-        <h2 className="text-base font-semibold text-white">{title}</h2>
-        <span className="rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>{count}</span>
-      </div>
-      <div className="overflow-x-auto">{children}</div>
-    </div>
-  )
-}
-
-function EmptyRow({ message }: { message: string }) {
-  return <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>{message}</p>
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-muted)' }}>{children}</th>
-}
-
-function Td({ children }: { children: React.ReactNode }) {
-  return <td className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{children}</td>
 }

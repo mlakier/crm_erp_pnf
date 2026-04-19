@@ -2,30 +2,20 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { normalizePhone } from '@/lib/format'
 import CustomerCreateForm from '@/components/CustomerCreateForm'
-import CustomerEditButton from '@/components/CustomerEditButton'
 import DeleteButton from '@/components/DeleteButton'
+import EditButton from '@/components/EditButton'
 import CreateModalButton from '@/components/CreateModalButton'
-import MasterDataCustomizeButton from '@/components/MasterDataCustomizeButton'
-import ColumnSelector from '@/components/ColumnSelector'
-import ExportButton from '@/components/ExportButton'
+import MasterDataPageHeader from '@/components/MasterDataPageHeader'
+import MasterDataListSection from '@/components/MasterDataListSection'
+import { MasterDataBodyCell, MasterDataEmptyStateRow, MasterDataHeaderCell, MasterDataMutedCell } from '@/components/MasterDataTableCells'
 import PaginationFooter from '@/components/PaginationFooter'
 import { getPagination } from '@/lib/pagination'
-import { withMasterDataDefaults } from '@/lib/master-data-columns'
-import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
-import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
+import { MASTER_DATA_TABLE_DIVIDER_STYLE, getMasterDataRowStyle } from '@/lib/master-data-table'
+import { displayMasterDataValue, formatMasterDataDate } from '@/lib/master-data-display'
+import { loadCompanyPageLogo } from '@/lib/company-page-logo'
 import { loadListOptions } from '@/lib/list-options-store'
-
-const CUSTOMER_COLUMNS = withMasterDataDefaults([
-  { id: 'number', label: 'Customer Id' },
-  { id: 'name', label: 'Name' },
-  { id: 'subsidiary', label: 'Primary Subsidiary' },
-  { id: 'currency', label: 'Primary Currency' },
-  { id: 'address', label: 'Billing Address' },
-  { id: 'inactive', label: 'Inactive' },
-  { id: 'created', label: 'Created' },
-  { id: 'last-modified', label: 'Last Modified' },
-  { id: 'actions', label: 'Actions', locked: true },
-])
+import { loadCustomerFormCustomization } from '@/lib/customer-form-customization-store'
+import { customerListDefinition } from '@/lib/master-data-list-definitions'
 
 export default async function CRMPage({
   searchParams,
@@ -54,25 +44,15 @@ export default async function CRMPage({
         ? [{ name: 'asc' as const }, { createdAt: 'desc' as const }]
         : [{ createdAt: 'desc' as const }]
 
-  const [totalCustomers, adminUser, subsidiaries, currencies, companySettings, cabinetFiles, listOptions] = await Promise.all([
+  const [totalCustomers, adminUser, subsidiaries, currencies, companyLogoPages, listOptions, formCustomization] = await Promise.all([
     prisma.customer.count({ where }),
-    prisma.user.findUnique({
-      where: { email: 'admin@example.com' },
-    }),
+    prisma.user.findUnique({ where: { email: 'admin@example.com' } }),
     prisma.entity.findMany({ orderBy: { subsidiaryId: 'asc' }, select: { id: true, subsidiaryId: true, name: true } }),
     prisma.currency.findMany({ orderBy: { currencyId: 'asc' }, select: { id: true, currencyId: true, name: true } }),
-    loadCompanyInformationSettings(),
-    loadCompanyCabinetFiles(),
+    loadCompanyPageLogo(),
     loadListOptions(),
+    loadCustomerFormCustomization(),
   ])
-
-  const selectedLogoValue = companySettings.companyLogoPagesFileId
-  const companyLogoPages =
-    cabinetFiles.find((file) => file.id === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.originalName === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.storedName === selectedLogoValue)
-    ?? cabinetFiles.find((file) => file.url === selectedLogoValue)
-    ?? (!selectedLogoValue ? cabinetFiles[0] : undefined)
 
   const pagination = getPagination(totalCustomers, params.page)
 
@@ -94,122 +74,115 @@ export default async function CRMPage({
 
   return (
     <div className="min-h-full px-8 py-8">
-      <div className="mb-6 flex items-center justify-between gap-4">
-        {companyLogoPages ? (
-          <img
-            src={companyLogoPages.url}
-            alt="Company logo"
-            className="h-16 w-auto rounded"
-          />
-        ) : null}
-        <div>
-          <h1 className="text-xl font-semibold text-white">Customers</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{totalCustomers} total</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <MasterDataCustomizeButton tableId="customers-list" columns={CUSTOMER_COLUMNS} title="Customers" />
-                    <CreateModalButton buttonLabel="New Customer" title="New Customer">
-          <CustomerCreateForm ownerUserId={adminUser.id} subsidiaries={subsidiaries} currencies={currencies} />
+      <MasterDataPageHeader
+        title="Customers"
+        total={totalCustomers}
+        logoUrl={companyLogoPages?.url}
+        actions={
+          <CreateModalButton buttonLabel="New Customer" title="New Customer">
+            <CustomerCreateForm ownerUserId={adminUser.id} subsidiaries={subsidiaries} currencies={currencies} />
           </CreateModalButton>
-        </div>
-      </div>
+        }
+      />
 
-      <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-        <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
-          <input type="hidden" name="page" value="1" />
-          <div className="flex gap-3 items-center flex-nowrap">
-            <input
-              type="text"
-              name="q"
-              defaultValue={params.q ?? ''}
-              placeholder="Search customer #, name, email, industry"
-              className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            />
-            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="name">Name A-Z</option>
-            </select>
-            <div className="flex items-center gap-2">
-              <Link href="/customers" className="rounded-md border px-3 py-2 text-sm font-medium text-center" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-                Reset
-              </Link>
-              <ExportButton tableId="customers-list" fileName="customers" />
-            </div>
-            <ColumnSelector tableId="customers-list" columns={CUSTOMER_COLUMNS} />
-          </div>
-        </form>
-
-        <div className="overflow-x-auto" data-column-selector-table="customers-list">
-          <table className="min-w-full" id="customers-list">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                <th data-column="number" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Customer Id</th>
-                <th data-column="name" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Name</th>
-                <th data-column="subsidiary" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Primary Subsidiary</th>
-                <th data-column="currency" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Primary Currency</th>
-                <th data-column="address" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Billing Address</th>
-                <th data-column="inactive" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Inactive</th>
-                <th data-column="created" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Created</th>
-                <th data-column="last-modified" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Last Modified</th>
-                <th data-column="actions" className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {customers.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-                    No customers found
-                  </td>
+      <MasterDataListSection
+        query={params.q}
+        searchPlaceholder={customerListDefinition.searchPlaceholder}
+        tableId={customerListDefinition.tableId}
+        exportFileName={customerListDefinition.exportFileName}
+        columns={customerListDefinition.columns}
+        sort={sort}
+        sortOptions={customerListDefinition.sortOptions}
+      >
+        <table className="min-w-full" id={customerListDefinition.tableId}>
+          <thead>
+            <tr style={MASTER_DATA_TABLE_DIVIDER_STYLE}>
+              <MasterDataHeaderCell columnId="number">Customer Id</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="name">Name</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="subsidiary">Primary Subsidiary</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="currency">Primary Currency</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="address">Billing Address</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="inactive">Inactive</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="last-modified">Last Modified</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
+            </tr>
+          </thead>
+          <tbody>
+            {customers.length === 0 ? (
+              <MasterDataEmptyStateRow colSpan={9}>No customers found</MasterDataEmptyStateRow>
+            ) : (
+              customers.map((customer, index) => (
+                <tr key={customer.id} style={getMasterDataRowStyle(index, customers.length)}>
+                  <MasterDataBodyCell columnId="number">
+                    <Link href={`/customers/${customer.id}`} className="font-medium hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                      {customer.customerId ?? 'Pending'}
+                    </Link>
+                  </MasterDataBodyCell>
+                  <MasterDataBodyCell columnId="name" className="px-4 py-2 text-sm text-white">{customer.name}</MasterDataBodyCell>
+                  <MasterDataMutedCell columnId="subsidiary">{customer.entity ? `${customer.entity.subsidiaryId} (${customer.entity.name})` : displayMasterDataValue(null)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="currency">{displayMasterDataValue(customer.currency?.currencyId)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="address">{displayMasterDataValue(customer.address)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="inactive">{customer.inactive ? 'Yes' : 'No'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="created">{formatMasterDataDate(customer.createdAt)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(customer.updatedAt)}</MasterDataMutedCell>
+                  <MasterDataBodyCell columnId="actions">
+                    <div className="flex items-center gap-2">
+                      <EditButton
+                        resource="customers"
+                        id={customer.id}
+                        fields={[
+                          ...(formCustomization.fields.customerId.visible ? [{ name: 'customerId', label: 'Customer ID', value: customer.customerId ?? '' }] : []),
+                          ...(formCustomization.fields.name.visible ? [{ name: 'name', label: 'Name', value: customer.name }] : []),
+                          ...(formCustomization.fields.email.visible ? [{ name: 'email', label: 'Email', value: customer.email ?? '', type: 'email' as const }] : []),
+                          ...(formCustomization.fields.phone.visible ? [{ name: 'phone', label: 'Phone', value: normalizePhone(customer.phone) ?? '' }] : []),
+                          ...(formCustomization.fields.address.visible ? [{ name: 'address', label: 'Billing Address', value: customer.address ?? '', type: 'address' as const }] : []),
+                          ...(formCustomization.fields.industry.visible
+                            ? [{
+                                name: 'industry',
+                                label: 'Industry',
+                                value: customer.industry ?? '',
+                                type: 'select' as const,
+                                options: [{ value: '', label: 'None' }, ...listOptions.customer.industry.map((option) => ({ value: option, label: option }))],
+                              }]
+                            : []),
+                          ...(formCustomization.fields.primarySubsidiaryId.visible
+                            ? [{
+                                name: 'primarySubsidiaryId',
+                                label: 'Primary Subsidiary',
+                                value: customer.entityId ?? '',
+                                type: 'select' as const,
+                                options: [{ value: '', label: 'None' }, ...subsidiaries.map((subsidiary) => ({ value: subsidiary.id, label: `${subsidiary.subsidiaryId} - ${subsidiary.name}` }))],
+                              }]
+                            : []),
+                          ...(formCustomization.fields.primaryCurrencyId.visible
+                            ? [{
+                                name: 'primaryCurrencyId',
+                                label: 'Primary Currency',
+                                value: customer.currencyId ?? '',
+                                type: 'select' as const,
+                                options: [{ value: '', label: 'None' }, ...currencies.map((currency) => ({ value: currency.id, label: `${currency.currencyId} - ${currency.name}` }))],
+                              }]
+                            : []),
+                          ...(formCustomization.fields.inactive.visible
+                            ? [{
+                                name: 'inactive',
+                                label: 'Inactive',
+                                value: customer.inactive ? 'true' : 'false',
+                                type: 'select' as const,
+                                options: [{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }],
+                              }]
+                            : []),
+                        ]}
+                      />
+                      <DeleteButton resource="customers" id={customer.id} />
+                    </div>
+                  </MasterDataBodyCell>
                 </tr>
-              ) : (
-                customers.map((customer, index) => (
-                  <tr key={customer.id} style={index < customers.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                    <td data-column="number" className="px-4 py-2 text-sm">
-                      <Link href={`/customers/${customer.id}`} className="font-medium hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {customer.customerId ?? 'Pending'}
-                      </Link>
-                    </td>
-                    <td data-column="name" className="px-4 py-2 text-sm text-white">{customer.name}</td>
-                    <td data-column="subsidiary" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {customer.entity ? `${customer.entity.subsidiaryId} (${customer.entity.name})` : 'N/A'}
-                    </td>
-                    <td data-column="currency" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{customer.currency?.currencyId ?? 'N/A'}</td>
-                    <td data-column="address" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{customer.address ?? 'N/A'}</td>
-                    <td data-column="inactive" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {customer.inactive ? 'Yes' : 'No'}
-                    </td>
-                    <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(customer.createdAt).toLocaleDateString()}</td>
-                    <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{new Date(customer.updatedAt).toLocaleDateString()}</td>
-                    <td data-column="actions" className="px-4 py-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <CustomerEditButton
-                          customerId={customer.id}
-                          entities={subsidiaries}
-                          currencies={currencies}
-                          industryOptions={listOptions.customer.industry}
-                          values={{
-                            name: customer.name,
-                            email: customer.email ?? '',
-                            phone: normalizePhone(customer.phone) ?? '',
-                            address: customer.address ?? '',
-                            industry: customer.industry ?? '',
-                            primarySubsidiaryId: customer.entityId ?? '',
-                            primaryCurrencyId: customer.currencyId ?? '',
-                            inactive: customer.inactive,
-                          }}
-                        />
-                        <DeleteButton resource="customers" id={customer.id} />
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
+              ))
+            )}
+          </tbody>
+        </table>
         <PaginationFooter
           startRow={pagination.startRow}
           endRow={pagination.endRow}
@@ -221,7 +194,7 @@ export default async function CRMPage({
           prevHref={buildPageHref(pagination.currentPage - 1)}
           nextHref={buildPageHref(pagination.currentPage + 1)}
         />
-      </section>
+      </MasterDataListSection>
     </div>
   )
 }

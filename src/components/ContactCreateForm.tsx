@@ -1,11 +1,20 @@
 'use client'
 
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { isFieldRequired } from '@/lib/form-requirements'
-import { useEffect } from 'react'
 import { isValidEmail } from '@/lib/validation'
 import AddressModal, { parseAddress } from '@/components/AddressModal'
+import {
+  defaultContactFormCustomization,
+  CONTACT_FORM_FIELDS,
+  type ContactFormCustomizationConfig,
+  type ContactFormFieldKey,
+} from '@/lib/contact-form-customization'
+
+type ContactFormCustomizationResponse = {
+  config?: ContactFormCustomizationConfig
+}
 
 export default function ContactCreateForm({
   userId,
@@ -29,16 +38,22 @@ export default function ContactCreateForm({
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [runtimeRequirements, setRuntimeRequirements] = useState<Record<string, boolean> | null>(null)
+  const [layoutConfig, setLayoutConfig] = useState<ContactFormCustomizationConfig>(() => defaultContactFormCustomization())
   const router = useRouter()
 
   useEffect(() => {
     let mounted = true
     async function loadRequirements() {
       try {
-        const response = await fetch('/api/config/form-requirements', { cache: 'no-store' })
-        const body = await response.json()
-        if (!response.ok) return
-        if (mounted) setRuntimeRequirements(body?.config?.contactCreate ?? null)
+        const [requirementsResponse, layoutResponse] = await Promise.all([
+          fetch('/api/config/form-requirements', { cache: 'no-store' }),
+          fetch('/api/config/contact-form-customization', { cache: 'no-store' }),
+        ])
+        const requirementsBody = await requirementsResponse.json()
+        const layoutBody = (await layoutResponse.json()) as ContactFormCustomizationResponse
+        if (!mounted) return
+        if (requirementsResponse.ok) setRuntimeRequirements(requirementsBody?.config?.contactCreate ?? null)
+        if (layoutResponse.ok && layoutBody.config) setLayoutConfig(layoutBody.config)
       } catch {
         // Keep static defaults when config API is unavailable.
       }
@@ -65,6 +80,123 @@ export default function ContactCreateForm({
     )
   }
 
+  const groupedVisibleFields = useMemo(() => {
+    return layoutConfig.sections
+      .map((section) => ({
+        section,
+        fields: CONTACT_FORM_FIELDS
+          .filter((field) => {
+            const config = layoutConfig.fields[field.id]
+            return config?.visible !== false && config?.section === section
+          })
+          .sort((a, b) => {
+            const left = layoutConfig.fields[a.id]
+            const right = layoutConfig.fields[b.id]
+            if ((left?.column ?? 1) !== (right?.column ?? 1)) return (left?.column ?? 1) - (right?.column ?? 1)
+            return (left?.order ?? 0) - (right?.order ?? 0)
+          }),
+      }))
+      .filter((group) => group.fields.length > 0)
+  }, [layoutConfig])
+
+  const formColumns = Math.min(4, Math.max(1, layoutConfig.formColumns || 2))
+
+  function getSectionGridStyle(): React.CSSProperties {
+    return { gridTemplateColumns: `repeat(${formColumns}, minmax(0, 1fr))` }
+  }
+
+  function getFieldPlacementStyle(fieldId: ContactFormFieldKey): React.CSSProperties {
+    const config = layoutConfig.fields[fieldId]
+    return {
+      gridColumnStart: Math.min(formColumns, Math.max(1, config?.column ?? 1)),
+      gridRowStart: Math.max(1, (config?.order ?? 0) + 1),
+    }
+  }
+
+  function renderField(fieldId: ContactFormFieldKey) {
+    switch (fieldId) {
+      case 'contactNumber':
+        return (
+          <FieldInput label={requiredLabel('Contact ID', req('contactNumber'))}>
+            <input value="Generated automatically" readOnly disabled className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white opacity-80" style={{ borderColor: 'var(--border-muted)' }} />
+          </FieldInput>
+        )
+      case 'firstName':
+        return (
+          <FieldInput label={requiredLabel('First name', req('firstName'))}>
+            <input value={firstName} onChange={(e) => setFirstName(e.target.value)} required={req('firstName')} className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+          </FieldInput>
+        )
+      case 'lastName':
+        return (
+          <FieldInput label={requiredLabel('Last name', req('lastName'))}>
+            <input value={lastName} onChange={(e) => setLastName(e.target.value)} required={req('lastName')} className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+          </FieldInput>
+        )
+      case 'email':
+        return (
+          <FieldInput label={requiredLabel('Email', req('email'))}>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required={req('email')} className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+          </FieldInput>
+        )
+      case 'phone':
+        return (
+          <FieldInput label={requiredLabel('Phone', req('phone'))}>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} required={req('phone')} className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+          </FieldInput>
+        )
+      case 'address':
+        return (
+          <FieldInput label={requiredLabel('Address', req('address'))}>
+            <div className="mt-1 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setAddressModalOpen(true)}
+                className="rounded-md border px-3 py-2 text-sm font-medium"
+                style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+              >
+                {address ? 'Edit Address' : 'Enter Address'}
+              </button>
+              <p className="text-xs" style={{ color: address ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                {address ? address : 'No address saved yet'}
+              </p>
+            </div>
+          </FieldInput>
+        )
+      case 'position':
+        return (
+          <FieldInput label={requiredLabel('Position', req('position'))}>
+            <input value={position} onChange={(e) => setPosition(e.target.value)} required={req('position')} className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+          </FieldInput>
+        )
+      case 'customerId':
+        return (
+          <FieldInput label={requiredLabel('Customer', req('customerId'))}>
+            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required={req('customerId')} className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)', backgroundColor: 'var(--card)' }}>
+              <option value="" style={{ backgroundColor: 'var(--card-elevated)', color: 'var(--text-muted)' }}>
+                None
+              </option>
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
+          </FieldInput>
+        )
+      case 'inactive':
+        return (
+          <FieldInput label={requiredLabel('Inactive', req('inactive'))}>
+            <select value="false" disabled className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm opacity-80" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)', backgroundColor: 'var(--card)' }}>
+              <option value="false">No</option>
+            </select>
+          </FieldInput>
+        )
+      default:
+        return null
+    }
+  }
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
@@ -79,6 +211,12 @@ export default function ContactCreateForm({
 
       if (req('customerId') && !customerId) {
         setError('Please select a customer')
+        setSaving(false)
+        return
+      }
+
+      if (req('address') && !address.trim()) {
+        setError('Address is required')
         setSaving(false)
         return
       }
@@ -114,11 +252,12 @@ export default function ContactCreateForm({
       setPhone('')
       setAddress('')
       setPosition('')
+      setCustomerId('')
       setAddressModalOpen(false)
       setSaving(false)
       onSuccess?.()
       router.refresh()
-    } catch (err) {
+    } catch {
       setError('Unable to create contact')
       setSaving(false)
     }
@@ -126,97 +265,15 @@ export default function ContactCreateForm({
 
   return (
     <section className="rounded-lg p-2">
-      <p className="mb-4 text-sm" style={{ color: 'var(--text-muted)' }}>Contact ID is generated automatically when the record is created.</p>
       <form className="space-y-4" onSubmit={handleSubmit}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('First name', req('firstName'))}</label>
-            <input
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              required={req('firstName')}
-              className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Last name', req('lastName'))}</label>
-            <input
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              required={req('lastName')}
-              className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            />
-          </div>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Email', req('email'))}</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required={req('email')}
-              className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Phone', req('phone'))}</label>
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required={req('phone')}
-              className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            />
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Address', req('address'))}</label>
-          <div className="mt-1 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setAddressModalOpen(true)}
-              className="rounded-md border px-3 py-2 text-sm font-medium"
-              style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-            >
-              {address ? 'Edit Address' : 'Enter Address'}
-            </button>
-            <p className="text-xs" style={{ color: address ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
-              {address ? address : 'No address saved yet'}
-            </p>
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Position</label>
-          <input
-            value={position}
-            onChange={(e) => setPosition(e.target.value)}
-            className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-            style={{ borderColor: 'var(--border-muted)' }}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Customer', req('customerId'))}</label>
-          <select
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            required={req('customerId')}
-            className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm"
-            style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)', backgroundColor: 'var(--card)' }}
-          >
-            <option value="" disabled style={{ backgroundColor: 'var(--card-elevated)', color: 'var(--text-muted)' }}>
-              Select customer
-            </option>
-            {customers.map((customer) => (
-              <option key={customer.id} value={customer.id} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                {customer.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {groupedVisibleFields.map(({ section, fields }) => (
+          <section key={section} className="rounded-lg border p-4" style={{ borderColor: 'var(--border-muted)' }}>
+            <div className="mb-4"><h3 className="text-sm font-semibold text-white">{section}</h3></div>
+            <div className="grid gap-4" style={getSectionGridStyle()}>
+              {fields.map((field) => <div key={field.id} style={getFieldPlacementStyle(field.id)}>{renderField(field.id)}</div>)}
+            </div>
+          </section>
+        ))}
         <AddressModal
           open={addressModalOpen}
           onClose={() => setAddressModalOpen(false)}
@@ -248,5 +305,14 @@ export default function ContactCreateForm({
         </div>
       </form>
     </section>
+  )
+}
+
+function FieldInput({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+      <span>{label}</span>
+      {children}
+    </label>
   )
 }
