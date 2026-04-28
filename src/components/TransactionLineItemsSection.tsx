@@ -15,6 +15,7 @@ type PurchaseOrderLineItemRow = {
   itemId: string | null
   itemName: string | null
   description: string
+  notes?: string | null
   quantity: number
   receivedQuantity: number
   billedQuantity: number
@@ -35,6 +36,7 @@ type EditableRowState = {
   itemRecordId: string | null
   itemSearch: string
   description: string
+  notes: string
   quantity: string
   unitPrice: string
   error: string
@@ -43,6 +45,23 @@ type EditableRowState = {
 type DraftRowState = EditableRowState & {
   id: string
 }
+
+type LineWidthMode = 'auto' | 'compact' | 'normal' | 'wide'
+type LineDisplayMode = 'label' | 'idAndLabel' | 'id'
+type LineDropdownSortMode = 'id' | 'label'
+type LineSectionSettings = {
+  fontSize?: 'xs' | 'sm'
+}
+type LineColumnSettings = Partial<Record<
+  PurchaseOrderLineColumnKey | 'notes',
+  {
+    widthMode?: LineWidthMode
+    editDisplay?: LineDisplayMode
+    viewDisplay?: LineDisplayMode
+    dropdownDisplay?: LineDisplayMode
+    dropdownSort?: LineDropdownSortMode
+  }
+>>
 
 declare global {
   interface Window {
@@ -61,12 +80,13 @@ const COLUMN_DEFINITIONS = [
   { id: 'billed-qty', label: 'Billed Qty', defaultVisible: true },
   { id: 'unit-price', label: 'Unit Price', defaultVisible: true },
   { id: 'line-total', label: 'Line Total', defaultVisible: true },
+  { id: 'notes', label: 'Notes', defaultVisible: true },
 ] as const
 
 const EDIT_COLUMN_DEFINITION = { id: 'actions', label: 'Actions', locked: true } as const
 
-const COLUMN_LAYOUT: Record<
-  PurchaseOrderLineColumnKey,
+const BASE_COLUMN_LAYOUT: Record<
+  PurchaseOrderLineColumnKey | 'notes',
   { align?: 'left' | 'center' | 'right'; width?: number; pinned?: boolean }
 > = {
   line: { align: 'center', width: 72, pinned: true },
@@ -78,6 +98,7 @@ const COLUMN_LAYOUT: Record<
   'open-qty': { align: 'right' },
   'unit-price': { align: 'right' },
   'line-total': { align: 'right' },
+  notes: { width: 220 },
 }
 
 const HEADER_TOOLTIPS: Record<string, string> = {
@@ -90,6 +111,7 @@ const HEADER_TOOLTIPS: Record<string, string> = {
   'open-qty': 'Derived remaining open quantity for this line based on ordered quantity less received quantity.',
   'unit-price': 'Price per unit for this purchase order line.',
   'line-total': 'Extended line amount calculated from quantity and unit price.',
+  notes: 'Additional internal notes captured for this line.',
 }
 
 function buildItemSelectionUpdates(item: ItemOption): Partial<EditableRowState> {
@@ -102,13 +124,30 @@ function buildItemSelectionUpdates(item: ItemOption): Partial<EditableRowState> 
   }
 }
 
-export default function PurchaseOrderLineItemsSection({
+function formatLookupValue(
+  id: string | null | undefined,
+  label: string | null | undefined,
+  mode: LineDisplayMode,
+) {
+  if (mode === 'id') return id ?? label ?? ''
+  if (mode === 'label') return label ?? id ?? ''
+  if (id && label) return `${id} - ${label}`
+  return id ?? label ?? ''
+}
+
+function getItemSortValue(item: ItemOption, mode: LineDropdownSortMode) {
+  return (mode === 'label' ? item.name : item.itemId).toLowerCase()
+}
+
+export default function TransactionLineItemsSection({
   rows,
   editing,
   purchaseOrderId,
   userId,
   itemOptions,
   lineColumns,
+  lineSettings,
+  lineColumnCustomization,
   draftMode,
   onDraftRowsChange,
   lineItemApiBasePath = '/api/purchase-order-line-items',
@@ -124,12 +163,15 @@ export default function PurchaseOrderLineItemsSection({
   purchaseOrderId: string
   userId: string
   itemOptions: ItemOption[]
-  lineColumns?: Array<{ id: PurchaseOrderLineColumnKey; label: string }>
+  lineColumns?: Array<{ id: PurchaseOrderLineColumnKey | 'notes'; label: string }>
+  lineSettings?: LineSectionSettings
+  lineColumnCustomization?: LineColumnSettings
   draftMode?: boolean
   onDraftRowsChange?: (
     rows: Array<{
       itemId: string | null
       description: string
+      notes?: string | null
       quantity: number
       unitPrice: number
       lineTotal: number
@@ -150,10 +192,9 @@ export default function PurchaseOrderLineItemsSection({
   const [draggedRowId, setDraggedRowId] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(true)
 
-  const itemOptionLabelById = useMemo(
-    () => new Map(itemOptions.map((item) => [item.id, `${item.itemId} - ${item.name}`])),
-    [itemOptions]
-  )
+  const lineFontSize = lineSettings?.fontSize ?? 'sm'
+  const tableFontSize = lineFontSize === 'xs' ? '0.75rem' : '0.875rem'
+  const tableInputClass = lineFontSize === 'xs' ? 'text-xs' : 'text-sm'
 
   const orderedVisibleLineColumns = useMemo(
     () =>
@@ -165,6 +206,27 @@ export default function PurchaseOrderLineItemsSection({
   const columns = editing
     ? [...orderedVisibleLineColumns, EDIT_COLUMN_DEFINITION]
     : orderedVisibleLineColumns
+
+  const getColumnLayout = useCallback(
+    (columnId: PurchaseOrderLineColumnKey | 'notes') => {
+      const base = BASE_COLUMN_LAYOUT[columnId]
+      const widthMode = lineColumnCustomization?.[columnId]?.widthMode ?? 'normal'
+      const baseWidth = base.width
+      const width =
+        widthMode === 'auto'
+          ? base.pinned
+            ? baseWidth ?? 120
+            : undefined
+          : widthMode === 'compact'
+            ? Math.max(72, Math.round((baseWidth ?? 140) * 0.7))
+            : widthMode === 'wide'
+              ? Math.round((baseWidth ?? 140) * 1.35)
+              : baseWidth
+
+      return { ...base, width }
+    },
+    [lineColumnCustomization],
+  )
 
   const orderedRows = useMemo(() => {
     if (!editing) return rows
@@ -194,6 +256,7 @@ export default function PurchaseOrderLineItemsSection({
           itemId: selectedItem?.itemId ?? row.itemId,
           itemName: selectedItem?.name ?? row.itemName,
           description: state?.description ?? row.description,
+          notes: state?.notes ?? row.notes ?? '',
           quantity,
           unitPrice,
           lineTotal,
@@ -212,6 +275,7 @@ export default function PurchaseOrderLineItemsSection({
         return {
           itemId: row.itemRecordId,
           description: row.description,
+          notes: row.notes || null,
           quantity,
           unitPrice,
           lineTotal: calcLineTotal(quantity, unitPrice),
@@ -226,13 +290,13 @@ export default function PurchaseOrderLineItemsSection({
   function getExistingRowState(row: PurchaseOrderLineItemRow): EditableRowState {
     return editableRows[row.id] ?? {
       itemRecordId: row.itemRecordId,
-      itemSearch:
-        row.itemRecordId && itemOptionLabelById.get(row.itemRecordId)
-          ? itemOptionLabelById.get(row.itemRecordId) ?? ''
-          : row.itemId && row.itemName
-            ? `${row.itemId} - ${row.itemName}`
-            : row.itemId ?? '',
+      itemSearch: formatLookupValue(
+        row.itemId,
+        row.itemName,
+        lineColumnCustomization?.['item-id']?.editDisplay ?? 'idAndLabel',
+      ),
       description: row.description,
+      notes: row.notes ?? '',
       quantity: String(row.quantity),
       unitPrice: String(row.unitPrice),
       error: '',
@@ -258,6 +322,7 @@ export default function PurchaseOrderLineItemsSection({
         body: JSON.stringify({
           itemId: state.itemRecordId,
           description: state.description,
+          notes: state.notes || null,
           quantity: state.quantity,
           unitPrice: state.unitPrice,
           displayOrder,
@@ -300,6 +365,7 @@ export default function PurchaseOrderLineItemsSection({
         itemRecordId: null,
         itemSearch: '',
         description: '',
+        notes: '',
         quantity: '1',
         unitPrice: '',
         error: '',
@@ -320,6 +386,7 @@ export default function PurchaseOrderLineItemsSection({
           [parentIdFieldName]: purchaseOrderId,
           itemId: state.itemRecordId,
           description: state.description,
+          notes: state.notes || null,
           quantity: state.quantity,
           unitPrice: state.unitPrice,
           displayOrder,
@@ -448,17 +515,17 @@ export default function PurchaseOrderLineItemsSection({
       </div>
 
       {!expanded ? null : rows.length === 0 && draftRows.length === 0 ? (
-        <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>
+        <p className={`px-6 py-4 ${tableInputClass}`} style={{ color: 'var(--text-muted)' }}>
           {emptyMessage}
         </p>
       ) : (
         <>
           <div id={tableId} className="overflow-x-auto overflow-y-visible" data-column-selector-table={tableId}>
-            <table className="min-w-[1200px] w-full" data-disable-filter-sort="true">
+            <table className="min-w-[1200px] w-full" data-disable-filter-sort="true" style={{ fontSize: tableFontSize }}>
               <thead>
                 <tr>
                   {orderedVisibleLineColumns.map((column) => {
-                    const layout = COLUMN_LAYOUT[column.id]
+                    const layout = getColumnLayout(column.id)
                     const pinnedLeft = getPinnedLeft(orderedVisibleLineColumns, column.id)
                     return (
                       <HeaderCell
@@ -496,7 +563,7 @@ export default function PurchaseOrderLineItemsSection({
                       }}
                     >
                       {orderedVisibleLineColumns.map((column) => {
-                        const layout = COLUMN_LAYOUT[column.id]
+                        const layout = getColumnLayout(column.id)
                         const pinnedLeft = getPinnedLeft(orderedVisibleLineColumns, column.id)
                         return (
                           <BodyCell
@@ -515,6 +582,8 @@ export default function PurchaseOrderLineItemsSection({
                               state,
                               updateExistingRow,
                               itemOptions,
+                              lineColumnCustomization,
+                              tableInputClass,
                             })}
                           </BodyCell>
                         )
@@ -554,7 +623,7 @@ export default function PurchaseOrderLineItemsSection({
                           }}
                         >
                           {orderedVisibleLineColumns.map((column) => {
-                            const layout = COLUMN_LAYOUT[column.id]
+                            const layout = getColumnLayout(column.id)
                             const pinnedLeft = getPinnedLeft(orderedVisibleLineColumns, column.id)
                             return (
                               <BodyCell
@@ -573,6 +642,8 @@ export default function PurchaseOrderLineItemsSection({
                                   draftRow,
                                   updateDraftRow,
                                   itemOptions,
+                                  lineColumnCustomization,
+                                  tableInputClass,
                                 })}
                               </BodyCell>
                             )
@@ -602,7 +673,7 @@ export default function PurchaseOrderLineItemsSection({
               <tfoot>
                 <tr style={{ borderTop: '1px solid var(--border-muted)' }}>
                   {orderedVisibleLineColumns.map((column) => {
-                    const layout = COLUMN_LAYOUT[column.id]
+                    const layout = getColumnLayout(column.id)
                     const pinnedLeft = getPinnedLeft(orderedVisibleLineColumns, column.id)
                     return (
                       <FooterCell
@@ -633,14 +704,14 @@ export default function PurchaseOrderLineItemsSection({
 }
 
 function getPinnedLeft(
-  visibleColumns: Array<{ id: PurchaseOrderLineColumnKey }>,
-  columnId: PurchaseOrderLineColumnKey
+  visibleColumns: Array<{ id: PurchaseOrderLineColumnKey | 'notes' }>,
+  columnId: PurchaseOrderLineColumnKey | 'notes'
 ) {
   let offset = 0
   for (const column of visibleColumns) {
     if (column.id === columnId) break
-    if (COLUMN_LAYOUT[column.id].pinned) {
-      offset += COLUMN_LAYOUT[column.id].width ?? 120
+    if (BASE_COLUMN_LAYOUT[column.id].pinned) {
+      offset += BASE_COLUMN_LAYOUT[column.id].width ?? 120
     }
   }
   return offset
@@ -654,15 +725,24 @@ function renderLineCell({
   state,
   updateExistingRow,
   itemOptions,
+  lineColumnCustomization,
+  tableInputClass,
 }: {
-  columnId: PurchaseOrderLineColumnKey
+  columnId: PurchaseOrderLineColumnKey | 'notes'
   row: PurchaseOrderLineItemRow
   rowIndex: number
   editing: boolean
   state: EditableRowState
   updateExistingRow: (row: PurchaseOrderLineItemRow, updates: Partial<EditableRowState>) => void
   itemOptions: ItemOption[]
+  lineColumnCustomization?: LineColumnSettings
+  tableInputClass: string
 }) {
+  const itemEditDisplay = lineColumnCustomization?.['item-id']?.editDisplay ?? 'idAndLabel'
+  const itemViewDisplay = lineColumnCustomization?.['item-id']?.viewDisplay ?? 'idAndLabel'
+  const itemDropdownDisplay = lineColumnCustomization?.['item-id']?.dropdownDisplay ?? 'idAndLabel'
+  const itemDropdownSort = lineColumnCustomization?.['item-id']?.dropdownSort ?? 'id'
+  const fullItemValue = formatLookupValue(row.itemId, row.itemName, 'idAndLabel')
   switch (columnId) {
     case 'line':
       return rowIndex + 1
@@ -671,6 +751,9 @@ function renderLineCell({
         <ItemLookupInput
           value={state.itemSearch}
           itemOptions={itemOptions}
+          dropdownDisplay={itemDropdownDisplay}
+          dropdownSort={itemDropdownSort}
+          inputClassName={tableInputClass}
           onChange={(value) => {
             updateExistingRow(row, {
               itemRecordId: null,
@@ -679,11 +762,16 @@ function renderLineCell({
             })
           }}
           onSelect={(item) => {
-            updateExistingRow(row, buildItemSelectionUpdates(item))
+            updateExistingRow(row, {
+              ...buildItemSelectionUpdates(item),
+              itemSearch: formatLookupValue(item.itemId, item.name, itemEditDisplay),
+            })
           }}
         />
       ) : (
-        row.itemId ?? '-'
+        <span className="block truncate whitespace-nowrap" title={fullItemValue || '-'}>
+          {formatLookupValue(row.itemId, row.itemName, itemViewDisplay) || '-'}
+        </span>
       )
     case 'description':
       return editing ? (
@@ -692,7 +780,8 @@ function renderLineCell({
             value={state.description}
             onChange={(event) => updateExistingRow(row, { description: event.target.value, error: '' })}
             disabled={state.itemRecordId != null}
-            className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
+            title={state.description}
+            className={`w-full rounded-md border bg-transparent px-2 py-1.5 text-white ${tableInputClass}`}
             style={{ borderColor: 'var(--border-muted)' }}
           />
           {state.error ? (
@@ -702,7 +791,19 @@ function renderLineCell({
           ) : null}
         </div>
       ) : (
-        <span style={{ color: 'var(--text-secondary)' }}>{row.description}</span>
+        <span className="block truncate whitespace-nowrap" title={row.description} style={{ color: 'var(--text-secondary)' }}>{row.description}</span>
+      )
+    case 'notes':
+      return editing ? (
+        <input
+          value={state.notes}
+          onChange={(event) => updateExistingRow(row, { notes: event.target.value, error: '' })}
+          title={state.notes}
+          className={`w-full rounded-md border bg-transparent px-2 py-1.5 text-white ${tableInputClass}`}
+          style={{ borderColor: 'var(--border-muted)' }}
+        />
+      ) : (
+        <span className="block truncate whitespace-nowrap" title={row.notes ?? '-'} style={{ color: 'var(--text-secondary)' }}>{row.notes ?? '-'}</span>
       )
     case 'quantity':
       return editing ? (
@@ -711,7 +812,7 @@ function renderLineCell({
           min="1"
           value={state.quantity}
           onChange={(event) => updateExistingRow(row, { quantity: event.target.value, error: '' })}
-          className="w-20 rounded-md border bg-transparent px-2 py-1.5 text-right text-sm text-white"
+          className={`w-20 rounded-md border bg-transparent px-2 py-1.5 text-right text-white ${tableInputClass}`}
           style={{ borderColor: 'var(--border-muted)' }}
         />
       ) : (
@@ -731,7 +832,7 @@ function renderLineCell({
           step="0.01"
           value={state.unitPrice}
           onChange={(event) => updateExistingRow(row, { unitPrice: event.target.value, error: '' })}
-          className="w-28 rounded-md border bg-transparent px-2 py-1.5 text-right text-sm text-white"
+          className={`w-28 rounded-md border bg-transparent px-2 py-1.5 text-right text-white ${tableInputClass}`}
           style={{ borderColor: 'var(--border-muted)' }}
         />
       ) : (
@@ -752,15 +853,22 @@ function renderDraftLineCell({
   draftRow,
   updateDraftRow,
   itemOptions,
+  lineColumnCustomization,
+  tableInputClass,
 }: {
-  columnId: PurchaseOrderLineColumnKey
+  columnId: PurchaseOrderLineColumnKey | 'notes'
   lineNumber: number
   quantity: number
   lineTotal: number
   draftRow: DraftRowState
   updateDraftRow: (draftId: string, updates: Partial<DraftRowState>) => void
   itemOptions: ItemOption[]
+  lineColumnCustomization?: LineColumnSettings
+  tableInputClass: string
 }) {
+  const itemEditDisplay = lineColumnCustomization?.['item-id']?.editDisplay ?? 'idAndLabel'
+  const itemDropdownDisplay = lineColumnCustomization?.['item-id']?.dropdownDisplay ?? 'idAndLabel'
+  const itemDropdownSort = lineColumnCustomization?.['item-id']?.dropdownSort ?? 'id'
   switch (columnId) {
     case 'line':
       return lineNumber
@@ -769,6 +877,9 @@ function renderDraftLineCell({
         <ItemLookupInput
           value={draftRow.itemSearch}
           itemOptions={itemOptions}
+          dropdownDisplay={itemDropdownDisplay}
+          dropdownSort={itemDropdownSort}
+          inputClassName={tableInputClass}
           onChange={(value) => {
             updateDraftRow(draftRow.id, {
               itemRecordId: null,
@@ -777,7 +888,10 @@ function renderDraftLineCell({
             })
           }}
           onSelect={(item) => {
-            updateDraftRow(draftRow.id, buildItemSelectionUpdates(item))
+            updateDraftRow(draftRow.id, {
+              ...buildItemSelectionUpdates(item),
+              itemSearch: formatLookupValue(item.itemId, item.name, itemEditDisplay),
+            })
           }}
         />
       )
@@ -788,7 +902,19 @@ function renderDraftLineCell({
           onChange={(event) => updateDraftRow(draftRow.id, { description: event.target.value, error: '' })}
           disabled={draftRow.itemRecordId != null}
           placeholder="Description"
-          className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
+          title={draftRow.description}
+          className={`w-full rounded-md border bg-transparent px-2 py-1.5 text-white ${tableInputClass}`}
+          style={{ borderColor: 'var(--border-muted)' }}
+        />
+      )
+    case 'notes':
+      return (
+        <input
+          value={draftRow.notes}
+          onChange={(event) => updateDraftRow(draftRow.id, { notes: event.target.value, error: '' })}
+          placeholder="Notes"
+          title={draftRow.notes}
+          className={`w-full rounded-md border bg-transparent px-2 py-1.5 text-white ${tableInputClass}`}
           style={{ borderColor: 'var(--border-muted)' }}
         />
       )
@@ -799,7 +925,7 @@ function renderDraftLineCell({
           min="1"
           value={draftRow.quantity}
           onChange={(event) => updateDraftRow(draftRow.id, { quantity: event.target.value, error: '' })}
-          className="w-20 rounded-md border bg-transparent px-2 py-1.5 text-right text-sm text-white"
+          className={`w-20 rounded-md border bg-transparent px-2 py-1.5 text-right text-white ${tableInputClass}`}
           style={{ borderColor: 'var(--border-muted)' }}
         />
       )
@@ -817,7 +943,7 @@ function renderDraftLineCell({
           step="0.01"
           value={draftRow.unitPrice}
           onChange={(event) => updateDraftRow(draftRow.id, { unitPrice: event.target.value, error: '' })}
-          className="w-28 rounded-md border bg-transparent px-2 py-1.5 text-right text-sm text-white"
+          className={`w-28 rounded-md border bg-transparent px-2 py-1.5 text-right text-white ${tableInputClass}`}
           style={{ borderColor: 'var(--border-muted)' }}
         />
       )
@@ -886,7 +1012,7 @@ function BodyCell({
   return (
     <td
       data-column={columnId}
-      className={`px-4 py-3 text-sm ${getAlignClassName(align)}`}
+      className={`px-4 py-3 ${getAlignClassName(align)}`}
       style={{
         color: 'var(--text-secondary)',
         ...(pinned ? getPinnedStyle(left ?? 0, width ?? 120, 10) : width ? { minWidth: width, width } : {}),
@@ -915,7 +1041,7 @@ function FooterCell({
   return (
     <td
       data-column={columnId}
-      className={`px-4 py-3 text-sm ${getAlignClassName(align)}`}
+      className={`px-4 py-3 ${getAlignClassName(align)}`}
       style={{
         color: 'var(--text-secondary)',
         backgroundColor: 'var(--card-elevated)',
@@ -968,19 +1094,31 @@ function FieldTooltip({ content }: { content: string }) {
 function ItemLookupInput({
   value,
   itemOptions,
+  dropdownDisplay,
+  dropdownSort,
+  inputClassName,
   onChange,
   onSelect,
 }: {
   value: string
   itemOptions: ItemOption[]
+  dropdownDisplay: LineDisplayMode
+  dropdownSort: LineDropdownSortMode
+  inputClassName: string
   onChange: (value: string) => void
   onSelect: (item: ItemOption) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState(value)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const dropdownRef = useRef<HTMLDivElement | null>(null)
-  const [dropdownStyle, setDropdownStyle] = useState<{ bottom: number; left: number; width: number } | null>(null)
+  const [dropdownStyle, setDropdownStyle] = useState<{
+    bottom: number
+    left: number
+    minWidth: number
+    maxWidth: number
+  } | null>(null)
 
   useEffect(() => {
     if (!open || !inputRef.current) return
@@ -988,11 +1126,12 @@ function ItemLookupInput({
     function updatePosition() {
       if (!inputRef.current) return
       const rect = inputRef.current.getBoundingClientRect()
-      const desiredWidth = Math.max(rect.width + 220, 420)
+      const maxWidth = window.innerWidth - 32
       setDropdownStyle({
         bottom: Math.max(window.innerHeight - rect.top + 4, 8),
-        left: Math.max(16, Math.min(rect.left, window.innerWidth - desiredWidth - 16)),
-        width: Math.min(desiredWidth, window.innerWidth - 32),
+        left: Math.max(16, rect.left),
+        minWidth: rect.width + 120,
+        maxWidth,
       })
     }
 
@@ -1003,7 +1142,7 @@ function ItemLookupInput({
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
     }
-  }, [open])
+  }, [open, query])
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -1018,40 +1157,84 @@ function ItemLookupInput({
   }, [])
 
   const filtered = useMemo(() => {
-    const query = value.trim().toLowerCase()
-    if (!query) return itemOptions.slice(0, 12)
-    return itemOptions.filter((item) => `${item.itemId} ${item.name}`.toLowerCase().includes(query)).slice(0, 12)
-  }, [itemOptions, value])
+    const normalizedQuery = query.trim().toLowerCase()
+    return [...itemOptions]
+      .sort((left, right) =>
+        getItemSortValue(left, dropdownSort).localeCompare(getItemSortValue(right, dropdownSort), undefined, {
+          sensitivity: 'base',
+          numeric: true,
+        })
+      )
+      .filter((item) => `${item.itemId} ${item.name}`.toLowerCase().includes(normalizedQuery))
+  }, [dropdownSort, itemOptions, query])
 
   return (
     <div ref={containerRef} className="relative z-50">
-      <input
-        ref={inputRef}
-        value={value}
-        onFocus={() => setOpen(true)}
-        onChange={(event) => {
-          onChange(event.target.value)
-          setOpen(true)
-        }}
-        placeholder="Search item"
-        className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-        style={{
-          borderColor: 'var(--border-muted)',
-          color: 'white',
-          backgroundColor: 'var(--card-elevated)',
-          colorScheme: 'dark',
-          WebkitTextFillColor: 'white',
-        }}
-      />
+      <div className="relative">
+        <input
+          ref={inputRef}
+          value={open ? query : value}
+          onFocus={() => {
+            setOpen(true)
+            setQuery(value)
+          }}
+          onChange={(event) => {
+            const nextQuery = event.target.value
+            setQuery(nextQuery)
+            onChange(nextQuery)
+            setOpen(true)
+          }}
+          placeholder="Select or search item"
+          title={value || 'Select or search item'}
+          className={`w-full rounded-md border bg-transparent px-2.5 py-1.5 pr-8 text-white ${inputClassName}`}
+          style={{
+            borderColor: 'var(--border-muted)',
+            color: 'white',
+            backgroundColor: 'var(--card-elevated)',
+            colorScheme: 'dark',
+            WebkitTextFillColor: 'white',
+          }}
+        />
+        <button
+          type="button"
+          onMouseDown={(event) => {
+            event.preventDefault()
+            const nextOpen = !open
+            setOpen(nextOpen)
+            if (nextOpen) {
+              setQuery(value)
+              inputRef.current?.focus()
+            }
+          }}
+          className="absolute inset-y-0 right-0 flex w-8 items-center justify-center rounded-r-md"
+          style={{ color: 'var(--text-muted)' }}
+          aria-label="Toggle item options"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m5 7 5 5 5-5" />
+          </svg>
+        </button>
+      </div>
       {open && filtered.length > 0 && dropdownStyle
         ? createPortal(
             <div
               ref={dropdownRef}
-              className="fixed z-[200] max-h-52 overflow-y-auto rounded-md border shadow-2xl"
+              className="fixed z-[200] max-h-60 overflow-y-auto rounded-md border shadow-2xl"
               style={{
                 bottom: dropdownStyle.bottom,
                 left: dropdownStyle.left,
-                width: dropdownStyle.width,
+                minWidth: dropdownStyle.minWidth,
+                width: 'max-content',
+                maxWidth: dropdownStyle.maxWidth,
                 borderColor: 'var(--border-muted)',
                 backgroundColor: 'var(--card-elevated)',
               }}
@@ -1063,14 +1246,15 @@ function ItemLookupInput({
                   onMouseDown={(event) => {
                     event.preventDefault()
                     onSelect(item)
+                    setQuery(formatLookupValue(item.itemId, item.name, dropdownDisplay))
                     setOpen(false)
                   }}
-                  className="block w-full px-3 py-2 text-left text-sm hover:bg-white/5"
+                  className={`block w-full whitespace-nowrap px-2.5 py-1.5 text-left hover:bg-white/5 ${inputClassName}`}
                   style={{ color: 'var(--text-secondary)' }}
+                  title={formatLookupValue(item.itemId, item.name, 'idAndLabel')}
                 >
-                  <span className="font-medium text-white">{item.itemId}</span>
-                  <span className="ml-2" style={{ color: 'var(--text-muted)' }}>
-                    {item.name}
+                  <span className="block truncate whitespace-nowrap">
+                    {formatLookupValue(item.itemId, item.name, dropdownDisplay)}
                   </span>
                 </button>
               ))}

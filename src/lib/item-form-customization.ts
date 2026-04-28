@@ -1,4 +1,5 @@
 import { getListSourceText, type FieldSourceType } from '@/lib/list-source'
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 export type ItemFormFieldKey =
   | 'name'
@@ -71,7 +72,21 @@ export type ItemFormCustomizationConfig = {
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<ItemFormFieldKey, ItemFormFieldCustomization>
+  statCards?: Array<TransactionStatCardSlot<ItemStatCardMetric>>
 }
+
+export type ItemStatCardMetric =
+  | 'purchaseOrderLines'
+  | 'subsidiaries'
+  | 'preferredVendor'
+  | 'status'
+
+export const ITEM_STAT_CARDS: Array<{ id: ItemStatCardMetric; label: string }> = [
+  { id: 'purchaseOrderLines', label: 'Purchase Order Lines' },
+  { id: 'subsidiaries', label: 'Subsidiaries' },
+  { id: 'preferredVendor', label: 'Preferred Vendor' },
+  { id: 'status', label: 'Status' },
+]
 
 export const ITEM_FORM_FIELDS: ItemFormFieldMeta[] = [
   { id: 'name', label: 'Name', fieldType: 'text', description: 'Primary item name shown on transactions and reports.' },
@@ -305,5 +320,14 @@ export function defaultItemFormCustomization(): ItemFormCustomizationConfig {
         },
       ])
     ) as Record<ItemFormFieldKey, ItemFormFieldCustomization>,
+    statCards: ITEM_STAT_CARDS.map((card, index) => ({
+      id: `item-stat-${card.id}`,
+      metric: card.id,
+      visible: true,
+      order: index,
+      size: 'md',
+      colorized: true,
+      linked: true,
+    })),
   }
 }

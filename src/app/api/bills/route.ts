@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { logActivity } from '@/lib/activity'
+import { createFieldChangeSummary, logActivity, logCommunicationActivity } from '@/lib/activity'
 import { generateNextBillNumber } from '@/lib/bill-number'
-import { parseMoneyValue } from '@/lib/money'
+import { calcLineTotal, parseMoneyValue, sumMoney } from '@/lib/money'
 import { resolveVendorTransactionSnapshot } from '@/lib/transaction-snapshot-defaults'
 
 const INCLUDE = {
   vendor: true,
+  purchaseOrder: true,
+  subsidiary: true,
+  currency: true,
+  lineItems: {
+    include: { item: true },
+    orderBy: [{ createdAt: 'asc' as const }],
+  },
 } as const
 
 export async function GET(request: NextRequest) {
@@ -40,8 +47,52 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url)
     const body = await request.json()
-    const { vendorId, total, date, dueDate, status, notes, subsidiaryId, currencyId, userId } = body
+    if (searchParams.get('action') === 'send-email') {
+      const {
+        billId,
+        userId,
+        to,
+        from,
+        subject,
+        preview,
+        attachPdf,
+      } = body as {
+        billId?: string
+        userId?: string | null
+        to?: string
+        from?: string
+        subject?: string
+        preview?: string
+        attachPdf?: boolean
+      }
+
+      if (!billId || !to?.trim() || !subject?.trim()) {
+        return NextResponse.json({ error: 'Missing required email fields' }, { status: 400 })
+      }
+
+      const bill = await prisma.bill.findUnique({ where: { id: billId }, select: { id: true } })
+      if (!bill) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
+
+      await logCommunicationActivity({
+        entityType: 'bill',
+        entityId: billId,
+        userId: userId ?? null,
+        context: 'UI',
+        channel: 'Email',
+        direction: 'Outbound',
+        subject: subject.trim(),
+        from: from?.trim() || '-',
+        to: to.trim(),
+        status: attachPdf ? 'Prepared (PDF)' : 'Prepared',
+        preview: preview?.trim() || '',
+      })
+
+      return NextResponse.json({ success: true })
+    }
+
+    const { vendorId, purchaseOrderId, total, date, dueDate, status, notes, subsidiaryId, currencyId, userId, lineItems } = body
 
     if (!vendorId || total === undefined || !date) {
       return NextResponse.json({ error: 'vendorId, total, and bill date are required' }, { status: 400 })
@@ -54,11 +105,41 @@ export async function POST(request: NextRequest) {
       currencyId,
     })
 
+    const normalizedLineItems = Array.isArray(lineItems)
+      ? lineItems
+          .map((line: {
+            itemId?: string | null
+            description?: string | null
+            quantity?: number
+            unitPrice?: number
+            notes?: string | null
+            displayOrder?: number
+          }) => {
+            const quantity = Math.max(1, Number(line.quantity) || 1)
+            const unitPrice = Math.max(0, Number(line.unitPrice) || 0)
+            const nextDescription = line.description?.trim() || ''
+            return {
+              itemId: line.itemId || null,
+              description: nextDescription,
+              quantity,
+              unitPrice,
+              lineTotal: calcLineTotal(quantity, unitPrice),
+              notes: line.notes?.trim() || null,
+            }
+          })
+          .filter((line: { itemId: string | null; description: string }) => line.itemId || line.description)
+      : []
+
+    const computedTotal = normalizedLineItems.length
+      ? sumMoney(normalizedLineItems.map((line: { lineTotal: number }) => line.lineTotal))
+      : parseMoneyValue(total)
+
     const bill = await prisma.bill.create({
       data: {
         number,
         vendorId,
-        total: parseMoneyValue(total),
+        purchaseOrderId: purchaseOrderId || null,
+        total: computedTotal,
         date: new Date(date),
         dueDate: dueDate ? new Date(dueDate) : null,
         status: nextStatus,
@@ -66,6 +147,25 @@ export async function POST(request: NextRequest) {
         subsidiaryId: snapshot.subsidiaryId,
         currencyId: snapshot.currencyId,
         userId: userId || null,
+        lineItems: normalizedLineItems.length
+          ? {
+              create: normalizedLineItems.map((line: {
+                itemId: string | null
+                description: string
+                quantity: number
+                unitPrice: number
+                lineTotal: number
+                notes: string | null
+              }) => ({
+                itemId: line.itemId,
+                description: line.description,
+                quantity: line.quantity,
+                unitPrice: line.unitPrice,
+                lineTotal: line.lineTotal,
+                notes: line.notes,
+              })),
+            }
+          : undefined,
       },
       include: INCLUDE,
     })
@@ -92,7 +192,12 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { vendorId, total, date, dueDate, status, notes } = body
+    const { vendorId, purchaseOrderId, total, date, dueDate, status, notes, subsidiaryId, currencyId } = body
+
+    const before = await prisma.bill.findUnique({ where: { id } })
+    if (!before) {
+      return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
+    }
 
     if (vendorId !== undefined && !String(vendorId ?? '').trim()) {
       return NextResponse.json({ error: 'vendorId cannot be empty' }, { status: 400 })
@@ -106,11 +211,14 @@ export async function PUT(request: NextRequest) {
       where: { id },
       data: {
         ...(vendorId !== undefined ? { vendorId: String(vendorId).trim() } : {}),
+        ...(purchaseOrderId !== undefined ? { purchaseOrderId: purchaseOrderId ? String(purchaseOrderId).trim() : null } : {}),
         ...(total !== undefined ? { total: parseMoneyValue(total) } : {}),
         ...(date !== undefined ? { date: new Date(String(date)) } : {}),
         ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
         ...(status !== undefined ? { status: status || 'received' } : {}),
         ...(notes !== undefined ? { notes: notes || null } : {}),
+        ...(subsidiaryId !== undefined ? { subsidiaryId: subsidiaryId || null } : {}),
+        ...(currencyId !== undefined ? { currencyId: currencyId || null } : {}),
       },
       include: INCLUDE,
     })
@@ -121,6 +229,35 @@ export async function PUT(request: NextRequest) {
       action: 'update',
       summary: `Updated bill ${bill.number}`,
     })
+
+    const changes = [
+      ['Vendor', before.vendorId ?? '', bill.vendorId ?? ''],
+      ['Purchase Order', before.purchaseOrderId ?? '', bill.purchaseOrderId ?? ''],
+      ['Total', String(before.total ?? ''), String(bill.total ?? '')],
+      ['Bill Date', before.date ? before.date.toISOString().slice(0, 10) : '', bill.date ? bill.date.toISOString().slice(0, 10) : ''],
+      ['Due Date', before.dueDate ? before.dueDate.toISOString().slice(0, 10) : '', bill.dueDate ? bill.dueDate.toISOString().slice(0, 10) : ''],
+      ['Status', before.status ?? '', bill.status ?? ''],
+      ['Notes', before.notes ?? '', bill.notes ?? ''],
+      ['Subsidiary', before.subsidiaryId ?? '', bill.subsidiaryId ?? ''],
+      ['Currency', before.currencyId ?? '', bill.currencyId ?? ''],
+    ]
+      .filter(([, oldValue, newValue]) => oldValue !== newValue)
+      .map(([fieldName, oldValue, newValue]) => ({
+        entityType: 'bill',
+        entityId: bill.id,
+        action: 'update',
+        summary: createFieldChangeSummary({
+          context: 'Header',
+          fieldName,
+          oldValue,
+          newValue,
+        }),
+        userId: bill.userId,
+      }))
+
+    if (changes.length) {
+      await prisma.activity.createMany({ data: changes })
+    }
 
     return NextResponse.json(bill)
   } catch {

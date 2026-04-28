@@ -2,20 +2,24 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import PurchaseOrderHeaderSections, {
-  type PurchaseOrderHeaderField,
-  type PurchaseOrderHeaderSection,
-} from '@/components/PurchaseOrderHeaderSections'
-import TransactionCreatePageShell from '@/components/TransactionCreatePageShell'
-import { RecordDetailEmptyState, RecordDetailSection } from '@/components/RecordDetailPanels'
-import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
+import TransactionHeaderSections, {
+  type TransactionHeaderField,
+  type TransactionHeaderSection,
+} from '@/components/TransactionHeaderSections'
+import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
+import { buildConfiguredTransactionSections, getOrderedVisibleTransactionLineColumns } from '@/lib/transaction-detail-helpers'
+import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/lib/form-requirements-client'
 import {
   PURCHASE_REQUISITION_DETAIL_FIELDS,
+  PURCHASE_REQUISITION_LINE_COLUMNS,
   type PurchaseRequisitionDetailCustomizationConfig,
   type PurchaseRequisitionDetailFieldKey,
+  type PurchaseRequisitionLineColumnKey,
 } from '@/lib/purchase-requisitions-detail-customization'
 import { purchaseRequisitionPageConfig } from '@/lib/transaction-page-configs/purchase-requisition'
 import { fmtCurrency, fmtPhone } from '@/lib/format'
+import { calcLineTotal, sumMoney } from '@/lib/money'
 
 type VendorOption = {
   id: string
@@ -49,6 +53,23 @@ type CurrencyOption = {
   name: string
 }
 
+type ItemOption = {
+  id: string
+  itemId: string | null
+  name: string
+  listPrice: number | null
+}
+
+type DraftLinePayload = {
+  itemId: string | null
+  description: string
+  notes?: string | null
+  quantity: number
+  unitPrice: number
+  lineTotal: number
+  displayOrder: number
+}
+
 const REQUISITION_STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
   { value: 'pending approval', label: 'Pending Approval' },
@@ -72,7 +93,10 @@ export default function PurchaseRequisitionCreatePageClient({
   departments,
   subsidiaries,
   currencies,
+  items,
   customization,
+  initialHeaderValues,
+  initialDraftRows,
 }: {
   nextNumber: string
   userId: string
@@ -81,28 +105,34 @@ export default function PurchaseRequisitionCreatePageClient({
   departments: DepartmentOption[]
   subsidiaries: SubsidiaryOption[]
   currencies: CurrencyOption[]
+  items: ItemOption[]
   customization: PurchaseRequisitionDetailCustomizationConfig
+  initialHeaderValues?: Partial<Record<string, string>>
+  initialDraftRows?: DraftLinePayload[]
 }) {
   const router = useRouter()
+  const { req, isLocked } = useFormRequirementsState('purchaseRequisitionCreate')
   const [headerValues, setHeaderValues] = useState<Record<string, string>>({
-    number: nextNumber,
-    status: 'draft',
-    priority: 'medium',
-    title: '',
-    description: '',
-    neededByDate: '',
-    notes: '',
-    vendorId: '',
-    departmentId: '',
-    subsidiaryId: '',
-    currencyId: '',
+    number: initialHeaderValues?.number ?? nextNumber,
+    status: initialHeaderValues?.status ?? 'draft',
+    priority: initialHeaderValues?.priority ?? 'medium',
+    title: initialHeaderValues?.title ?? '',
+    description: initialHeaderValues?.description ?? '',
+    neededByDate: initialHeaderValues?.neededByDate ?? '',
+    notes: initialHeaderValues?.notes ?? '',
+    vendorId: initialHeaderValues?.vendorId ?? '',
+    departmentId: initialHeaderValues?.departmentId ?? '',
+    subsidiaryId: initialHeaderValues?.subsidiaryId ?? '',
+    currencyId: initialHeaderValues?.currencyId ?? '',
   })
+  const [draftRows, setDraftRows] = useState<DraftLinePayload[]>(initialDraftRows ?? [])
   const [error, setError] = useState('')
 
   const selectedVendor = useMemo(
     () => vendors.find((vendor) => vendor.id === (headerValues.vendorId ?? '')) ?? null,
     [headerValues.vendorId, vendors]
   )
+  const computedTotal = useMemo(() => sumMoney(draftRows.map((row) => row.lineTotal)), [draftRows])
 
   const vendorOptions = vendors.map((vendor) => ({
     value: vendor.id,
@@ -123,7 +153,7 @@ export default function PurchaseRequisitionCreatePageClient({
 
   const headerFieldDefinitions: Record<
     PurchaseRequisitionDetailFieldKey,
-    PurchaseOrderHeaderField & { key: PurchaseRequisitionDetailFieldKey }
+    TransactionHeaderField & { key: PurchaseRequisitionDetailFieldKey }
   > = {
     vendorName: {
       key: 'vendorName',
@@ -320,8 +350,8 @@ export default function PurchaseRequisitionCreatePageClient({
       helpText: 'User who approved the requisition based on the approval activity trail.',
       fieldType: 'text',
       sourceText: 'System Notes / activity history',
-      subsectionTitle: 'Document Identity',
-      subsectionDescription: 'Document numbering, source context, and ownership for this requisition.',
+      subsectionTitle: 'Workflow & Timing',
+      subsectionDescription: 'Current workflow status, urgency, approval context, and required-by timing.',
     },
     title: {
       key: 'title',
@@ -331,8 +361,8 @@ export default function PurchaseRequisitionCreatePageClient({
       type: 'text',
       helpText: 'Brief internal title for the requisition.',
       fieldType: 'text',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Request Details',
+      subsectionDescription: 'Business purpose, summary, and internal notes for the requisition request.',
     },
     description: {
       key: 'description',
@@ -342,8 +372,8 @@ export default function PurchaseRequisitionCreatePageClient({
       type: 'text',
       helpText: 'Header description for the requisition.',
       fieldType: 'text',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Request Details',
+      subsectionDescription: 'Business purpose, summary, and internal notes for the requisition request.',
     },
     status: {
       key: 'status',
@@ -355,8 +385,8 @@ export default function PurchaseRequisitionCreatePageClient({
       helpText: 'Current workflow state of the requisition.',
       fieldType: 'list',
       sourceText: 'System purchase requisition statuses',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Workflow & Timing',
+      subsectionDescription: 'Current workflow status, urgency, approval context, and required-by timing.',
     },
     priority: {
       key: 'priority',
@@ -368,8 +398,8 @@ export default function PurchaseRequisitionCreatePageClient({
       helpText: 'Urgency level for the requested spend.',
       fieldType: 'list',
       sourceText: 'System purchase requisition priorities',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Workflow & Timing',
+      subsectionDescription: 'Current workflow status, urgency, approval context, and required-by timing.',
     },
     neededByDate: {
       key: 'neededByDate',
@@ -380,8 +410,8 @@ export default function PurchaseRequisitionCreatePageClient({
       type: 'text',
       helpText: 'Date the requested goods or services are needed.',
       fieldType: 'date',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Workflow & Timing',
+      subsectionDescription: 'Current workflow status, urgency, approval context, and required-by timing.',
     },
     departmentId: {
       key: 'departmentId',
@@ -393,8 +423,8 @@ export default function PurchaseRequisitionCreatePageClient({
       helpText: 'Department requesting or funding the spend.',
       fieldType: 'list',
       sourceText: 'Departments master data',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Sourcing & Financials',
+      subsectionDescription: 'Department, vendor, subsidiary, currency, and financial context for the request.',
     },
     vendorId: {
       key: 'vendorId',
@@ -406,8 +436,8 @@ export default function PurchaseRequisitionCreatePageClient({
       helpText: 'Preferred vendor linked to this requisition.',
       fieldType: 'list',
       sourceText: 'Vendors master data',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Sourcing & Financials',
+      subsectionDescription: 'Department, vendor, subsidiary, currency, and financial context for the request.',
     },
     subsidiaryId: {
       key: 'subsidiaryId',
@@ -419,8 +449,8 @@ export default function PurchaseRequisitionCreatePageClient({
       helpText: 'Subsidiary that owns the requisition.',
       fieldType: 'list',
       sourceText: 'Subsidiaries master data',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Sourcing & Financials',
+      subsectionDescription: 'Department, vendor, subsidiary, currency, and financial context for the request.',
     },
     currencyId: {
       key: 'currencyId',
@@ -432,18 +462,18 @@ export default function PurchaseRequisitionCreatePageClient({
       helpText: 'Transaction currency for the requisition.',
       fieldType: 'list',
       sourceText: 'Currencies master data',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Sourcing & Financials',
+      subsectionDescription: 'Department, vendor, subsidiary, currency, and financial context for the request.',
     },
     total: {
       key: 'total',
       label: 'Total',
-      value: '0',
-      displayValue: fmtCurrency(0),
+      value: String(computedTotal),
+      displayValue: fmtCurrency(computedTotal),
       helpText: 'Current document total based on all requisition line amounts.',
       fieldType: 'currency',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Sourcing & Financials',
+      subsectionDescription: 'Department, vendor, subsidiary, currency, and financial context for the request.',
     },
     notes: {
       key: 'notes',
@@ -453,8 +483,8 @@ export default function PurchaseRequisitionCreatePageClient({
       type: 'text',
       helpText: 'Internal notes or comments for the requisition.',
       fieldType: 'text',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Request Details',
+      subsectionDescription: 'Business purpose, summary, and internal notes for the requisition request.',
     },
     createdAt: {
       key: 'createdAt',
@@ -477,18 +507,39 @@ export default function PurchaseRequisitionCreatePageClient({
       subsectionDescription: 'System-managed timestamps for this requisition record.',
     },
   }
+  applyRequirementsToEditableFields(headerFieldDefinitions, req, isLocked)
 
-  const headerSections: PurchaseOrderHeaderSection[] = buildConfiguredTransactionSections({
+
+  const headerSections: TransactionHeaderSection[] = buildConfiguredTransactionSections({
     fields: PURCHASE_REQUISITION_DETAIL_FIELDS,
     layout: customization,
     fieldDefinitions: headerFieldDefinitions,
     sectionDescriptions: purchaseRequisitionPageConfig.sectionDescriptions,
   })
+  const orderedVisibleLineColumns = getOrderedVisibleTransactionLineColumns(
+    PURCHASE_REQUISITION_LINE_COLUMNS,
+    customization
+  )
+
+  const requisitionCompatibleLineColumns = orderedVisibleLineColumns.map((column) => ({
+    id: column.id as PurchaseRequisitionLineColumnKey,
+    label: column.label,
+  }))
 
   async function handleCreate(values: Record<string, string>) {
     setError('')
 
     try {
+      const filteredLines = draftRows
+        .map((row, index) => ({
+          ...row,
+          quantity: Math.max(1, row.quantity || 1),
+          unitPrice: Math.max(0, row.unitPrice || 0),
+          lineTotal: calcLineTotal(row.quantity || 1, row.unitPrice || 0),
+          displayOrder: index,
+        }))
+        .filter((row) => row.description.trim() || row.itemId)
+
       const response = await fetch('/api/purchase-requisitions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -505,6 +556,8 @@ export default function PurchaseRequisitionCreatePageClient({
           subsidiaryId: values.subsidiaryId?.trim() || null,
           currencyId: values.currencyId?.trim() || null,
           userId,
+          total: sumMoney(filteredLines.map((row) => row.lineTotal)),
+          lineItems: filteredLines,
         }),
       })
 
@@ -525,17 +578,40 @@ export default function PurchaseRequisitionCreatePageClient({
   }
 
   return (
-    <TransactionCreatePageShell
+    <RecordDetailPageShell
       backHref="/purchase-requisitions"
       backLabel="<- Back to Purchase Requisitions"
-      title="New Purchase Requisition"
-      description="Capture the requisition header first, then add line items after save."
-      formId="new-purchase-requisition-form"
+      meta="New"
+      title={initialHeaderValues ? 'Duplicate Purchase Requisition' : 'New Purchase Requisition'}
+      widthClassName="w-full max-w-none"
+      actions={
+        <>
+          <button
+            type="button"
+            onClick={() => router.push('/purchase-requisitions')}
+            className="rounded-md border px-3 py-1.5 text-xs font-medium"
+            style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="new-purchase-requisition-form"
+            className="rounded-md px-3 py-1.5 text-xs font-semibold text-white"
+            style={{ backgroundColor: 'var(--accent-primary-strong)' }}
+          >
+            Save
+          </button>
+        </>
+      }
     >
-      <PurchaseOrderHeaderSections
+      <TransactionHeaderSections
         editing
         sections={headerSections}
         columns={customization.formColumns}
+        containerTitle="Purchase Requisition Details"
+        containerDescription="Core purchase requisition fields organized into configurable sections."
+        showSubsections={false}
         formId="new-purchase-requisition-form"
         submitMode="controlled"
         onSubmit={handleCreate}
@@ -556,17 +632,38 @@ export default function PurchaseRequisitionCreatePageClient({
         }}
       />
 
-      <div className="mt-6">
-        <RecordDetailSection title="Purchase Requisition Line Items" count={0}>
-          <RecordDetailEmptyState message="Add line items after the requisition is saved." />
-        </RecordDetailSection>
-      </div>
+      <TransactionLineItemsSection
+        rows={[]}
+        editing
+        purchaseOrderId="draft-purchase-requisition"
+        userId={userId || 'draft-user'}
+        itemOptions={items.map((item) => ({
+          id: item.id,
+          itemId: item.itemId ?? 'Pending',
+          name: item.name,
+          unitPrice: item.listPrice ?? 0,
+          itemDrivenValues: {
+            description: item.name,
+            unitPrice: String(item.listPrice ?? 0),
+          },
+        }))}
+        lineColumns={requisitionCompatibleLineColumns}
+        lineSettings={customization.lineSettings}
+        lineColumnCustomization={customization.lineColumns}
+        sectionTitle="Purchase Requisition Line Items"
+        draftMode
+        onDraftRowsChange={setDraftRows}
+        lineItemApiBasePath="/api/purchase-requisitions/line-items"
+        parentIdFieldName="requisitionId"
+        tableId="purchase-requisition-new-line-items"
+      />
 
       {error ? (
         <p className="mt-4 text-sm" style={{ color: 'var(--danger)' }}>
           {error}
         </p>
       ) : null}
-    </TransactionCreatePageShell>
+    </RecordDetailPageShell>
   )
 }
+

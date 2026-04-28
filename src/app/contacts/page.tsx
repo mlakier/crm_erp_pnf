@@ -115,7 +115,12 @@ export default async function ContactsPage({
               <MasterDataHeaderCell columnId="phone">Phone</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="address">Address</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="position">Position</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="primary">Primary</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="quotes-sales-orders">Quotes / SOs</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="invoices">Invoices</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="invoice-cc">Invoice CC</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="inactive">Inactive</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="db-id">DB Id</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="last-modified">Last Modified</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
@@ -123,7 +128,7 @@ export default async function ContactsPage({
           </thead>
           <tbody>
             {contacts.length === 0 ? (
-              <MasterDataEmptyStateRow colSpan={12}>No contacts found</MasterDataEmptyStateRow>
+              <MasterDataEmptyStateRow colSpan={17}>No contacts found</MasterDataEmptyStateRow>
             ) : contacts.map((contact, index) => (
               <tr key={contact.id} style={getMasterDataRowStyle(index, contacts.length)}>
                 <MasterDataBodyCell columnId="contact-number" className="px-4 py-2 text-sm font-medium">
@@ -140,7 +145,12 @@ export default async function ContactsPage({
                 <MasterDataMutedCell columnId="phone">{fmtPhone(contact.phone)}</MasterDataMutedCell>
                 <MasterDataMutedCell columnId="address">{contact.address ?? '-'}</MasterDataMutedCell>
                 <MasterDataMutedCell columnId="position">{contact.position ?? '-'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="primary">{contact.isPrimaryForCustomer ? 'Yes' : 'No'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="quotes-sales-orders">{contact.receivesQuotesSalesOrders ? 'Yes' : 'No'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="invoices">{contact.receivesInvoices ? 'Yes' : 'No'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="invoice-cc">{contact.receivesInvoiceCc ? 'Yes' : 'No'}</MasterDataMutedCell>
                 <MasterDataMutedCell columnId="inactive">{contact.active ? 'No' : 'Yes'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="db-id">{contact.id}</MasterDataMutedCell>
                 <MasterDataMutedCell columnId="created">{formatMasterDataDate(contact.createdAt)}</MasterDataMutedCell>
                 <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(contact.updatedAt)}</MasterDataMutedCell>
                 <MasterDataBodyCell columnId="actions" style={{ color: 'var(--text-secondary)' }}>

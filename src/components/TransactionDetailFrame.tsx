@@ -8,6 +8,7 @@ export default function TransactionDetailFrame({
   supplementarySections,
   communications,
   systemNotes,
+  showFooterSections = true,
 }: {
   stats?: ReactNode
   header: ReactNode
@@ -16,6 +17,7 @@ export default function TransactionDetailFrame({
   supplementarySections?: ReactNode | ReactNode[]
   communications?: ReactNode
   systemNotes?: ReactNode
+  showFooterSections?: boolean
 }) {
   const extras = Array.isArray(supplementarySections)
     ? supplementarySections.filter(Boolean)
@@ -28,12 +30,14 @@ export default function TransactionDetailFrame({
       {stats ? <div className="mb-8">{stats}</div> : null}
       {header}
       {lineItems}
-      {relatedDocuments}
-      {extras.map((section, index) => (
-        <div key={index}>{section}</div>
-      ))}
-      {communications}
-      {systemNotes}
+      {showFooterSections ? relatedDocuments : null}
+      {showFooterSections
+        ? extras.map((section, index) => (
+            <div key={index}>{section}</div>
+          ))
+        : null}
+      {showFooterSections ? communications : null}
+      {showFooterSections ? systemNotes : null}
     </>
   )
 }

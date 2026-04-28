@@ -11,19 +11,7 @@ export default function ConvertLeadButton({
   canConvert: boolean
   opportunityId?: string | null
 }) {
-  if (opportunityId) {
-    return (
-      <Link
-        href={`/opportunities/${opportunityId}`}
-        className="inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-semibold"
-        style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-      >
-        View Opp
-      </Link>
-    )
-  }
-
-  if (!canConvert) {
+  if (opportunityId || !canConvert) {
     return null
   }
 

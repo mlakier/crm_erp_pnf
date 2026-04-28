@@ -1,4 +1,5 @@
 import { getListSourceText, type FieldSourceType } from '@/lib/list-source'
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 export type DepartmentFormFieldKey =
   | 'departmentId'
@@ -35,7 +36,21 @@ export type DepartmentFormCustomizationConfig = {
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<DepartmentFormFieldKey, DepartmentFormFieldCustomization>
+  statCards?: Array<TransactionStatCardSlot<DepartmentStatCardMetric>>
 }
+
+export type DepartmentStatCardMetric =
+  | 'employees'
+  | 'subsidiaries'
+  | 'customFields'
+  | 'status'
+
+export const DEPARTMENT_STAT_CARDS: Array<{ id: DepartmentStatCardMetric; label: string }> = [
+  { id: 'employees', label: 'Employees' },
+  { id: 'subsidiaries', label: 'Subsidiaries' },
+  { id: 'customFields', label: 'Custom Fields' },
+  { id: 'status', label: 'Status' },
+]
 
 export const DEPARTMENT_FORM_FIELDS: DepartmentFormFieldMeta[] = [
   { id: 'departmentId', label: 'Department ID', fieldType: 'text', description: 'Unique department code used across the company.' },
@@ -119,5 +134,14 @@ export function defaultDepartmentFormCustomization(): DepartmentFormCustomizatio
         },
       ])
     ) as Record<DepartmentFormFieldKey, DepartmentFormFieldCustomization>,
+    statCards: DEPARTMENT_STAT_CARDS.map((card, index) => ({
+      id: `department-stat-${card.id}`,
+      metric: card.id,
+      visible: true,
+      order: index,
+      size: 'md',
+      colorized: true,
+      linked: true,
+    })),
   }
 }

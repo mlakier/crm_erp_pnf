@@ -1,0 +1,119 @@
+{
+  "formColumns": 2,
+  "sections": [
+    "Core",
+    "Organization",
+    "Status"
+  ],
+  "sectionRows": {
+    "Core": 2,
+    "Organization": 3,
+    "Status": 1
+  },
+  "fields": {
+    "departmentId": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 1
+    },
+    "departmentNumber": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 2
+    },
+    "name": {
+      "visible": true,
+      "section": "Core",
+      "order": 1,
+      "column": 1
+    },
+    "description": {
+      "visible": true,
+      "section": "Core",
+      "order": 1,
+      "column": 2
+    },
+    "division": {
+      "visible": true,
+      "section": "Organization",
+      "order": 0,
+      "column": 1
+    },
+    "subsidiaryIds": {
+      "visible": true,
+      "section": "Organization",
+      "order": 0,
+      "column": 2
+    },
+    "includeChildren": {
+      "visible": true,
+      "section": "Organization",
+      "order": 1,
+      "column": 1
+    },
+    "planningCategory": {
+      "visible": true,
+      "section": "Organization",
+      "order": 1,
+      "column": 2
+    },
+    "managerEmployeeId": {
+      "visible": true,
+      "section": "Organization",
+      "order": 2,
+      "column": 1
+    },
+    "approverEmployeeId": {
+      "visible": true,
+      "section": "Organization",
+      "order": 2,
+      "column": 2
+    },
+    "inactive": {
+      "visible": true,
+      "section": "Status",
+      "order": 0,
+      "column": 1
+    }
+  },
+  "statCards": [
+    {
+      "id": "department-stat-employees",
+      "metric": "employees",
+      "visible": true,
+      "order": 0,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "department-stat-subsidiaries",
+      "metric": "subsidiaries",
+      "visible": true,
+      "order": 1,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "department-stat-customFields",
+      "metric": "customFields",
+      "visible": true,
+      "order": 2,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "department-stat-status",
+      "metric": "status",
+      "visible": true,
+      "order": 3,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    }
+  ]
+}

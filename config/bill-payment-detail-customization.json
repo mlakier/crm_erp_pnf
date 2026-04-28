@@ -1,0 +1,114 @@
+{
+  "formColumns": 3,
+  "sections": [
+    "Document Identity",
+    "Payment Terms",
+    "Record Keys",
+    "System Dates"
+  ],
+  "sectionRows": {
+    "Document Identity": 1,
+    "Payment Terms": 3,
+    "Record Keys": 1,
+    "System Dates": 1
+  },
+  "fields": {
+    "id": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 1
+    },
+    "number": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 1
+    },
+    "billId": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 2
+    },
+    "amount": {
+      "visible": true,
+      "section": "Payment Terms",
+      "order": 0,
+      "column": 1
+    },
+    "date": {
+      "visible": true,
+      "section": "Payment Terms",
+      "order": 0,
+      "column": 2
+    },
+    "method": {
+      "visible": true,
+      "section": "Payment Terms",
+      "order": 1,
+      "column": 1
+    },
+    "reference": {
+      "visible": true,
+      "section": "Payment Terms",
+      "order": 1,
+      "column": 2
+    },
+    "status": {
+      "visible": true,
+      "section": "Payment Terms",
+      "order": 0,
+      "column": 3
+    },
+    "notes": {
+      "visible": true,
+      "section": "Payment Terms",
+      "order": 1,
+      "column": 3
+    },
+    "createdAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 1
+    },
+    "updatedAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 2
+    }
+  },
+  "referenceLayouts": [],
+  "statCards": [
+    {
+      "id": "bp-bill",
+      "metric": "bill",
+      "visible": true,
+      "order": 0,
+      "size": "sm"
+    },
+    {
+      "id": "bp-date",
+      "metric": "date",
+      "visible": true,
+      "order": 1,
+      "size": "sm"
+    },
+    {
+      "id": "bp-status",
+      "metric": "status",
+      "visible": true,
+      "order": 2,
+      "size": "sm"
+    },
+    {
+      "id": "bp-amount",
+      "metric": "amount",
+      "visible": true,
+      "order": 3,
+      "size": "lg"
+    }
+  ]
+}

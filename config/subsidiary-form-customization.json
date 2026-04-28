@@ -1,0 +1,181 @@
+{
+  "formColumns": 2,
+  "sections": [
+    "Core",
+    "Registration",
+    "Hierarchy",
+    "Currency",
+    "Consolidation",
+    "Accounting",
+    "Status"
+  ],
+  "sectionRows": {
+    "Core": 1,
+    "Registration": 3,
+    "Hierarchy": 1,
+    "Currency": 2,
+    "Consolidation": 1,
+    "Accounting": 3,
+    "Status": 1
+  },
+  "fields": {
+    "subsidiaryId": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 1
+    },
+    "name": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 2
+    },
+    "legalName": {
+      "visible": true,
+      "section": "Registration",
+      "order": 0,
+      "column": 1
+    },
+    "entityType": {
+      "visible": true,
+      "section": "Registration",
+      "order": 0,
+      "column": 2
+    },
+    "country": {
+      "visible": true,
+      "section": "Registration",
+      "order": 1,
+      "column": 1
+    },
+    "address": {
+      "visible": true,
+      "section": "Registration",
+      "order": 1,
+      "column": 2
+    },
+    "taxId": {
+      "visible": true,
+      "section": "Registration",
+      "order": 2,
+      "column": 1
+    },
+    "registrationNumber": {
+      "visible": true,
+      "section": "Registration",
+      "order": 2,
+      "column": 2
+    },
+    "parentSubsidiaryId": {
+      "visible": true,
+      "section": "Hierarchy",
+      "order": 0,
+      "column": 1
+    },
+    "defaultCurrencyId": {
+      "visible": true,
+      "section": "Currency",
+      "order": 0,
+      "column": 1
+    },
+    "functionalCurrencyId": {
+      "visible": true,
+      "section": "Currency",
+      "order": 0,
+      "column": 2
+    },
+    "reportingCurrencyId": {
+      "visible": true,
+      "section": "Currency",
+      "order": 1,
+      "column": 1
+    },
+    "consolidationMethod": {
+      "visible": true,
+      "section": "Consolidation",
+      "order": 0,
+      "column": 1
+    },
+    "ownershipPercent": {
+      "visible": true,
+      "section": "Consolidation",
+      "order": 0,
+      "column": 2
+    },
+    "retainedEarningsAccountId": {
+      "visible": true,
+      "section": "Accounting",
+      "order": 0,
+      "column": 1
+    },
+    "ctaAccountId": {
+      "visible": true,
+      "section": "Accounting",
+      "order": 0,
+      "column": 2
+    },
+    "intercompanyClearingAccountId": {
+      "visible": true,
+      "section": "Accounting",
+      "order": 1,
+      "column": 1
+    },
+    "dueToAccountId": {
+      "visible": true,
+      "section": "Accounting",
+      "order": 1,
+      "column": 2
+    },
+    "dueFromAccountId": {
+      "visible": true,
+      "section": "Accounting",
+      "order": 2,
+      "column": 1
+    },
+    "inactive": {
+      "visible": true,
+      "section": "Status",
+      "order": 0,
+      "column": 1
+    }
+  },
+  "statCards": [
+    {
+      "id": "subsidiary-stat-childSubsidiaries",
+      "metric": "childSubsidiaries",
+      "visible": true,
+      "order": 0,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "subsidiary-stat-employees",
+      "metric": "employees",
+      "visible": true,
+      "order": 1,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "subsidiary-stat-customers",
+      "metric": "customers",
+      "visible": true,
+      "order": 2,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "subsidiary-stat-vendors",
+      "metric": "vendors",
+      "visible": true,
+      "order": 3,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    }
+  ]
+}

@@ -1,8 +1,9 @@
 import { fmtDocumentDate } from '@/lib/format'
-import type { TransactionPageConfig } from '@/lib/transaction-page-config'
+import type { TransactionPageConfig, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 export type FulfillmentPageConfigRecord = {
   statusLabel: string
+  statusTone?: TransactionVisualTone
   salesOrderId: string | null
   salesOrderNumber: string | null
   lineCount: number
@@ -13,22 +14,19 @@ export type FulfillmentPageConfigRecord = {
 
 export const fulfillmentPageConfig: TransactionPageConfig<FulfillmentPageConfigRecord> = {
   sectionDescriptions: {
-    Customer: 'Customer context derived from the linked sales order.',
-    'Fulfillment Details': 'Core fulfillment fields, source sales context, and warehouse notes.',
+    'Document Identity': 'Primary fulfillment identifier and customer context from the linked sales order.',
+    'Source Context': 'Upstream sales documents that produced this fulfillment.',
+    'Fulfillment Terms': 'Lifecycle status, fulfillment date, and warehouse notes for this document.',
+    'Commercial Context': 'Subsidiary and currency context inherited from the sales flow.',
+    'Record Keys': 'Internal database identifiers for this fulfillment.',
+    'System Dates': 'System-managed timestamps for this fulfillment.',
   },
   stats: [
     {
       id: 'status',
       label: 'Status',
       getValue: (record) => record.statusLabel,
-      getValueTone: (record) =>
-        record.statusLabel === 'Shipped'
-          ? 'green'
-          : record.statusLabel === 'Cancelled'
-            ? 'red'
-            : record.statusLabel === 'Packed'
-              ? 'accent'
-              : 'default',
+      getValueTone: (record) => record.statusTone ?? 'default',
     },
     {
       id: 'salesOrder',

@@ -6,14 +6,21 @@ import {
   loadManagedListDefinitions,
   normalizeManagedListKey,
 } from '@/lib/managed-list-registry'
+import {
+  getManagedListDefaultRowColorTone,
+  supportsManagedListRowColorTones,
+} from '@/lib/managed-list-color-tones'
+import type { TransactionStatusColorTone } from '@/lib/company-preferences-definitions'
 
 const DISPLAY_ORDER_PATH = join(process.cwd(), 'config', 'list-display-order.json')
 const CUSTOM_LISTS_PATH = join(process.cwd(), 'config', 'custom-lists.json')
+const ROW_METADATA_PATH = join(process.cwd(), 'config', 'managed-list-row-metadata.json')
 
 export type ManagedListRow = {
   id: string
   value: string
   sortOrder: number
+  colorTone?: TransactionStatusColorTone
 }
 
 export type ManagedListSummary = {
@@ -26,6 +33,7 @@ export type ManagedListSummary = {
 }
 
 type CustomList = { key: string; label: string; whereUsed: string[] }
+type ManagedListRowMetadata = Record<string, Record<string, { colorTone?: TransactionStatusColorTone }>>
 
 function readDisplayOrder(): Record<string, string> {
   try {
@@ -50,6 +58,38 @@ function readCustomLists(): CustomList[] {
 
 function writeCustomLists(lists: CustomList[]) {
   writeFileSync(CUSTOM_LISTS_PATH, JSON.stringify({ lists }, null, 2))
+}
+
+function readRowMetadata(): ManagedListRowMetadata {
+  try {
+    const data = JSON.parse(readFileSync(ROW_METADATA_PATH, 'utf-8'))
+    return data && typeof data === 'object' ? (data as ManagedListRowMetadata) : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeRowMetadata(metadata: ManagedListRowMetadata) {
+  writeFileSync(ROW_METADATA_PATH, JSON.stringify(metadata, null, 2))
+}
+
+function supportsRowColorTones(key: string) {
+  return supportsManagedListRowColorTones(key)
+}
+
+function normalizeColorTone(value: unknown): TransactionStatusColorTone | undefined {
+  return value === 'default'
+    || value === 'gray'
+    || value === 'accent'
+    || value === 'teal'
+    || value === 'yellow'
+    || value === 'orange'
+    || value === 'green'
+    || value === 'red'
+    || value === 'purple'
+    || value === 'pink'
+    ? value
+    : undefined
 }
 
 function formatListId(code: string, sequence: number): string {
@@ -97,16 +137,46 @@ export async function ensureRegisteredManagedLists() {
     const key = normalizeManagedListKey(definition.key)
     if (!definition.defaultValues || definition.defaultValues.length === 0) continue
 
-    const count = await prisma.listOption.count({ where: { key } })
-    if (count > 0) continue
+    const existingRows = await prisma.listOption.findMany({
+      where: { key },
+      orderBy: [{ sortOrder: 'asc' }, { value: 'asc' }],
+      select: { listId: true, value: true, sortOrder: true },
+    })
+
+    if (existingRows.length === 0) {
+      await prisma.listOption.createMany({
+        data: definition.defaultValues.map((value, index) => ({
+          key,
+          listId: formatListId(key, index + 1),
+          value,
+          label: value,
+          sortOrder: index,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })),
+      })
+      continue
+    }
+
+    const existingValues = new Set(existingRows.map((row) => row.value.trim().toLowerCase()))
+    const currentMaxSeq = existingRows
+      .map((row) => parseListIdSequence(row.listId, key))
+      .filter((sequence): sequence is number => sequence !== null)
+    let nextSeq = Math.max(0, ...currentMaxSeq) + 1
+    let nextSortOrder = Math.max(-1, ...existingRows.map((row) => row.sortOrder)) + 1
+
+    const missingDefaults = definition.defaultValues.filter(
+      (value) => !existingValues.has(value.trim().toLowerCase()),
+    )
+    if (missingDefaults.length === 0) continue
 
     await prisma.listOption.createMany({
-      data: definition.defaultValues.map((value, index) => ({
+      data: missingDefaults.map((value) => ({
         key,
-        listId: formatListId(key, index + 1),
+        listId: formatListId(key, nextSeq++),
         value,
         label: value,
-        sortOrder: index,
+        sortOrder: nextSortOrder++,
         createdAt: new Date(),
         updatedAt: new Date(),
       })),
@@ -116,6 +186,7 @@ export async function ensureRegisteredManagedLists() {
 
 export async function loadManagedListsState() {
   await ensureRegisteredManagedLists()
+  const rowMetadata = readRowMetadata()
 
   const allOptions = await prisma.listOption.findMany({
     orderBy: [{ key: 'asc' }, { sortOrder: 'asc' }, { value: 'asc' }],
@@ -128,6 +199,9 @@ export async function loadManagedListsState() {
       id: row.listId,
       value: row.value,
       sortOrder: row.sortOrder,
+      colorTone:
+        normalizeColorTone(rowMetadata[row.key]?.[row.listId]?.colorTone)
+        ?? getManagedListDefaultRowColorTone(row.key, row.value),
     })
   }
 
@@ -220,9 +294,13 @@ export async function updateManagedListDisplayOrder(key: string, displayOrder: s
   writeDisplayOrder(config)
 }
 
-export async function replaceManagedListRows(key: string, incomingRows: Array<{ id?: string; value?: string } | null | undefined>) {
+export async function replaceManagedListRows(
+  key: string,
+  incomingRows: Array<{ id?: string; value?: string; colorTone?: TransactionStatusColorTone } | null | undefined>,
+) {
   const normalizedKey = normalizeManagedListKey(key)
   const code = normalizedKey.replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '') || 'LIST'
+  const canColorize = supportsRowColorTones(normalizedKey)
 
   const currentDbRows = await prisma.listOption.findMany({
     where: { key: normalizedKey },
@@ -258,7 +336,12 @@ export async function replaceManagedListRows(key: string, incomingRows: Array<{ 
       }
     }
 
-    return [{ listId, value, sortOrder }]
+    return [{
+      listId,
+      value,
+      sortOrder,
+      colorTone: canColorize ? (normalizeColorTone(row.colorTone) ?? getManagedListDefaultRowColorTone(normalizedKey, value)) : undefined,
+    }]
   })
 
   await prisma.$transaction(async (tx) => {
@@ -277,4 +360,14 @@ export async function replaceManagedListRows(key: string, incomingRows: Array<{ 
       })
     }
   })
+
+  const metadata = readRowMetadata()
+  const nextListMetadata = Object.fromEntries(
+    finalRows.map((row) => [
+      row.listId,
+      row.colorTone ? { colorTone: row.colorTone } : {},
+    ]),
+  ) as Record<string, { colorTone?: TransactionStatusColorTone }>
+  metadata[normalizedKey] = nextListMetadata
+  writeRowMetadata(metadata)
 }

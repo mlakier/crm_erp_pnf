@@ -131,6 +131,7 @@ export default async function SubsidiariesPage({
               <MasterDataHeaderCell columnId="consolidation-method">Consolidation Method</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="ownership-percent">Ownership %</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="inactive">Inactive</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="db-id">DB Id</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="last-modified">Last Modified</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
@@ -138,7 +139,7 @@ export default async function SubsidiariesPage({
           </thead>
           <tbody>
             {entities.length === 0 ? (
-              <MasterDataEmptyStateRow colSpan={subsidiaryListDefinition.columns.length}>No subsidiaries found</MasterDataEmptyStateRow>
+              <MasterDataEmptyStateRow colSpan={17}>No subsidiaries found</MasterDataEmptyStateRow>
             ) : (
               entities.map((Subsidiary, index) => (
                 <tr key={Subsidiary.id} style={getMasterDataRowStyle(index, entities.length)}>
@@ -160,6 +161,7 @@ export default async function SubsidiariesPage({
                   <MasterDataMutedCell columnId="consolidation-method">{Subsidiary.consolidationMethod ?? '-'}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="ownership-percent">{Subsidiary.ownershipPercent?.toString() ?? '-'}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="inactive">{Subsidiary.active ? 'No' : 'Yes'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="db-id">{Subsidiary.id}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="created">{formatMasterDataDate(Subsidiary.createdAt)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(Subsidiary.updatedAt)}</MasterDataMutedCell>
                   <MasterDataBodyCell columnId="actions">

@@ -1,0 +1,153 @@
+{
+  "formColumns": 2,
+  "sections": [
+    "Core",
+    "Organization",
+    "Access",
+    "Employment",
+    "Status"
+  ],
+  "sectionRows": {
+    "Core": 3,
+    "Organization": 4,
+    "Access": 1,
+    "Employment": 1,
+    "Status": 1
+  },
+  "fields": {
+    "employeeId": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 1
+    },
+    "eid": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 2
+    },
+    "firstName": {
+      "visible": true,
+      "section": "Core",
+      "order": 1,
+      "column": 1
+    },
+    "lastName": {
+      "visible": true,
+      "section": "Core",
+      "order": 1,
+      "column": 2
+    },
+    "email": {
+      "visible": true,
+      "section": "Core",
+      "order": 2,
+      "column": 1
+    },
+    "phone": {
+      "visible": true,
+      "section": "Core",
+      "order": 2,
+      "column": 2
+    },
+    "title": {
+      "visible": true,
+      "section": "Organization",
+      "order": 0,
+      "column": 1
+    },
+    "laborType": {
+      "visible": true,
+      "section": "Organization",
+      "order": 0,
+      "column": 2
+    },
+    "departmentId": {
+      "visible": true,
+      "section": "Organization",
+      "order": 1,
+      "column": 1
+    },
+    "subsidiaryIds": {
+      "visible": true,
+      "section": "Organization",
+      "order": 1,
+      "column": 2
+    },
+    "includeChildren": {
+      "visible": true,
+      "section": "Organization",
+      "order": 2,
+      "column": 1
+    },
+    "managerId": {
+      "visible": true,
+      "section": "Organization",
+      "order": 3,
+      "column": 1
+    },
+    "userId": {
+      "visible": true,
+      "section": "Access",
+      "order": 0,
+      "column": 1
+    },
+    "hireDate": {
+      "visible": true,
+      "section": "Employment",
+      "order": 0,
+      "column": 1
+    },
+    "terminationDate": {
+      "visible": true,
+      "section": "Employment",
+      "order": 0,
+      "column": 2
+    },
+    "inactive": {
+      "visible": true,
+      "section": "Status",
+      "order": 0,
+      "column": 1
+    }
+  },
+  "statCards": [
+    {
+      "id": "employee-stat-directReports",
+      "metric": "directReports",
+      "visible": true,
+      "order": 0,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "employee-stat-subsidiaries",
+      "metric": "subsidiaries",
+      "visible": true,
+      "order": 1,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "employee-stat-linkedUser",
+      "metric": "linkedUser",
+      "visible": true,
+      "order": 2,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "employee-stat-status",
+      "metric": "status",
+      "visible": true,
+      "order": 3,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    }
+  ]
+}

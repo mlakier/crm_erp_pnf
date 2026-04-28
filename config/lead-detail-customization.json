@@ -1,0 +1,206 @@
+{
+  "formColumns": 3,
+  "sections": [
+    "Primary Contact",
+    "Company Information",
+    "Qualification",
+    "System Information"
+  ],
+  "sectionRows": {
+    "Primary Contact": 2,
+    "Company Information": 2,
+    "Qualification": 3,
+    "System Information": 2
+  },
+  "fields": {
+    "id": {
+      "visible": false,
+      "section": "System Information",
+      "order": 1,
+      "column": 3
+    },
+    "leadNumber": {
+      "visible": true,
+      "section": "System Information",
+      "order": 0,
+      "column": 1
+    },
+    "firstName": {
+      "visible": true,
+      "section": "Primary Contact",
+      "order": 0,
+      "column": 1
+    },
+    "lastName": {
+      "visible": true,
+      "section": "Primary Contact",
+      "order": 0,
+      "column": 2
+    },
+    "email": {
+      "visible": true,
+      "section": "Primary Contact",
+      "order": 1,
+      "column": 1
+    },
+    "phone": {
+      "visible": true,
+      "section": "Primary Contact",
+      "order": 1,
+      "column": 2
+    },
+    "company": {
+      "visible": true,
+      "section": "Company Information",
+      "order": 0,
+      "column": 1
+    },
+    "title": {
+      "visible": true,
+      "section": "Primary Contact",
+      "order": 0,
+      "column": 3
+    },
+    "status": {
+      "visible": true,
+      "section": "Qualification",
+      "order": 0,
+      "column": 1
+    },
+    "source": {
+      "visible": true,
+      "section": "Qualification",
+      "order": 0,
+      "column": 2
+    },
+    "rating": {
+      "visible": true,
+      "section": "Qualification",
+      "order": 0,
+      "column": 3
+    },
+    "expectedValue": {
+      "visible": true,
+      "section": "Qualification",
+      "order": 1,
+      "column": 1
+    },
+    "subsidiaryId": {
+      "visible": true,
+      "section": "Qualification",
+      "order": 1,
+      "column": 2
+    },
+    "currencyId": {
+      "visible": true,
+      "section": "Qualification",
+      "order": 1,
+      "column": 3
+    },
+    "website": {
+      "visible": true,
+      "section": "Company Information",
+      "order": 0,
+      "column": 2
+    },
+    "industry": {
+      "visible": true,
+      "section": "Company Information",
+      "order": 0,
+      "column": 3
+    },
+    "address": {
+      "visible": true,
+      "section": "Company Information",
+      "order": 1,
+      "column": 1
+    },
+    "notes": {
+      "visible": true,
+      "section": "Company Information",
+      "order": 1,
+      "column": 2
+    },
+    "lastContactedAt": {
+      "visible": true,
+      "section": "Qualification",
+      "order": 2,
+      "column": 1
+    },
+    "qualifiedAt": {
+      "visible": true,
+      "section": "Qualification",
+      "order": 2,
+      "column": 2
+    },
+    "convertedAt": {
+      "visible": true,
+      "section": "Qualification",
+      "order": 2,
+      "column": 3
+    },
+    "inactive": {
+      "visible": false,
+      "section": "System Information",
+      "order": 0,
+      "column": 3
+    },
+    "createdBy": {
+      "visible": true,
+      "section": "System Information",
+      "order": 0,
+      "column": 2
+    },
+    "createdAt": {
+      "visible": true,
+      "section": "System Information",
+      "order": 1,
+      "column": 1
+    },
+    "updatedAt": {
+      "visible": true,
+      "section": "System Information",
+      "order": 1,
+      "column": 2
+    }
+  },
+  "referenceLayouts": [],
+  "statCards": [
+    {
+      "id": "slot-1",
+      "metric": "company",
+      "visible": true,
+      "order": 0,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-2",
+      "metric": "expectedValue",
+      "visible": true,
+      "order": 1,
+      "size": "md",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-3",
+      "metric": "createdAt",
+      "visible": true,
+      "order": 2,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-4",
+      "metric": "status",
+      "visible": true,
+      "order": 3,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    }
+  ]
+}

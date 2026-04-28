@@ -4,13 +4,14 @@ import {
   defaultInvoiceDetailCustomization,
   INVOICE_DETAIL_FIELDS,
   INVOICE_LINE_COLUMNS,
+  INVOICE_REFERENCE_SOURCES,
   INVOICE_STAT_CARDS,
   type InvoiceDetailCustomizationConfig,
   type InvoiceDetailFieldKey,
   type InvoiceLineColumnKey,
-  type InvoiceStatCardKey,
   type InvoiceStatCardSlot,
 } from '@/lib/invoice-detail-customization'
+import { mergeTransactionReferenceLayouts } from '@/lib/transaction-reference-layouts'
 
 const STORE_PATH = path.join(process.cwd(), 'config', 'invoice-detail-customization.json')
 
@@ -36,6 +37,15 @@ function normalizeRowCount(value: unknown, fallback: number): number {
 function mergeWithDefaults(overrides: Partial<InvoiceDetailCustomizationConfig>): InvoiceDetailCustomizationConfig {
   const merged = cloneDefaults()
   merged.formColumns = normalizeColumnCount(overrides.formColumns, merged.formColumns)
+
+  if (overrides.lineSettings && typeof overrides.lineSettings === 'object') {
+    merged.lineSettings = {
+      ...merged.lineSettings,
+      ...(overrides.lineSettings.fontSize === 'xs' || overrides.lineSettings.fontSize === 'sm'
+        ? { fontSize: overrides.lineSettings.fontSize }
+        : {}),
+    }
+  }
 
   const inputSections = Array.isArray(overrides.sections)
     ? overrides.sections.map((section) => normalizeText(section)).filter((section): section is string => Boolean(section))
@@ -79,6 +89,7 @@ function mergeWithDefaults(overrides: Partial<InvoiceDetailCustomizationConfig>)
     merged.sectionRows[section] = normalizeRowCount(sectionRowsInput[section], merged.sectionRows[section] ?? 2)
     merged.fields[field.id].column = Math.min(merged.formColumns, Math.max(1, merged.fields[field.id].column))
   }
+  merged.referenceLayouts = mergeTransactionReferenceLayouts(overrides.referenceLayouts, merged.referenceLayouts, INVOICE_REFERENCE_SOURCES)
 
   const lineColumnOverrides =
     overrides.lineColumns && typeof overrides.lineColumns === 'object'
@@ -94,6 +105,36 @@ function mergeWithDefaults(overrides: Partial<InvoiceDetailCustomizationConfig>)
         typeof override.order === 'number' && Number.isFinite(override.order)
           ? Math.max(0, Math.trunc(override.order))
           : merged.lineColumns[column.id].order,
+      widthMode:
+        override.widthMode === 'auto'
+        || override.widthMode === 'compact'
+        || override.widthMode === 'normal'
+        || override.widthMode === 'wide'
+          ? override.widthMode
+          : merged.lineColumns[column.id].widthMode,
+      editDisplay:
+        override.editDisplay === 'label'
+        || override.editDisplay === 'idAndLabel'
+        || override.editDisplay === 'id'
+          ? override.editDisplay
+          : merged.lineColumns[column.id].editDisplay,
+      viewDisplay:
+        override.viewDisplay === 'label'
+        || override.viewDisplay === 'idAndLabel'
+        || override.viewDisplay === 'id'
+          ? override.viewDisplay
+          : merged.lineColumns[column.id].viewDisplay,
+      dropdownDisplay:
+        override.dropdownDisplay === 'label'
+        || override.dropdownDisplay === 'idAndLabel'
+        || override.dropdownDisplay === 'id'
+          ? override.dropdownDisplay
+          : merged.lineColumns[column.id].dropdownDisplay,
+      dropdownSort:
+        override.dropdownSort === 'id'
+        || override.dropdownSort === 'label'
+          ? override.dropdownSort
+          : merged.lineColumns[column.id].dropdownSort,
     }
   }
 
@@ -110,6 +151,11 @@ function mergeWithDefaults(overrides: Partial<InvoiceDetailCustomizationConfig>)
         {
           visible: column.visible,
           order: index,
+          widthMode: merged.lineColumns[column.id].widthMode,
+          editDisplay: merged.lineColumns[column.id].editDisplay,
+          viewDisplay: merged.lineColumns[column.id].viewDisplay,
+          dropdownDisplay: merged.lineColumns[column.id].dropdownDisplay,
+          dropdownSort: merged.lineColumns[column.id].dropdownSort,
         },
       ]),
   ) as Record<InvoiceLineColumnKey, InvoiceDetailCustomizationConfig['lineColumns'][InvoiceLineColumnKey]>
@@ -126,6 +172,9 @@ function mergeWithDefaults(overrides: Partial<InvoiceDetailCustomizationConfig>)
         typeof card.order === 'number' && Number.isFinite(card.order)
           ? Math.max(0, Math.trunc(card.order))
           : index,
+      size: card.size === 'sm' || card.size === 'lg' || card.size === 'md' ? card.size : 'md',
+      colorized: card.colorized !== false,
+      linked: card.linked !== false,
     }))
     .sort((left, right) => left.order - right.order)
     .map((card, index) => ({

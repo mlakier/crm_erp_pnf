@@ -1,0 +1,84 @@
+{
+  "formColumns": 2,
+  "sections": [
+    "Core",
+    "Settings"
+  ],
+  "sectionRows": {
+    "Core": 2,
+    "Settings": 2
+  },
+  "fields": {
+    "currencyId": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 1
+    },
+    "code": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 2
+    },
+    "name": {
+      "visible": true,
+      "section": "Core",
+      "order": 1,
+      "column": 1
+    },
+    "symbol": {
+      "visible": true,
+      "section": "Core",
+      "order": 1,
+      "column": 2
+    },
+    "decimals": {
+      "visible": true,
+      "section": "Settings",
+      "order": 0,
+      "column": 1
+    },
+    "isBase": {
+      "visible": true,
+      "section": "Settings",
+      "order": 0,
+      "column": 2
+    },
+    "inactive": {
+      "visible": true,
+      "section": "Settings",
+      "order": 1,
+      "column": 1
+    }
+  },
+  "statCards": [
+    {
+      "id": "currency-stat-subsidiaries",
+      "metric": "subsidiaries",
+      "visible": true,
+      "order": 0,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "currency-stat-customers",
+      "metric": "customers",
+      "visible": true,
+      "order": 1,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "currency-stat-vendors",
+      "metric": "vendors",
+      "visible": true,
+      "order": 2,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    }
+  ]
+}

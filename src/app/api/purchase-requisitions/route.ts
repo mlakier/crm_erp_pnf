@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { createFieldChangeSummary, logActivity } from '@/lib/activity'
+import { createFieldChangeSummary, logActivity, logCommunicationActivity } from '@/lib/activity'
 import { generateNextRequisitionNumber } from '@/lib/requisition-number'
 import { generateNextPurchaseOrderNumber } from '@/lib/purchase-order-number'
 import { calcLineTotal, sumMoney } from '@/lib/money'
@@ -38,8 +38,72 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url)
     const body = await request.json()
-    const { number: requestedNumber, status, title, description, priority, neededByDate, notes, vendorId, departmentId, entityId, subsidiaryId, currencyId, userId } = body
+    if (searchParams.get('action') === 'send-email') {
+      const {
+        requisitionId,
+        userId,
+        to,
+        from,
+        subject,
+        preview,
+        attachPdf,
+      } = body as {
+        requisitionId?: string
+        userId?: string | null
+        to?: string
+        from?: string
+        subject?: string
+        preview?: string
+        attachPdf?: boolean
+      }
+
+      if (!requisitionId || !to?.trim() || !subject?.trim()) {
+        return NextResponse.json({ error: 'Missing required email fields' }, { status: 400 })
+      }
+
+      const requisition = await prisma.requisition.findUnique({
+        where: { id: requisitionId },
+        select: { id: true },
+      })
+
+      if (!requisition) {
+        return NextResponse.json({ error: 'Purchase requisition not found' }, { status: 404 })
+      }
+
+      await logCommunicationActivity({
+        entityType: 'purchase-requisition',
+        entityId: requisitionId,
+        userId: userId ?? null,
+        context: 'UI',
+        channel: 'Email',
+        direction: 'Outbound',
+        subject: subject.trim(),
+        from: from?.trim() || '-',
+        to: to.trim(),
+        status: attachPdf ? 'Prepared (PDF)' : 'Prepared',
+        preview: preview?.trim() || '',
+      })
+
+      return NextResponse.json({ success: true })
+    }
+    const {
+      number: requestedNumber,
+      status,
+      title,
+      description,
+      priority,
+      neededByDate,
+      notes,
+      vendorId,
+      departmentId,
+      entityId,
+      subsidiaryId,
+      currencyId,
+      userId,
+      lineItems,
+    } = body
     const requestSubsidiaryId = subsidiaryId ?? entityId
 
     if (!userId) {
@@ -52,6 +116,34 @@ export async function POST(request: NextRequest) {
       currencyId,
     })
 
+    const normalizedLineItems = Array.isArray(lineItems)
+      ? lineItems
+          .map((line: {
+            itemId?: string | null
+            description?: string | null
+            quantity?: number
+            unitPrice?: number
+            notes?: string | null
+          }) => {
+            const quantity = Math.max(1, Number(line.quantity) || 1)
+            const unitPrice = Math.max(0, Number(line.unitPrice) || 0)
+            const nextDescription = line.description?.trim() || ''
+            return {
+              itemId: line.itemId || null,
+              description: nextDescription,
+              quantity,
+              unitPrice,
+              lineTotal: calcLineTotal(quantity, unitPrice),
+              notes: line.notes?.trim() || null,
+            }
+          })
+          .filter((line: { itemId: string | null; description: string }) => line.itemId || line.description)
+      : []
+
+    const computedTotal = normalizedLineItems.length
+      ? sumMoney(normalizedLineItems.map((line: { lineTotal: number }) => line.lineTotal))
+      : 0
+
     const requisition = await prisma.requisition.create({
       data: {
         number,
@@ -61,12 +153,31 @@ export async function POST(request: NextRequest) {
         priority: priority || 'medium',
         neededByDate: neededByDate ? new Date(neededByDate) : null,
         notes: notes || null,
-        total: 0,
+        total: computedTotal,
         userId,
         departmentId: departmentId || null,
         vendorId: vendorId || null,
         subsidiaryId: snapshot.subsidiaryId,
         currencyId: snapshot.currencyId,
+        lineItems: normalizedLineItems.length
+          ? {
+              create: normalizedLineItems.map((line: {
+                itemId: string | null
+                description: string
+                quantity: number
+                unitPrice: number
+                lineTotal: number
+                notes: string | null
+              }) => ({
+                itemId: line.itemId,
+                description: line.description,
+                quantity: line.quantity,
+                unitPrice: line.unitPrice,
+                lineTotal: line.lineTotal,
+                notes: line.notes,
+              })),
+            }
+          : undefined,
       },
       include: INCLUDE,
     })

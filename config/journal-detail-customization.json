@@ -1,0 +1,349 @@
+{
+  "formColumns": 4,
+  "sections": [
+    "Journal Entry",
+    "Source And Approval"
+  ],
+  "sectionRows": {
+    "Journal Entry": 3,
+    "Source And Approval": 2
+  },
+  "lineSettings": {
+    "fontSize": "xs"
+  },
+  "glImpactSettings": {
+    "fontSize": "xs"
+  },
+  "fields": {
+    "number": {
+      "visible": true,
+      "section": "Journal Entry",
+      "order": 0,
+      "column": 1
+    },
+    "date": {
+      "visible": true,
+      "section": "Journal Entry",
+      "order": 1,
+      "column": 1
+    },
+    "description": {
+      "visible": true,
+      "section": "Journal Entry",
+      "order": 2,
+      "column": 1
+    },
+    "status": {
+      "visible": true,
+      "section": "Journal Entry",
+      "order": 0,
+      "column": 2
+    },
+    "subsidiaryId": {
+      "visible": true,
+      "section": "Journal Entry",
+      "order": 1,
+      "column": 2
+    },
+    "currencyId": {
+      "visible": true,
+      "section": "Journal Entry",
+      "order": 2,
+      "column": 2
+    },
+    "accountingPeriodId": {
+      "visible": true,
+      "section": "Journal Entry",
+      "order": 0,
+      "column": 3
+    },
+    "journalType": {
+      "visible": true,
+      "section": "Journal Entry",
+      "order": 2,
+      "column": 3
+    },
+    "total": {
+      "visible": true,
+      "section": "Journal Entry",
+      "order": 0,
+      "column": 4
+    },
+    "sourceType": {
+      "visible": true,
+      "section": "Source And Approval",
+      "order": 0,
+      "column": 1
+    },
+    "sourceId": {
+      "visible": true,
+      "section": "Source And Approval",
+      "order": 1,
+      "column": 1
+    },
+    "userId": {
+      "visible": true,
+      "section": "Source And Approval",
+      "order": 0,
+      "column": 3
+    },
+    "postedByEmployeeId": {
+      "visible": true,
+      "section": "Source And Approval",
+      "order": 0,
+      "column": 2
+    },
+    "approvedByEmployeeId": {
+      "visible": true,
+      "section": "Source And Approval",
+      "order": 1,
+      "column": 2
+    },
+    "createdAt": {
+      "visible": true,
+      "section": "Source And Approval",
+      "order": 0,
+      "column": 4
+    },
+    "updatedAt": {
+      "visible": true,
+      "section": "Source And Approval",
+      "order": 1,
+      "column": 4
+    }
+  },
+  "lineColumns": {
+    "line": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "accountId": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "wide",
+      "editDisplay": "idAndLabel",
+      "viewDisplay": "idAndLabel",
+      "dropdownDisplay": "idAndLabel",
+      "dropdownSort": "id"
+    },
+    "description": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "idAndLabel",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    },
+    "debit": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "credit": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "subsidiaryId": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "departmentId": {
+      "visible": true,
+      "order": 6,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "locationId": {
+      "visible": true,
+      "order": 7,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "projectId": {
+      "visible": true,
+      "order": 8,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    },
+    "customerId": {
+      "visible": true,
+      "order": 9,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "idAndLabel",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "vendorId": {
+      "visible": true,
+      "order": 10,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "itemId": {
+      "visible": true,
+      "order": 11,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "employeeId": {
+      "visible": true,
+      "order": 12,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "memo": {
+      "visible": true,
+      "order": 13,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    }
+  },
+  "glImpactColumns": {
+    "line": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "compact",
+      "viewDisplay": "label"
+    },
+    "accountId": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "wide",
+      "viewDisplay": "idAndLabel"
+    },
+    "description": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "wide",
+      "viewDisplay": "label"
+    },
+    "subsidiaryId": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "normal",
+      "viewDisplay": "idAndLabel"
+    },
+    "departmentId": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "compact",
+      "viewDisplay": "idAndLabel"
+    },
+    "locationId": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "compact",
+      "viewDisplay": "idAndLabel"
+    },
+    "projectId": {
+      "visible": true,
+      "order": 6,
+      "widthMode": "normal",
+      "viewDisplay": "idAndLabel"
+    },
+    "customerId": {
+      "visible": true,
+      "order": 7,
+      "widthMode": "wide",
+      "viewDisplay": "idAndLabel"
+    },
+    "vendorId": {
+      "visible": true,
+      "order": 8,
+      "widthMode": "wide",
+      "viewDisplay": "idAndLabel"
+    },
+    "itemId": {
+      "visible": true,
+      "order": 9,
+      "widthMode": "wide",
+      "viewDisplay": "idAndLabel"
+    },
+    "employeeId": {
+      "visible": true,
+      "order": 10,
+      "widthMode": "normal",
+      "viewDisplay": "idAndLabel"
+    },
+    "debit": {
+      "visible": true,
+      "order": 11,
+      "widthMode": "normal",
+      "viewDisplay": "label"
+    },
+    "credit": {
+      "visible": true,
+      "order": 12,
+      "widthMode": "normal",
+      "viewDisplay": "label"
+    }
+  },
+  "statCards": [
+    {
+      "id": "slot-1",
+      "metric": "totalDebits",
+      "visible": true,
+      "order": 0
+    },
+    {
+      "id": "slot-2",
+      "metric": "totalCredits",
+      "visible": true,
+      "order": 1
+    },
+    {
+      "id": "slot-3",
+      "metric": "balance",
+      "visible": true,
+      "order": 2
+    },
+    {
+      "id": "slot-4",
+      "metric": "journalLines",
+      "visible": true,
+      "order": 3
+    }
+  ]
+}

@@ -1,0 +1,190 @@
+{
+  "formColumns": 3,
+  "sections": [
+    "Document Identity",
+    "Customer Snapshot",
+    "Receipt Terms",
+    "Record Keys",
+    "System Dates"
+  ],
+  "sectionRows": {
+    "Document Identity": 1,
+    "Customer Snapshot": 1,
+    "Receipt Terms": 2,
+    "Record Keys": 1,
+    "System Dates": 1
+  },
+  "fields": {
+    "customerName": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 0,
+      "column": 2
+    },
+    "customerNumber": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 0,
+      "column": 1
+    },
+    "id": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 1
+    },
+    "number": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 1
+    },
+    "invoiceId": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 2
+    },
+    "amount": {
+      "visible": true,
+      "section": "Receipt Terms",
+      "order": 0,
+      "column": 1
+    },
+    "date": {
+      "visible": true,
+      "section": "Receipt Terms",
+      "order": 0,
+      "column": 2
+    },
+    "method": {
+      "visible": true,
+      "section": "Receipt Terms",
+      "order": 0,
+      "column": 3
+    },
+    "reference": {
+      "visible": true,
+      "section": "Receipt Terms",
+      "order": 1,
+      "column": 1
+    },
+    "createdAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 1
+    },
+    "updatedAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 2
+    }
+  },
+  "referenceLayouts": [
+    {
+      "id": "reference-invoice-1",
+      "referenceId": "invoice",
+      "formColumns": 3,
+      "rows": 3,
+      "fields": {
+        "invoiceDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 0
+        },
+        "invoiceNumber": {
+          "visible": true,
+          "column": 1,
+          "order": 0
+        },
+        "invoiceStatus": {
+          "visible": true,
+          "column": 1,
+          "order": 1
+        },
+        "invoiceTotal": {
+          "visible": true,
+          "column": 2,
+          "order": 0
+        },
+        "invoiceDueDate": {
+          "visible": true,
+          "column": 3,
+          "order": 0
+        },
+        "invoicePaidDate": {
+          "visible": false,
+          "column": 2,
+          "order": 2
+        },
+        "invoiceCustomerDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 3
+        },
+        "invoiceSalesOrderDbId": {
+          "visible": false,
+          "column": 2,
+          "order": 3
+        },
+        "invoiceUserDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 4
+        },
+        "invoiceSubsidiaryDbId": {
+          "visible": false,
+          "column": 2,
+          "order": 4
+        },
+        "invoiceCurrencyDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 5
+        },
+        "invoiceCreatedAt": {
+          "visible": true,
+          "column": 2,
+          "order": 1
+        },
+        "invoiceUpdatedAt": {
+          "visible": false,
+          "column": 1,
+          "order": 6
+        }
+      }
+    }
+  ],
+  "statCards": [
+    {
+      "id": "receipt-date",
+      "metric": "date",
+      "visible": true,
+      "order": 0,
+      "size": "sm"
+    },
+    {
+      "id": "receipt-method",
+      "metric": "method",
+      "visible": true,
+      "order": 1,
+      "size": "sm"
+    },
+    {
+      "id": "linked-invoice",
+      "metric": "invoice",
+      "visible": true,
+      "order": 2,
+      "size": "sm"
+    },
+    {
+      "id": "receipt-amount",
+      "metric": "amount",
+      "visible": true,
+      "order": 3,
+      "size": "sm"
+    }
+  ]
+}

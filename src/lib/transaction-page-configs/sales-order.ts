@@ -1,5 +1,5 @@
 import { fmtCurrency } from '@/lib/format'
-import type { TransactionPageConfig } from '@/lib/transaction-page-config'
+import type { TransactionPageConfig, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 export type SalesOrderPageConfigRecord = {
   id: string
@@ -7,7 +7,7 @@ export type SalesOrderPageConfigRecord = {
   createdFrom: string | null
   lineCount: number
   statusLabel: string
-  statusTone?: 'default' | 'blue' | 'green' | 'red'
+  statusTone?: TransactionVisualTone
   customerId: string | null
   customerHref: string | null
   userId: string | null
@@ -24,8 +24,11 @@ export type SalesOrderPageConfigRecord = {
 
 export const salesOrderPageConfig: TransactionPageConfig<SalesOrderPageConfigRecord> = {
   sectionDescriptions: {
-    Customer: 'Customer contact and default commercial context from the linked master data record.',
-    'Sales Order Details': 'Core order control fields and upstream sales context.',
+    'Document Identity': 'Sales order number, customer, and ownership context for this record.',
+    'Source Context': 'Upstream quote and opportunity context that produced this sales order.',
+    'Commercial Terms': 'Subsidiary, currency, lifecycle status, and total for the order.',
+    'Record Keys': 'Internal and linked-record identifiers captured on the sales order.',
+    'System Dates': 'System-managed timestamps for this sales order record.',
   },
   stats: [
     {
@@ -50,14 +53,10 @@ export const salesOrderPageConfig: TransactionPageConfig<SalesOrderPageConfigRec
       id: 'status',
       label: 'Status',
       getValue: (record) => record.statusLabel,
+      getCardTone: (record) =>
+        record.statusTone ?? 'default',
       getValueTone: (record) =>
-        record.statusTone === 'green'
-          ? 'green'
-          : record.statusTone === 'red'
-            ? 'red'
-            : record.statusTone === 'blue'
-              ? 'accent'
-              : 'default',
+        record.statusTone ?? 'default',
     },
     {
       id: 'customerId',

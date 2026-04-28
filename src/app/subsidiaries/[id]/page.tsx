@@ -9,6 +9,7 @@ import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSectio
 import SubsidiaryDetailCustomizeMode from '@/components/SubsidiaryDetailCustomizeMode'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import SystemNotesSection from '@/components/SystemNotesSection'
+import TransactionStatsRow from '@/components/TransactionStatsRow'
 import {
   RecordDetailCell,
   RecordDetailEmptyState,
@@ -208,6 +209,18 @@ export default async function SubsidiaryDetailPage({
   }
 
   const customizeFields = buildCustomizePreviewFields(SUBSIDIARY_FORM_FIELDS, fieldDefinitions)
+  const statPreviewCards = [
+    { id: 'childSubsidiaries', label: 'Child Subsidiaries', value: Subsidiary.childSubsidiaries.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+    { id: 'employees', label: 'Employees', value: Subsidiary.employees.length, cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
+    { id: 'customers', label: 'Customers', value: Subsidiary.customers.length, cardTone: 'yellow', valueTone: 'yellow', supportsColorized: true, supportsLink: false },
+    { id: 'vendors', label: 'Vendors', value: Subsidiary.vendors.length, cardTone: 'green', valueTone: 'green', supportsColorized: true, supportsLink: false },
+  ]
+  const statDefinitions = [
+    { id: 'childSubsidiaries', label: 'Child Subsidiaries', getValue: () => Subsidiary.childSubsidiaries.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
+    { id: 'employees', label: 'Employees', getValue: () => Subsidiary.employees.length, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
+    { id: 'customers', label: 'Customers', getValue: () => Subsidiary.customers.length, getCardTone: () => 'yellow' as const, getValueTone: () => 'yellow' as const },
+    { id: 'vendors', label: 'Vendors', getValue: () => Subsidiary.vendors.length, getCardTone: () => 'green' as const, getValueTone: () => 'green' as const },
+  ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: SUBSIDIARY_FORM_FIELDS,
     layout: formCustomization,
@@ -272,6 +285,16 @@ export default async function SubsidiaryDetailPage({
         </>
       }
     >
+        {!isCustomizing ? (
+          <div className="mb-8">
+            <TransactionStatsRow
+              record={Subsidiary}
+              stats={statDefinitions}
+              visibleStatCards={formCustomization.statCards as Array<{ id: string; metric: string; visible: boolean; order: number; size?: 'sm' | 'md' | 'lg'; colorized?: boolean; linked?: boolean }> | undefined}
+            />
+          </div>
+        ) : null}
+
         {isCustomizing ? (
           <SubsidiaryDetailCustomizeMode
             detailHref={detailHref}
@@ -279,6 +302,7 @@ export default async function SubsidiaryDetailPage({
             initialRequirements={{ ...formRequirements.subsidiaryCreate }}
             fields={customizeFields}
             sectionDescriptions={sectionDescriptions}
+            statPreviewCards={statPreviewCards}
           />
         ) : (
           <InlineRecordDetails
@@ -292,8 +316,9 @@ export default async function SubsidiaryDetailPage({
           />
         )}
 
-        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} /> : null}
+        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} internalId={Subsidiary.id} /> : null}
 
+        {!isCustomizing ? (
         <RecordDetailSection title="Child Subsidiaries" count={Subsidiary.childSubsidiaries.length}>
           {Subsidiary.childSubsidiaries.length === 0 ? (
             <RecordDetailEmptyState message="No child subsidiaries" />
@@ -320,7 +345,9 @@ export default async function SubsidiaryDetailPage({
             </table>
           )}
         </RecordDetailSection>
+        ) : null}
 
+        {!isCustomizing ? (
         <RecordDetailSection title="Employees" count={Subsidiary.employees.length}>
           {Subsidiary.employees.length === 0 ? (
             <RecordDetailEmptyState message="No employees in this subsidiary" />
@@ -349,7 +376,9 @@ export default async function SubsidiaryDetailPage({
             </table>
           )}
         </RecordDetailSection>
+        ) : null}
 
+        {!isCustomizing ? (
         <RecordDetailSection title="Customers" count={Subsidiary.customers.length}>
           {Subsidiary.customers.length === 0 ? (
             <RecordDetailEmptyState message="No customers in this subsidiary" />
@@ -376,7 +405,9 @@ export default async function SubsidiaryDetailPage({
             </table>
           )}
         </RecordDetailSection>
+        ) : null}
 
+        {!isCustomizing ? (
         <RecordDetailSection title="Vendors" count={Subsidiary.vendors.length}>
           {Subsidiary.vendors.length === 0 ? (
             <RecordDetailEmptyState message="No vendors in this subsidiary" />
@@ -403,7 +434,8 @@ export default async function SubsidiaryDetailPage({
             </table>
           )}
         </RecordDetailSection>
-        <SystemNotesSection notes={systemNotes} />
+        ) : null}
+        {!isCustomizing ? <SystemNotesSection notes={systemNotes} /> : null}
     </RecordDetailPageShell>
   )
 }

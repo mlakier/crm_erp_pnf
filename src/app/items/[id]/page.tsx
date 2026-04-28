@@ -15,6 +15,7 @@ import {
   RecordDetailHeaderCell,
   RecordDetailSection,
 } from '@/components/RecordDetailPanels'
+import TransactionStatsRow from '@/components/TransactionStatsRow'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
 import { fmtCurrency, fmtDocumentDate } from '@/lib/format'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
@@ -101,6 +102,7 @@ export default async function ItemDetailPage({
 
   const detailHref = `/items/${item.id}`
   const itemCurrencyCode = item.currency?.code ?? item.currency?.currencyId ?? undefined
+  const itemStatus = item.active ? 'Active' : 'Inactive'
   const sectionDescriptions: Record<string, string> = {
     Core: 'The primary identity and commercial classification for the item.',
     Operational: 'Availability, purchasing, fulfillment, and operational defaults for the item.',
@@ -273,6 +275,18 @@ export default async function ItemDetailPage({
     directRevenuePosting: { name: 'directRevenuePosting', label: 'Direct Revenue Posting', value: String(item.directRevenuePosting), type: 'checkbox', placeholder: 'Direct Revenue Posting', helpText: 'If enabled, revenue can post directly at billing or fulfillment instead of first routing through deferred revenue logic.' },
   }
   const customizeFields = buildCustomizePreviewFields(ITEM_FORM_FIELDS, itemFieldDefinitions)
+  const statPreviewCards = [
+    { id: 'purchaseOrderLines', label: 'Purchase Order Lines', value: item.purchaseOrderLineItems.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+    { id: 'subsidiaries', label: 'Subsidiaries', value: item.itemSubsidiaries.length, accent: 'teal', cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
+    { id: 'preferredVendor', label: 'Preferred Vendor', value: item.preferredVendor ? item.preferredVendor.name : 'Not Set', href: item.preferredVendor ? `/vendors/${item.preferredVendor.id}` : null, accent: 'yellow', cardTone: item.preferredVendor ? 'yellow' : 'default', valueTone: item.preferredVendor ? 'yellow' : 'default', supportsColorized: true, supportsLink: true },
+    { id: 'status', label: 'Status', value: itemStatus, cardTone: item.active ? 'green' : 'red', valueTone: item.active ? 'green' : 'red', supportsColorized: true, supportsLink: false },
+  ]
+  const statDefinitions = [
+    { id: 'purchaseOrderLines', label: 'Purchase Order Lines', getValue: () => item.purchaseOrderLineItems.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
+    { id: 'subsidiaries', label: 'Subsidiaries', getValue: () => item.itemSubsidiaries.length, accent: 'teal' as const, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
+    { id: 'preferredVendor', label: 'Preferred Vendor', getValue: () => (item.preferredVendor ? item.preferredVendor.name : 'Not Set'), getHref: () => (item.preferredVendor ? `/vendors/${item.preferredVendor.id}` : null), accent: 'yellow' as const, getCardTone: () => (item.preferredVendor ? 'yellow' : 'default') as const, getValueTone: () => (item.preferredVendor ? 'yellow' : 'default') as const },
+    { id: 'status', label: 'Status', getValue: () => itemStatus, getCardTone: () => (item.active ? 'green' : 'red') as const, getValueTone: () => (item.active ? 'green' : 'red') as const },
+  ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: ITEM_FORM_FIELDS,
     layout: itemFormCustomization,
@@ -344,6 +358,16 @@ export default async function ItemDetailPage({
         </>
       }
     >
+        {!isCustomizing ? (
+          <div className="mb-8">
+            <TransactionStatsRow
+              record={item}
+              stats={statDefinitions}
+              visibleStatCards={itemFormCustomization.statCards as Array<{ id: string; metric: string; visible: boolean; order: number; size?: 'sm' | 'md' | 'lg'; colorized?: boolean; linked?: boolean }> | undefined}
+            />
+          </div>
+        ) : null}
+
         {isCustomizing ? (
           <ItemDetailCustomizeMode
             detailHref={detailHref}
@@ -351,6 +375,7 @@ export default async function ItemDetailPage({
             initialRequirements={{ ...formRequirements.itemCreate }}
             fields={customizeFields}
             sectionDescriptions={sectionDescriptions}
+            statPreviewCards={statPreviewCards}
           />
         ) : (
           <InlineRecordDetails
@@ -366,6 +391,7 @@ export default async function ItemDetailPage({
 
         {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} internalId={item.id} /> : null}
 
+        {!isCustomizing ? (
         <RecordDetailSection title="Purchase Order Lines" count={item.purchaseOrderLineItems.length}>
           {item.purchaseOrderLineItems.length === 0 ? (
             <RecordDetailEmptyState message="No purchase order lines for this item" />
@@ -400,7 +426,8 @@ export default async function ItemDetailPage({
             </table>
           )}
         </RecordDetailSection>
-        <SystemNotesSection notes={systemNotes} />
+        ) : null}
+        {!isCustomizing ? <SystemNotesSection notes={systemNotes} /> : null}
     </RecordDetailPageShell>
   )
 }

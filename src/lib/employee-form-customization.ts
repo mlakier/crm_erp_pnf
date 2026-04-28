@@ -1,4 +1,5 @@
 import { getListSourceText, type FieldSourceType } from '@/lib/list-source'
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 export type EmployeeFormFieldKey =
   | 'employeeId'
@@ -40,7 +41,21 @@ export type EmployeeFormCustomizationConfig = {
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<EmployeeFormFieldKey, EmployeeFormFieldCustomization>
+  statCards?: Array<TransactionStatCardSlot<EmployeeStatCardMetric>>
 }
+
+export type EmployeeStatCardMetric =
+  | 'directReports'
+  | 'subsidiaries'
+  | 'linkedUser'
+  | 'status'
+
+export const EMPLOYEE_STAT_CARDS: Array<{ id: EmployeeStatCardMetric; label: string }> = [
+  { id: 'directReports', label: 'Direct Reports' },
+  { id: 'subsidiaries', label: 'Subsidiaries' },
+  { id: 'linkedUser', label: 'Linked User' },
+  { id: 'status', label: 'Status' },
+]
 
 export const EMPLOYEE_FORM_FIELDS: EmployeeFormFieldMeta[] = [
   { id: 'employeeId', label: 'Employee ID', fieldType: 'text', description: 'Unique employee number or code.' },
@@ -148,5 +163,14 @@ export function defaultEmployeeFormCustomization(): EmployeeFormCustomizationCon
         },
       ])
     ) as Record<EmployeeFormFieldKey, EmployeeFormFieldCustomization>,
+    statCards: EMPLOYEE_STAT_CARDS.map((card, index) => ({
+      id: `employee-stat-${card.id}`,
+      metric: card.id,
+      visible: true,
+      order: index,
+      size: 'md',
+      colorized: true,
+      linked: true,
+    })),
   }
 }

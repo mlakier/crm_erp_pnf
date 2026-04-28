@@ -1,3 +1,13 @@
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
+import {
+  buildDefaultTransactionReferenceLayout,
+  type TransactionReferenceLayout,
+} from '@/lib/transaction-reference-layouts'
+import {
+  type LinkedRecordReferenceSource,
+  INVOICE_FULL_REFERENCE_FIELDS,
+} from '@/lib/linked-record-reference-catalogs'
+
 export type InvoiceReceiptDetailFieldKey =
   | 'customerName'
   | 'customerNumber'
@@ -31,7 +41,8 @@ export type InvoiceReceiptDetailCustomizationConfig = {
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<InvoiceReceiptDetailFieldKey, InvoiceReceiptDetailFieldCustomization>
-  statCards?: Array<{ id: string; metric: string; visible: boolean; order: number }>
+  referenceLayouts: TransactionReferenceLayout[]
+  statCards?: Array<TransactionStatCardSlot<InvoiceReceiptStatCardKey>>
 }
 
 export type InvoiceReceiptStatCardKey = 'amount' | 'date' | 'method' | 'invoice'
@@ -57,27 +68,50 @@ export const INVOICE_RECEIPT_DETAIL_FIELDS: InvoiceReceiptDetailFieldMeta[] = [
   { id: 'updatedAt', label: 'Last Modified', fieldType: 'date', description: 'Date/time the invoice receipt record was last modified.' },
 ]
 
+export const INVOICE_RECEIPT_REFERENCE_SOURCES: LinkedRecordReferenceSource[] = [
+  {
+    id: 'invoice',
+    label: 'Invoice',
+    linkedFieldLabel: 'Invoice',
+    description: 'Expand the linked invoice context for this receipt.',
+    fields: INVOICE_FULL_REFERENCE_FIELDS,
+    defaultVisibleFieldIds: ['invoiceNumber', 'invoiceStatus', 'invoiceTotal'],
+    defaultColumns: 2,
+    defaultRows: 2,
+  },
+]
+
 export function defaultInvoiceReceiptDetailCustomization(): InvoiceReceiptDetailCustomizationConfig {
   return {
     formColumns: 3,
-    sections: ['Customer', 'Invoice Receipt Details'],
+    sections: [
+      'Document Identity',
+      'Customer Snapshot',
+      'Receipt Terms',
+      'Record Keys',
+      'System Dates',
+    ],
     sectionRows: {
-      Customer: 1,
-      'Invoice Receipt Details': 3,
+      'Document Identity': 1,
+      'Customer Snapshot': 1,
+      'Receipt Terms': 2,
+      'Record Keys': 1,
+      'System Dates': 1,
     },
     fields: {
-      customerName: { visible: true, section: 'Customer', order: 0, column: 1 },
-      customerNumber: { visible: true, section: 'Customer', order: 0, column: 2 },
-      id: { visible: true, section: 'Invoice Receipt Details', order: 0, column: 1 },
-      number: { visible: true, section: 'Invoice Receipt Details', order: 0, column: 2 },
-      invoiceId: { visible: true, section: 'Invoice Receipt Details', order: 0, column: 3 },
-      amount: { visible: true, section: 'Invoice Receipt Details', order: 1, column: 1 },
-      date: { visible: true, section: 'Invoice Receipt Details', order: 1, column: 2 },
-      method: { visible: true, section: 'Invoice Receipt Details', order: 1, column: 3 },
-      reference: { visible: true, section: 'Invoice Receipt Details', order: 2, column: 1 },
-      createdAt: { visible: true, section: 'Invoice Receipt Details', order: 2, column: 2 },
-      updatedAt: { visible: true, section: 'Invoice Receipt Details', order: 2, column: 3 },
+      number: { visible: true, section: 'Document Identity', order: 0, column: 1 },
+      invoiceId: { visible: true, section: 'Document Identity', order: 0, column: 2 },
+      customerNumber: { visible: true, section: 'Customer Snapshot', order: 0, column: 1 },
+      customerName: { visible: true, section: 'Customer Snapshot', order: 0, column: 2 },
+      amount: { visible: true, section: 'Receipt Terms', order: 0, column: 1 },
+      date: { visible: true, section: 'Receipt Terms', order: 0, column: 2 },
+      method: { visible: true, section: 'Receipt Terms', order: 0, column: 3 },
+      reference: { visible: true, section: 'Receipt Terms', order: 1, column: 1 },
+      id: { visible: true, section: 'Record Keys', order: 0, column: 1 },
+      createdAt: { visible: true, section: 'System Dates', order: 0, column: 1 },
+      updatedAt: { visible: true, section: 'System Dates', order: 0, column: 2 },
     },
+    referenceLayouts: [buildDefaultTransactionReferenceLayout(INVOICE_RECEIPT_REFERENCE_SOURCES, 'invoice')],
     statCards: [
       { id: 'receipt-amount', metric: 'amount', visible: true, order: 0 },
       { id: 'receipt-date', metric: 'date', visible: true, order: 1 },

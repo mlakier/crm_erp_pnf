@@ -3,9 +3,13 @@ import path from 'path'
 import {
   defaultJournalDetailCustomization,
   JOURNAL_DETAIL_FIELDS,
+  JOURNAL_GL_IMPACT_COLUMNS,
+  JOURNAL_LINE_COLUMNS,
   JOURNAL_STAT_CARDS,
   type JournalDetailCustomizationConfig,
   type JournalDetailFieldKey,
+  type JournalGlImpactColumnKey,
+  type JournalLineColumnKey,
   type JournalStatCardKey,
 } from '@/lib/journal-detail-customization'
 
@@ -34,9 +38,17 @@ function normalizeFieldPlacements(config: JournalDetailCustomizationConfig): Jou
   const nextConfig: JournalDetailCustomizationConfig = {
     ...config,
     sectionRows: { ...config.sectionRows },
+    lineSettings: { ...config.lineSettings },
+    glImpactSettings: { ...config.glImpactSettings },
     fields: Object.fromEntries(
       JOURNAL_DETAIL_FIELDS.map((field) => [field.id, { ...config.fields[field.id] }]),
     ) as JournalDetailCustomizationConfig['fields'],
+    lineColumns: Object.fromEntries(
+      JOURNAL_LINE_COLUMNS.map((column) => [column.id, { ...config.lineColumns[column.id] }]),
+    ) as JournalDetailCustomizationConfig['lineColumns'],
+    glImpactColumns: Object.fromEntries(
+      JOURNAL_GL_IMPACT_COLUMNS.map((column) => [column.id, { ...config.glImpactColumns[column.id] }]),
+    ) as JournalDetailCustomizationConfig['glImpactColumns'],
   }
 
   for (const section of nextConfig.sections) {
@@ -87,6 +99,20 @@ function normalizeFieldPlacements(config: JournalDetailCustomizationConfig): Jou
 function mergeWithDefaults(overrides: Partial<JournalDetailCustomizationConfig>): JournalDetailCustomizationConfig {
   const merged = cloneDefaults()
   merged.formColumns = normalizeColumnCount(overrides.formColumns, merged.formColumns)
+  const lineSettingsInput =
+    overrides.lineSettings && typeof overrides.lineSettings === 'object'
+      ? (overrides.lineSettings as Record<string, unknown>)
+      : {}
+  merged.lineSettings = {
+    fontSize: lineSettingsInput.fontSize === 'sm' ? 'sm' : merged.lineSettings.fontSize,
+  }
+  const glImpactSettingsInput =
+    overrides.glImpactSettings && typeof overrides.glImpactSettings === 'object'
+      ? (overrides.glImpactSettings as Record<string, unknown>)
+      : {}
+  merged.glImpactSettings = {
+    fontSize: glImpactSettingsInput.fontSize === 'sm' ? 'sm' : merged.glImpactSettings.fontSize,
+  }
 
   const inputSections = Array.isArray(overrides.sections)
     ? overrides.sections.map((section) => normalizeText(section)).filter((section): section is string => Boolean(section))
@@ -106,9 +132,13 @@ function mergeWithDefaults(overrides: Partial<JournalDetailCustomizationConfig>)
     overrides.fields && typeof overrides.fields === 'object'
       ? (overrides.fields as Partial<Record<JournalDetailFieldKey, Partial<JournalDetailCustomizationConfig['fields'][JournalDetailFieldKey]>>>)
       : {}
+  const legacyFieldOverrides =
+    overrides.fields && typeof overrides.fields === 'object'
+      ? (overrides.fields as Record<string, Partial<JournalDetailCustomizationConfig['fields'][JournalDetailFieldKey]>>)
+      : {}
 
   for (const field of JOURNAL_DETAIL_FIELDS) {
-    const override = fieldOverrides[field.id]
+    const override = fieldOverrides[field.id] ?? (field.id === 'total' ? legacyFieldOverrides.computedTotal : undefined)
     if (!override || typeof override !== 'object') continue
 
     const section = normalizeText(override.section)
@@ -130,6 +160,109 @@ function mergeWithDefaults(overrides: Partial<JournalDetailCustomizationConfig>)
     merged.fields[field.id].column = Math.min(merged.formColumns, Math.max(1, merged.fields[field.id].column))
   }
 
+  const lineColumnOverrides =
+    overrides.lineColumns && typeof overrides.lineColumns === 'object'
+      ? (overrides.lineColumns as Partial<Record<JournalLineColumnKey, Partial<JournalDetailCustomizationConfig['lineColumns'][JournalLineColumnKey]>>>)
+      : {}
+
+  for (const column of JOURNAL_LINE_COLUMNS) {
+    const override = lineColumnOverrides[column.id]
+    if (!override || typeof override !== 'object') continue
+
+    merged.lineColumns[column.id] = {
+      visible: override.visible === undefined ? merged.lineColumns[column.id].visible : override.visible === true,
+      order:
+        typeof override.order === 'number' && Number.isFinite(override.order)
+          ? Math.max(0, Math.trunc(override.order))
+          : merged.lineColumns[column.id].order,
+      widthMode:
+        override.widthMode === 'auto'
+        || override.widthMode === 'compact'
+        || override.widthMode === 'normal'
+        || override.widthMode === 'wide'
+          ? override.widthMode
+          : merged.lineColumns[column.id].widthMode,
+      editDisplay:
+        override.editDisplay === 'label'
+        || override.editDisplay === 'idAndLabel'
+        || override.editDisplay === 'id'
+          ? override.editDisplay
+          : merged.lineColumns[column.id].editDisplay,
+      viewDisplay:
+        override.viewDisplay === 'label'
+        || override.viewDisplay === 'idAndLabel'
+        || override.viewDisplay === 'id'
+          ? override.viewDisplay
+          : merged.lineColumns[column.id].viewDisplay,
+      dropdownDisplay:
+        override.dropdownDisplay === 'label'
+        || override.dropdownDisplay === 'idAndLabel'
+        || override.dropdownDisplay === 'id'
+          ? override.dropdownDisplay
+          : merged.lineColumns[column.id].dropdownDisplay,
+      dropdownSort:
+        override.dropdownSort === 'id'
+        || override.dropdownSort === 'label'
+          ? override.dropdownSort
+          : merged.lineColumns[column.id].dropdownSort,
+    }
+  }
+
+  merged.lineColumns = Object.fromEntries(
+    [...JOURNAL_LINE_COLUMNS]
+      .sort((left, right) => merged.lineColumns[left.id].order - merged.lineColumns[right.id].order)
+      .map((column, index) => [
+        column.id,
+        {
+          ...merged.lineColumns[column.id],
+          order: index,
+        },
+      ]),
+  ) as JournalDetailCustomizationConfig['lineColumns']
+
+  const glImpactColumnOverrides =
+    overrides.glImpactColumns && typeof overrides.glImpactColumns === 'object'
+      ? (overrides.glImpactColumns as Partial<Record<JournalGlImpactColumnKey, Partial<JournalDetailCustomizationConfig['glImpactColumns'][JournalGlImpactColumnKey]>>>)
+      : {}
+
+  for (const column of JOURNAL_GL_IMPACT_COLUMNS) {
+    const override = glImpactColumnOverrides[column.id]
+    if (!override || typeof override !== 'object') continue
+
+    merged.glImpactColumns[column.id] = {
+      visible: override.visible === undefined ? merged.glImpactColumns[column.id].visible : override.visible === true,
+      order:
+        typeof override.order === 'number' && Number.isFinite(override.order)
+          ? Math.max(0, Math.trunc(override.order))
+          : merged.glImpactColumns[column.id].order,
+      widthMode:
+        override.widthMode === 'auto'
+        || override.widthMode === 'compact'
+        || override.widthMode === 'normal'
+        || override.widthMode === 'wide'
+          ? override.widthMode
+          : merged.glImpactColumns[column.id].widthMode,
+      viewDisplay:
+        override.viewDisplay === 'label'
+        || override.viewDisplay === 'idAndLabel'
+        || override.viewDisplay === 'id'
+          ? override.viewDisplay
+          : merged.glImpactColumns[column.id].viewDisplay,
+    }
+  }
+
+  merged.glImpactColumns = Object.fromEntries(
+    [...JOURNAL_GL_IMPACT_COLUMNS]
+      .sort((left, right) => merged.glImpactColumns[left.id].order - merged.glImpactColumns[right.id].order)
+      .map((column, index) => [
+        column.id,
+        {
+          ...merged.glImpactColumns[column.id],
+          order: index,
+        },
+      ]),
+  ) as JournalDetailCustomizationConfig['glImpactColumns']
+
   const validStatMetrics = new Set(JOURNAL_STAT_CARDS.map((card) => card.id))
   const statCardInputs = Array.isArray(overrides.statCards) ? overrides.statCards : []
   const fallbackMetric = JOURNAL_STAT_CARDS[0]?.id
@@ -148,6 +281,14 @@ function mergeWithDefaults(overrides: Partial<JournalDetailCustomizationConfig>)
                 typeof (card as { order?: unknown }).order === 'number' && Number.isFinite((card as { order?: unknown }).order)
                   ? Math.max(0, Math.trunc((card as { order?: number }).order ?? index))
                   : index,
+              size:
+                (card as { size?: unknown }).size === 'sm'
+                || (card as { size?: unknown }).size === 'md'
+                || (card as { size?: unknown }).size === 'lg'
+                  ? ((card as { size?: 'sm' | 'md' | 'lg' }).size ?? 'md')
+                  : 'md',
+              colorized: (card as { colorized?: unknown }).colorized !== false,
+              linked: (card as { linked?: unknown }).linked !== false,
             }
           })
           .filter((card): card is JournalDetailCustomizationConfig['statCards'][number] => Boolean(card))
@@ -159,7 +300,7 @@ function mergeWithDefaults(overrides: Partial<JournalDetailCustomizationConfig>)
     normalizedStatCards.length > 0
       ? normalizedStatCards
       : fallbackMetric
-        ? [{ id: 'slot-1', metric: fallbackMetric, visible: true, order: 0 }]
+        ? [{ id: 'slot-1', metric: fallbackMetric, visible: true, order: 0, size: 'md', colorized: true, linked: true }]
         : []
 
   return normalizeFieldPlacements(merged)

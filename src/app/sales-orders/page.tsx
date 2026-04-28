@@ -13,6 +13,7 @@ import { loadListValues } from '@/lib/load-list-values'
 import DeleteButton from '@/components/DeleteButton'
 import { RecordListHeaderLabel } from '@/components/RecordListHeaderLabel'
 import { buildMasterDataExportUrl } from '@/lib/master-data-export-url'
+import { createRecordLabelMapFromValues, formatRecordLabel } from '@/lib/record-status-label'
 
 const SALES_ORDER_COLUMNS = [
   { id: 'sales-order-number', label: 'Sales Order Id' },
@@ -70,6 +71,7 @@ export default async function SalesOrdersPage({
   ])
 
   const statusOptions = ['all', ...statusValues.map((value) => value.toLowerCase())]
+  const statusLabelMap = createRecordLabelMapFromValues(statusValues)
   const pagination = getPagination(totalSalesOrders, params.page)
 
   const salesOrders = await prisma.salesOrder.findMany({
@@ -154,7 +156,7 @@ export default async function SalesOrdersPage({
                     }
               }
             >
-              {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+              {status === 'all' ? 'All' : formatRecordLabel(status, statusLabelMap)}
             </Link>
           )
         })}
@@ -228,38 +230,84 @@ export default async function SalesOrdersPage({
                         {order.number}
                       </Link>
                     </td>
-                    <td data-column="customer-id" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {order.customer.customerId ?? '-'}
+                    <td data-column="customer-id" className="px-4 py-2 text-sm">
+                      <Link href={`/customers/${order.customer.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                        {order.customer.customerId ?? '-'}
+                      </Link>
                     </td>
-                    <td data-column="customer" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {order.customer.name}
+                    <td data-column="quote" className="px-4 py-2 text-sm">
+                      {order.quote ? (
+                        <Link href={`/quotes/${order.quote.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {order.quote.number}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                      )}
                     </td>
-                    <td data-column="created-by" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {order.user?.userId ?? '-'}
-                    </td>
-                    <td data-column="quote" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {order.quote?.number ?? '-'}
-                    </td>
-                    <td data-column="opportunity-id" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {order.quote?.opportunity?.opportunityNumber ?? '-'}
+                    <td data-column="opportunity-id" className="px-4 py-2 text-sm">
+                      {order.quote?.opportunity ? (
+                        <Link href={`/opportunities/${order.quote.opportunity.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {order.quote.opportunity.opportunityNumber ?? '-'}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                      )}
                     </td>
                     <td data-column="status" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {order.status}
+                      {formatRecordLabel(order.status, statusLabelMap)}
                     </td>
                     <td data-column="total" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
                       {fmtCurrency(order.total, undefined, moneySettings)}
                     </td>
-                    <td data-column="subsidiary-id" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {order.subsidiary?.subsidiaryId ?? '-'}
+                    <td data-column="subsidiary-id" className="px-4 py-2 text-sm">
+                      {order.subsidiary ? (
+                        <Link href={`/subsidiaries/${order.subsidiary.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {order.subsidiary.subsidiaryId}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                      )}
                     </td>
-                    <td data-column="subsidiary" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {order.subsidiary?.name ?? '-'}
+                    <td data-column="customer" className="px-4 py-2 text-sm">
+                      <Link href={`/customers/${order.customer.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                        {order.customer.name}
+                      </Link>
                     </td>
-                    <td data-column="currency-id" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {order.currency?.currencyId ?? order.currency?.code ?? '-'}
+                    <td data-column="created-by" className="px-4 py-2 text-sm">
+                      {order.user ? (
+                        <Link href={`/users/${order.user.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {order.user.userId ?? '-'}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                      )}
                     </td>
-                    <td data-column="currency" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {order.currency?.code ?? '-'}
+                    <td data-column="subsidiary" className="px-4 py-2 text-sm">
+                      {order.subsidiary ? (
+                        <Link href={`/subsidiaries/${order.subsidiary.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {order.subsidiary.name}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                      )}
+                    </td>
+                    <td data-column="currency-id" className="px-4 py-2 text-sm">
+                      {order.currency ? (
+                        <Link href={`/currencies/${order.currency.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {order.currency.currencyId ?? order.currency.code ?? '-'}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                      )}
+                    </td>
+                    <td data-column="currency" className="px-4 py-2 text-sm">
+                      {order.currency ? (
+                        <Link href={`/currencies/${order.currency.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {order.currency.code ?? '-'}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                      )}
                     </td>
                     <td data-column="db-id" className="px-4 py-2 text-sm" style={{ color: 'var(--text-muted)' }}>
                       {order.id}

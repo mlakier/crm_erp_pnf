@@ -3,6 +3,15 @@
 Mode: audit-only
 Generated: 2026-04-25T07:24:14.355Z
 
+## Component Applicability
+
+| Component | Applicable |
+| --- | --- |
+| Header | Yes |
+| Lines | Yes |
+| GL Impact | Yes |
+| Footer | Yes |
+
 ## Checks
 
 ### Foundation
@@ -39,11 +48,26 @@ Generated: 2026-04-25T07:24:14.355Z
 ### Line Section
 - [x] Line section includes add-line capability where applicable (src\app\invoices\[id]\page.tsx)
 
-### Detail Section
+### Line Item Presentation & Customize
+- [ ] Customize flow exposes a line-item column customization block when the page has transaction lines
+- [ ] Line-item customization supports visibility and order persistence where applicable
+- [ ] Line-item customization supports applicable presentation controls such as width, edit/view display, dropdown display, and dropdown sort for lookup columns
+- [ ] Non-lookup line columns do not expose irrelevant display or dropdown controls
+- [ ] Saved line-item customization is reflected in both detail view and `[id]?edit=1` edit mode
+- [ ] Truncated line-item values still expose full value on hover
+
+### Footer Section
 - [x] Detail page includes related documents section (src\app\invoices\[id]\page.tsx)
 - [x] Detail page includes communications section (src\app\invoices\[id]\page.tsx)
 - [x] Detail page wires send email in communications (src\app\invoices\[id]\page.tsx)
+- [x] Detail page includes system notes section (src\app\invoices\[id]\page.tsx)
 - [x] Detail page includes GL impact section (src\app\invoices\[id]\page.tsx)
+
+### GL Impact Presentation & Customize
+- [ ] Customize flow exposes a GL impact column customization block when the page has GL impact
+- [ ] GL impact customization supports visibility and order persistence where applicable
+- [ ] GL impact customization supports applicable width and view-display controls without dropdown-only settings
+- [ ] Saved GL impact customization is reflected in the rendered GL impact table after reload
 
 ## Missing Files
 - None

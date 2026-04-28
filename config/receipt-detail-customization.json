@@ -1,0 +1,166 @@
+{
+  "formColumns": 3,
+  "sections": [
+    "Document Identity",
+    "Receipt Terms",
+    "Record Keys",
+    "System Dates"
+  ],
+  "sectionRows": {
+    "Document Identity": 1,
+    "Receipt Terms": 2,
+    "Record Keys": 1,
+    "System Dates": 1
+  },
+  "fields": {
+    "id": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 1
+    },
+    "number": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 1
+    },
+    "purchaseOrderId": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 2
+    },
+    "quantity": {
+      "visible": true,
+      "section": "Receipt Terms",
+      "order": 0,
+      "column": 1
+    },
+    "date": {
+      "visible": true,
+      "section": "Receipt Terms",
+      "order": 0,
+      "column": 2
+    },
+    "status": {
+      "visible": true,
+      "section": "Receipt Terms",
+      "order": 0,
+      "column": 3
+    },
+    "notes": {
+      "visible": true,
+      "section": "Receipt Terms",
+      "order": 1,
+      "column": 1
+    },
+    "createdAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 1
+    },
+    "updatedAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 2
+    }
+  },
+  "referenceLayouts": [
+    {
+      "id": "reference-purchaseOrder-1",
+      "referenceId": "purchaseOrder",
+      "formColumns": 3,
+      "rows": 2,
+      "fields": {
+        "purchaseOrderDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 0
+        },
+        "purchaseOrderNumber": {
+          "visible": true,
+          "column": 1,
+          "order": 0
+        },
+        "purchaseOrderStatus": {
+          "visible": true,
+          "column": 3,
+          "order": 0
+        },
+        "purchaseOrderTotal": {
+          "visible": true,
+          "column": 2,
+          "order": 0
+        },
+        "purchaseOrderVendorDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 2
+        },
+        "purchaseOrderUserDbId": {
+          "visible": false,
+          "column": 2,
+          "order": 2
+        },
+        "purchaseOrderRequisitionDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 3
+        },
+        "purchaseOrderSubsidiaryDbId": {
+          "visible": false,
+          "column": 2,
+          "order": 3
+        },
+        "purchaseOrderCurrencyDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 4
+        },
+        "purchaseOrderCreatedAt": {
+          "visible": false,
+          "column": 2,
+          "order": 4
+        },
+        "purchaseOrderUpdatedAt": {
+          "visible": false,
+          "column": 1,
+          "order": 5
+        }
+      }
+    }
+  ],
+  "statCards": [
+    {
+      "id": "receipt-po",
+      "metric": "purchaseOrder",
+      "visible": true,
+      "order": 0,
+      "size": "sm"
+    },
+    {
+      "id": "receipt-quantity",
+      "metric": "quantity",
+      "visible": true,
+      "order": 1,
+      "size": "sm"
+    },
+    {
+      "id": "receipt-status",
+      "metric": "status",
+      "visible": true,
+      "order": 2,
+      "size": "sm"
+    },
+    {
+      "id": "receipt-date",
+      "metric": "date",
+      "visible": true,
+      "order": 3,
+      "size": "sm"
+    }
+  ]
+}

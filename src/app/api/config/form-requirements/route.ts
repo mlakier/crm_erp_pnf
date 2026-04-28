@@ -5,6 +5,7 @@ import {
   FORM_REQUIREMENTS,
   FormKey,
   FormRequirementsMap,
+  LOCKED_FORM_REQUIREMENTS,
 } from '@/lib/form-requirements'
 import { loadFormRequirements, saveFormRequirements } from '@/lib/form-requirements-store'
 
@@ -26,6 +27,17 @@ function sanitizeInput(input: unknown): FormRequirementsMap {
     for (const field of Object.keys(clean[form])) {
       if (Object.prototype.hasOwnProperty.call(formRecord, field)) {
         clean[form][field] = formRecord[field] === true
+      }
+    }
+  }
+
+  for (const form of Object.keys(LOCKED_FORM_REQUIREMENTS) as FormKey[]) {
+    const lockedFields = LOCKED_FORM_REQUIREMENTS[form]
+    if (!lockedFields) continue
+
+    for (const field of Object.keys(lockedFields)) {
+      if (lockedFields[field]) {
+        clean[form][field] = true
       }
     }
   }

@@ -4,13 +4,14 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
-import PurchaseOrderHeaderSections, {
-  type PurchaseOrderHeaderField,
-  type PurchaseOrderHeaderSection,
-} from '@/components/PurchaseOrderHeaderSections'
-import PurchaseOrderLineItemsSection from '@/components/PurchaseOrderLineItemsSection'
+import TransactionHeaderSections, {
+  type TransactionHeaderField,
+  type TransactionHeaderSection,
+} from '@/components/TransactionHeaderSections'
+import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import { RecordDetailEmptyState, RecordDetailSection } from '@/components/RecordDetailPanels'
 import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
+import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/lib/form-requirements-client'
 import {
   INVOICE_DETAIL_FIELDS,
   type InvoiceDetailCustomizationConfig,
@@ -126,6 +127,7 @@ export default function InvoiceCreatePageClient({
   duplicateInvoice?: DuplicateInvoiceSource | null
 }) {
   const router = useRouter()
+  const { req, isLocked } = useFormRequirementsState('invoiceCreate')
   const initialSalesOrder = duplicateInvoice ? null : salesOrders[0] ?? null
   const [headerValues, setHeaderValues] = useState<Record<string, string>>({
     salesOrderId: duplicateInvoice?.salesOrder?.id ?? initialSalesOrder?.id ?? '',
@@ -191,7 +193,7 @@ export default function InvoiceCreatePageClient({
 
   const headerFieldDefinitions: Record<
     InvoiceDetailFieldKey,
-    PurchaseOrderHeaderField & { key: InvoiceDetailFieldKey }
+    TransactionHeaderField & { key: InvoiceDetailFieldKey }
   > = {
     customerName: {
       key: 'customerName',
@@ -477,8 +479,10 @@ export default function InvoiceCreatePageClient({
       subsectionDescription: 'System-managed lifecycle timestamps.',
     },
   }
+  applyRequirementsToEditableFields(headerFieldDefinitions, req, isLocked)
 
-  const headerSections: PurchaseOrderHeaderSection[] = buildConfiguredTransactionSections({
+
+  const headerSections: TransactionHeaderSection[] = buildConfiguredTransactionSections({
     fields: INVOICE_DETAIL_FIELDS,
     layout: customization,
     fieldDefinitions: headerFieldDefinitions,
@@ -591,7 +595,7 @@ export default function InvoiceCreatePageClient({
         </>
       }
     >
-      <PurchaseOrderHeaderSections
+      <TransactionHeaderSections
         editing
         sections={headerSections}
         columns={customization.formColumns}
@@ -633,7 +637,7 @@ export default function InvoiceCreatePageClient({
 
       <div className="mt-6">
         {lineRows.length > 0 ? (
-          <PurchaseOrderLineItemsSection
+          <TransactionLineItemsSection
             rows={lineRows}
             editing={false}
             purchaseOrderId="draft-invoice"
@@ -664,3 +668,4 @@ export default function InvoiceCreatePageClient({
     </RecordDetailPageShell>
   )
 }
+

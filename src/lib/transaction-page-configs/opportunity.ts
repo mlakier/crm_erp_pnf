@@ -1,12 +1,12 @@
 import { fmtCurrency, fmtDocumentDate } from '@/lib/format'
-import type { TransactionPageConfig } from '@/lib/transaction-page-config'
+import type { TransactionPageConfig, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 export type OpportunityPageConfigRecord = {
   amount: number
   closeDate: Date | null
   lineCount: number
   stageLabel: string
-  stageTone?: 'default' | 'accent' | 'teal' | 'yellow' | 'green' | 'red'
+  stageTone?: TransactionVisualTone
   quoteNumber: string | null
   quoteHref: string | null
   moneySettings?: Parameters<typeof fmtCurrency>[2]
@@ -14,8 +14,12 @@ export type OpportunityPageConfigRecord = {
 
 export const opportunityPageConfig: TransactionPageConfig<OpportunityPageConfigRecord> = {
   sectionDescriptions: {
-    Customer: 'Customer context from the linked master data record.',
-    'Opportunity Details': 'Core opportunity fields, stage context, and forecast controls.',
+    'Document Identity': 'Opportunity numbering, naming, and source-document context for this pipeline record.',
+    'Customer Snapshot': 'Primary customer context captured directly on the opportunity detail page.',
+    'Pipeline & Forecast': 'Stage, amount, probability, and expected close timing for this opportunity.',
+    'Commercial Context': 'Subsidiary and currency context for this opportunity.',
+    'Record Keys': 'Internal identifiers and ownership keys tied to this opportunity.',
+    'System Dates': 'System-managed timestamps for this opportunity record.',
   },
   stats: [
     {
@@ -39,6 +43,7 @@ export const opportunityPageConfig: TransactionPageConfig<OpportunityPageConfigR
       label: 'Quote',
       getValue: (record) => record.quoteNumber ?? '-',
       getHref: (record) => record.quoteHref,
+      getValueTone: (record) => (record.quoteHref ? 'accent' : 'default'),
     },
     {
       id: 'stage',

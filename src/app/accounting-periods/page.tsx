@@ -126,6 +126,7 @@ export default async function AccountingPeriodsPage({
               <MasterDataHeaderCell columnId="ap-locked">AP Locked</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="inventory-locked">Inventory Locked</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="closed-at">Closed At</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="db-id">DB Id</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="last-modified">Last Modified</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
@@ -133,7 +134,7 @@ export default async function AccountingPeriodsPage({
           </thead>
           <tbody>
             {periods.length === 0 ? (
-              <MasterDataEmptyStateRow colSpan={13}>No accounting periods found</MasterDataEmptyStateRow>
+              <MasterDataEmptyStateRow colSpan={14}>No accounting periods found</MasterDataEmptyStateRow>
             ) : (
               periods.map((period, index) => (
                 <tr key={period.id} style={getMasterDataRowStyle(index, periods.length)}>
@@ -151,6 +152,7 @@ export default async function AccountingPeriodsPage({
                   <MasterDataMutedCell columnId="ap-locked">{yesNo(period.apLocked)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="inventory-locked">{yesNo(period.inventoryLocked)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="closed-at">{formatMasterDataDate(period.closedAt)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="db-id">{period.id}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="created">{formatMasterDataDate(period.createdAt)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(period.updatedAt)}</MasterDataMutedCell>
                   <MasterDataBodyCell columnId="actions">

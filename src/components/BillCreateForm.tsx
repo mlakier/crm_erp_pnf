@@ -6,22 +6,47 @@ import { parseMoneyValue } from '@/lib/money'
 
 export default function BillCreateForm({
   vendors,
+  initialValues,
+  submitLabel = 'Create Bill',
+  redirectToDetail = false,
+  cancelHref,
   onSuccess,
   onCancel,
 }: {
   vendors: Array<{ id: string; name: string }>
-  onSuccess?: () => void
+  initialValues?: {
+    vendorId?: string
+    total?: string
+    date?: string
+    dueDate?: string
+    status?: string
+    notes?: string
+  }
+  submitLabel?: string
+  redirectToDetail?: boolean
+  cancelHref?: string
+  onSuccess?: (id?: string) => void
   onCancel?: () => void
 }) {
-  const [vendorId, setVendorId] = useState(vendors[0]?.id ?? '')
-  const [total, setTotal] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
-  const [dueDate, setDueDate] = useState('')
-  const [status, setStatus] = useState('received')
-  const [notes, setNotes] = useState('')
+  const [vendorId, setVendorId] = useState(initialValues?.vendorId ?? vendors[0]?.id ?? '')
+  const [total, setTotal] = useState(initialValues?.total ?? '')
+  const [date, setDate] = useState(initialValues?.date ?? new Date().toISOString().split('T')[0])
+  const [dueDate, setDueDate] = useState(initialValues?.dueDate ?? '')
+  const [status, setStatus] = useState(initialValues?.status ?? 'received')
+  const [notes, setNotes] = useState(initialValues?.notes ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
+
+  function handleCancel() {
+    if (onCancel) {
+      onCancel()
+      return
+    }
+    if (cancelHref) {
+      router.push(cancelHref)
+    }
+  }
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -44,10 +69,15 @@ export default function BillCreateForm({
         }),
       })
 
-      const body = await response.json()
+      const body = (await response.json().catch(() => ({}))) as { error?: string; id?: string }
       if (!response.ok) {
         setError(body.error || 'Unable to create bill')
         setSaving(false)
+        return
+      }
+
+      if (redirectToDetail && body.id) {
+        router.push(`/bills/${body.id}`)
         return
       }
 
@@ -58,7 +88,7 @@ export default function BillCreateForm({
       setNotes('')
       setSaving(false)
       router.refresh()
-      onSuccess?.()
+      onSuccess?.(body.id)
     } catch {
       setError('Unable to create bill')
       setSaving(false)
@@ -67,10 +97,14 @@ export default function BillCreateForm({
 
   return (
     <section>
-      <p className="mb-4 text-sm" style={{ color: 'var(--text-secondary)' }}>Bill # is generated automatically when the record is created.</p>
+      <p className="mb-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
+        Bill # is generated automatically when the record is created.
+      </p>
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div>
-          <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Vendor</label>
+          <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+            Vendor
+          </label>
           <select
             value={vendorId}
             onChange={(e) => setVendorId(e.target.value)}
@@ -86,7 +120,9 @@ export default function BillCreateForm({
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Total</label>
+            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+              Total
+            </label>
             <input
               type="number"
               value={total}
@@ -97,7 +133,9 @@ export default function BillCreateForm({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Status</label>
+            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+              Status
+            </label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
@@ -114,7 +152,9 @@ export default function BillCreateForm({
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Bill Date</label>
+            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+              Bill Date
+            </label>
             <input
               type="date"
               value={date}
@@ -125,7 +165,9 @@ export default function BillCreateForm({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Due Date</label>
+            <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+              Due Date
+            </label>
             <input
               type="date"
               value={dueDate}
@@ -136,7 +178,9 @@ export default function BillCreateForm({
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Notes</label>
+          <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+            Notes
+          </label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -144,12 +188,16 @@ export default function BillCreateForm({
             style={{ borderColor: 'var(--border-muted)' }}
           />
         </div>
-        {error ? <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p> : null}
+        {error ? (
+          <p className="text-sm" style={{ color: 'var(--danger)' }}>
+            {error}
+          </p>
+        ) : null}
         <div className="flex items-center justify-end gap-3">
-          {onCancel ? (
+          {onCancel || cancelHref ? (
             <button
               type="button"
-              onClick={onCancel}
+              onClick={handleCancel}
               className="rounded-md border px-4 py-2 text-sm font-medium"
               style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
             >
@@ -162,7 +210,7 @@ export default function BillCreateForm({
             className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed"
             style={{ backgroundColor: saving ? '#64748b' : 'var(--accent-primary-strong)' }}
           >
-            {saving ? 'Saving...' : 'Create Bill'}
+            {saving ? 'Saving...' : submitLabel}
           </button>
         </div>
       </form>

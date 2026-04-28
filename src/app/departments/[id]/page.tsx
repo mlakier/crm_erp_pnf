@@ -10,6 +10,7 @@ import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSectio
 import DepartmentDetailCustomizeMode from '@/components/DepartmentDetailCustomizeMode'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import SystemNotesSection from '@/components/SystemNotesSection'
+import TransactionStatsRow from '@/components/TransactionStatsRow'
 import {
   RecordDetailCell,
   RecordDetailField,
@@ -194,6 +195,18 @@ export default async function DepartmentDetailPage({
   }
 
   const customizeFields = buildCustomizePreviewFields(DEPARTMENT_FORM_FIELDS, fieldDefinitions)
+  const statPreviewCards = [
+    { id: 'employees', label: 'Employees', value: department.employees.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+    { id: 'subsidiaries', label: 'Subsidiaries', value: department.departmentSubsidiaries.length, cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
+    { id: 'customFields', label: 'Custom Fields', value: customFields.length, cardTone: 'yellow', valueTone: 'yellow', supportsColorized: true, supportsLink: false },
+    { id: 'status', label: 'Status', value: department.active ? 'Active' : 'Inactive', cardTone: department.active ? 'green' : 'red', valueTone: department.active ? 'green' : 'red', supportsColorized: true, supportsLink: false },
+  ]
+  const statDefinitions = [
+    { id: 'employees', label: 'Employees', getValue: () => department.employees.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
+    { id: 'subsidiaries', label: 'Subsidiaries', getValue: () => department.departmentSubsidiaries.length, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
+    { id: 'customFields', label: 'Custom Fields', getValue: () => customFields.length, getCardTone: () => 'yellow' as const, getValueTone: () => 'yellow' as const },
+    { id: 'status', label: 'Status', getValue: () => (department.active ? 'Active' : 'Inactive'), getCardTone: () => (department.active ? 'green' : 'red') as const, getValueTone: () => (department.active ? 'green' : 'red') as const },
+  ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: DEPARTMENT_FORM_FIELDS,
     layout: formCustomization,
@@ -267,6 +280,16 @@ export default async function DepartmentDetailPage({
         </>
       )}
     >
+      {!isCustomizing ? (
+        <div className="mb-8">
+          <TransactionStatsRow
+            record={department}
+            stats={statDefinitions}
+            visibleStatCards={formCustomization.statCards as Array<{ id: string; metric: string; visible: boolean; order: number; size?: 'sm' | 'md' | 'lg'; colorized?: boolean; linked?: boolean }> | undefined}
+          />
+        </div>
+      ) : null}
+
       {isCustomizing ? (
         <DepartmentDetailCustomizeMode
           detailHref={detailHref}
@@ -274,6 +297,7 @@ export default async function DepartmentDetailPage({
           initialRequirements={{ ...formRequirements.departmentCreate }}
           fields={customizeFields}
           sectionDescriptions={sectionDescriptions}
+          statPreviewCards={statPreviewCards}
         />
       ) : (
         <InlineRecordDetails
@@ -287,16 +311,18 @@ export default async function DepartmentDetailPage({
         />
       )}
 
-      {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} /> : null}
+      {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} internalId={department.id} /> : null}
 
+      {!isCustomizing ? (
       <RecordDetailSection title="Subsidiary Availability" count={department.departmentSubsidiaries.length}>
         <dl className="grid gap-3 sm:grid-cols-2">
           <RecordDetailField label="Subsidiaries">{subsidiaryDisplay || '-'}</RecordDetailField>
           <RecordDetailField label="Include Children">{department.includeChildren ? 'Yes' : 'No'}</RecordDetailField>
         </dl>
       </RecordDetailSection>
+      ) : null}
 
-      {customFields.length > 0 ? (
+      {!isCustomizing && customFields.length > 0 ? (
         <RecordDetailSection title="Custom fields" count={customFields.length}>
           <dl className="grid gap-3 sm:grid-cols-2">
             {customFields.map((field) => (
@@ -311,6 +337,7 @@ export default async function DepartmentDetailPage({
         </RecordDetailSection>
       ) : null}
 
+      {!isCustomizing ? (
       <RecordDetailSection title="Employees" count={department.employees.length}>
         {department.employees.length === 0 ? (
           <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>
@@ -345,7 +372,8 @@ export default async function DepartmentDetailPage({
           </table>
         )}
       </RecordDetailSection>
-      <SystemNotesSection notes={systemNotes} />
+      ) : null}
+      {!isCustomizing ? <SystemNotesSection notes={systemNotes} /> : null}
     </RecordDetailPageShell>
   )
 }

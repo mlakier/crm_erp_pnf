@@ -44,28 +44,29 @@ export default function InvoiceRelatedDocuments({
 }) {
   return (
     <TransactionRelatedDocumentsTabs
-      defaultActiveKey="sales-orders"
+      defaultActiveKey="opportunities"
       tabs={[
         {
-          key: 'sales-orders',
-          label: 'Sales Orders',
-          count: salesOrders.length,
+          key: 'opportunities',
+          label: 'Opportunities',
+          count: opportunities.length,
           tone: 'upstream',
-          emptyMessage: 'No source sales order is linked to this invoice.',
-          headers: ['TXN ID', 'STATUS', 'TOTAL'],
-          rows: salesOrders.map((salesOrder) => ({
-            id: salesOrder.id,
+          emptyMessage: 'No source opportunity is linked to this invoice.',
+          headers: ['TXN ID', 'NAME', 'STATUS', 'TOTAL'],
+          rows: opportunities.map((opportunity) => ({
+            id: opportunity.id,
             cells: [
               <Link
                 key="link"
-                href={`/sales-orders/${salesOrder.id}`}
+                href={`/opportunities/${opportunity.id}`}
                 className="hover:underline"
                 style={{ color: 'var(--accent-primary-strong)' }}
               >
-                {salesOrder.number}
+                {opportunity.number}
               </Link>,
-              <RelatedDocumentsStatusBadge key="status" status={salesOrder.status} />,
-              fmtCurrency(salesOrder.total, undefined, moneySettings),
+              opportunity.name,
+              <RelatedDocumentsStatusBadge key="status" status={opportunity.status} />,
+              fmtCurrency(opportunity.total, undefined, moneySettings),
             ],
           })),
         },
@@ -93,35 +94,34 @@ export default function InvoiceRelatedDocuments({
           })),
         },
         {
-          key: 'opportunities',
-          label: 'Opportunities',
-          count: opportunities.length,
+          key: 'sales-orders',
+          label: 'Sales Orders',
+          count: salesOrders.length,
           tone: 'upstream',
-          emptyMessage: 'No source opportunity is linked to this invoice.',
-          headers: ['TXN ID', 'NAME', 'STATUS', 'TOTAL'],
-          rows: opportunities.map((opportunity) => ({
-            id: opportunity.id,
+          emptyMessage: 'No source sales order is linked to this invoice.',
+          headers: ['TXN ID', 'STATUS', 'TOTAL'],
+          rows: salesOrders.map((salesOrder) => ({
+            id: salesOrder.id,
             cells: [
               <Link
                 key="link"
-                href={`/opportunities/${opportunity.id}`}
+                href={`/sales-orders/${salesOrder.id}`}
                 className="hover:underline"
                 style={{ color: 'var(--accent-primary-strong)' }}
               >
-                {opportunity.number}
+                {salesOrder.number}
               </Link>,
-              opportunity.name,
-              <RelatedDocumentsStatusBadge key="status" status={opportunity.status} />,
-              fmtCurrency(opportunity.total, undefined, moneySettings),
+              <RelatedDocumentsStatusBadge key="status" status={salesOrder.status} />,
+              fmtCurrency(salesOrder.total, undefined, moneySettings),
             ],
           })),
         },
         {
           key: 'customer-receipts',
-          label: 'Customer Receipts',
+          label: 'Invoice Receipts',
           count: cashReceipts.length,
           tone: 'downstream',
-          emptyMessage: 'No customer receipts are linked to this invoice yet.',
+          emptyMessage: 'No invoice receipts are linked to this invoice yet.',
           headers: ['TXN ID', 'AMOUNT', 'DATE', 'METHOD', 'REFERENCE'],
           rows: cashReceipts.map((receipt) => ({
             id: receipt.id,

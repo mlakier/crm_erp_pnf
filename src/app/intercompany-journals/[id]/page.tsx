@@ -25,6 +25,9 @@ export default async function IntercompanyJournalEntryDetailPage({
     prisma.journalEntry.findFirst({
       where: { id, journalType: 'intercompany' },
       include: {
+        user: {
+          select: { id: true, userId: true, name: true, email: true },
+        },
         lineItems: {
           orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
           include: {
@@ -102,13 +105,22 @@ export default async function IntercompanyJournalEntryDetailPage({
         subsidiaryId: entry.subsidiaryId ?? '',
         currencyId: entry.currencyId ?? '',
         accountingPeriodId: entry.accountingPeriodId ?? '',
+        total: entry.total.toString(),
         sourceType: entry.sourceType ?? '',
         sourceId: entry.sourceId ?? '',
+        userId: entry.userId ?? '',
         postedByEmployeeId: entry.postedByEmployeeId ?? '',
         approvedByEmployeeId: entry.approvedByEmployeeId ?? '',
         createdAt: fmtDocumentDate(entry.createdAt, moneySettings),
         updatedAt: fmtDocumentDate(entry.updatedAt, moneySettings),
       }}
+      createdByUserLabel={
+        entry.user
+          ? entry.user.userId && entry.user.name
+            ? `${entry.user.userId} - ${entry.user.name}`
+            : entry.user.userId ?? entry.user.name ?? entry.user.email
+          : '-'
+      }
       initialLineItems={entry.lineItems.map((line) => ({
         key: line.id,
         displayOrder: line.displayOrder,

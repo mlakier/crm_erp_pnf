@@ -1,4 +1,5 @@
 import { getListSourceText, type FieldSourceType } from '@/lib/list-source'
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 export type ChartOfAccountsFormFieldKey =
   | 'accountId'
@@ -46,7 +47,21 @@ export type ChartOfAccountsFormCustomizationConfig = {
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<ChartOfAccountsFormFieldKey, ChartOfAccountsFormFieldCustomization>
+  statCards?: Array<TransactionStatCardSlot<ChartOfAccountsStatCardMetric>>
 }
+
+export type ChartOfAccountsStatCardMetric =
+  | 'subsidiaries'
+  | 'childAccounts'
+  | 'posting'
+  | 'summary'
+
+export const CHART_OF_ACCOUNTS_STAT_CARDS: Array<{ id: ChartOfAccountsStatCardMetric; label: string }> = [
+  { id: 'subsidiaries', label: 'Subsidiaries' },
+  { id: 'childAccounts', label: 'Child Accounts' },
+  { id: 'posting', label: 'Posting' },
+  { id: 'summary', label: 'Summary' },
+]
 
 export const CHART_OF_ACCOUNTS_FORM_FIELDS: ChartOfAccountsFormFieldMeta[] = [
   { id: 'accountId', label: 'Account Id', fieldType: 'text', description: 'System-generated GL account identifier used throughout the platform.' },
@@ -176,5 +191,14 @@ export function defaultChartOfAccountsFormCustomization(): ChartOfAccountsFormCu
         },
       ])
     ) as Record<ChartOfAccountsFormFieldKey, ChartOfAccountsFormFieldCustomization>,
+    statCards: CHART_OF_ACCOUNTS_STAT_CARDS.map((card, index) => ({
+      id: `chart-of-accounts-stat-${card.id}`,
+      metric: card.id,
+      visible: true,
+      order: index,
+      size: 'md',
+      colorized: true,
+      linked: true,
+    })),
   }
 }

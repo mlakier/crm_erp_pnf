@@ -43,6 +43,26 @@ export type NegativeColor = 'default' | 'red'
 
 export type DocumentDateFormat = 'locale' | 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD'
 
+export type TransactionStatusColorTone =
+  | 'default'
+  | 'gray'
+  | 'accent'
+  | 'teal'
+  | 'yellow'
+  | 'orange'
+  | 'green'
+  | 'red'
+  | 'purple'
+  | 'pink'
+
+export type SalesOrderStatusColorKey = 'draft' | 'approved' | 'booked' | 'fulfilled' | 'cancelled'
+
+export type SalesOrderStatusColorSettings = Record<SalesOrderStatusColorKey, TransactionStatusColorTone>
+
+export type TransactionStatusColorSettings = {
+  salesOrder: SalesOrderStatusColorSettings
+}
+
 export type MoneySettings = {
   locale: string
   fallbackCurrencyCode: string
@@ -105,7 +125,21 @@ export const COMPANY_DOCUMENT_DATE_FORMAT_OPTIONS = [
 export type CompanyPreferencesSettings = {
   idSettings: Record<IdSettingKey, IdSetting>
   moneySettings: MoneySettings
+  transactionStatusColors: TransactionStatusColorSettings
 }
+
+export const COMPANY_TRANSACTION_STATUS_TONE_OPTIONS = [
+  { value: 'default', label: 'Default / Muted' },
+  { value: 'gray', label: 'Gray' },
+  { value: 'accent', label: 'Accent Blue' },
+  { value: 'teal', label: 'Teal' },
+  { value: 'yellow', label: 'Yellow' },
+  { value: 'orange', label: 'Orange' },
+  { value: 'green', label: 'Green' },
+  { value: 'red', label: 'Red' },
+  { value: 'purple', label: 'Purple' },
+  { value: 'pink', label: 'Pink' },
+] as const
 
 export const ID_SETTING_DEFINITIONS: Array<{
   key: IdSettingKey
@@ -174,4 +208,14 @@ export const DEFAULT_MONEY_SETTINGS: MoneySettings = {
   showCurrencyOn: 'all',
   negativeColor: 'default',
   documentDateFormat: 'locale',
+}
+
+export const DEFAULT_TRANSACTION_STATUS_COLOR_SETTINGS: TransactionStatusColorSettings = {
+  salesOrder: {
+    draft: 'default',
+    approved: 'accent',
+    booked: 'accent',
+    fulfilled: 'green',
+    cancelled: 'red',
+  },
 }

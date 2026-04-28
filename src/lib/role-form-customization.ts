@@ -1,4 +1,5 @@
 import { getListSourceText, type FieldSourceType } from '@/lib/list-source'
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 export type RoleFormFieldKey =
   | 'roleId'
@@ -28,7 +29,21 @@ export type RoleFormCustomizationConfig = {
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<RoleFormFieldKey, RoleFormFieldCustomization>
+  statCards?: Array<TransactionStatCardSlot<RoleStatCardMetric>>
 }
+
+export type RoleStatCardMetric =
+  | 'users'
+  | 'activeUsers'
+  | 'inactiveUsers'
+  | 'status'
+
+export const ROLE_STAT_CARDS: Array<{ id: RoleStatCardMetric; label: string }> = [
+  { id: 'users', label: 'Users' },
+  { id: 'activeUsers', label: 'Active Users' },
+  { id: 'inactiveUsers', label: 'Inactive Users' },
+  { id: 'status', label: 'Status' },
+]
 
 export const ROLE_FORM_FIELDS: RoleFormFieldMeta[] = [
   { id: 'roleId', label: 'Role ID', fieldType: 'text', description: 'System-generated role identifier.' },
@@ -82,5 +97,14 @@ export function defaultRoleFormCustomization(): RoleFormCustomizationConfig {
         },
       ])
     ) as Record<RoleFormFieldKey, RoleFormFieldCustomization>,
+    statCards: ROLE_STAT_CARDS.map((card, index) => ({
+      id: `role-stat-${card.id}`,
+      metric: card.id,
+      visible: true,
+      order: index,
+      size: 'md',
+      colorized: true,
+      linked: true,
+    })),
   }
 }

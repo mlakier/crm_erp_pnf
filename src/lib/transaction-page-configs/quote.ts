@@ -1,5 +1,5 @@
 import { fmtCurrency, fmtDocumentDate } from '@/lib/format'
-import type { TransactionPageConfig } from '@/lib/transaction-page-config'
+import type { TransactionPageConfig, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 export type QuotePageConfigRecord = {
   customerId: string | null
@@ -10,14 +10,18 @@ export type QuotePageConfigRecord = {
   validUntil: Date | null
   lineCount: number
   statusLabel: string
-  statusTone?: 'default' | 'accent' | 'teal' | 'yellow' | 'green' | 'red'
+  statusTone?: TransactionVisualTone
   moneySettings?: Parameters<typeof fmtCurrency>[2]
 }
 
 export const quotePageConfig: TransactionPageConfig<QuotePageConfigRecord> = {
   sectionDescriptions: {
-    Customer: 'Customer contact and default commercial context from the linked master data record.',
-    'Quote Details': 'Core quote fields, upstream opportunity context, and commercial controls.',
+    'Document Identity': 'Quote number, customer selection, and ownership context for this document.',
+    'Customer Snapshot': 'Primary customer contact and default commercial context from the linked master data record.',
+    'Opportunity Context': 'Upstream opportunity references that produced or inform this quote.',
+    'Commercial Terms': 'Status, validity, currency, totals, and internal commercial notes for the quote.',
+    'Record Keys': 'Internal database and linked-record identifiers tied to this quote.',
+    'System Dates': 'System-managed timestamps for this quote record.',
   },
   stats: [
     {
@@ -31,6 +35,7 @@ export const quotePageConfig: TransactionPageConfig<QuotePageConfigRecord> = {
       label: 'Customer Id',
       getValue: (record) => record.customerId ?? '-',
       getHref: (record) => record.customerHref,
+      getValueTone: (record) => (record.customerHref ? 'accent' : 'default'),
     },
     {
       id: 'validUntil',
@@ -42,6 +47,7 @@ export const quotePageConfig: TransactionPageConfig<QuotePageConfigRecord> = {
       label: 'Opportunity Id',
       getValue: (record) => record.opportunityId ?? '-',
       getHref: (record) => record.opportunityHref,
+      getValueTone: (record) => (record.opportunityHref ? 'accent' : 'default'),
     },
     {
       id: 'lineCount',

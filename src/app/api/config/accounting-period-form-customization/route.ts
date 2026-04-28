@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
+  ACCOUNTING_PERIOD_STAT_CARDS,
   defaultAccountingPeriodFormCustomization,
   ACCOUNTING_PERIOD_FORM_FIELDS,
   type AccountingPeriodFormCustomizationConfig,
   type AccountingPeriodFormFieldKey,
+  type AccountingPeriodStatCardMetric,
 } from '@/lib/accounting-period-form-customization'
 import {
   loadAccountingPeriodFormCustomization,
@@ -28,6 +30,8 @@ function sanitizeInput(input: unknown): AccountingPeriodFormCustomizationConfig 
   const fieldsInput = root.fields && typeof root.fields === 'object'
     ? root.fields as Record<string, unknown>
     : {}
+  const statCardsInput = Array.isArray(root.statCards) ? root.statCards : []
+  const allowedMetrics = new Set<AccountingPeriodStatCardMetric>(ACCOUNTING_PERIOD_STAT_CARDS.map((card) => card.id))
 
   const fields = Object.fromEntries(
     ACCOUNTING_PERIOD_FORM_FIELDS.map((field) => {
@@ -62,6 +66,32 @@ function sanitizeInput(input: unknown): AccountingPeriodFormCustomizationConfig 
       ])
     ),
     fields,
+    statCards: (() => {
+      const normalized = statCardsInput
+        .map((entry, index) => {
+          const statRoot = entry && typeof entry === 'object' ? entry as Record<string, unknown> : null
+          if (!statRoot) return null
+
+          const metric = String(statRoot.metric ?? '').trim() as AccountingPeriodStatCardMetric
+          if (!allowedMetrics.has(metric)) return null
+
+          return {
+            id: String(statRoot.id ?? `accounting-period-stat-${metric}`),
+            metric,
+            visible: statRoot.visible === undefined ? true : statRoot.visible === true,
+            order: typeof statRoot.order === 'number' && Number.isFinite(statRoot.order) ? statRoot.order : index,
+            size: statRoot.size === 'sm' || statRoot.size === 'lg' ? statRoot.size : 'md',
+            colorized: statRoot.colorized === undefined ? true : statRoot.colorized === true,
+            linked: statRoot.linked === undefined ? true : statRoot.linked === true,
+          }
+        })
+        .filter((card): card is NonNullable<typeof card> => Boolean(card))
+
+      return (normalized.length > 0 ? normalized : defaults.statCards ?? []).map((card, index) => ({
+        ...card,
+        order: index,
+      }))
+    })(),
   }
 }
 

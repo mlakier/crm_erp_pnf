@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { connection } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { fmtCurrency, fmtDocumentDate, toNumericValue } from '@/lib/format'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
@@ -8,14 +9,13 @@ import RecordStatusButton from '@/components/RecordStatusButton'
 import SalesOrderCreateInvoiceButton from '@/components/SalesOrderCreateInvoiceButton'
 import SalesOrderDetailCustomizeMode from '@/components/SalesOrderDetailCustomizeMode'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
-import PurchaseOrderHeaderSections, { type PurchaseOrderHeaderField } from '@/components/PurchaseOrderHeaderSections'
-import PurchaseOrderLineItemsSection from '@/components/PurchaseOrderLineItemsSection'
+import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import CommunicationsSection from '@/components/CommunicationsSection'
 import SalesOrderRelatedDocuments from '@/components/SalesOrderRelatedDocuments'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
-import InvoiceGlImpactSection, { type InvoiceGlImpactRow } from '@/components/InvoiceGlImpactSection'
 import DeleteButton from '@/components/DeleteButton'
 import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
 import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
@@ -24,36 +24,80 @@ import { parseCommunicationSummary, parseFieldChangeSummary } from '@/lib/activi
 import {
   SALES_ORDER_DETAIL_FIELDS,
   SALES_ORDER_LINE_COLUMNS,
+  SALES_ORDER_REFERENCE_SOURCES,
   type SalesOrderDetailFieldKey,
+  type SalesOrderReferenceFieldKey,
 } from '@/lib/sales-order-detail-customization'
 import { loadSalesOrderDetailCustomization } from '@/lib/sales-order-detail-customization-store'
-import { salesOrderPageConfig } from '@/lib/transaction-page-configs/sales-order'
+import { salesOrderPageConfig, type SalesOrderPageConfigRecord } from '@/lib/transaction-page-configs/sales-order'
 import { buildTransactionCommunicationComposePayload } from '@/lib/transaction-communications'
 import {
   buildConfiguredTransactionSections,
   buildTransactionCustomizePreviewFields,
   getOrderedVisibleTransactionLineColumns,
 } from '@/lib/transaction-detail-helpers'
+import { loadManagedListDetail } from '@/lib/manage-lists'
+import {
+  getAvailableWorkflowStatusActions,
+  getWorkflowDocumentAction,
+  loadOtcWorkflowRuntime,
+} from '@/lib/otc-workflow-runtime'
+import type { TransactionStatusColorTone } from '@/lib/company-preferences-definitions'
+import type { TransactionVisualTone } from '@/lib/transaction-page-config'
 
 function formatSalesOrderStatus(status: string | null) {
   if (!status) return 'Unknown'
   return status.charAt(0).toUpperCase() + status.slice(1)
 }
 
-function formatStatusTone(status: string | null) {
-  const key = (status ?? '').toLowerCase()
-  const styles: Record<string, { bg: string; color: string }> = {
-    draft: { bg: 'rgba(255,255,255,0.07)', color: 'var(--text-muted)' },
-    booked: { bg: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' },
-    fulfilled: { bg: 'rgba(34,197,94,0.16)', color: '#86efac' },
-    cancelled: { bg: 'rgba(239,68,68,0.18)', color: '#fca5a5' },
+function getToneStyle(tone: TransactionStatusColorTone) {
+  if (tone === 'gray') {
+    return { bg: 'rgba(148,163,184,0.10)', color: 'var(--text-muted)' }
   }
-  return styles[key] ?? styles.draft
+  if (tone === 'accent') {
+    return { bg: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }
+  }
+  if (tone === 'teal') {
+    return { bg: 'rgba(20,184,166,0.18)', color: '#5eead4' }
+  }
+  if (tone === 'yellow') {
+    return { bg: 'rgba(245,158,11,0.18)', color: '#fcd34d' }
+  }
+  if (tone === 'orange') {
+    return { bg: 'rgba(249,115,22,0.18)', color: '#fdba74' }
+  }
+  if (tone === 'green') {
+    return { bg: 'rgba(34,197,94,0.16)', color: '#86efac' }
+  }
+  if (tone === 'red') {
+    return { bg: 'rgba(239,68,68,0.18)', color: '#fca5a5' }
+  }
+  if (tone === 'purple') {
+    return { bg: 'rgba(168,85,247,0.18)', color: '#d8b4fe' }
+  }
+  if (tone === 'pink') {
+    return { bg: 'rgba(236,72,153,0.18)', color: '#f9a8d4' }
+  }
+  return { bg: 'rgba(255,255,255,0.07)', color: 'var(--text-muted)' }
+}
+
+function getSalesOrderStatusToneKey(
+  status: string | null,
+  configuredTones: Record<string, TransactionStatusColorTone>,
+): TransactionVisualTone {
+  return configuredTones[(status ?? '').toLowerCase()] ?? 'default'
+}
+
+function formatStatusTone(
+  status: string | null,
+  configuredTones: Record<string, TransactionStatusColorTone>,
+) {
+  return getToneStyle(configuredTones[(status ?? '').toLowerCase()] ?? 'default')
 }
 
 type SalesOrderHeaderField = {
-  key: SalesOrderDetailFieldKey
-} & PurchaseOrderHeaderField
+  key: SalesOrderDetailFieldKey | SalesOrderReferenceFieldKey
+} & TransactionHeaderField
 
 type SalesOrderLineRow = {
   id: string
@@ -76,19 +120,14 @@ export default async function SalesOrderDetailPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ edit?: string; customize?: string }>
 }) {
+  await connection()
   const { id } = await params
   const { moneySettings } = await loadCompanyDisplaySettings()
   const { edit, customize } = await searchParams
   const isEditing = edit === '1'
   const isCustomizing = customize === '1'
-  const statusOptions = [
-    { value: 'draft', label: 'Draft' },
-    { value: 'booked', label: 'Booked' },
-    { value: 'fulfilled', label: 'Fulfilled' },
-    { value: 'cancelled', label: 'Cancelled' },
-  ]
 
-  const [salesOrder, activities, customization, subsidiaries, currencies, items] = await Promise.all([
+  const [salesOrder, activities, customization, subsidiaries, currencies, items, statusListDetail, workflow] = await Promise.all([
     prisma.salesOrder.findUnique({
       where: { id },
       include: {
@@ -109,10 +148,69 @@ export default async function SalesOrderDetailPage({
             userId: true,
             name: true,
             email: true,
+            roleId: true,
+            departmentId: true,
+            inactive: true,
+            locked: true,
+            lockedAt: true,
+            lastLoginAt: true,
+            passwordChangedAt: true,
+            mustChangePassword: true,
+            failedLoginAttempts: true,
+            defaultSubsidiaryId: true,
+            includeChildren: true,
+            approvalLimit: true,
+            approvalCurrencyId: true,
+            delegatedApproverUserId: true,
+            delegationStartDate: true,
+            delegationEndDate: true,
+            createdAt: true,
+            updatedAt: true,
           },
         },
-        subsidiary: { select: { id: true, subsidiaryId: true, name: true } },
-        currency: { select: { id: true, currencyId: true, code: true, name: true } },
+        subsidiary: {
+          select: {
+            id: true,
+            subsidiaryId: true,
+            name: true,
+            legalName: true,
+            entityType: true,
+            country: true,
+            address: true,
+            taxId: true,
+            registrationNumber: true,
+            parentSubsidiaryId: true,
+            defaultCurrencyId: true,
+            functionalCurrencyId: true,
+            reportingCurrencyId: true,
+            fiscalCalendarId: true,
+            consolidationMethod: true,
+            ownershipPercent: true,
+            retainedEarningsAccountId: true,
+            ctaAccountId: true,
+            intercompanyClearingAccountId: true,
+            dueToAccountId: true,
+            dueFromAccountId: true,
+            periodLockDate: true,
+            active: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        currency: {
+          select: {
+            id: true,
+            currencyId: true,
+            code: true,
+            name: true,
+            symbol: true,
+            decimals: true,
+            isBase: true,
+            active: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
         lineItems: {
           orderBy: [{ createdAt: 'asc' }],
           include: {
@@ -170,6 +268,8 @@ export default async function SalesOrderDetailPage({
       select: { id: true, itemId: true, name: true, listPrice: true },
       take: 500,
     }),
+    loadManagedListDetail('SO-STATUS'),
+    loadOtcWorkflowRuntime(),
   ])
 
   if (!salesOrder) notFound()
@@ -208,7 +308,10 @@ export default async function SalesOrderDetailPage({
   })
   const computedTotal = sumMoney(lineRows.map((row) => row.lineTotal))
   const latestInvoice = salesOrder.invoices[0]
-  const statusTone = formatStatusTone(salesOrder.status)
+  const salesOrderStatusColors = Object.fromEntries(
+    (statusListDetail?.rows ?? []).map((row) => [row.value.toLowerCase(), row.colorTone ?? 'default']),
+  ) as Record<string, TransactionStatusColorTone>
+  const statusTone = formatStatusTone(salesOrder.status, salesOrderStatusColors)
   const detailHref = `/sales-orders/${salesOrder.id}`
   const subsidiaryOptions = subsidiaries.map((subsidiary) => ({
     value: subsidiary.id,
@@ -217,6 +320,10 @@ export default async function SalesOrderDetailPage({
   const currencyOptions = currencies.map((currency) => ({
     value: currency.id,
     label: `${currency.code ?? currency.currencyId} - ${currency.name}`,
+  }))
+  const statusOptions = (statusListDetail?.rows ?? []).map((row) => ({
+    value: row.value.toLowerCase(),
+    label: formatSalesOrderStatus(row.value),
   }))
   const itemOptions = items.map((item) => ({
     id: item.id,
@@ -263,7 +370,15 @@ export default async function SalesOrderDetailPage({
     })
     .filter((communication): communication is Exclude<typeof communication, null> => Boolean(communication))
 
-  const headerFieldDefinitions: Record<SalesOrderDetailFieldKey, SalesOrderHeaderField> = {
+  const allFieldDefinitions: Record<SalesOrderDetailFieldKey | SalesOrderReferenceFieldKey, SalesOrderHeaderField> = {
+    customerDbId: {
+      key: 'customerDbId',
+      label: 'DB Id',
+      value: salesOrder.customer.id,
+      helpText: 'Internal database identifier for the linked customer record.',
+      fieldType: 'text',
+      sourceText: 'Customers master data',
+    },
     customerName: {
       key: 'customerName',
       label: 'Customer Name',
@@ -304,12 +419,44 @@ export default async function SalesOrderDetailPage({
       fieldType: 'text',
       sourceText: 'Customers master data',
     },
+    customerIndustry: {
+      key: 'customerIndustry',
+      label: 'Industry',
+      value: salesOrder.customer.industry ?? '',
+      helpText: 'Customer industry or segment classification.',
+      fieldType: 'list',
+      sourceText: 'Customers master data',
+    },
+    customerUserDbId: {
+      key: 'customerUserDbId',
+      label: 'Owner User DB Id',
+      value: salesOrder.customer.userId,
+      helpText: 'Internal user record linked to the customer.',
+      fieldType: 'text',
+      sourceText: 'Customers master data',
+    },
+    customerSubsidiaryDbId: {
+      key: 'customerSubsidiaryDbId',
+      label: 'Primary Subsidiary DB Id',
+      value: salesOrder.customer.subsidiaryId ?? '',
+      helpText: 'Internal subsidiary record linked to the customer.',
+      fieldType: 'text',
+      sourceText: 'Customers master data',
+    },
     customerPrimarySubsidiary: {
       key: 'customerPrimarySubsidiary',
       label: 'Primary Subsidiary',
       value: salesOrder.customer.subsidiary ? `${salesOrder.customer.subsidiary.subsidiaryId} - ${salesOrder.customer.subsidiary.name}` : '',
       helpText: 'Default subsidiary context from the linked customer record.',
       fieldType: 'list',
+      sourceText: 'Customers master data',
+    },
+    customerCurrencyDbId: {
+      key: 'customerCurrencyDbId',
+      label: 'Primary Currency DB Id',
+      value: salesOrder.customer.currencyId ?? '',
+      helpText: 'Internal currency record linked to the customer.',
+      fieldType: 'text',
       sourceText: 'Customers master data',
     },
     customerPrimaryCurrency: {
@@ -327,6 +474,758 @@ export default async function SalesOrderDetailPage({
       helpText: 'Indicates whether the linked customer is inactive for new activity.',
       fieldType: 'checkbox',
       sourceText: 'Customers master data',
+    },
+    customerCreatedAt: {
+      key: 'customerCreatedAt',
+      label: 'Created',
+      value: salesOrder.customer.createdAt.toISOString(),
+      displayValue: fmtDocumentDate(salesOrder.customer.createdAt, moneySettings),
+      helpText: 'Date/time the linked customer record was created.',
+      fieldType: 'date',
+      sourceText: 'Customers master data',
+    },
+    customerUpdatedAt: {
+      key: 'customerUpdatedAt',
+      label: 'Last Modified',
+      value: salesOrder.customer.updatedAt.toISOString(),
+      displayValue: fmtDocumentDate(salesOrder.customer.updatedAt, moneySettings),
+      helpText: 'Date/time the linked customer record was last modified.',
+      fieldType: 'date',
+      sourceText: 'Customers master data',
+    },
+    quoteDbId: {
+      key: 'quoteDbId',
+      label: 'DB Id',
+      value: salesOrder.quote?.id ?? '',
+      helpText: 'Internal database identifier for the linked quote.',
+      fieldType: 'text',
+      sourceText: 'Source transaction',
+    },
+    quoteNumber: {
+      key: 'quoteNumber',
+      label: 'Quote Id',
+      value: salesOrder.quote?.number ?? '',
+      displayValue: salesOrder.quote ? (
+        <Link href={`/quotes/${salesOrder.quote.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+          {salesOrder.quote.number}
+        </Link>
+      ) : (
+        '-'
+      ),
+      helpText: 'Quote number linked to this sales order.',
+      fieldType: 'text',
+      sourceText: 'Source transaction',
+    },
+    quoteStatus: {
+      key: 'quoteStatus',
+      label: 'Quote Status',
+      value: salesOrder.quote?.status ?? '',
+      displayValue: salesOrder.quote?.status ? salesOrder.quote.status.charAt(0).toUpperCase() + salesOrder.quote.status.slice(1) : '-',
+      helpText: 'Current status of the linked quote.',
+      fieldType: 'list',
+      sourceText: 'Quote status list',
+    },
+    quoteTotal: {
+      key: 'quoteTotal',
+      label: 'Quote Total',
+      value: salesOrder.quote ? String(toNumericValue(salesOrder.quote.total, 0)) : '',
+      displayValue: salesOrder.quote ? fmtCurrency(toNumericValue(salesOrder.quote.total, 0), undefined, moneySettings) : '-',
+      helpText: 'Current total on the linked quote.',
+      fieldType: 'currency',
+      sourceText: 'Source transaction',
+    },
+    quoteValidUntil: {
+      key: 'quoteValidUntil',
+      label: 'Valid Until',
+      value: salesOrder.quote?.validUntil?.toISOString() ?? '',
+      displayValue: salesOrder.quote?.validUntil ? fmtDocumentDate(salesOrder.quote.validUntil, moneySettings) : '-',
+      helpText: 'Expiration date on the linked quote.',
+      fieldType: 'date',
+      sourceText: 'Source transaction',
+    },
+    quoteNotes: {
+      key: 'quoteNotes',
+      label: 'Notes',
+      value: salesOrder.quote?.notes ?? '',
+      helpText: 'Internal notes captured on the linked quote.',
+      fieldType: 'text',
+      sourceText: 'Source transaction',
+    },
+    quoteCustomerDbId: {
+      key: 'quoteCustomerDbId',
+      label: 'Customer DB Id',
+      value: salesOrder.quote?.customerId ?? '',
+      helpText: 'Internal customer record linked to the quote.',
+      fieldType: 'text',
+      sourceText: 'Source transaction',
+    },
+    quoteUserDbId: {
+      key: 'quoteUserDbId',
+      label: 'User DB Id',
+      value: salesOrder.quote?.userId ?? '',
+      helpText: 'Internal owner user record linked to the quote.',
+      fieldType: 'text',
+      sourceText: 'Source transaction',
+    },
+    quoteOpportunityDbId: {
+      key: 'quoteOpportunityDbId',
+      label: 'Opportunity DB Id',
+      value: salesOrder.quote?.opportunityId ?? '',
+      helpText: 'Internal opportunity record linked to the quote.',
+      fieldType: 'text',
+      sourceText: 'Source transaction',
+    },
+    quoteSubsidiaryDbId: {
+      key: 'quoteSubsidiaryDbId',
+      label: 'Subsidiary DB Id',
+      value: salesOrder.quote?.subsidiaryId ?? '',
+      helpText: 'Internal subsidiary record linked to the quote.',
+      fieldType: 'text',
+      sourceText: 'Source transaction',
+    },
+    quoteCurrencyDbId: {
+      key: 'quoteCurrencyDbId',
+      label: 'Currency DB Id',
+      value: salesOrder.quote?.currencyId ?? '',
+      helpText: 'Internal currency record linked to the quote.',
+      fieldType: 'text',
+      sourceText: 'Source transaction',
+    },
+    quoteCreatedAt: {
+      key: 'quoteCreatedAt',
+      label: 'Created',
+      value: salesOrder.quote?.createdAt?.toISOString() ?? '',
+      displayValue: salesOrder.quote?.createdAt ? fmtDocumentDate(salesOrder.quote.createdAt, moneySettings) : '-',
+      helpText: 'Date/time the linked quote record was created.',
+      fieldType: 'date',
+      sourceText: 'Source transaction',
+    },
+    quoteUpdatedAt: {
+      key: 'quoteUpdatedAt',
+      label: 'Last Modified',
+      value: salesOrder.quote?.updatedAt?.toISOString() ?? '',
+      displayValue: salesOrder.quote?.updatedAt ? fmtDocumentDate(salesOrder.quote.updatedAt, moneySettings) : '-',
+      helpText: 'Date/time the linked quote record was last modified.',
+      fieldType: 'date',
+      sourceText: 'Source transaction',
+    },
+    opportunityDbId: {
+      key: 'opportunityDbId',
+      label: 'DB Id',
+      value: salesOrder.quote?.opportunity?.id ?? '',
+      helpText: 'Internal database identifier for the linked opportunity.',
+      fieldType: 'text',
+      sourceText: 'Opportunities',
+    },
+    opportunityNumber: {
+      key: 'opportunityNumber',
+      label: 'Opportunity Id',
+      value: salesOrder.quote?.opportunity?.opportunityNumber ?? '',
+      displayValue: salesOrder.quote?.opportunity ? (
+        <Link href={`/opportunities/${salesOrder.quote.opportunity.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+          {salesOrder.quote.opportunity.opportunityNumber ?? salesOrder.quote.opportunity.name}
+        </Link>
+      ) : (
+        '-'
+      ),
+      helpText: 'Identifier for the linked opportunity.',
+      fieldType: 'text',
+      sourceText: 'Opportunities',
+    },
+    opportunityName: {
+      key: 'opportunityName',
+      label: 'Opportunity Name',
+      value: salesOrder.quote?.opportunity?.name ?? '',
+      helpText: 'Display name from the linked opportunity.',
+      fieldType: 'text',
+      sourceText: 'Opportunities',
+    },
+    opportunityAmount: {
+      key: 'opportunityAmount',
+      label: 'Amount',
+      value: salesOrder.quote?.opportunity ? String(toNumericValue(salesOrder.quote.opportunity.amount, 0)) : '',
+      displayValue: salesOrder.quote?.opportunity
+        ? fmtCurrency(toNumericValue(salesOrder.quote.opportunity.amount, 0), undefined, moneySettings)
+        : '-',
+      helpText: 'Opportunity amount captured on the linked opportunity.',
+      fieldType: 'currency',
+      sourceText: 'Opportunities',
+    },
+    opportunityStage: {
+      key: 'opportunityStage',
+      label: 'Stage',
+      value: salesOrder.quote?.opportunity?.stage ?? '',
+      displayValue: salesOrder.quote?.opportunity?.stage
+        ? salesOrder.quote.opportunity.stage.charAt(0).toUpperCase() + salesOrder.quote.opportunity.stage.slice(1)
+        : '-',
+      helpText: 'Current sales stage of the linked opportunity.',
+      fieldType: 'list',
+      sourceText: 'Opportunity stages',
+    },
+    opportunityCloseDate: {
+      key: 'opportunityCloseDate',
+      label: 'Close Date',
+      value: salesOrder.quote?.opportunity?.closeDate?.toISOString() ?? '',
+      displayValue: salesOrder.quote?.opportunity?.closeDate ? fmtDocumentDate(salesOrder.quote.opportunity.closeDate, moneySettings) : '-',
+      helpText: 'Expected close date for the linked opportunity.',
+      fieldType: 'date',
+      sourceText: 'Opportunities',
+    },
+    opportunityProbability: {
+      key: 'opportunityProbability',
+      label: 'Probability',
+      value: salesOrder.quote?.opportunity?.probability != null ? String(salesOrder.quote.opportunity.probability) : '',
+      displayValue: salesOrder.quote?.opportunity?.probability != null ? `${salesOrder.quote.opportunity.probability}%` : '-',
+      helpText: 'Win probability captured on the linked opportunity.',
+      fieldType: 'number',
+      sourceText: 'Opportunities',
+    },
+    opportunityExpectedValue: {
+      key: 'opportunityExpectedValue',
+      label: 'Expected Value',
+      value: salesOrder.quote?.opportunity ? String(toNumericValue(salesOrder.quote.opportunity.expectedValue, 0)) : '',
+      displayValue: salesOrder.quote?.opportunity
+        ? fmtCurrency(toNumericValue(salesOrder.quote.opportunity.expectedValue, 0), undefined, moneySettings)
+        : '-',
+      helpText: 'Expected value captured on the linked opportunity.',
+      fieldType: 'currency',
+      sourceText: 'Opportunities',
+    },
+    opportunityCustomerDbId: {
+      key: 'opportunityCustomerDbId',
+      label: 'Customer DB Id',
+      value: salesOrder.quote?.opportunity?.customerId ?? '',
+      helpText: 'Internal customer record linked to the opportunity.',
+      fieldType: 'text',
+      sourceText: 'Opportunities',
+    },
+    opportunityUserDbId: {
+      key: 'opportunityUserDbId',
+      label: 'User DB Id',
+      value: salesOrder.quote?.opportunity?.userId ?? '',
+      helpText: 'Internal owner user record linked to the opportunity.',
+      fieldType: 'text',
+      sourceText: 'Opportunities',
+    },
+    opportunitySubsidiaryDbId: {
+      key: 'opportunitySubsidiaryDbId',
+      label: 'Subsidiary DB Id',
+      value: salesOrder.quote?.opportunity?.subsidiaryId ?? '',
+      helpText: 'Internal subsidiary record linked to the opportunity.',
+      fieldType: 'text',
+      sourceText: 'Opportunities',
+    },
+    opportunityCurrencyDbId: {
+      key: 'opportunityCurrencyDbId',
+      label: 'Currency DB Id',
+      value: salesOrder.quote?.opportunity?.currencyId ?? '',
+      helpText: 'Internal currency record linked to the opportunity.',
+      fieldType: 'text',
+      sourceText: 'Opportunities',
+    },
+    opportunityInactive: {
+      key: 'opportunityInactive',
+      label: 'Inactive',
+      value: salesOrder.quote?.opportunity ? (salesOrder.quote.opportunity.inactive ? 'Yes' : 'No') : '',
+      displayValue: salesOrder.quote?.opportunity ? (salesOrder.quote.opportunity.inactive ? 'Yes' : 'No') : '-',
+      helpText: 'Indicates whether the linked opportunity is inactive.',
+      fieldType: 'checkbox',
+      sourceText: 'Opportunities',
+    },
+    opportunityCreatedAt: {
+      key: 'opportunityCreatedAt',
+      label: 'Created',
+      value: salesOrder.quote?.opportunity?.createdAt?.toISOString() ?? '',
+      displayValue: salesOrder.quote?.opportunity?.createdAt ? fmtDocumentDate(salesOrder.quote.opportunity.createdAt, moneySettings) : '-',
+      helpText: 'Date/time the linked opportunity record was created.',
+      fieldType: 'date',
+      sourceText: 'Opportunities',
+    },
+    opportunityUpdatedAt: {
+      key: 'opportunityUpdatedAt',
+      label: 'Last Modified',
+      value: salesOrder.quote?.opportunity?.updatedAt?.toISOString() ?? '',
+      displayValue: salesOrder.quote?.opportunity?.updatedAt ? fmtDocumentDate(salesOrder.quote.opportunity.updatedAt, moneySettings) : '-',
+      helpText: 'Date/time the linked opportunity record was last modified.',
+      fieldType: 'date',
+      sourceText: 'Opportunities',
+    },
+    ownerDbId: {
+      key: 'ownerDbId',
+      label: 'DB Id',
+      value: salesOrder.user?.id ?? '',
+      helpText: 'Internal database identifier for the linked user.',
+      fieldType: 'text',
+      sourceText: 'Users master data',
+    },
+    ownerUserId: {
+      key: 'ownerUserId',
+      label: 'User Id',
+      value: salesOrder.user?.userId ?? '',
+      helpText: 'User identifier for the record owner/creator.',
+      fieldType: 'text',
+      sourceText: 'Users master data',
+    },
+    ownerName: {
+      key: 'ownerName',
+      label: 'Name',
+      value: salesOrder.user?.name ?? '',
+      helpText: 'Display name for the linked user.',
+      fieldType: 'text',
+      sourceText: 'Users master data',
+    },
+    ownerEmail: {
+      key: 'ownerEmail',
+      label: 'Email',
+      value: salesOrder.user?.email ?? '',
+      helpText: 'Email address for the linked user.',
+      fieldType: 'email',
+      sourceText: 'Users master data',
+    },
+    ownerRoleDbId: {
+      key: 'ownerRoleDbId',
+      label: 'Role DB Id',
+      value: salesOrder.user?.roleId ?? '',
+      helpText: 'Internal role record linked to the user.',
+      fieldType: 'text',
+      sourceText: 'Users master data',
+    },
+    ownerDepartmentDbId: {
+      key: 'ownerDepartmentDbId',
+      label: 'Department DB Id',
+      value: salesOrder.user?.departmentId ?? '',
+      helpText: 'Internal department record linked to the user.',
+      fieldType: 'text',
+      sourceText: 'Users master data',
+    },
+    ownerInactive: {
+      key: 'ownerInactive',
+      label: 'Inactive',
+      value: salesOrder.user ? (salesOrder.user.inactive ? 'Yes' : 'No') : '',
+      displayValue: salesOrder.user ? (salesOrder.user.inactive ? 'Yes' : 'No') : '-',
+      helpText: 'Indicates whether the linked user is inactive.',
+      fieldType: 'checkbox',
+      sourceText: 'Users master data',
+    },
+    ownerLocked: {
+      key: 'ownerLocked',
+      label: 'Locked',
+      value: salesOrder.user ? (salesOrder.user.locked ? 'Yes' : 'No') : '',
+      displayValue: salesOrder.user ? (salesOrder.user.locked ? 'Yes' : 'No') : '-',
+      helpText: 'Indicates whether the linked user account is locked.',
+      fieldType: 'checkbox',
+      sourceText: 'Users master data',
+    },
+    ownerLockedAt: {
+      key: 'ownerLockedAt',
+      label: 'Locked At',
+      value: salesOrder.user?.lockedAt?.toISOString() ?? '',
+      displayValue: salesOrder.user?.lockedAt ? fmtDocumentDate(salesOrder.user.lockedAt, moneySettings) : '-',
+      helpText: 'Timestamp when the linked user account was locked.',
+      fieldType: 'date',
+      sourceText: 'Users master data',
+    },
+    ownerLastLoginAt: {
+      key: 'ownerLastLoginAt',
+      label: 'Last Login',
+      value: salesOrder.user?.lastLoginAt?.toISOString() ?? '',
+      displayValue: salesOrder.user?.lastLoginAt ? fmtDocumentDate(salesOrder.user.lastLoginAt, moneySettings) : '-',
+      helpText: 'Timestamp of the linked user’s last login.',
+      fieldType: 'date',
+      sourceText: 'Users master data',
+    },
+    ownerPasswordChangedAt: {
+      key: 'ownerPasswordChangedAt',
+      label: 'Password Changed',
+      value: salesOrder.user?.passwordChangedAt?.toISOString() ?? '',
+      displayValue: salesOrder.user?.passwordChangedAt ? fmtDocumentDate(salesOrder.user.passwordChangedAt, moneySettings) : '-',
+      helpText: 'Timestamp when the linked user last changed password.',
+      fieldType: 'date',
+      sourceText: 'Users master data',
+    },
+    ownerMustChangePassword: {
+      key: 'ownerMustChangePassword',
+      label: 'Must Change Password',
+      value: salesOrder.user ? (salesOrder.user.mustChangePassword ? 'Yes' : 'No') : '',
+      displayValue: salesOrder.user ? (salesOrder.user.mustChangePassword ? 'Yes' : 'No') : '-',
+      helpText: 'Indicates whether the linked user must change password at next login.',
+      fieldType: 'checkbox',
+      sourceText: 'Users master data',
+    },
+    ownerFailedLoginAttempts: {
+      key: 'ownerFailedLoginAttempts',
+      label: 'Failed Login Attempts',
+      value: salesOrder.user?.failedLoginAttempts != null ? String(salesOrder.user.failedLoginAttempts) : '',
+      helpText: 'Current failed login attempt count for the linked user.',
+      fieldType: 'number',
+      sourceText: 'Users master data',
+    },
+    ownerDefaultSubsidiaryDbId: {
+      key: 'ownerDefaultSubsidiaryDbId',
+      label: 'Default Subsidiary DB Id',
+      value: salesOrder.user?.defaultSubsidiaryId ?? '',
+      helpText: 'Internal default subsidiary linked to the user.',
+      fieldType: 'text',
+      sourceText: 'Users master data',
+    },
+    ownerIncludeChildren: {
+      key: 'ownerIncludeChildren',
+      label: 'Include Children',
+      value: salesOrder.user ? (salesOrder.user.includeChildren ? 'Yes' : 'No') : '',
+      displayValue: salesOrder.user ? (salesOrder.user.includeChildren ? 'Yes' : 'No') : '-',
+      helpText: 'Indicates whether the user includes child subsidiaries by default.',
+      fieldType: 'checkbox',
+      sourceText: 'Users master data',
+    },
+    ownerApprovalLimit: {
+      key: 'ownerApprovalLimit',
+      label: 'Approval Limit',
+      value: salesOrder.user?.approvalLimit != null ? String(toNumericValue(salesOrder.user.approvalLimit, 0)) : '',
+      displayValue: salesOrder.user?.approvalLimit != null ? fmtCurrency(toNumericValue(salesOrder.user.approvalLimit, 0), undefined, moneySettings) : '-',
+      helpText: 'Approval limit captured on the linked user.',
+      fieldType: 'currency',
+      sourceText: 'Users master data',
+    },
+    ownerApprovalCurrencyDbId: {
+      key: 'ownerApprovalCurrencyDbId',
+      label: 'Approval Currency DB Id',
+      value: salesOrder.user?.approvalCurrencyId ?? '',
+      helpText: 'Internal approval currency linked to the user.',
+      fieldType: 'text',
+      sourceText: 'Users master data',
+    },
+    ownerDelegatedApproverDbId: {
+      key: 'ownerDelegatedApproverDbId',
+      label: 'Delegated Approver DB Id',
+      value: salesOrder.user?.delegatedApproverUserId ?? '',
+      helpText: 'Internal delegated approver user linked to the user.',
+      fieldType: 'text',
+      sourceText: 'Users master data',
+    },
+    ownerDelegationStartDate: {
+      key: 'ownerDelegationStartDate',
+      label: 'Delegation Start',
+      value: salesOrder.user?.delegationStartDate?.toISOString() ?? '',
+      displayValue: salesOrder.user?.delegationStartDate ? fmtDocumentDate(salesOrder.user.delegationStartDate, moneySettings) : '-',
+      helpText: 'Delegation start date on the linked user.',
+      fieldType: 'date',
+      sourceText: 'Users master data',
+    },
+    ownerDelegationEndDate: {
+      key: 'ownerDelegationEndDate',
+      label: 'Delegation End',
+      value: salesOrder.user?.delegationEndDate?.toISOString() ?? '',
+      displayValue: salesOrder.user?.delegationEndDate ? fmtDocumentDate(salesOrder.user.delegationEndDate, moneySettings) : '-',
+      helpText: 'Delegation end date on the linked user.',
+      fieldType: 'date',
+      sourceText: 'Users master data',
+    },
+    ownerCreatedAt: {
+      key: 'ownerCreatedAt',
+      label: 'Created',
+      value: salesOrder.user?.createdAt?.toISOString() ?? '',
+      displayValue: salesOrder.user?.createdAt ? fmtDocumentDate(salesOrder.user.createdAt, moneySettings) : '-',
+      helpText: 'Date/time the linked user record was created.',
+      fieldType: 'date',
+      sourceText: 'Users master data',
+    },
+    ownerUpdatedAt: {
+      key: 'ownerUpdatedAt',
+      label: 'Last Modified',
+      value: salesOrder.user?.updatedAt?.toISOString() ?? '',
+      displayValue: salesOrder.user?.updatedAt ? fmtDocumentDate(salesOrder.user.updatedAt, moneySettings) : '-',
+      helpText: 'Date/time the linked user record was last modified.',
+      fieldType: 'date',
+      sourceText: 'Users master data',
+    },
+    subsidiaryDbId: {
+      key: 'subsidiaryDbId',
+      label: 'DB Id',
+      value: salesOrder.subsidiary?.id ?? '',
+      helpText: 'Internal database identifier for the linked subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryCode: {
+      key: 'subsidiaryCode',
+      label: 'Subsidiary Id',
+      value: salesOrder.subsidiary?.subsidiaryId ?? '',
+      helpText: 'Identifier for the linked subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryName: {
+      key: 'subsidiaryName',
+      label: 'Subsidiary Name',
+      value: salesOrder.subsidiary?.name ?? '',
+      helpText: 'Display name for the linked subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryLegalName: {
+      key: 'subsidiaryLegalName',
+      label: 'Legal Name',
+      value: salesOrder.subsidiary?.legalName ?? '',
+      helpText: 'Legal entity name for the linked subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryEntityType: {
+      key: 'subsidiaryEntityType',
+      label: 'Entity Type',
+      value: salesOrder.subsidiary?.entityType ?? '',
+      helpText: 'Entity type captured on the linked subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryCountry: {
+      key: 'subsidiaryCountry',
+      label: 'Country',
+      value: salesOrder.subsidiary?.country ?? '',
+      helpText: 'Country captured on the linked subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryAddress: {
+      key: 'subsidiaryAddress',
+      label: 'Address',
+      value: salesOrder.subsidiary?.address ?? '',
+      helpText: 'Address captured on the linked subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryTaxId: {
+      key: 'subsidiaryTaxId',
+      label: 'Tax Id',
+      value: salesOrder.subsidiary?.taxId ?? '',
+      helpText: 'Tax identifier for the linked subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryRegistrationNumber: {
+      key: 'subsidiaryRegistrationNumber',
+      label: 'Registration Number',
+      value: salesOrder.subsidiary?.registrationNumber ?? '',
+      helpText: 'Registration number for the linked subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryParentDbId: {
+      key: 'subsidiaryParentDbId',
+      label: 'Parent Subsidiary DB Id',
+      value: salesOrder.subsidiary?.parentSubsidiaryId ?? '',
+      helpText: 'Internal parent subsidiary linked to this subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryDefaultCurrencyDbId: {
+      key: 'subsidiaryDefaultCurrencyDbId',
+      label: 'Default Currency DB Id',
+      value: salesOrder.subsidiary?.defaultCurrencyId ?? '',
+      helpText: 'Internal default currency linked to the subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryFunctionalCurrencyDbId: {
+      key: 'subsidiaryFunctionalCurrencyDbId',
+      label: 'Functional Currency DB Id',
+      value: salesOrder.subsidiary?.functionalCurrencyId ?? '',
+      helpText: 'Internal functional currency linked to the subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryReportingCurrencyDbId: {
+      key: 'subsidiaryReportingCurrencyDbId',
+      label: 'Reporting Currency DB Id',
+      value: salesOrder.subsidiary?.reportingCurrencyId ?? '',
+      helpText: 'Internal reporting currency linked to the subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryFiscalCalendarDbId: {
+      key: 'subsidiaryFiscalCalendarDbId',
+      label: 'Fiscal Calendar DB Id',
+      value: salesOrder.subsidiary?.fiscalCalendarId ?? '',
+      helpText: 'Internal fiscal calendar linked to the subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryConsolidationMethod: {
+      key: 'subsidiaryConsolidationMethod',
+      label: 'Consolidation Method',
+      value: salesOrder.subsidiary?.consolidationMethod ?? '',
+      helpText: 'Consolidation method captured on the linked subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryOwnershipPercent: {
+      key: 'subsidiaryOwnershipPercent',
+      label: 'Ownership %',
+      value: salesOrder.subsidiary?.ownershipPercent != null ? String(salesOrder.subsidiary.ownershipPercent) : '',
+      displayValue: salesOrder.subsidiary?.ownershipPercent != null ? `${salesOrder.subsidiary.ownershipPercent}%` : '-',
+      helpText: 'Ownership percentage captured on the linked subsidiary.',
+      fieldType: 'number',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryRetainedEarningsAccountDbId: {
+      key: 'subsidiaryRetainedEarningsAccountDbId',
+      label: 'Retained Earnings Account DB Id',
+      value: salesOrder.subsidiary?.retainedEarningsAccountId ?? '',
+      helpText: 'Internal retained earnings account linked to the subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryCtaAccountDbId: {
+      key: 'subsidiaryCtaAccountDbId',
+      label: 'CTA Account DB Id',
+      value: salesOrder.subsidiary?.ctaAccountId ?? '',
+      helpText: 'Internal CTA account linked to the subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryIntercompanyClearingAccountDbId: {
+      key: 'subsidiaryIntercompanyClearingAccountDbId',
+      label: 'Intercompany Clearing Account DB Id',
+      value: salesOrder.subsidiary?.intercompanyClearingAccountId ?? '',
+      helpText: 'Internal intercompany clearing account linked to the subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryDueToAccountDbId: {
+      key: 'subsidiaryDueToAccountDbId',
+      label: 'Due To Account DB Id',
+      value: salesOrder.subsidiary?.dueToAccountId ?? '',
+      helpText: 'Internal due-to account linked to the subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryDueFromAccountDbId: {
+      key: 'subsidiaryDueFromAccountDbId',
+      label: 'Due From Account DB Id',
+      value: salesOrder.subsidiary?.dueFromAccountId ?? '',
+      helpText: 'Internal due-from account linked to the subsidiary.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryPeriodLockDate: {
+      key: 'subsidiaryPeriodLockDate',
+      label: 'Period Lock Date',
+      value: salesOrder.subsidiary?.periodLockDate?.toISOString() ?? '',
+      displayValue: salesOrder.subsidiary?.periodLockDate ? fmtDocumentDate(salesOrder.subsidiary.periodLockDate, moneySettings) : '-',
+      helpText: 'Period lock date on the linked subsidiary.',
+      fieldType: 'date',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryActive: {
+      key: 'subsidiaryActive',
+      label: 'Active',
+      value: salesOrder.subsidiary ? (salesOrder.subsidiary.active ? 'Yes' : 'No') : '',
+      displayValue: salesOrder.subsidiary ? (salesOrder.subsidiary.active ? 'Yes' : 'No') : '-',
+      helpText: 'Indicates whether the linked subsidiary is active.',
+      fieldType: 'checkbox',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryCreatedAt: {
+      key: 'subsidiaryCreatedAt',
+      label: 'Created',
+      value: salesOrder.subsidiary?.createdAt?.toISOString() ?? '',
+      displayValue: salesOrder.subsidiary?.createdAt ? fmtDocumentDate(salesOrder.subsidiary.createdAt, moneySettings) : '-',
+      helpText: 'Date/time the linked subsidiary record was created.',
+      fieldType: 'date',
+      sourceText: 'Subsidiaries master data',
+    },
+    subsidiaryUpdatedAt: {
+      key: 'subsidiaryUpdatedAt',
+      label: 'Last Modified',
+      value: salesOrder.subsidiary?.updatedAt?.toISOString() ?? '',
+      displayValue: salesOrder.subsidiary?.updatedAt ? fmtDocumentDate(salesOrder.subsidiary.updatedAt, moneySettings) : '-',
+      helpText: 'Date/time the linked subsidiary record was last modified.',
+      fieldType: 'date',
+      sourceText: 'Subsidiaries master data',
+    },
+    currencyDbId: {
+      key: 'currencyDbId',
+      label: 'DB Id',
+      value: salesOrder.currency?.id ?? '',
+      helpText: 'Internal database identifier for the linked currency.',
+      fieldType: 'text',
+      sourceText: 'Currencies master data',
+    },
+    currencyCode: {
+      key: 'currencyCode',
+      label: 'Currency Code',
+      value: salesOrder.currency?.code ?? salesOrder.currency?.currencyId ?? '',
+      helpText: 'Transaction currency code from the linked currency record.',
+      fieldType: 'text',
+      sourceText: 'Currencies master data',
+    },
+    currencyNumber: {
+      key: 'currencyNumber',
+      label: 'Currency Id',
+      value: salesOrder.currency?.currencyId ?? '',
+      helpText: 'Internal currency identifier from the linked currency record.',
+      fieldType: 'text',
+      sourceText: 'Currencies master data',
+    },
+    currencyName: {
+      key: 'currencyName',
+      label: 'Currency Name',
+      value: salesOrder.currency?.name ?? '',
+      helpText: 'Display name from the linked currency record.',
+      fieldType: 'text',
+      sourceText: 'Currencies master data',
+    },
+    currencySymbol: {
+      key: 'currencySymbol',
+      label: 'Symbol',
+      value: salesOrder.currency?.symbol ?? '',
+      helpText: 'Display symbol for the linked currency.',
+      fieldType: 'text',
+      sourceText: 'Currencies master data',
+    },
+    currencyDecimals: {
+      key: 'currencyDecimals',
+      label: 'Decimals',
+      value: salesOrder.currency?.decimals != null ? String(salesOrder.currency.decimals) : '',
+      helpText: 'Decimal precision configured for the linked currency.',
+      fieldType: 'number',
+      sourceText: 'Currencies master data',
+    },
+    currencyIsBase: {
+      key: 'currencyIsBase',
+      label: 'Is Base',
+      value: salesOrder.currency ? (salesOrder.currency.isBase ? 'Yes' : 'No') : '',
+      displayValue: salesOrder.currency ? (salesOrder.currency.isBase ? 'Yes' : 'No') : '-',
+      helpText: 'Indicates whether the linked currency is the base currency.',
+      fieldType: 'checkbox',
+      sourceText: 'Currencies master data',
+    },
+    currencyActive: {
+      key: 'currencyActive',
+      label: 'Active',
+      value: salesOrder.currency ? (salesOrder.currency.active ? 'Yes' : 'No') : '',
+      displayValue: salesOrder.currency ? (salesOrder.currency.active ? 'Yes' : 'No') : '-',
+      helpText: 'Indicates whether the linked currency is active.',
+      fieldType: 'checkbox',
+      sourceText: 'Currencies master data',
+    },
+    currencyCreatedAt: {
+      key: 'currencyCreatedAt',
+      label: 'Created',
+      value: salesOrder.currency?.createdAt?.toISOString() ?? '',
+      displayValue: salesOrder.currency?.createdAt ? fmtDocumentDate(salesOrder.currency.createdAt, moneySettings) : '-',
+      helpText: 'Date/time the linked currency record was created.',
+      fieldType: 'date',
+      sourceText: 'Currencies master data',
+    },
+    currencyUpdatedAt: {
+      key: 'currencyUpdatedAt',
+      label: 'Last Modified',
+      value: salesOrder.currency?.updatedAt?.toISOString() ?? '',
+      displayValue: salesOrder.currency?.updatedAt ? fmtDocumentDate(salesOrder.currency.updatedAt, moneySettings) : '-',
+      helpText: 'Date/time the linked currency record was last modified.',
+      fieldType: 'date',
+      sourceText: 'Currencies master data',
     },
     id: {
       key: 'id',
@@ -460,7 +1359,7 @@ export default async function SalesOrderDetailPage({
       options: statusOptions,
       helpText: 'Current lifecycle stage of the sales order.',
       fieldType: 'list',
-      sourceText: 'System sales order statuses',
+      sourceText: 'Sales order status list',
       subsectionTitle: 'Commercial Terms',
       subsectionDescription: 'Commercial controls, fulfillment status, and monetary context for the order.',
     },
@@ -496,23 +1395,53 @@ export default async function SalesOrderDetailPage({
     },
   }
 
+  const customerHref = `/customers/${salesOrder.customer.id}`
+  const quoteHref = salesOrder.quote ? `/quotes/${salesOrder.quote.id}` : null
+  const opportunityHref = salesOrder.quote?.opportunity ? `/opportunities/${salesOrder.quote.opportunity.id}` : null
+  const ownerHref = salesOrder.user ? `/users/${salesOrder.user.id}` : null
+  const subsidiaryHref = salesOrder.subsidiary ? `/subsidiaries/${salesOrder.subsidiary.id}` : null
+  const currencyHref = salesOrder.currency ? `/currencies/${salesOrder.currency.id}` : null
+
+  const assignHrefByPrefix = (prefix: string, href: string | null) => {
+    if (!href) return
+    for (const [key, field] of Object.entries(allFieldDefinitions)) {
+      if (
+        key.startsWith(prefix) &&
+        (field.label.includes('Id') || field.label.includes('#') || key.toLowerCase().includes('number'))
+      ) {
+        field.href = href
+      }
+    }
+  }
+
+  assignHrefByPrefix('customer', customerHref)
+  assignHrefByPrefix('quote', quoteHref)
+  assignHrefByPrefix('opportunity', opportunityHref)
+  assignHrefByPrefix('owner', ownerHref)
+  assignHrefByPrefix('subsidiary', subsidiaryHref)
+  assignHrefByPrefix('currency', currencyHref)
+
+  allFieldDefinitions.customerId.href = customerHref
+  allFieldDefinitions.userId.href = ownerHref
+  allFieldDefinitions.quoteId.href = quoteHref
+  allFieldDefinitions.createdFrom.href = quoteHref
+  allFieldDefinitions.opportunityId.href = opportunityHref
+  allFieldDefinitions.subsidiaryId.href = subsidiaryHref
+  allFieldDefinitions.currencyId.href = currencyHref
+
   const headerSections = buildConfiguredTransactionSections({
     fields: SALES_ORDER_DETAIL_FIELDS,
     layout: customization,
-    fieldDefinitions: headerFieldDefinitions,
+    fieldDefinitions: allFieldDefinitions as Record<SalesOrderDetailFieldKey, SalesOrderHeaderField>,
     sectionDescriptions: salesOrderPageConfig.sectionDescriptions,
   })
 
   const customizeFields = buildTransactionCustomizePreviewFields({
     fields: SALES_ORDER_DETAIL_FIELDS,
-    fieldDefinitions: headerFieldDefinitions,
-      previewOverrides: {
+    fieldDefinitions: allFieldDefinitions as Record<SalesOrderDetailFieldKey, SalesOrderHeaderField>,
+    previewOverrides: {
       id: salesOrder.id,
       customerId: salesOrder.customer.customerId ?? '',
-      customerAddress: salesOrder.customer.address ?? '',
-      customerPrimarySubsidiary: salesOrder.customer.subsidiary ? `${salesOrder.customer.subsidiary.subsidiaryId} - ${salesOrder.customer.subsidiary.name}` : '',
-      customerPrimaryCurrency: salesOrder.customer.currency ? `${salesOrder.customer.currency.code} - ${salesOrder.customer.currency.name}` : '',
-      customerInactive: salesOrder.customer.inactive ? 'Yes' : 'No',
       userId: salesOrder.user?.userId ?? '',
       quoteId: salesOrder.quote?.number ?? '',
       createdBy: createdByLabel,
@@ -526,6 +1455,52 @@ export default async function SalesOrderDetailPage({
       updatedAt: fmtDocumentDate(salesOrder.updatedAt, moneySettings),
     },
   })
+  const referenceSourceDefinitions = SALES_ORDER_REFERENCE_SOURCES.map((source) => ({
+    ...source,
+    fields: source.fields.map((field) => ({
+      id: field.id,
+      label: field.label,
+      fieldType: field.fieldType,
+      source: field.source,
+      description: field.description,
+      previewValue: allFieldDefinitions[field.id]?.value ?? '',
+    })),
+  }))
+  const referenceSections = customization.referenceLayouts
+    .map((referenceLayout) => {
+      const source = SALES_ORDER_REFERENCE_SOURCES.find((entry) => entry.id === referenceLayout.referenceId)
+      if (!source) return null
+        const fields = source.fields
+          .filter((field) => referenceLayout.fields[field.id]?.visible)
+          .sort((left, right) => {
+            const leftConfig = referenceLayout.fields[left.id]
+            const rightConfig = referenceLayout.fields[right.id]
+          if (!leftConfig || !rightConfig) return 0
+          if (leftConfig.column !== rightConfig.column) return leftConfig.column - rightConfig.column
+          return leftConfig.order - rightConfig.order
+        })
+          .map((field) => ({
+            ...allFieldDefinitions[field.id],
+            column: referenceLayout.fields[field.id]?.column ?? 1,
+            order: referenceLayout.fields[field.id]?.order ?? 0,
+          }))
+
+        if (fields.length === 0) return null
+
+        return {
+          id: referenceLayout.id,
+          title: source.label,
+          description: source.description,
+          columns: referenceLayout.formColumns,
+          rows: Math.max(
+            1,
+            ...fields.map((field) => Math.max(1, (field.order ?? 0) + 1)),
+          ),
+          fields,
+        }
+      })
+    .filter((section): section is { id: string; title: string; description: string; columns: number; rows: number; fields: SalesOrderHeaderField[] } => Boolean(section))
+  const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
 
   const visibleLineColumnOrder = getOrderedVisibleTransactionLineColumns(
     SALES_ORDER_LINE_COLUMNS,
@@ -547,11 +1522,49 @@ export default async function SalesOrderDetailPage({
         : null
     })
     .filter((column): column is { id: 'line' | 'item-id' | 'description' | 'quantity' | 'received-qty' | 'open-qty' | 'unit-price' | 'line-total'; label: string } => Boolean(column))
-  const visibleStatIds = customization.statCards
-    .filter((card) => card.visible)
-    .sort((left, right) => left.order - right.order)
-    .map((card) => card.metric)
-  const glImpactRows: InvoiceGlImpactRow[] = []
+  const poCompatibleLineColumnCustomization = {
+    line: customization.lineColumns.line,
+    'item-id': customization.lineColumns['item-id'],
+    description: customization.lineColumns.description,
+    quantity: customization.lineColumns.quantity,
+    'received-qty': customization.lineColumns['fulfilled-qty'],
+    'open-qty': customization.lineColumns['open-qty'],
+    'unit-price': customization.lineColumns['unit-price'],
+    'line-total': customization.lineColumns['line-total'],
+  }
+  const statsRecord = {
+    id: salesOrder.id,
+    total: computedTotal,
+    createdFrom: salesOrder.quote?.number ?? null,
+    lineCount: lineRows.length,
+    statusLabel: formatSalesOrderStatus(salesOrder.status),
+    statusTone: getSalesOrderStatusToneKey(salesOrder.status, salesOrderStatusColors),
+    customerId: salesOrder.customer.customerId ?? null,
+    customerHref: `/customers/${salesOrder.customer.id}`,
+    userId: salesOrder.user?.userId ?? null,
+    quoteId: salesOrder.quote?.number ?? null,
+    quoteHref: salesOrder.quote ? `/quotes/${salesOrder.quote.id}` : null,
+    opportunityId: salesOrder.quote?.opportunity?.opportunityNumber ?? null,
+    opportunityHref: salesOrder.quote?.opportunity ? `/opportunities/${salesOrder.quote.opportunity.id}` : null,
+    subsidiaryId: salesOrder.subsidiary?.subsidiaryId ?? null,
+    currencyId: salesOrder.currency?.currencyId ?? salesOrder.currency?.code ?? null,
+    createdAt: fmtDocumentDate(salesOrder.createdAt, moneySettings),
+    updatedAt: fmtDocumentDate(salesOrder.updatedAt, moneySettings),
+    moneySettings,
+  } satisfies SalesOrderPageConfigRecord
+  const statPreviewCards = salesOrderPageConfig.stats.map((stat) => ({
+    id: stat.id,
+    label: stat.label,
+    value: stat.getValue(statsRecord),
+    href: stat.getHref?.(statsRecord) ?? null,
+    accent: stat.accent,
+    valueTone: stat.getValueTone?.(statsRecord),
+    cardTone: stat.getCardTone?.(statsRecord),
+    supportsColorized: Boolean(stat.accent || stat.getValueTone || stat.getCardTone),
+    supportsLink: Boolean(stat.getHref),
+  }))
+  const salesOrderStatusActions = getAvailableWorkflowStatusActions(workflow, 'sales-order', salesOrder.status)
+  const createInvoiceAction = getWorkflowDocumentAction(workflow, 'sales-order', 'invoice', salesOrder.status)
 
   return (
     <RecordDetailPageShell
@@ -578,12 +1591,24 @@ export default async function SalesOrderDetailPage({
       widthClassName="w-full max-w-none"
       headerCenter={
         !isCustomizing && !isEditing ? (
-          <>
-            {salesOrder.status !== 'booked' ? <RecordStatusButton resource="sales-orders" id={salesOrder.id} status="booked" label="Book Order" tone="blue" /> : null}
-            {salesOrder.status !== 'fulfilled' ? <RecordStatusButton resource="sales-orders" id={salesOrder.id} status="fulfilled" label="Mark Fulfilled" tone="emerald" /> : null}
-            {salesOrder.status !== 'draft' ? <RecordStatusButton resource="sales-orders" id={salesOrder.id} status="draft" label="Reset Draft" tone="gray" /> : null}
-            <SalesOrderCreateInvoiceButton salesOrderId={salesOrder.id} existingInvoiceId={latestInvoice?.id} />
-          </>
+          <div className="flex flex-wrap items-start gap-2">
+            {salesOrderStatusActions.map((action) => (
+              <RecordStatusButton
+                key={action.id}
+                resource="sales-orders"
+                id={salesOrder.id}
+                status={action.nextValue}
+                label={action.label}
+                tone={action.tone}
+                fieldName={action.fieldName}
+                workflowStep={action.step}
+                workflowActionId={action.id}
+              />
+            ))}
+            {createInvoiceAction || latestInvoice ? (
+              <SalesOrderCreateInvoiceButton salesOrderId={salesOrder.id} existingInvoiceId={latestInvoice?.id} />
+            ) : null}
+          </div>
         ) : null
       }
       actions={
@@ -593,7 +1618,15 @@ export default async function SalesOrderDetailPage({
             cancelHref={detailHref}
             formId={`inline-record-form-${salesOrder.id}`}
             recordId={salesOrder.id}
-            primaryActions={!isEditing ? (
+            primaryActions={isEditing ? (
+              <Link
+                href={`${detailHref}?customize=1`}
+                className="rounded-md border px-3 py-2 text-sm"
+                style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+              >
+                Customize
+              </Link>
+            ) : (
               <>
                 <MasterDataDetailCreateMenu newHref="/sales-orders/new" duplicateHref={`/sales-orders/new?duplicateFrom=${salesOrder.id}`} />
                 <MasterDataDetailExportMenu
@@ -625,44 +1658,21 @@ export default async function SalesOrderDetailPage({
                 </Link>
                 <DeleteButton resource="sales-orders" id={salesOrder.id} />
               </>
-            ) : null}
+            )}
           />
         )
       }
     >
       <TransactionDetailFrame
+        showFooterSections={!isCustomizing}
         stats={
-          <TransactionStatsRow
-            record={{
-              id: salesOrder.id,
-              total: computedTotal,
-              createdFrom: salesOrder.quote?.number ?? null,
-              lineCount: lineRows.length,
-              statusLabel: formatSalesOrderStatus(salesOrder.status),
-              statusTone:
-                salesOrder.status === 'fulfilled'
-                  ? 'green'
-                  : salesOrder.status === 'cancelled'
-                    ? 'red'
-                    : salesOrder.status === 'booked'
-                      ? 'blue'
-                      : 'default',
-              customerId: salesOrder.customer.customerId ?? null,
-              customerHref: `/customers/${salesOrder.customer.id}`,
-              userId: salesOrder.user?.userId ?? null,
-              quoteId: salesOrder.quote?.number ?? null,
-              quoteHref: salesOrder.quote ? `/quotes/${salesOrder.quote.id}` : null,
-              opportunityId: salesOrder.quote?.opportunity?.opportunityNumber ?? null,
-              opportunityHref: salesOrder.quote?.opportunity ? `/opportunities/${salesOrder.quote.opportunity.id}` : null,
-              subsidiaryId: salesOrder.subsidiary?.subsidiaryId ?? null,
-              currencyId: salesOrder.currency?.currencyId ?? salesOrder.currency?.code ?? null,
-              createdAt: fmtDocumentDate(salesOrder.createdAt, moneySettings),
-              updatedAt: fmtDocumentDate(salesOrder.updatedAt, moneySettings),
-              moneySettings,
-            }}
-            stats={salesOrderPageConfig.stats}
-            visibleStatIds={visibleStatIds}
-          />
+          isCustomizing ? null : (
+            <TransactionStatsRow
+              record={statsRecord}
+              stats={salesOrderPageConfig.stats}
+              visibleStatCards={customization.statCards}
+            />
+          )
         }
         header={
           isCustomizing ? (
@@ -671,21 +1681,43 @@ export default async function SalesOrderDetailPage({
                 detailHref={detailHref}
                 initialLayout={customization}
                 fields={customizeFields}
+                referenceSourceDefinitions={referenceSourceDefinitions}
                 sectionDescriptions={salesOrderPageConfig.sectionDescriptions}
+                statPreviewCards={statPreviewCards}
               />
             </div>
           ) : (
-            <PurchaseOrderHeaderSections
-              purchaseOrderId={salesOrder.id}
-              editing={isEditing}
-              sections={headerSections}
-              columns={customization.formColumns}
-              updateUrl={`/api/sales-orders?id=${encodeURIComponent(salesOrder.id)}`}
-            />
+            <div className="space-y-6">
+              {referenceSections.length > 0 ? (
+                <TransactionHeaderSections
+                  editing={false}
+                  sections={referenceSections.map((section) => ({
+                      title: section.title,
+                      description: section.description,
+                      rows: section.rows,
+                      fields: section.fields,
+                    }))}
+                  columns={referenceColumns}
+                  containerTitle="Reference Details"
+                  containerDescription="Expanded context from linked records on this sales order."
+                  showSubsections={false}
+                />
+              ) : null}
+              <TransactionHeaderSections
+                purchaseOrderId={salesOrder.id}
+                editing={isEditing}
+                sections={headerSections}
+                columns={customization.formColumns}
+                containerTitle="Sales Order Details"
+                containerDescription="Core sales order fields organized into configurable sections."
+                showSubsections={false}
+                updateUrl={`/api/sales-orders?id=${encodeURIComponent(salesOrder.id)}`}
+              />
+            </div>
           )
         }
-        lineItems={
-          <PurchaseOrderLineItemsSection
+        lineItems={isCustomizing ? null : (
+          <TransactionLineItemsSection
             rows={lineRows.map((row, index) => ({
               id: row.id,
               displayOrder: index,
@@ -705,6 +1737,8 @@ export default async function SalesOrderDetailPage({
             userId={salesOrder.userId}
             itemOptions={itemOptions}
             lineColumns={poCompatibleLineColumns}
+            lineSettings={customization.lineSettings}
+            lineColumnCustomization={poCompatibleLineColumnCustomization}
             sectionTitle="Sales Order Line Items"
             lineItemApiBasePath="/api/sales-order-line-items"
             deleteResource="sales-order-line-items"
@@ -712,9 +1746,22 @@ export default async function SalesOrderDetailPage({
             tableId="sales-order-line-items"
             allowAddLines={isEditing}
           />
-        }
-        relatedDocuments={
+        )}
+        relatedDocuments={isCustomizing ? null : (
           <SalesOrderRelatedDocuments
+            opportunities={
+              salesOrder.quote?.opportunity
+                ? [
+                    {
+                      id: salesOrder.quote.opportunity.id,
+                      number: salesOrder.quote.opportunity.opportunityNumber ?? salesOrder.quote.opportunity.name,
+                      name: salesOrder.quote.opportunity.name,
+                      status: salesOrder.quote.opportunity.stage,
+                      total: toNumericValue(salesOrder.quote.opportunity.amount, 0),
+                    },
+                  ]
+                : []
+            }
             quotes={
               salesOrder.quote
                 ? [
@@ -755,8 +1802,8 @@ export default async function SalesOrderDetailPage({
               }))
             )}
           />
-        }
-        communications={
+        )}
+        communications={isCustomizing ? null : (
           <CommunicationsSection
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
@@ -781,9 +1828,8 @@ export default async function SalesOrderDetailPage({
               })),
             })}
           />
-        }
-        supplementarySections={<InvoiceGlImpactSection rows={glImpactRows} />}
-        systemNotes={<SystemNotesSection notes={systemNotes} />}
+        )}
+        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
       />
     </RecordDetailPageShell>
   )

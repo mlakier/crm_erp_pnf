@@ -4,8 +4,14 @@ import { generateNextPurchaseOrderNumber } from '@/lib/purchase-order-number'
 import { loadPurchaseOrderDetailCustomization } from '@/lib/purchase-order-detail-customization-store'
 import { toNumericValue } from '@/lib/format'
 
-export default async function NewPurchaseOrderPage() {
-  const [adminUser, vendors, subsidiaries, items, nextNumber, customization] = await Promise.all([
+export default async function NewPurchaseOrderPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ duplicateFrom?: string }>
+}) {
+  const duplicateFrom = (await searchParams)?.duplicateFrom?.trim()
+
+  const [adminUser, vendors, subsidiaries, items, nextNumber, customization, duplicateSource] = await Promise.all([
     prisma.user.findUnique({ where: { email: 'admin@example.com' } }),
     prisma.vendor.findMany({
       orderBy: { vendorNumber: 'asc' },
@@ -32,6 +38,16 @@ export default async function NewPurchaseOrderPage() {
     }),
     generateNextPurchaseOrderNumber(),
     loadPurchaseOrderDetailCustomization(),
+    duplicateFrom
+      ? prisma.purchaseOrder.findUnique({
+          where: { id: duplicateFrom },
+          include: {
+            lineItems: {
+              orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+            },
+          },
+        })
+      : Promise.resolve(null),
   ])
 
   if (!adminUser) {
@@ -52,6 +68,28 @@ export default async function NewPurchaseOrderPage() {
       subsidiaries={subsidiaries}
       items={items.map((item) => ({ ...item, listPrice: toNumericValue(item.listPrice, 0) }))}
       customization={customization}
+      initialHeaderValues={
+        duplicateSource
+          ? {
+              number: nextNumber,
+              vendorId: duplicateSource.vendorId,
+              subsidiaryId: duplicateSource.subsidiaryId ?? '',
+              status: duplicateSource.status,
+            }
+          : undefined
+      }
+      initialDraftRows={
+        duplicateSource
+          ? duplicateSource.lineItems.map((line) => ({
+              itemId: line.itemId,
+              description: line.description,
+              quantity: line.quantity,
+              unitPrice: toNumericValue(line.unitPrice, 0),
+              lineTotal: toNumericValue(line.lineTotal, 0),
+              displayOrder: line.displayOrder,
+            }))
+          : undefined
+      }
     />
   )
 }

@@ -11,6 +11,14 @@ type QuoteDoc = {
   opportunityName: string | null
 }
 
+type OpportunityDoc = {
+  id: string
+  number: string
+  name: string
+  status: string
+  total: number
+}
+
 type FulfillmentDoc = {
   id: string
   number: string
@@ -38,11 +46,13 @@ type CashReceiptDoc = {
 }
 
 export default function FulfillmentRelatedDocuments({
+  opportunities,
   quotes,
   fulfillments,
   invoices,
   cashReceipts,
 }: {
+  opportunities: OpportunityDoc[]
   quotes: QuoteDoc[]
   fulfillments: FulfillmentDoc[]
   invoices: InvoiceDoc[]
@@ -50,10 +60,12 @@ export default function FulfillmentRelatedDocuments({
 }) {
   return (
     <SalesOrderRelatedDocuments
+      opportunities={opportunities}
       quotes={quotes}
       fulfillments={fulfillments}
       invoices={invoices}
       cashReceipts={cashReceipts}
+      showFulfillments={false}
     />
   )
 }

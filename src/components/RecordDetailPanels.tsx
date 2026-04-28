@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState, type ReactNode } from 'react'
+import type { TransactionStatCardSize, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 export function RecordDetailStatCard({
   label,
@@ -9,12 +10,16 @@ export function RecordDetailStatCard({
   accent,
   href,
   valueTone,
+  cardTone,
+  size = 'md',
 }: {
   label: string
   value: ReactNode
   accent?: true | 'teal' | 'yellow'
   href?: string | null
-  valueTone?: 'default' | 'accent' | 'teal' | 'yellow' | 'green' | 'red'
+  valueTone?: TransactionVisualTone
+  cardTone?: TransactionVisualTone
+  size?: TransactionStatCardSize
 }) {
   const textColor =
     accent === 'teal'
@@ -25,29 +30,82 @@ export function RecordDetailStatCard({
           ? 'var(--accent-primary-strong)'
           : 'var(--text-muted)'
   const valueColor =
-    valueTone === 'accent'
+    valueTone === 'gray'
+      ? 'var(--text-muted)'
+      : valueTone === 'accent'
       ? 'var(--accent-primary-strong)'
       : valueTone === 'teal'
         ? '#5eead4'
         : valueTone === 'yellow'
           ? '#fcd34d'
+          : valueTone === 'orange'
+            ? '#fdba74'
           : valueTone === 'green'
             ? '#86efac'
             : valueTone === 'red'
               ? '#fca5a5'
+              : valueTone === 'purple'
+                ? '#d8b4fe'
+                : valueTone === 'pink'
+                  ? '#f9a8d4'
               : '#ffffff'
+  const cardBackgroundColor =
+    cardTone === 'gray'
+      ? 'rgba(148,163,184,0.10)'
+      : cardTone === 'accent'
+      ? 'rgba(59,130,246,0.16)'
+      : cardTone === 'teal'
+        ? 'rgba(20,184,166,0.16)'
+        : cardTone === 'yellow'
+          ? 'rgba(245,158,11,0.16)'
+          : cardTone === 'orange'
+            ? 'rgba(249,115,22,0.16)'
+          : cardTone === 'green'
+            ? 'rgba(34,197,94,0.14)'
+            : cardTone === 'red'
+              ? 'rgba(239,68,68,0.14)'
+              : cardTone === 'purple'
+                ? 'rgba(168,85,247,0.16)'
+                : cardTone === 'pink'
+                  ? 'rgba(236,72,153,0.16)'
+              : accent
+                ? 'var(--card-elevated)'
+                : 'var(--card)'
+  const cardBorderColor =
+    cardTone === 'gray'
+      ? 'rgba(148,163,184,0.22)'
+      : cardTone === 'accent'
+      ? 'rgba(59,130,246,0.32)'
+      : cardTone === 'teal'
+        ? 'rgba(20,184,166,0.32)'
+        : cardTone === 'yellow'
+          ? 'rgba(245,158,11,0.32)'
+          : cardTone === 'orange'
+            ? 'rgba(249,115,22,0.32)'
+          : cardTone === 'green'
+            ? 'rgba(34,197,94,0.28)'
+            : cardTone === 'red'
+              ? 'rgba(239,68,68,0.28)'
+              : cardTone === 'purple'
+                ? 'rgba(168,85,247,0.32)'
+                : cardTone === 'pink'
+                  ? 'rgba(236,72,153,0.32)'
+              : 'var(--border-muted)'
+  const cardPaddingClass = size === 'sm' ? 'p-4' : size === 'lg' ? 'p-6' : 'p-5'
+  const labelClass = size === 'sm' ? 'text-xs' : 'text-sm'
+  const valueClass = size === 'sm' ? 'mt-2 text-xl' : size === 'lg' ? 'mt-4 text-3xl' : 'mt-3 text-2xl'
   return (
     <div
-      className="rounded-2xl border p-5"
+      className={`rounded-2xl border ${cardPaddingClass}`}
       style={{
-        backgroundColor: accent ? 'var(--card-elevated)' : 'var(--card)',
-        borderColor: 'var(--border-muted)',
+        backgroundColor: cardBackgroundColor,
+        borderColor: cardBorderColor,
       }}
     >
-      <p className="text-sm font-medium" style={{ color: textColor }}>
+      <p className={`${labelClass} font-medium`} style={{ color: textColor }}>
         {label}
       </p>
-      <div className="mt-3 text-2xl font-semibold" style={{ color: valueColor }}>
+      <div className={`${valueClass} font-semibold`} style={{ color: valueColor }}>
         {href ? (
           <Link href={href} className="hover:underline" style={{ color: valueColor }}>
             {value}
@@ -81,7 +139,7 @@ export function RecordDetailSection({
 
   return (
     <div
-      className="mb-6 overflow-hidden rounded-xl border"
+      className="mb-6 overflow-visible rounded-xl border"
       style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}
     >
       <div
@@ -120,7 +178,7 @@ export function RecordDetailSection({
           </span>
         </div>
       </div>
-      {expanded ? <div className="overflow-x-auto">{children}</div> : null}
+      {expanded ? <div style={{ overflowX: 'auto', overflowY: 'visible' }}>{children}</div> : null}
     </div>
   )
 }

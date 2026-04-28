@@ -1,10 +1,12 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import {
+  EMPLOYEE_STAT_CARDS,
   defaultEmployeeFormCustomization,
   EMPLOYEE_FORM_FIELDS,
   type EmployeeFormCustomizationConfig,
   type EmployeeFormFieldKey,
+  type EmployeeStatCardMetric,
 } from '@/lib/employee-form-customization'
 
 const STORE_PATH = path.join(process.cwd(), 'config', 'employee-form-customization.json')
@@ -108,6 +110,7 @@ function mergeWithDefaults(overrides: Partial<EmployeeFormCustomizationConfig>):
   const fieldOverrides = overrides.fields && typeof overrides.fields === 'object'
     ? overrides.fields as Partial<Record<EmployeeFormFieldKey, Partial<EmployeeFormCustomizationConfig['fields'][EmployeeFormFieldKey]>>>
     : {}
+  const statCardOverrides = Array.isArray(overrides.statCards) ? overrides.statCards : []
 
   for (const field of EMPLOYEE_FORM_FIELDS) {
     const override = fieldOverrides[field.id]
@@ -128,6 +131,32 @@ function mergeWithDefaults(overrides: Partial<EmployeeFormCustomizationConfig>):
     merged.sectionRows[section] = normalizeRowCount(sectionRowsInput[section], merged.sectionRows[section] ?? 2)
     merged.fields[field.id].column = Math.min(merged.formColumns, Math.max(1, merged.fields[field.id].column))
   }
+
+  const allowedMetrics = new Set<EmployeeStatCardMetric>(EMPLOYEE_STAT_CARDS.map((card) => card.id))
+  const normalizedStatCards = statCardOverrides
+    .map((entry, index) => {
+      const root = entry && typeof entry === 'object' ? entry as Record<string, unknown> : null
+      if (!root) return null
+
+      const metric = String(root.metric ?? '').trim() as EmployeeStatCardMetric
+      if (!allowedMetrics.has(metric)) return null
+
+      return {
+        id: String(root.id ?? `employee-stat-${metric}`),
+        metric,
+        visible: root.visible === undefined ? true : root.visible === true,
+        order: typeof root.order === 'number' && Number.isFinite(root.order) ? root.order : index,
+        size: root.size === 'sm' || root.size === 'lg' ? root.size : 'md',
+        colorized: root.colorized === undefined ? true : root.colorized === true,
+        linked: root.linked === undefined ? true : root.linked === true,
+      }
+    })
+    .filter((card): card is NonNullable<typeof card> => Boolean(card))
+
+  merged.statCards = (normalizedStatCards.length > 0 ? normalizedStatCards : cloneDefaults().statCards ?? []).map((card, index) => ({
+    ...card,
+    order: index,
+  }))
 
   return normalizeFieldPlacements(merged)
 }

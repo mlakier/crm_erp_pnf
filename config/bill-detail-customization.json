@@ -1,0 +1,262 @@
+{
+  "formColumns": 3,
+  "sections": [
+    "Document Identity",
+    "Workflow & Timing",
+    "Sourcing & Financials",
+    "Record Keys",
+    "System Dates"
+  ],
+  "sectionRows": {
+    "Document Identity": 2,
+    "Workflow & Timing": 2,
+    "Sourcing & Financials": 2,
+    "Record Keys": 1,
+    "System Dates": 1
+  },
+  "fields": {
+    "id": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 1
+    },
+    "number": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 1
+    },
+    "vendorId": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 2
+    },
+    "purchaseOrderId": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 3
+    },
+    "userId": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 2
+    },
+    "subsidiaryId": {
+      "visible": true,
+      "section": "Sourcing & Financials",
+      "order": 0,
+      "column": 1
+    },
+    "currencyId": {
+      "visible": true,
+      "section": "Sourcing & Financials",
+      "order": 0,
+      "column": 2
+    },
+    "total": {
+      "visible": true,
+      "section": "Sourcing & Financials",
+      "order": 0,
+      "column": 3
+    },
+    "date": {
+      "visible": true,
+      "section": "Workflow & Timing",
+      "order": 0,
+      "column": 1
+    },
+    "dueDate": {
+      "visible": true,
+      "section": "Workflow & Timing",
+      "order": 0,
+      "column": 2
+    },
+    "status": {
+      "visible": true,
+      "section": "Workflow & Timing",
+      "order": 0,
+      "column": 3
+    },
+    "notes": {
+      "visible": true,
+      "section": "Sourcing & Financials",
+      "order": 2,
+      "column": 1
+    },
+    "createdAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 1
+    },
+    "updatedAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 2
+    }
+  },
+  "lineSettings": {
+    "fontSize": "sm"
+  },
+  "lineColumns": {
+    "line": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    },
+    "item-id": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "normal",
+      "editDisplay": "idAndLabel",
+      "viewDisplay": "idAndLabel",
+      "dropdownDisplay": "idAndLabel",
+      "dropdownSort": "id"
+    },
+    "description": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "wide",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    },
+    "quantity": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    },
+    "unit-price": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    },
+    "line-total": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    },
+    "notes": {
+      "visible": true,
+      "order": 6,
+      "widthMode": "wide",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    }
+  },
+  "referenceLayouts": [
+    {
+      "id": "reference-purchaseOrder-1",
+      "referenceId": "purchaseOrder",
+      "formColumns": 3,
+      "rows": 2,
+      "fields": {
+        "purchaseOrderDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 0
+        },
+        "purchaseOrderNumber": {
+          "visible": true,
+          "column": 1,
+          "order": 0
+        },
+        "purchaseOrderStatus": {
+          "visible": true,
+          "column": 2,
+          "order": 0
+        },
+        "purchaseOrderTotal": {
+          "visible": true,
+          "column": 3,
+          "order": 0
+        },
+        "purchaseOrderVendorDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 2
+        },
+        "purchaseOrderUserDbId": {
+          "visible": false,
+          "column": 2,
+          "order": 2
+        },
+        "purchaseOrderRequisitionDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 0
+        },
+        "purchaseOrderSubsidiaryDbId": {
+          "visible": false,
+          "column": 2,
+          "order": 3
+        },
+        "purchaseOrderCurrencyDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 4
+        },
+        "purchaseOrderCreatedAt": {
+          "visible": false,
+          "column": 2,
+          "order": 4
+        },
+        "purchaseOrderUpdatedAt": {
+          "visible": false,
+          "column": 1,
+          "order": 5
+        }
+      }
+    }
+  ],
+  "statCards": [
+    {
+      "id": "bill-total",
+      "metric": "total",
+      "visible": true,
+      "order": 0
+    },
+    {
+      "id": "bill-status",
+      "metric": "status",
+      "visible": true,
+      "order": 1
+    },
+    {
+      "id": "bill-date",
+      "metric": "date",
+      "visible": true,
+      "order": 2
+    },
+    {
+      "id": "bill-po",
+      "metric": "purchaseOrder",
+      "visible": true,
+      "order": 3
+    }
+  ]
+}

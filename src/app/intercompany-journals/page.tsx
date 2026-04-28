@@ -23,8 +23,11 @@ const JE_COLUMNS = [
   { id: 'currency', label: 'Currency' },
   { id: 'period', label: 'Accounting Period' },
   { id: 'source-type', label: 'Source Type' },
+  { id: 'source-id', label: 'Source Id', defaultVisible: false },
+  { id: 'created-by', label: 'Created By', defaultVisible: false },
   { id: 'posted-by', label: 'Prepared By' },
   { id: 'approved-by', label: 'Approved By' },
+  { id: 'db-id', label: 'DB Id', defaultVisible: false },
   { id: 'created', label: 'Created' },
   { id: 'last-modified', label: 'Last Modified' },
   { id: 'actions', label: 'Actions', locked: true },
@@ -48,7 +51,7 @@ export default async function IntercompanyJournalsPage({
   ])
   const where = {
     journalType: 'intercompany',
-    ...(query ? { OR: [{ number: { contains: query } }, { description: { contains: query } }, { status: { contains: query } }] } : {}),
+    ...(query ? { OR: [{ number: { contains: query } }, { description: { contains: query } }, { status: { contains: query } }, { sourceId: { contains: query } }] } : {}),
     ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
   }
 
@@ -61,7 +64,7 @@ export default async function IntercompanyJournalsPage({
     loadCompanyCabinetFiles(),
   ])
   const { statusFilterValues } = formOptions
-  const STATUS_OPTIONS = statusFilterValues
+  const STATUS_OPTIONS = Array.from(new Set(statusFilterValues))
 
   const pagination = getPagination(totalRows, params.page)
   const rows = await prisma.journalEntry.findMany({ where, include: { subsidiary: true, currency: true, user: true, accountingPeriod: true, postedByEmployee: true, approvedByEmployee: true, lineItems: true }, orderBy, skip: pagination.skip, take: pagination.pageSize })
@@ -124,7 +127,7 @@ export default async function IntercompanyJournalsPage({
             </tr></thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={14} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No intercompany journals yet.</td></tr>
+                <tr><td colSpan={16} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No intercompany journals yet.</td></tr>
               ) : rows.map((row, i) => (
                 <tr key={row.id} style={i < rows.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
                   <td data-column="number" className="px-4 py-2 text-sm font-medium">
@@ -140,8 +143,11 @@ export default async function IntercompanyJournalsPage({
                   <td data-column="currency" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.currency?.code ?? '\u2014'}</td>
                   <td data-column="period" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.accountingPeriod?.name ?? '\u2014'}</td>
                   <td data-column="source-type" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.sourceType ?? '\u2014'}</td>
+                  <td data-column="source-id" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.sourceId ?? '\u2014'}</td>
+                  <td data-column="created-by" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.user ? (row.user.userId && row.user.name ? `${row.user.userId} - ${row.user.name}` : row.user.userId ?? row.user.name ?? row.user.email) : '\u2014'}</td>
                   <td data-column="posted-by" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.postedByEmployee ? `${row.postedByEmployee.firstName} ${row.postedByEmployee.lastName}` : '\u2014'}</td>
                   <td data-column="approved-by" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.approvedByEmployee ? `${row.approvedByEmployee.firstName} ${row.approvedByEmployee.lastName}` : '\u2014'}</td>
+                  <td data-column="db-id" className="px-4 py-2 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{row.id}</td>
                   <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtDocumentDate(row.createdAt, moneySettings)}</td>
                   <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtDocumentDate(row.updatedAt, moneySettings)}</td>
                   <td data-column="actions" className="px-4 py-2 text-sm"><span className="flex items-center gap-2">

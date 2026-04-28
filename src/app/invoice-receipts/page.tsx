@@ -157,7 +157,15 @@ export default async function InvoiceReceiptsPage({ searchParams }: { searchPara
                       <span style={{ color: 'var(--text-secondary)' }}>{'\u2014'}</span>
                     )}
                   </td>
-                  <td data-column="customer" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.invoice?.customer?.name ?? '\u2014'}</td>
+                  <td data-column="customer" className="px-4 py-2 text-sm">
+                    {row.invoice?.customer ? (
+                      <Link href={`/customers/${row.invoice.customer.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                        {row.invoice.customer.name}
+                      </Link>
+                    ) : (
+                      <span style={{ color: 'var(--text-secondary)' }}>{'\u2014'}</span>
+                    )}
+                  </td>
                   <td data-column="amount" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtCurrency(row.amount, undefined, moneySettings)}</td>
                   <td data-column="date" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtDocumentDate(row.date, moneySettings)}</td>
                   <td data-column="method" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.method}</td>

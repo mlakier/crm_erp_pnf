@@ -100,6 +100,7 @@ export default async function RolesPage({
               <MasterDataHeaderCell columnId="inactive-users">Inactive Users</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="active-users">Active Users</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="inactive">Inactive</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="db-id">DB Id</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="last-modified">Last Modified</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
@@ -107,7 +108,7 @@ export default async function RolesPage({
           </thead>
           <tbody>
             {roles.length === 0 ? (
-              <MasterDataEmptyStateRow colSpan={10}>No roles found</MasterDataEmptyStateRow>
+              <MasterDataEmptyStateRow colSpan={11}>No roles found</MasterDataEmptyStateRow>
             ) : (
               roles.map((item, index) => {
                 const inactiveUsers = item.users.filter((u) => u.inactive).length
@@ -125,6 +126,7 @@ export default async function RolesPage({
                     <MasterDataMutedCell columnId="inactive-users">{inactiveUsers}</MasterDataMutedCell>
                     <MasterDataMutedCell columnId="active-users">{activeUsers}</MasterDataMutedCell>
                     <MasterDataMutedCell columnId="inactive">{item.active ? 'No' : 'Yes'}</MasterDataMutedCell>
+                    <MasterDataMutedCell columnId="db-id">{item.id}</MasterDataMutedCell>
                     <MasterDataMutedCell columnId="created">{formatMasterDataDate(item.createdAt)}</MasterDataMutedCell>
                     <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(item.updatedAt)}</MasterDataMutedCell>
                     <MasterDataBodyCell columnId="actions">

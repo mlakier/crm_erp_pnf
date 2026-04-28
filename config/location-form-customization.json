@@ -1,0 +1,100 @@
+{
+  "formColumns": 2,
+  "sections": [
+    "Core",
+    "Hierarchy",
+    "Operations",
+    "Address"
+  ],
+  "sectionRows": {
+    "Core": 2,
+    "Hierarchy": 2,
+    "Operations": 2,
+    "Address": 1
+  },
+  "fields": {
+    "locationId": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 1
+    },
+    "code": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 2
+    },
+    "name": {
+      "visible": true,
+      "section": "Core",
+      "order": 1,
+      "column": 1
+    },
+    "subsidiaryId": {
+      "visible": true,
+      "section": "Hierarchy",
+      "order": 0,
+      "column": 1
+    },
+    "parentLocationId": {
+      "visible": true,
+      "section": "Hierarchy",
+      "order": 1,
+      "column": 1
+    },
+    "locationType": {
+      "visible": true,
+      "section": "Operations",
+      "order": 0,
+      "column": 1
+    },
+    "makeInventoryAvailable": {
+      "visible": true,
+      "section": "Operations",
+      "order": 0,
+      "column": 2
+    },
+    "address": {
+      "visible": true,
+      "section": "Address",
+      "order": 0,
+      "column": 1
+    },
+    "inactive": {
+      "visible": true,
+      "section": "Operations",
+      "order": 1,
+      "column": 2
+    }
+  },
+  "statCards": [
+    {
+      "id": "location-stat-childLocations",
+      "metric": "childLocations",
+      "visible": true,
+      "order": 0,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "location-stat-employees",
+      "metric": "employees",
+      "visible": true,
+      "order": 1,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "location-stat-items",
+      "metric": "items",
+      "visible": true,
+      "order": 2,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    }
+  ]
+}

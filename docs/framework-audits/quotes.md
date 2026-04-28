@@ -3,6 +3,15 @@
 Mode: audit-only
 Generated: 2026-04-25T07:27:20.217Z
 
+## Component Applicability
+
+| Component | Applicable |
+| --- | --- |
+| Header | Yes |
+| Lines | Yes |
+| GL Impact | No |
+| Footer | Yes |
+
 ## Checks
 
 ### Foundation
@@ -28,11 +37,22 @@ Generated: 2026-04-25T07:27:20.217Z
 ### Line Section
 - [x] Line section includes add-line capability where applicable (src\app\quotes\[id]\page.tsx)
 
-### Detail Section
+### Line Item Presentation & Customize
+- [ ] Customize flow exposes a line-item column customization block when the page has transaction lines
+- [ ] Line-item customization supports visibility and order persistence where applicable
+- [ ] Line-item customization supports applicable presentation controls such as width, edit/view display, dropdown display, and dropdown sort for lookup columns
+- [ ] Non-lookup line columns do not expose irrelevant display or dropdown controls
+- [ ] Saved line-item customization is reflected in both detail view and `[id]?edit=1` edit mode
+- [ ] Truncated line-item values still expose full value on hover
+
+### Footer Section
 - [x] Detail page includes related documents section (src\app\quotes\[id]\page.tsx)
 - [x] Detail page includes communications section (src\app\quotes\[id]\page.tsx)
 - [x] Detail page wires send email in communications (src\app\quotes\[id]\page.tsx)
-- [x] Detail page includes GL impact section (src\app\quotes\[id]\page.tsx)
+- [x] Detail page includes system notes section (src\app\quotes\[id]\page.tsx)
+
+### GL Impact Applicability
+- [ ] Quotes should not render a GL impact section by design; if one appears, treat it as design drift rather than a required audit target
 
 ## Missing Files
 - None

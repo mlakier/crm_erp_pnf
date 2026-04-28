@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
+  CHART_OF_ACCOUNTS_STAT_CARDS,
   defaultChartOfAccountsFormCustomization,
   CHART_OF_ACCOUNTS_FORM_FIELDS,
   type ChartOfAccountsFormCustomizationConfig,
   type ChartOfAccountsFormFieldKey,
+  type ChartOfAccountsStatCardMetric,
 } from '@/lib/chart-of-accounts-form-customization'
 import {
   loadChartOfAccountsFormCustomization,
@@ -27,6 +29,8 @@ function sanitizeInput(input: unknown): ChartOfAccountsFormCustomizationConfig {
   const fieldsInput = root.fields && typeof root.fields === 'object'
     ? root.fields as Record<string, unknown>
     : {}
+  const statCardsInput = Array.isArray(root.statCards) ? root.statCards : []
+  const allowedMetrics = new Set<ChartOfAccountsStatCardMetric>(CHART_OF_ACCOUNTS_STAT_CARDS.map((card) => card.id))
 
   const fields = Object.fromEntries(
     CHART_OF_ACCOUNTS_FORM_FIELDS.map((field) => {
@@ -61,6 +65,32 @@ function sanitizeInput(input: unknown): ChartOfAccountsFormCustomizationConfig {
       ])
     ),
     fields,
+    statCards: (() => {
+      const normalized = statCardsInput
+        .map((entry, index) => {
+          const statRoot = entry && typeof entry === 'object' ? entry as Record<string, unknown> : null
+          if (!statRoot) return null
+
+          const metric = String(statRoot.metric ?? '').trim() as ChartOfAccountsStatCardMetric
+          if (!allowedMetrics.has(metric)) return null
+
+          return {
+            id: String(statRoot.id ?? `chart-of-accounts-stat-${metric}`),
+            metric,
+            visible: statRoot.visible === undefined ? true : statRoot.visible === true,
+            order: typeof statRoot.order === 'number' && Number.isFinite(statRoot.order) ? statRoot.order : index,
+            size: statRoot.size === 'sm' || statRoot.size === 'lg' ? statRoot.size : 'md',
+            colorized: statRoot.colorized === undefined ? true : statRoot.colorized === true,
+            linked: statRoot.linked === undefined ? true : statRoot.linked === true,
+          }
+        })
+        .filter((card): card is NonNullable<typeof card> => Boolean(card))
+
+      return (normalized.length > 0 ? normalized : defaults.statCards ?? []).map((card, index) => ({
+        ...card,
+        order: index,
+      }))
+    })(),
   }
 }
 

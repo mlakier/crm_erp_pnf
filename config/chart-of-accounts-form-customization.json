@@ -7,9 +7,9 @@
     "Controls"
   ],
   "sectionRows": {
-    "Core": 2,
-    "Reporting": 2,
-    "Structure": 2,
+    "Core": 3,
+    "Reporting": 3,
+    "Structure": 3,
     "Controls": 4
   },
   "fields": {
@@ -19,23 +19,29 @@
       "order": 0,
       "column": 1
     },
-    "name": {
+    "accountNumber": {
       "visible": true,
       "section": "Core",
       "order": 0,
       "column": 2
     },
-    "description": {
+    "name": {
       "visible": true,
       "section": "Core",
       "order": 1,
       "column": 1
     },
-    "accountType": {
+    "description": {
       "visible": true,
       "section": "Core",
       "order": 1,
       "column": 2
+    },
+    "accountType": {
+      "visible": true,
+      "section": "Core",
+      "order": 2,
+      "column": 1
     },
     "normalBalance": {
       "visible": true,
@@ -55,16 +61,34 @@
       "order": 1,
       "column": 1
     },
-    "parentAccountId": {
+    "financialStatementCategory": {
+      "visible": true,
+      "section": "Reporting",
+      "order": 1,
+      "column": 2
+    },
+    "subsidiaryIds": {
       "visible": true,
       "section": "Structure",
       "order": 0,
       "column": 1
     },
-    "closeToAccountId": {
+    "includeChildren": {
       "visible": true,
       "section": "Structure",
       "order": 0,
+      "column": 2
+    },
+    "parentAccountId": {
+      "visible": true,
+      "section": "Structure",
+      "order": 1,
+      "column": 1
+    },
+    "closeToAccountId": {
+      "visible": true,
+      "section": "Structure",
+      "order": 1,
       "column": 2
     },
     "isPosting": {
@@ -88,14 +112,14 @@
     "requiresSubledgerType": {
       "visible": true,
       "section": "Structure",
-      "order": 1,
+      "order": 2,
       "column": 1
     },
     "cashFlowCategory": {
       "visible": true,
       "section": "Reporting",
-      "order": 1,
-      "column": 2
+      "order": 2,
+      "column": 1
     },
     "inventory": {
       "visible": true,
@@ -121,5 +145,43 @@
       "order": 3,
       "column": 1
     }
-  }
+  },
+  "statCards": [
+    {
+      "id": "chart-of-accounts-stat-subsidiaries",
+      "metric": "subsidiaries",
+      "visible": true,
+      "order": 0,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "chart-of-accounts-stat-childAccounts",
+      "metric": "childAccounts",
+      "visible": true,
+      "order": 1,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "chart-of-accounts-stat-posting",
+      "metric": "posting",
+      "visible": true,
+      "order": 2,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "chart-of-accounts-stat-summary",
+      "metric": "summary",
+      "visible": true,
+      "order": 3,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    }
+  ]
 }

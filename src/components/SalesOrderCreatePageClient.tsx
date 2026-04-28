@@ -4,9 +4,10 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionActionStack from '@/components/TransactionActionStack'
-import PurchaseOrderHeaderSections, { type PurchaseOrderHeaderField } from '@/components/PurchaseOrderHeaderSections'
-import PurchaseOrderLineItemsSection from '@/components/PurchaseOrderLineItemsSection'
+import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
+import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/lib/form-requirements-client'
 import {
   SALES_ORDER_DETAIL_FIELDS,
   SALES_ORDER_LINE_COLUMNS,
@@ -58,7 +59,7 @@ type DraftLine = {
 
 type SalesOrderHeaderField = {
   key: SalesOrderDetailFieldKey
-} & PurchaseOrderHeaderField
+} & TransactionHeaderField
 
 const sectionDescriptions: Record<string, string> = {
   Customer: 'Customer contact and default commercial context from the linked master data record.',
@@ -87,6 +88,7 @@ export default function SalesOrderCreatePageClient({
   statusOptions: Array<{ value: string; label: string }>
 }) {
   const router = useRouter()
+  const { req, isLocked } = useFormRequirementsState('salesOrderCreate')
   const defaultUser = users[0] ?? null
   const [headerValues, setHeaderValues] = useState<Record<string, string>>({
     id: '',
@@ -392,6 +394,8 @@ export default function SalesOrderCreatePageClient({
       subsectionDescription: 'System-managed timestamps for this sales order record.',
     },
   }
+  applyRequirementsToEditableFields(headerFieldDefinitions, req, isLocked)
+
 
   const headerSections = buildConfiguredTransactionSections({
     fields: SALES_ORDER_DETAIL_FIELDS,
@@ -466,7 +470,7 @@ export default function SalesOrderCreatePageClient({
       widthClassName="w-full max-w-none"
       actions={<TransactionActionStack mode="create" cancelHref="/sales-orders" formId="create-sales-order-form" />}
     >
-      <PurchaseOrderHeaderSections
+      <TransactionHeaderSections
         editing
         sections={headerSections}
         columns={customization.formColumns}
@@ -482,7 +486,7 @@ export default function SalesOrderCreatePageClient({
         </p>
       ) : null}
 
-      <PurchaseOrderLineItemsSection
+      <TransactionLineItemsSection
         rows={[]}
         editing
         purchaseOrderId="draft-sales-order"
@@ -496,3 +500,4 @@ export default function SalesOrderCreatePageClient({
     </RecordDetailPageShell>
   )
 }
+

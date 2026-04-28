@@ -4,6 +4,13 @@ import { createFieldChangeSummary, logActivity } from '@/lib/activity'
 import { generateNextSalesOrderNumber } from '@/lib/sales-order-number'
 import { calcLineTotal, sumMoney } from '@/lib/money'
 import { toNumericValue } from '@/lib/format'
+import {
+  coerceWorkflowValueForStep,
+  getDefaultWorkflowStatus,
+  getWorkflowDocumentAction,
+  isWorkflowActionIdAllowed,
+  loadOtcWorkflowRuntime,
+} from '@/lib/otc-workflow-runtime'
 
 export async function GET() {
   try {
@@ -25,6 +32,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { quoteId, duplicateFrom, number, customerId, userId, subsidiaryId, currencyId, status, lineItems } = body
+    const workflow = await loadOtcWorkflowRuntime()
 
     if (duplicateFrom) {
       const sourceSalesOrder = await prisma.salesOrder.findUnique({
@@ -51,7 +59,7 @@ export async function POST(request: NextRequest) {
       const duplicatedSalesOrder = await prisma.salesOrder.create({
         data: {
           number: generatedNumber,
-          status: 'draft',
+          status: getDefaultWorkflowStatus(workflow, 'sales-order'),
           total: toNumericValue(sourceSalesOrder.total),
           customerId: sourceSalesOrder.customerId,
           userId: sourceSalesOrder.userId,
@@ -103,7 +111,11 @@ export async function POST(request: NextRequest) {
       const createdSalesOrder = await prisma.salesOrder.create({
         data: {
           number: String(number).trim(),
-          status: typeof status === 'string' && status.trim() ? status.trim() : 'draft',
+          status: coerceWorkflowValueForStep(
+            workflow,
+            'sales-order',
+            typeof status === 'string' && status.trim() ? status.trim() : getDefaultWorkflowStatus(workflow, 'sales-order'),
+          ),
           total: normalizedLineItems.length ? sumMoney(normalizedLineItems.map((line) => line.lineTotal)) : 0,
           customerId: String(customerId),
           userId: String(userId),
@@ -146,6 +158,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Sales order already exists for this quote', salesOrderId: quote.salesOrder.id }, { status: 409 })
     }
 
+    const salesOrderCreateAction = getWorkflowDocumentAction(workflow, 'quote', 'sales-order', quote.status)
+    if (!salesOrderCreateAction) {
+      return NextResponse.json({ error: 'Workflow does not currently allow sales order creation from this quote status' }, { status: 409 })
+    }
+
     const generatedNumber = await generateNextSalesOrderNumber()
     const normalizedLineItems = quote.lineItems.map((line) => ({
       description: line.description,
@@ -162,7 +179,7 @@ export async function POST(request: NextRequest) {
     const salesOrder = await prisma.salesOrder.create({
       data: {
         number: generatedNumber,
-        status: 'draft',
+        status: salesOrderCreateAction.resultStatus,
         total,
         customerId: quote.customerId,
         userId: quote.userId,
@@ -177,11 +194,6 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    await prisma.quote.update({
-      where: { id: quote.id },
-      data: { status: 'accepted' },
-    })
-
     await logActivity({
       entityType: 'sales-order',
       entityId: salesOrder.id,
@@ -194,7 +206,7 @@ export async function POST(request: NextRequest) {
       entityType: 'quote',
       entityId: quote.id,
       action: 'update',
-      summary: `Accepted quote ${quote.number} and created sales order ${salesOrder.number}`,
+      summary: `Created sales order ${salesOrder.number} from quote ${quote.number}`,
       userId: quote.userId,
     })
 
@@ -214,7 +226,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { number, status, subsidiaryId, currencyId } = body
+    const { number, status, subsidiaryId, currencyId, workflowStep, workflowActionId } = body
 
     const existingSalesOrder = await prisma.salesOrder.findUnique({
       where: { id },
@@ -232,8 +244,14 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Sales order not found' }, { status: 404 })
     }
 
+    const workflow = await loadOtcWorkflowRuntime()
+
     const nextNumber = typeof number === 'string' ? number.trim() : existingSalesOrder.number
-    const nextStatus = typeof status === 'string' ? status.trim() : existingSalesOrder.status
+    const nextStatus = coerceWorkflowValueForStep(
+      workflow,
+      'sales-order',
+      typeof status === 'string' ? status.trim() : existingSalesOrder.status,
+    )
     const nextSubsidiaryId =
       subsidiaryId === undefined ? existingSalesOrder.subsidiaryId : subsidiaryId || null
     const nextCurrencyId =
@@ -244,6 +262,14 @@ export async function PUT(request: NextRequest) {
     }
     if (!nextStatus) {
       return NextResponse.json({ error: 'Missing sales order status' }, { status: 400 })
+    }
+
+    if (
+      workflowStep === 'sales-order'
+      && typeof workflowActionId === 'string'
+      && !isWorkflowActionIdAllowed(workflow, 'sales-order', workflowActionId, existingSalesOrder.status, nextStatus)
+    ) {
+      return NextResponse.json({ error: 'Workflow transition is not allowed' }, { status: 409 })
     }
 
     const salesOrder = await prisma.salesOrder.update({

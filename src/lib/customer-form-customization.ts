@@ -1,4 +1,5 @@
 import { getListSourceText, type FieldSourceType } from '@/lib/list-source'
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 export type CustomerFormFieldKey =
   | 'customerId'
@@ -33,7 +34,21 @@ export type CustomerFormCustomizationConfig = {
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<CustomerFormFieldKey, CustomerFormFieldCustomization>
+  statCards?: Array<TransactionStatCardSlot<CustomerStatCardMetric>>
 }
+
+export type CustomerStatCardMetric =
+  | 'contacts'
+  | 'opportunities'
+  | 'pipelineValue'
+  | 'status'
+
+export const CUSTOMER_STAT_CARDS: Array<{ id: CustomerStatCardMetric; label: string }> = [
+  { id: 'contacts', label: 'Contacts' },
+  { id: 'opportunities', label: 'Opportunities' },
+  { id: 'pipelineValue', label: 'Pipeline Value' },
+  { id: 'status', label: 'Status' },
+]
 
 export const CUSTOMER_FORM_FIELDS: CustomerFormFieldMeta[] = [
   { id: 'customerId', label: 'Customer ID', fieldType: 'text', description: 'System-generated customer identifier.' },
@@ -111,5 +126,14 @@ export function defaultCustomerFormCustomization(): CustomerFormCustomizationCon
         },
       ])
     ) as Record<CustomerFormFieldKey, CustomerFormFieldCustomization>,
+    statCards: CUSTOMER_STAT_CARDS.map((card, index) => ({
+      id: `customer-stat-${card.id}`,
+      metric: card.id,
+      visible: true,
+      order: index,
+      size: 'md',
+      colorized: true,
+      linked: true,
+    })),
   }
 }

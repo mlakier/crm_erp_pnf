@@ -11,8 +11,12 @@ export type PurchaseRequisitionPageConfigRecord = {
 
 export const purchaseRequisitionPageConfig: TransactionPageConfig<PurchaseRequisitionPageConfigRecord> = {
   sectionDescriptions: {
-    Vendor: 'Supplier master data linked to this purchase requisition.',
-    'Purchase Requisition Details': 'Core requisition fields, approval context, and procurement controls.',
+    'Document Identity': 'Document numbering, provenance, and ownership for the purchase requisition.',
+    'Workflow & Timing': 'Current workflow status, urgency, approval context, and required-by timing.',
+    'Request Details': 'Business purpose, summary, and internal notes for the requisition request.',
+    'Sourcing & Financials': 'Department, vendor, subsidiary, currency, and financial context for the request.',
+    'Record Keys': 'Internal and linked transaction identifiers for this requisition.',
+    'System Dates': 'System-managed timestamps for this purchase requisition.',
   },
   stats: [
     {

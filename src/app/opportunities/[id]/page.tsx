@@ -1,14 +1,16 @@
 import Link from 'next/link'
+import { connection } from 'next/server'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { fmtCurrency, fmtDocumentDate, fmtPhone, toNumericValue } from '@/lib/format'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
 import DeleteButton from '@/components/DeleteButton'
 import OpportunityCreateQuoteButton from '@/components/OpportunityCreateQuoteButton'
+import RecordStatusButton from '@/components/RecordStatusButton'
 import OpportunityDetailCustomizeMode from '@/components/OpportunityDetailCustomizeMode'
-import OpportunityLineItemForm from '@/components/OpportunityLineItemForm'
-import PurchaseOrderHeaderSections, { type PurchaseOrderHeaderField } from '@/components/PurchaseOrderHeaderSections'
-import PurchaseOrderLineItemsSection from '@/components/PurchaseOrderLineItemsSection'
+import OpportunityRelatedDocumentsSection from '@/components/OpportunityRelatedDocumentsSection'
+import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
@@ -17,11 +19,14 @@ import CommunicationsSection from '@/components/CommunicationsSection'
 import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
 import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
 import TransactionActionStack from '@/components/TransactionActionStack'
-import InvoiceGlImpactSection, { type InvoiceGlImpactRow } from '@/components/InvoiceGlImpactSection'
-import { RecordDetailSection, RecordDetailEmptyState, RecordDetailCell, RecordDetailHeaderCell } from '@/components/RecordDetailPanels'
 import { parseCommunicationSummary, parseFieldChangeSummary } from '@/lib/activity'
 import {
+  buildLinkedReferenceFieldDefinitions,
+  buildLinkedReferencePreviewSources,
+} from '@/lib/linked-record-reference-catalogs'
+import {
   OPPORTUNITY_DETAIL_FIELDS,
+  OPPORTUNITY_REFERENCE_SOURCES,
   OPPORTUNITY_LINE_COLUMNS,
   type OpportunityDetailFieldKey,
 } from '@/lib/opportunity-detail-customization'
@@ -33,26 +38,73 @@ import {
   buildTransactionCustomizePreviewFields,
   getOrderedVisibleTransactionLineColumns,
 } from '@/lib/transaction-detail-helpers'
-import { loadListOptionsForSource } from '@/lib/list-source'
+import { loadManagedListDetail } from '@/lib/manage-lists'
+import {
+  getAvailableWorkflowStatusActions,
+  getWorkflowDocumentAction,
+  loadOtcWorkflowRuntime,
+} from '@/lib/otc-workflow-runtime'
+import type { TransactionStatusColorTone } from '@/lib/company-preferences-definitions'
+import type { TransactionVisualTone } from '@/lib/transaction-page-config'
 
-type OpportunityHeaderField = PurchaseOrderHeaderField & { key: OpportunityDetailFieldKey }
+type OpportunityHeaderField = TransactionHeaderField & { key: OpportunityDetailFieldKey }
 
 function formatStage(stage: string | null) {
   if (!stage) return 'Unknown'
   return stage.charAt(0).toUpperCase() + stage.slice(1)
 }
 
-function formatStageTone(stage: string | null) {
-  const key = (stage ?? '').toLowerCase()
-  const styles: Record<string, { bg: string; color: string }> = {
-    prospecting: { bg: 'rgba(255,255,255,0.07)', color: 'var(--text-muted)' },
-    qualified: { bg: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' },
-    proposal: { bg: 'rgba(168,85,247,0.18)', color: '#d8b4fe' },
-    negotiation: { bg: 'rgba(245,158,11,0.18)', color: '#fcd34d' },
-    won: { bg: 'rgba(34,197,94,0.16)', color: '#86efac' },
-    lost: { bg: 'rgba(239,68,68,0.18)', color: '#fca5a5' },
+function getToneStyle(tone: TransactionStatusColorTone) {
+  if (tone === 'gray') {
+    return { bg: 'rgba(148,163,184,0.10)', color: 'var(--text-muted)' }
   }
-  return styles[key] ?? styles.prospecting
+  if (tone === 'accent') {
+    return { bg: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }
+  }
+  if (tone === 'teal') {
+    return { bg: 'rgba(20,184,166,0.18)', color: '#5eead4' }
+  }
+  if (tone === 'yellow') {
+    return { bg: 'rgba(245,158,11,0.18)', color: '#fcd34d' }
+  }
+  if (tone === 'orange') {
+    return { bg: 'rgba(249,115,22,0.18)', color: '#fdba74' }
+  }
+  if (tone === 'green') {
+    return { bg: 'rgba(34,197,94,0.16)', color: '#86efac' }
+  }
+  if (tone === 'red') {
+    return { bg: 'rgba(239,68,68,0.18)', color: '#fca5a5' }
+  }
+  if (tone === 'purple') {
+    return { bg: 'rgba(168,85,247,0.18)', color: '#d8b4fe' }
+  }
+  if (tone === 'pink') {
+    return { bg: 'rgba(236,72,153,0.18)', color: '#f9a8d4' }
+  }
+  return { bg: 'rgba(255,255,255,0.07)', color: 'var(--text-muted)' }
+}
+
+function getOpportunityStageTone(
+  stage: string | null,
+  configuredTones: Record<string, TransactionStatusColorTone>,
+) {
+  const key = (stage ?? '').toLowerCase()
+  const configuredTone =
+    key === 'prospecting' || key === 'qualified' || key === 'proposal' || key === 'negotiation' || key === 'won' || key === 'lost'
+      ? configuredTones[key]
+      : 'default'
+  return getToneStyle(configuredTone)
+}
+
+function getOpportunityStageToneKey(
+  stage: string | null,
+  configuredTones: Record<string, TransactionStatusColorTone>,
+): TransactionVisualTone {
+  const key = (stage ?? '').toLowerCase()
+  return key === 'prospecting' || key === 'qualified' || key === 'proposal' || key === 'negotiation' || key === 'won' || key === 'lost'
+    ? configuredTones[key]
+    : 'default'
 }
 
 export default async function OpportunityDetailPage({
@@ -62,25 +114,58 @@ export default async function OpportunityDetailPage({
   params: Promise<{ id: string }>
   searchParams?: Promise<{ edit?: string; customize?: string }>
 }) {
+  await connection()
   const { id } = await params
   const resolvedSearchParams = (await searchParams) ?? {}
   const isEditing = resolvedSearchParams.edit === '1'
   const isCustomizing = resolvedSearchParams.customize === '1'
   const { moneySettings } = await loadCompanyDisplaySettings()
 
-  const [opportunity, activities, customization, items, stageOptions] = await Promise.all([
+  const [opportunity, activities, customization, items, stageListDetail, subsidiaries, currencies, workflow] = await Promise.all([
     prisma.opportunity.findUnique({
       where: { id },
       include: {
-        quote: true,
-        user: {
-          select: {
-            id: true,
-            userId: true,
-            name: true,
-            email: true,
+        quote: {
+          include: {
+            salesOrder: {
+              include: {
+                fulfillments: {
+                  orderBy: { createdAt: 'desc' },
+                  select: {
+                    id: true,
+                    number: true,
+                    status: true,
+                    date: true,
+                    notes: true,
+                  },
+                },
+                invoices: {
+                  orderBy: { createdAt: 'desc' },
+                  select: {
+                    id: true,
+                    number: true,
+                    status: true,
+                    total: true,
+                    dueDate: true,
+                    createdAt: true,
+                    cashReceipts: {
+                      orderBy: { date: 'desc' },
+                      select: {
+                        id: true,
+                        number: true,
+                        amount: true,
+                        date: true,
+                        method: true,
+                        reference: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
+        user: true,
         lineItems: {
           orderBy: { createdAt: 'asc' },
           include: { item: true },
@@ -90,6 +175,8 @@ export default async function OpportunityDetailPage({
             contacts: { orderBy: { firstName: 'asc' } },
           },
         },
+        subsidiary: true,
+        currency: true,
       },
     }),
     prisma.activity.findMany({
@@ -102,7 +189,10 @@ export default async function OpportunityDetailPage({
       orderBy: { name: 'asc' },
       select: { id: true, name: true, listPrice: true, itemId: true },
     }),
-    loadListOptionsForSource({ sourceType: 'managed-list', sourceKey: 'LIST-OPP-STAGE' }),
+    loadManagedListDetail('OPP-STAGE'),
+    prisma.subsidiary.findMany({ orderBy: { subsidiaryId: 'asc' }, select: { id: true, subsidiaryId: true, name: true } }),
+    prisma.currency.findMany({ orderBy: { code: 'asc' }, select: { id: true, currencyId: true, code: true, name: true } }),
+    loadOtcWorkflowRuntime(),
   ])
 
   if (!opportunity) notFound()
@@ -122,18 +212,29 @@ export default async function OpportunityDetailPage({
     ]),
   )
 
-  const statusTone = formatStageTone(opportunity.stage)
-  const stageSelectOptions = stageOptions.map((option) => ({ value: option.value, label: option.label }))
+  const opportunityStageColors = Object.fromEntries(
+    (stageListDetail?.rows ?? []).map((row) => [row.value.toLowerCase(), row.colorTone ?? 'default']),
+  ) as Record<string, TransactionStatusColorTone>
+  const statusTone = getOpportunityStageTone(opportunity.stage, opportunityStageColors)
+  const stageSelectOptions = (stageListDetail?.rows ?? []).map((row) => ({ value: row.value, label: row.value }))
+  const subsidiaryOptions = subsidiaries.map((subsidiary) => ({
+    value: subsidiary.id,
+    label: `${subsidiary.subsidiaryId} - ${subsidiary.name}`,
+  }))
+  const currencyOptions = currencies.map((currency) => ({
+    value: currency.id,
+    label: `${currency.code ?? currency.currencyId} - ${currency.name}`,
+  }))
   const lineRows = opportunity.lineItems.map((line, index) => ({
     id: line.id,
     lineNumber: index + 1,
     itemId: line.item?.itemId ?? null,
     itemName: line.item?.name ?? null,
     description: line.description,
+    notes: line.notes ?? null,
     quantity: line.quantity,
     unitPrice: toNumericValue(line.unitPrice, 0),
     lineTotal: toNumericValue(line.lineTotal, 0),
-    notes: line.notes ?? null,
   }))
   const systemNotes = activities
     .map((activity) => {
@@ -168,6 +269,24 @@ export default async function OpportunityDetailPage({
     .filter((communication): communication is Exclude<typeof communication, null> => Boolean(communication))
 
   const headerFieldDefinitions: Record<OpportunityDetailFieldKey, OpportunityHeaderField> = {
+    id: {
+      key: 'id',
+      label: 'DB Id',
+      value: opportunity.id,
+      helpText: 'Internal database identifier for the opportunity record.',
+      fieldType: 'text',
+      subsectionTitle: 'Record Keys',
+      subsectionDescription: 'Core identifiers and forecast metadata for this opportunity.',
+    },
+    customerId: {
+      key: 'customerId',
+      label: 'Customer Id',
+      value: opportunity.customerId,
+      displayValue: opportunity.customer.customerId ?? '-',
+      helpText: 'Internal customer identifier linked to the opportunity.',
+      fieldType: 'text',
+      sourceText: 'Customers master data',
+    },
     customerName: {
       key: 'customerName',
       label: 'Customer Name',
@@ -193,6 +312,17 @@ export default async function OpportunityDetailPage({
       helpText: 'Primary customer phone number.',
       fieldType: 'text',
       sourceText: 'Customers master data',
+    },
+    userId: {
+      key: 'userId',
+      label: 'User Id',
+      value: opportunity.userId,
+      displayValue: opportunity.user?.userId ?? '-',
+      helpText: 'Internal user identifier for the opportunity owner.',
+      fieldType: 'text',
+      sourceText: 'Users master data',
+      subsectionTitle: 'Record Keys',
+      subsectionDescription: 'Core identifiers and forecast metadata for this opportunity.',
     },
     opportunityNumber: {
       key: 'opportunityNumber',
@@ -255,6 +385,46 @@ export default async function OpportunityDetailPage({
       subsectionTitle: 'Forecast Terms',
       subsectionDescription: 'Forecast amount, stage, close date, and downstream quote context.',
     },
+    probability: {
+      key: 'probability',
+      label: 'Probability',
+      value: opportunity.probability != null ? String(opportunity.probability) : '',
+      displayValue: opportunity.probability != null ? `${Math.round(opportunity.probability)}%` : '-',
+      editable: true,
+      type: 'number',
+      helpText: 'Forecast probability percentage for the opportunity.',
+      fieldType: 'number',
+      subsectionTitle: 'Forecast Terms',
+      subsectionDescription: 'Forecast amount, stage, close date, and downstream quote context.',
+    },
+    subsidiaryId: {
+      key: 'subsidiaryId',
+      label: 'Subsidiary',
+      value: opportunity.subsidiaryId ?? '',
+      editable: true,
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...subsidiaryOptions],
+      displayValue: opportunity.subsidiary ? `${opportunity.subsidiary.subsidiaryId} - ${opportunity.subsidiary.name}` : '-',
+      helpText: 'Owning subsidiary for the opportunity.',
+      fieldType: 'list',
+      sourceText: 'Subsidiaries master data',
+      subsectionTitle: 'Forecast Terms',
+      subsectionDescription: 'Forecast amount, stage, close date, and downstream quote context.',
+    },
+    currencyId: {
+      key: 'currencyId',
+      label: 'Currency',
+      value: opportunity.currencyId ?? '',
+      editable: true,
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...currencyOptions],
+      displayValue: opportunity.currency ? `${opportunity.currency.code ?? opportunity.currency.currencyId} - ${opportunity.currency.name}` : '-',
+      helpText: 'Transaction currency for the opportunity.',
+      fieldType: 'list',
+      sourceText: 'Currencies master data',
+      subsectionTitle: 'Forecast Terms',
+      subsectionDescription: 'Forecast amount, stage, close date, and downstream quote context.',
+    },
     quoteNumber: {
       key: 'quoteNumber',
       label: 'Quote',
@@ -271,6 +441,16 @@ export default async function OpportunityDetailPage({
       sourceText: 'Quote transaction',
       subsectionTitle: 'Forecast Terms',
       subsectionDescription: 'Forecast amount, stage, close date, and downstream quote context.',
+    },
+    inactive: {
+      key: 'inactive',
+      label: 'Inactive',
+      value: opportunity.inactive ? 'Yes' : 'No',
+      displayValue: opportunity.inactive ? 'Yes' : 'No',
+      helpText: 'Whether the opportunity is inactive.',
+      fieldType: 'boolean',
+      subsectionTitle: 'System Dates',
+      subsectionDescription: 'System-managed timestamps for this opportunity.',
     },
     createdAt: {
       key: 'createdAt',
@@ -294,19 +474,108 @@ export default async function OpportunityDetailPage({
     },
   }
 
+  const customerHref = `/customers/${opportunity.customer.id}`
+  const ownerHref = opportunity.user ? `/users/${opportunity.user.id}` : null
+  const quoteHref = opportunity.quote ? `/quotes/${opportunity.quote.id}` : null
+  const subsidiaryHref = opportunity.subsidiary ? `/subsidiaries/${opportunity.subsidiary.id}` : null
+  const currencyHref = opportunity.currency ? `/currencies/${opportunity.currency.id}` : null
+
+  headerFieldDefinitions.customerId.href = customerHref
+  headerFieldDefinitions.userId.href = ownerHref
+  headerFieldDefinitions.quoteNumber.href = quoteHref
+  headerFieldDefinitions.subsidiaryId.href = subsidiaryHref
+  headerFieldDefinitions.currencyId.href = currencyHref
+
+  const referenceFieldDefinitions = buildLinkedReferenceFieldDefinitions(OPPORTUNITY_REFERENCE_SOURCES, {
+    customer: opportunity.customer,
+    owner: opportunity.user,
+    quote: opportunity.quote,
+    subsidiary: opportunity.subsidiary,
+    currency: opportunity.currency,
+  }, {
+    customer: customerHref,
+    owner: ownerHref,
+    quote: quoteHref,
+    subsidiary: subsidiaryHref,
+    currency: currencyHref,
+  })
+  const allFieldDefinitions = {
+    ...headerFieldDefinitions,
+    ...referenceFieldDefinitions,
+  }
+
   const headerSections = buildConfiguredTransactionSections({
     fields: OPPORTUNITY_DETAIL_FIELDS,
     layout: customization,
     fieldDefinitions: headerFieldDefinitions,
     sectionDescriptions: opportunityPageConfig.sectionDescriptions,
   })
-  const visibleStatIds = customization.statCards.filter((slot) => slot.visible).map((slot) => slot.metric)
   const customizeFields = buildTransactionCustomizePreviewFields({
     fields: OPPORTUNITY_DETAIL_FIELDS,
-    fieldDefinitions: headerFieldDefinitions,
+    fieldDefinitions: allFieldDefinitions,
   })
   const visibleLineColumns = getOrderedVisibleTransactionLineColumns(OPPORTUNITY_LINE_COLUMNS, customization)
-  const glImpactRows: InvoiceGlImpactRow[] = []
+  const statsRecord = {
+    amount: toNumericValue(opportunity.amount, 0),
+    closeDate: opportunity.closeDate,
+    lineCount: lineRows.length,
+    quoteNumber: opportunity.quote?.number ?? null,
+    quoteHref: opportunity.quote ? `/quotes/${opportunity.quote.id}` : null,
+    stageLabel: formatStage(opportunity.stage),
+    stageTone: getOpportunityStageToneKey(opportunity.stage, opportunityStageColors),
+    moneySettings,
+  } as const
+  const statPreviewCards = opportunityPageConfig.stats.map((stat) => ({
+    id: stat.id,
+    label: stat.label,
+    value: stat.getValue(statsRecord),
+    href: stat.getHref?.(statsRecord) ?? null,
+    accent: stat.accent,
+    valueTone: stat.getValueTone?.(statsRecord),
+    cardTone: stat.getCardTone?.(statsRecord),
+    supportsColorized: Boolean(stat.accent || stat.getValueTone || stat.getCardTone),
+    supportsLink: Boolean(stat.getHref),
+  }))
+  const referenceSourceDefinitions = buildLinkedReferencePreviewSources(OPPORTUNITY_REFERENCE_SOURCES, {
+    customer: opportunity.customer,
+    owner: opportunity.user,
+    quote: opportunity.quote,
+    subsidiary: opportunity.subsidiary,
+    currency: opportunity.currency,
+  })
+  const referenceSections = (customization.referenceLayouts ?? [])
+    .map((referenceLayout) => {
+      const source = OPPORTUNITY_REFERENCE_SOURCES.find((entry) => entry.id === referenceLayout.referenceId)
+      if (!source) return null
+      const fields = source.fields
+        .filter((field) => referenceLayout.fields[field.id]?.visible)
+        .sort((left, right) => {
+          const leftConfig = referenceLayout.fields[left.id]
+          const rightConfig = referenceLayout.fields[right.id]
+          if (!leftConfig || !rightConfig) return 0
+          if (leftConfig.column !== rightConfig.column) return leftConfig.column - rightConfig.column
+          return leftConfig.order - rightConfig.order
+        })
+        .map((field) => ({
+          ...allFieldDefinitions[field.id],
+          column: referenceLayout.fields[field.id]?.column ?? 1,
+          order: referenceLayout.fields[field.id]?.order ?? 0,
+        }))
+
+      if (fields.length === 0) return null
+
+      return {
+        title: source.label,
+        description: source.description,
+        columns: referenceLayout.formColumns,
+        rows: Math.max(1, ...fields.map((field) => Math.max(1, (field.order ?? 0) + 1))),
+        fields,
+      }
+    })
+    .filter((section): section is { title: string; description: string; columns: number; rows: number; fields: TransactionHeaderField[] } => Boolean(section))
+  const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
+  const opportunityStatusActions = getAvailableWorkflowStatusActions(workflow, 'opportunity', opportunity.stage)
+  const createQuoteAction = getWorkflowDocumentAction(workflow, 'opportunity', 'quote', opportunity.stage)
 
   return (
     <RecordDetailPageShell
@@ -325,7 +594,31 @@ export default async function OpportunityDetailPage({
         </div>
       }
       widthClassName="w-full max-w-none"
-      headerCenter={!isCustomizing && !isEditing ? <OpportunityCreateQuoteButton opportunityId={opportunity.id} existingQuoteId={opportunity.quote?.id} /> : null}
+      headerCenter={
+        !isCustomizing && !isEditing ? (
+          <div className="flex flex-wrap items-start gap-2">
+            {opportunityStatusActions.map((action) => (
+              <RecordStatusButton
+                key={action.id}
+                resource="opportunities"
+                id={opportunity.id}
+                status={action.nextValue}
+                label={action.label}
+                tone={action.tone}
+                fieldName={action.fieldName}
+                workflowStep={action.step}
+                workflowActionId={action.id}
+              />
+            ))}
+            {createQuoteAction || opportunity.quote ? (
+              <OpportunityCreateQuoteButton
+                opportunityId={opportunity.id}
+                existingQuoteId={opportunity.quote?.id ?? null}
+              />
+            ) : null}
+          </div>
+        ) : null
+      }
       actions={
         isCustomizing ? null : (
           <TransactionActionStack
@@ -334,7 +627,15 @@ export default async function OpportunityDetailPage({
             formId={`inline-record-form-${opportunity.id}`}
             recordId={opportunity.id}
             primaryActions={
-              !isEditing ? (
+              isEditing ? (
+                <Link
+                  href={`${detailHref}?customize=1`}
+                  className="rounded-md border px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+                >
+                  Customize
+                </Link>
+              ) : (
                 <>
                   <MasterDataDetailCreateMenu newHref="/opportunities/new" duplicateHref={`/opportunities/new?duplicateFrom=${encodeURIComponent(opportunity.id)}`} />
                   <MasterDataDetailExportMenu
@@ -366,37 +667,22 @@ export default async function OpportunityDetailPage({
                   </Link>
                   <DeleteButton resource="opportunities" id={opportunity.id} />
                 </>
-              ) : null
+              )
             }
           />
         )
       }
     >
       <TransactionDetailFrame
+        showFooterSections={!isCustomizing}
         stats={
-          <TransactionStatsRow
-            record={{
-              amount: toNumericValue(opportunity.amount, 0),
-              closeDate: opportunity.closeDate,
-              lineCount: lineRows.length,
-              quoteNumber: opportunity.quote?.number ?? null,
-              quoteHref: opportunity.quote ? `/quotes/${opportunity.quote.id}` : null,
-              stageLabel: formatStage(opportunity.stage),
-              stageTone:
-                opportunity.stage === 'won'
-                  ? 'green'
-                  : opportunity.stage === 'lost'
-                    ? 'red'
-                    : opportunity.stage === 'negotiation'
-                      ? 'yellow'
-                      : opportunity.stage === 'qualified'
-                        ? 'accent'
-                        : 'default',
-              moneySettings,
-            }}
-            stats={opportunityPageConfig.stats}
-            visibleStatIds={visibleStatIds}
-          />
+          isCustomizing ? null : (
+            <TransactionStatsRow
+              record={statsRecord}
+              stats={opportunityPageConfig.stats}
+              visibleStatCards={customization.statCards}
+            />
+          )
         }
         header={
           isCustomizing ? (
@@ -405,134 +691,154 @@ export default async function OpportunityDetailPage({
                 detailHref={detailHref}
                 initialLayout={customization}
                 fields={customizeFields}
+                referenceSourceDefinitions={referenceSourceDefinitions}
                 sectionDescriptions={opportunityPageConfig.sectionDescriptions}
+                statPreviewCards={statPreviewCards}
               />
             </div>
           ) : (
-            <PurchaseOrderHeaderSections
-              purchaseOrderId={opportunity.id}
-              editing={isEditing}
-              sections={headerSections}
-              columns={customization.formColumns}
-              updateUrl={`/api/opportunities?id=${encodeURIComponent(opportunity.id)}`}
-            />
+            <div className="space-y-6">
+              {referenceSections.length > 0 ? (
+                <TransactionHeaderSections
+                  editing={false}
+                  sections={referenceSections.map((section) => ({
+                    title: section.title,
+                    description: section.description,
+                    rows: section.rows,
+                    fields: section.fields,
+                  }))}
+                  columns={referenceColumns}
+                  containerTitle="Reference Details"
+                  containerDescription="Expanded context from linked records on this opportunity."
+                  showSubsections={false}
+                />
+              ) : null}
+              <TransactionHeaderSections
+                purchaseOrderId={opportunity.id}
+                editing={isEditing}
+                sections={headerSections}
+                columns={customization.formColumns}
+                containerTitle="Opportunity Details"
+                containerDescription="Core opportunity fields organized into configurable sections."
+                showSubsections={false}
+                updateUrl={`/api/opportunities?id=${encodeURIComponent(opportunity.id)}`}
+              />
+            </div>
           )
         }
         lineItems={
-          <div>
-            {isEditing ? (
-              <OpportunityLineItemForm
-                opportunityId={opportunity.id}
-                items={items.map((item) => ({ ...item, listPrice: toNumericValue(item.listPrice, 0) }))}
+          isCustomizing ? null : (
+            <div>
+              <TransactionLineItemsSection
+                rows={lineRows.map((row, index) => ({
+                  id: row.id,
+                  displayOrder: index,
+                  itemRecordId: opportunity.lineItems[index]?.item?.id ?? null,
+                  itemId: row.itemId,
+                  itemName: row.itemName,
+                  description: row.description,
+                  notes: row.notes,
+                  quantity: row.quantity,
+                  receivedQuantity: 0,
+                  billedQuantity: 0,
+                  openQuantity: row.quantity,
+                  unitPrice: row.unitPrice,
+                  lineTotal: row.lineTotal,
+                }))}
+                editing={isEditing}
+                purchaseOrderId={opportunity.id}
+                userId={opportunity.userId}
+                itemOptions={items.map((item) => ({
+                  id: item.id,
+                  itemId: item.itemId ?? 'ITEM',
+                  name: item.name,
+                  unitPrice: toNumericValue(item.listPrice, 0),
+                }))}
+                lineColumns={visibleLineColumns}
+                lineSettings={customization.lineSettings}
+                lineColumnCustomization={customization.lineColumns}
+                sectionTitle="Opportunity Line Items"
+                lineItemApiBasePath="/api/opportunities/line-items"
+                deleteResource="opportunities/line-items"
+                parentIdFieldName="opportunityId"
+                tableId="opportunity-line-items"
+                allowAddLines={isEditing}
               />
-            ) : null}
-            <PurchaseOrderLineItemsSection
-              rows={lineRows.map((row, index) => ({
-                id: row.id,
-                displayOrder: index,
-                itemRecordId: opportunity.lineItems[index]?.item?.id ?? null,
-                itemId: row.itemId,
-                itemName: row.itemName,
-                description: row.description,
-                quantity: row.quantity,
-                receivedQuantity: 0,
-                billedQuantity: 0,
-                openQuantity: row.quantity,
-                unitPrice: row.unitPrice,
-                lineTotal: row.lineTotal,
-              }))}
-              editing={isEditing}
-              purchaseOrderId={opportunity.id}
-              userId={opportunity.userId}
-              itemOptions={items.map((item) => ({
-                id: item.id,
-                itemId: item.itemId ?? 'ITEM',
-                name: item.name,
-                unitPrice: toNumericValue(item.listPrice, 0),
-              }))}
-              lineColumns={visibleLineColumns}
-              sectionTitle="Opportunity Line Items"
-              lineItemApiBasePath="/api/opportunities/line-items"
-              deleteResource="opportunities/line-items"
-              parentIdFieldName="opportunityId"
-              tableId="opportunity-line-items"
-              allowAddLines={isEditing}
-            />
-          </div>
+            </div>
+          )
         }
-        relatedDocuments={
-          <RecordDetailSection
-            title="Related Documents"
-            count={opportunity.quote ? 1 : 0}
-            summary={opportunity.quote ? 'Generated quote' : undefined}
-            collapsible
-          >
-            {!opportunity.quote ? (
-              <RecordDetailEmptyState message="No related documents yet." />
-            ) : (
-              <table className="min-w-full">
-                <thead>
-                  <tr>
-                    <RecordDetailHeaderCell>Quote</RecordDetailHeaderCell>
-                    <RecordDetailHeaderCell>Status</RecordDetailHeaderCell>
-                    <RecordDetailHeaderCell className="text-right">Total</RecordDetailHeaderCell>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <RecordDetailCell>
-                      <Link href={`/quotes/${opportunity.quote.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {opportunity.quote.number}
-                      </Link>
-                    </RecordDetailCell>
-                    <RecordDetailCell>{opportunity.quote.status ?? '-'}</RecordDetailCell>
-                    <RecordDetailCell className="text-right">{fmtCurrency(opportunity.quote.total, undefined, moneySettings)}</RecordDetailCell>
-                  </tr>
-                </tbody>
-              </table>
-            )}
-          </RecordDetailSection>
-        }
-        supplementarySections={[
-          opportunity.customer.contacts.length > 0 ? (
-            <RecordDetailSection
-              title="Customer Contacts"
-              count={opportunity.customer.contacts.length}
-              summary={`${opportunity.customer.contacts.length} contacts`}
-              collapsible
-            >
-              <table className="min-w-full">
-                <thead>
-                  <tr>
-                    <RecordDetailHeaderCell>Contact #</RecordDetailHeaderCell>
-                    <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
-                    <RecordDetailHeaderCell>Email</RecordDetailHeaderCell>
-                    <RecordDetailHeaderCell>Position</RecordDetailHeaderCell>
-                  </tr>
-                </thead>
-                <tbody>
-                  {opportunity.customer.contacts.map((contact, index) => (
-                    <tr
-                      key={contact.id}
-                      style={index < opportunity.customer.contacts.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : undefined}
-                    >
-                      <RecordDetailCell>
-                        <Link href={`/contacts/${contact.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                          {contact.contactNumber ?? 'Pending'}
-                        </Link>
-                      </RecordDetailCell>
-                      <RecordDetailCell>{contact.firstName} {contact.lastName}</RecordDetailCell>
-                      <RecordDetailCell>{contact.email ?? '-'}</RecordDetailCell>
-                      <RecordDetailCell>{contact.position ?? '-'}</RecordDetailCell>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </RecordDetailSection>
-          ) : null,
-          <InvoiceGlImpactSection key="gl-impact" rows={glImpactRows} />,
-        ]}
-        communications={
+        relatedDocuments={isCustomizing ? null : (
+          <OpportunityRelatedDocumentsSection
+            quote={
+              opportunity.quote
+                ? {
+                    id: opportunity.quote.id,
+                    href: `/quotes/${opportunity.quote.id}`,
+                    number: opportunity.quote.number,
+                    status: opportunity.quote.status ?? '-',
+                    total: toNumericValue(opportunity.quote.total, 0),
+                  }
+                : null
+            }
+            salesOrders={
+              opportunity.quote?.salesOrder
+                ? [
+                    {
+                      id: opportunity.quote.salesOrder.id,
+                      href: `/sales-orders/${opportunity.quote.salesOrder.id}`,
+                      number: opportunity.quote.salesOrder.number,
+                      status: opportunity.quote.salesOrder.status,
+                      total: toNumericValue(opportunity.quote.salesOrder.total, 0),
+                    },
+                  ]
+                : []
+            }
+            fulfillments={
+              opportunity.quote?.salesOrder?.fulfillments.map((fulfillment) => ({
+                id: fulfillment.id,
+                href: `/fulfillments/${fulfillment.id}`,
+                number: fulfillment.number,
+                status: fulfillment.status,
+                date: fulfillment.date.toISOString(),
+                notes: fulfillment.notes,
+              })) ?? []
+            }
+            invoices={
+              opportunity.quote?.salesOrder?.invoices.map((invoice) => ({
+                id: invoice.id,
+                href: `/invoices/${invoice.id}`,
+                number: invoice.number,
+                status: invoice.status,
+                total: toNumericValue(invoice.total, 0),
+                dueDate: invoice.dueDate?.toISOString() ?? null,
+                createdAt: invoice.createdAt.toISOString(),
+              })) ?? []
+            }
+            invoiceReceipts={
+              opportunity.quote?.salesOrder?.invoices.flatMap((invoice) =>
+                invoice.cashReceipts.map((receipt) => ({
+                  id: receipt.id,
+                  href: `/invoice-receipts/${receipt.id}`,
+                  number: receipt.number ?? 'Pending',
+                  amount: toNumericValue(receipt.amount, 0),
+                  date: receipt.date.toISOString(),
+                  method: receipt.method,
+                  reference: receipt.reference,
+                })),
+              ) ?? []
+            }
+            contacts={opportunity.customer.contacts.map((contact) => ({
+              id: contact.id,
+              href: `/contacts/${contact.id}`,
+              number: contact.contactNumber ?? 'Pending',
+              name: `${contact.firstName} ${contact.lastName}`.trim(),
+              email: contact.email ?? '-',
+              position: contact.position ?? '-',
+            }))}
+          />
+        )}
+        supplementarySections={isCustomizing ? null : []}
+        communications={isCustomizing ? null : (
           <CommunicationsSection
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
@@ -557,8 +863,8 @@ export default async function OpportunityDetailPage({
               })),
             })}
           />
-        }
-        systemNotes={<SystemNotesSection notes={systemNotes} />}
+        )}
+        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
       />
     </RecordDetailPageShell>
   )

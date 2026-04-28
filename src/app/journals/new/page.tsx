@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import JournalCreatePageClient from '@/components/JournalCreatePageClient'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
+import { findAccountingPeriodIdForDate } from '@/lib/accounting-periods'
 import { loadJournalEntryFormOptions } from '@/lib/journal-entry-form-options'
 import { loadJournalDetailCustomization } from '@/lib/journal-detail-customization-store'
 import { generateNextJournalNumber } from '@/lib/journal-number'
@@ -30,6 +31,7 @@ export default async function NewJournalEntryPage({
   ])
 
   const today = new Date().toISOString().slice(0, 10)
+  const initialAccountingPeriodId = findAccountingPeriodIdForDate(formOptions.accountingPeriods, today, sourceEntry?.subsidiaryId)
 
   return (
     <JournalCreatePageClient
@@ -48,14 +50,17 @@ export default async function NewJournalEntryPage({
         status: sourceEntry?.status ?? formOptions.statusOptions[0]?.value ?? 'draft',
         subsidiaryId: sourceEntry?.subsidiaryId ?? '',
         currencyId: sourceEntry?.currencyId ?? '',
-        accountingPeriodId: sourceEntry?.accountingPeriodId ?? '',
+        accountingPeriodId: initialAccountingPeriodId,
+        total: sourceEntry?.total?.toString() ?? '0',
         sourceType: sourceEntry?.sourceType ?? '',
         sourceId: sourceEntry?.sourceId ?? '',
+        userId: sourceEntry?.userId ?? '',
         postedByEmployeeId: sourceEntry?.postedByEmployeeId ?? '',
         approvedByEmployeeId: sourceEntry?.approvedByEmployeeId ?? '',
         createdAt: '-',
         updatedAt: '-',
       }}
+      createdByUserLabel="-"
       initialLineItems={
         sourceEntry?.lineItems.map((line) => ({
           key: `dup-${line.id}`,

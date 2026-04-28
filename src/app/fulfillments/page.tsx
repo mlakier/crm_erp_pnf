@@ -13,6 +13,7 @@ import { loadCompanyInformationSettings } from '@/lib/company-information-settin
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
 import { loadListValues } from '@/lib/load-list-values'
 import { buildMasterDataExportUrl } from '@/lib/master-data-export-url'
+import { createRecordLabelMapFromValues, formatRecordLabel } from '@/lib/record-status-label'
 
 const FULFILLMENT_COLUMNS = [
   { id: 'fulfillment-id', label: 'Fulfillment Id' },
@@ -64,6 +65,7 @@ export default async function FulfillmentsPage({
   ])
 
   const statusOptions = ['all', ...statusValues.map((value) => value.toLowerCase())]
+  const statusLabelMap = createRecordLabelMapFromValues(statusValues)
   const pagination = getPagination(totalRows, params.page)
   const rows = await prisma.fulfillment.findMany({
     where,
@@ -132,7 +134,7 @@ export default async function FulfillmentsPage({
                   : { backgroundColor: 'var(--card)', color: 'var(--text-secondary)', border: '1px solid var(--border-muted)' }
               }
             >
-              {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+              {status === 'all' ? 'All' : formatRecordLabel(status, statusLabelMap)}
             </Link>
           )
         })}
@@ -200,20 +202,38 @@ export default async function FulfillmentsPage({
                         <span style={{ color: 'var(--text-secondary)' }}>{'\u2014'}</span>
                       )}
                     </td>
-                    <td data-column="customer" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {row.salesOrder?.customer?.name ?? '\u2014'}
+                    <td data-column="customer" className="px-4 py-2 text-sm">
+                      {row.salesOrder?.customer ? (
+                        <Link href={`/customers/${row.salesOrder.customer.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {row.salesOrder.customer.name}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>{'\u2014'}</span>
+                      )}
                     </td>
                     <td data-column="status" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {row.status}
+                      {formatRecordLabel(row.status, statusLabelMap)}
                     </td>
                     <td data-column="date" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
                       {fmtDocumentDate(row.date, moneySettings)}
                     </td>
-                    <td data-column="subsidiary" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {row.subsidiary?.name ?? '\u2014'}
+                    <td data-column="subsidiary" className="px-4 py-2 text-sm">
+                      {row.subsidiary ? (
+                        <Link href={`/subsidiaries/${row.subsidiary.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {row.subsidiary.name}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>{'\u2014'}</span>
+                      )}
                     </td>
-                    <td data-column="currency" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {row.currency?.code ?? '\u2014'}
+                    <td data-column="currency" className="px-4 py-2 text-sm">
+                      {row.currency ? (
+                        <Link href={`/currencies/${row.currency.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {row.currency.code}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>{'\u2014'}</span>
+                      )}
                     </td>
                     <td data-column="notes" className="px-4 py-2 text-sm truncate max-w-[220px]" style={{ color: 'var(--text-secondary)' }}>
                       {row.notes ?? '\u2014'}

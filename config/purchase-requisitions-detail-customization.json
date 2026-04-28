@@ -1,0 +1,335 @@
+{
+  "formColumns": 3,
+  "sections": [
+    "Document Identity",
+    "Workflow & Timing",
+    "Request Details",
+    "Sourcing & Financials",
+    "Record Keys",
+    "System Dates"
+  ],
+  "sectionRows": {
+    "Document Identity": 2,
+    "Workflow & Timing": 2,
+    "Request Details": 2,
+    "Sourcing & Financials": 2,
+    "Record Keys": 2,
+    "System Dates": 1
+  },
+  "lineSettings": {
+    "fontSize": "sm"
+  },
+  "fields": {
+    "id": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 1
+    },
+    "number": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 1
+    },
+    "userId": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 2
+    },
+    "departmentRecordId": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 3
+    },
+    "vendorRecordId": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 1,
+      "column": 1
+    },
+    "subsidiaryRecordId": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 1,
+      "column": 2
+    },
+    "currencyRecordId": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 1,
+      "column": 3
+    },
+    "createdBy": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 3
+    },
+    "createdFrom": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 2
+    },
+    "approvedBy": {
+      "visible": true,
+      "section": "Workflow & Timing",
+      "order": 1,
+      "column": 1
+    },
+    "title": {
+      "visible": true,
+      "section": "Request Details",
+      "order": 0,
+      "column": 1
+    },
+    "description": {
+      "visible": true,
+      "section": "Request Details",
+      "order": 0,
+      "column": 2
+    },
+    "status": {
+      "visible": true,
+      "section": "Workflow & Timing",
+      "order": 0,
+      "column": 1
+    },
+    "priority": {
+      "visible": true,
+      "section": "Workflow & Timing",
+      "order": 0,
+      "column": 2
+    },
+    "neededByDate": {
+      "visible": true,
+      "section": "Workflow & Timing",
+      "order": 0,
+      "column": 3
+    },
+    "departmentId": {
+      "visible": true,
+      "section": "Sourcing & Financials",
+      "order": 0,
+      "column": 1
+    },
+    "vendorId": {
+      "visible": true,
+      "section": "Sourcing & Financials",
+      "order": 0,
+      "column": 2
+    },
+    "subsidiaryId": {
+      "visible": true,
+      "section": "Sourcing & Financials",
+      "order": 1,
+      "column": 1
+    },
+    "currencyId": {
+      "visible": true,
+      "section": "Sourcing & Financials",
+      "order": 1,
+      "column": 2
+    },
+    "total": {
+      "visible": true,
+      "section": "Sourcing & Financials",
+      "order": 1,
+      "column": 3
+    },
+    "notes": {
+      "visible": true,
+      "section": "Request Details",
+      "order": 0,
+      "column": 3
+    },
+    "createdAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 1
+    },
+    "updatedAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 2
+    }
+  },
+  "referenceLayouts": [
+    {
+      "id": "reference-vendor-1",
+      "referenceId": "vendor",
+      "formColumns": 2,
+      "rows": 3,
+      "fields": {
+        "vendorDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 0
+        },
+        "vendorNumberRef": {
+          "visible": true,
+          "column": 1,
+          "order": 1
+        },
+        "vendorNameRef": {
+          "visible": true,
+          "column": 1,
+          "order": 0
+        },
+        "vendorEmailRef": {
+          "visible": true,
+          "column": 2,
+          "order": 0
+        },
+        "vendorPhoneRef": {
+          "visible": true,
+          "column": 2,
+          "order": 1
+        },
+        "vendorAddressRef": {
+          "visible": false,
+          "column": 2,
+          "order": 2
+        },
+        "vendorTaxIdRef": {
+          "visible": false,
+          "column": 1,
+          "order": 3
+        },
+        "vendorSubsidiaryDbIdRef": {
+          "visible": false,
+          "column": 2,
+          "order": 3
+        },
+        "vendorCurrencyDbIdRef": {
+          "visible": false,
+          "column": 1,
+          "order": 4
+        },
+        "vendorInactiveRef": {
+          "visible": false,
+          "column": 2,
+          "order": 4
+        },
+        "vendorCreatedAtRef": {
+          "visible": false,
+          "column": 1,
+          "order": 5
+        },
+        "vendorUpdatedAtRef": {
+          "visible": false,
+          "column": 2,
+          "order": 5
+        }
+      }
+    }
+  ],
+  "lineColumns": {
+    "line": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "item-id": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "wide",
+      "editDisplay": "idAndLabel",
+      "viewDisplay": "idAndLabel",
+      "dropdownDisplay": "idAndLabel",
+      "dropdownSort": "id"
+    },
+    "description": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "wide",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    },
+    "quantity": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "unit-price": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "line-total": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "notes": {
+      "visible": false,
+      "order": 6,
+      "widthMode": "wide",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    }
+  },
+  "statCards": [
+    {
+      "id": "slot-2",
+      "metric": "neededByDate",
+      "visible": true,
+      "order": 0,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-3",
+      "metric": "lineCount",
+      "visible": true,
+      "order": 1,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-4",
+      "metric": "status",
+      "visible": true,
+      "order": 2,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-1",
+      "metric": "total",
+      "visible": true,
+      "order": 3,
+      "size": "lg",
+      "colorized": true,
+      "linked": true
+    }
+  ]
+}

@@ -11,8 +11,8 @@ import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
 import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
 import { loadListValues } from '@/lib/load-list-values'
-import { DEFAULT_RECORD_LIST_SORT, prependIdSortOption } from '@/lib/record-list-sort'
 import { RecordListHeaderLabel } from '@/components/RecordListHeaderLabel'
+import { buildMasterDataExportUrl } from '@/lib/master-data-export-url'
 
 const COLS = [
   { id: 'number', label: 'Purchase Req Id' },
@@ -24,25 +24,19 @@ const COLS = [
   { id: 'total', label: 'Total' },
   { id: 'needed-by', label: 'Needed By' },
   { id: 'db-id', label: 'DB Id' },
-  { id: 'last-modified', label: 'Last Modified' },
   { id: 'created', label: 'Created' },
+  { id: 'last-modified', label: 'Last Modified' },
   { id: 'actions', label: 'Actions', locked: true },
 ]
 
 export default async function PurchaseRequisitionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; sort?: string; status?: string; page?: string }>
+  searchParams: Promise<{ q?: string; status?: string; page?: string }>
 }) {
   const params = await searchParams
   const { moneySettings } = await loadCompanyDisplaySettings()
   const query = (params.q ?? '').trim()
-  const sort = params.sort ?? DEFAULT_RECORD_LIST_SORT
-  const sortOptions = prependIdSortOption([
-    { value: 'newest', label: 'Newest' },
-    { value: 'oldest', label: 'Oldest' },
-    { value: 'name', label: 'Name A-Z' },
-  ])
   const statusFilter = params.status ?? 'all'
 
   const where = {
@@ -65,14 +59,7 @@ export default async function PurchaseRequisitionsPage({
     prisma.requisition.findMany({
       where,
       include: { vendor: true, department: true, subsidiary: true, currency: true },
-      orderBy:
-        sort === 'id'
-          ? [{ number: 'asc' as const }, { createdAt: 'desc' as const }]
-          : sort === 'oldest'
-            ? [{ createdAt: 'asc' as const }]
-            : sort === 'name'
-              ? [{ title: 'asc' as const }]
-              : [{ createdAt: 'desc' as const }],
+      orderBy: [{ createdAt: 'desc' as const }],
       skip: pagination.skip,
       take: pagination.pageSize,
     }),
@@ -82,12 +69,14 @@ export default async function PurchaseRequisitionsPage({
   ])
 
   const statusOptions = ['all', ...statusValues.map((value) => value.toLowerCase())]
+  const exportAllUrl = buildMasterDataExportUrl('purchase-requisitions', query, undefined, {
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+  })
 
   const buildPageHref = (page: number) => {
     const search = new URLSearchParams()
     if (params.q) search.set('q', params.q)
     if (statusFilter !== 'all') search.set('status', statusFilter)
-    if (sort) search.set('sort', sort)
     search.set('page', String(page))
     return `/purchase-requisitions?${search.toString()}`
   }
@@ -103,9 +92,7 @@ export default async function PurchaseRequisitionsPage({
   return (
     <div className="min-h-full px-8 py-8">
       <div className="mb-6 flex items-center justify-between gap-4">
-        {companyLogoPages ? (
-          <img src={companyLogoPages.url} alt="Company logo" className="h-16 w-auto rounded" />
-        ) : null}
+        {companyLogoPages ? <img src={companyLogoPages.url} alt="Company logo" className="h-16 w-auto rounded" /> : null}
         <div>
           <h1 className="text-xl font-semibold text-white">Purchase Requisitions</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
@@ -171,19 +158,7 @@ export default async function PurchaseRequisitionsPage({
             />
             <input type="hidden" name="status" value={statusFilter} />
             <input type="hidden" name="page" value="1" />
-            <select
-              name="sort"
-              defaultValue={sort}
-              className="rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              {sortOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <ExportButton tableId="requisitions-list" fileName="purchase_requisitions" />
+            <ExportButton tableId="requisitions-list" fileName="purchase_requisitions" exportAllUrl={exportAllUrl} />
             <ColumnSelector tableId="requisitions-list" columns={COLS} />
           </form>
         </div>
@@ -199,10 +174,7 @@ export default async function PurchaseRequisitionsPage({
                     className="sticky top-0 z-10 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide"
                     style={{ color: 'var(--text-muted)', backgroundColor: 'var(--card)' }}
                   >
-                    <RecordListHeaderLabel
-                      label={column.label}
-                      tooltip={'tooltip' in column ? column.tooltip : undefined}
-                    />
+                    <RecordListHeaderLabel label={column.label} tooltip={'tooltip' in column ? column.tooltip : undefined} />
                   </th>
                 ))}
               </tr>
@@ -210,91 +182,107 @@ export default async function PurchaseRequisitionsPage({
             <tbody>
               {requisitions.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={12}
-                    className="px-4 py-8 text-center text-sm"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
+                  <td colSpan={12} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
                     No purchase requisitions found
                   </td>
                 </tr>
               ) : (
-                requisitions.map((req, index) => (
+                requisitions.map((requisition, index) => (
                   <tr
-                    key={req.id}
+                    key={requisition.id}
                     style={index < requisitions.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}
                   >
                     <td data-column="number" className="px-4 py-2 text-sm font-medium">
                       <Link
-                        href={`/purchase-requisitions/${req.id}`}
+                        href={`/purchase-requisitions/${requisition.id}`}
                         className="hover:underline"
                         style={{ color: 'var(--accent-primary-strong)' }}
                       >
-                        {req.number}
+                        {requisition.number}
                       </Link>
                     </td>
                     <td data-column="title" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {req.title ?? '-'}
+                      {requisition.title ?? '-'}
                     </td>
                     <td data-column="status" className="px-4 py-2 text-sm">
-                      <StatusBadge status={req.status} />
+                      <StatusBadge status={requisition.status} />
                     </td>
                     <td data-column="priority" className="px-4 py-2 text-sm">
-                      <PriorityBadge priority={req.priority} />
+                      <PriorityBadge priority={requisition.priority} />
                     </td>
-                    <td data-column="department" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {req.department ? `${req.department.departmentId} - ${req.department.name}` : '-'}
+                    <td data-column="department" className="px-4 py-2 text-sm">
+                      {requisition.department && requisition.departmentId ? (
+                        <Link
+                          href={`/departments/${requisition.departmentId}`}
+                          className="hover:underline"
+                          style={{ color: 'var(--accent-primary-strong)' }}
+                        >
+                          {`${requisition.department.departmentId} - ${requisition.department.name}`}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                      )}
                     </td>
-                    <td data-column="vendor" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {req.vendor?.name ?? '-'}
+                    <td data-column="vendor" className="px-4 py-2 text-sm">
+                      {requisition.vendor ? (
+                        <Link
+                          href={`/vendors/${requisition.vendorId}`}
+                          className="hover:underline"
+                          style={{ color: 'var(--accent-primary-strong)' }}
+                        >
+                          {requisition.vendor.name}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                      )}
                     </td>
                     <td data-column="total" className="px-4 py-2 text-sm font-medium text-white">
-                      {fmtCurrency(req.total, undefined, moneySettings)}
+                      {fmtCurrency(requisition.total, undefined, moneySettings)}
                     </td>
                     <td data-column="needed-by" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {req.neededByDate ? fmtDocumentDate(req.neededByDate, moneySettings) : '-'}
+                      {requisition.neededByDate ? fmtDocumentDate(requisition.neededByDate, moneySettings) : '-'}
                     </td>
                     <td data-column="db-id" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {req.id}
-                    </td>
-                    <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {fmtDocumentDate(req.updatedAt, moneySettings)}
+                      {requisition.id}
                     </td>
                     <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {fmtDocumentDate(req.createdAt, moneySettings)}
+                      {fmtDocumentDate(requisition.createdAt, moneySettings)}
+                    </td>
+                    <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                      {fmtDocumentDate(requisition.updatedAt, moneySettings)}
                     </td>
                     <td data-column="actions" className="px-4 py-2 text-sm">
                       <div className="flex items-center gap-2">
                         <EditButton
                           resource="purchase-requisitions"
-                          id={req.id}
+                          id={requisition.id}
                           fields={[
-                            { name: 'title', label: 'Title', value: req.title ?? '' },
+                            { name: 'title', label: 'Title', value: requisition.title ?? '' },
                             {
                               name: 'status',
                               label: 'Status',
-                              value: req.status,
+                              value: requisition.status,
                               type: 'select',
                               options: REQUISITION_STATUS_OPTIONS,
                             },
                             {
                               name: 'priority',
                               label: 'Priority',
-                              value: req.priority,
+                              value: requisition.priority,
                               type: 'select',
                               options: PRIORITY_OPTIONS,
                             },
                             {
                               name: 'neededByDate',
                               label: 'Needed By',
-                              value: req.neededByDate
-                                ? new Date(req.neededByDate).toISOString().split('T')[0]
+                              value: requisition.neededByDate
+                                ? new Date(requisition.neededByDate).toISOString().split('T')[0]
                                 : '',
                               type: 'date',
                             },
                           ]}
                         />
-                        <DeleteButton resource="purchase-requisitions" id={req.id} />
+                        <DeleteButton resource="purchase-requisitions" id={requisition.id} />
                       </div>
                     </td>
                   </tr>

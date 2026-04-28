@@ -1,0 +1,276 @@
+{
+  "formColumns": 3,
+  "sections": [
+    "Document Identity",
+    "Source Context",
+    "Fulfillment Terms",
+    "Commercial Context",
+    "Record Keys",
+    "System Dates"
+  ],
+  "sectionRows": {
+    "Document Identity": 1,
+    "Source Context": 1,
+    "Fulfillment Terms": 1,
+    "Commercial Context": 1,
+    "Record Keys": 1,
+    "System Dates": 1
+  },
+  "fields": {
+    "customerName": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 3
+    },
+    "customerNumber": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 2
+    },
+    "id": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 1
+    },
+    "number": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 1
+    },
+    "salesOrderId": {
+      "visible": true,
+      "section": "Source Context",
+      "order": 0,
+      "column": 1
+    },
+    "quoteId": {
+      "visible": true,
+      "section": "Source Context",
+      "order": 0,
+      "column": 2
+    },
+    "opportunityId": {
+      "visible": true,
+      "section": "Source Context",
+      "order": 0,
+      "column": 3
+    },
+    "status": {
+      "visible": true,
+      "section": "Fulfillment Terms",
+      "order": 0,
+      "column": 1
+    },
+    "subsidiaryId": {
+      "visible": true,
+      "section": "Commercial Context",
+      "order": 0,
+      "column": 1
+    },
+    "currencyId": {
+      "visible": true,
+      "section": "Commercial Context",
+      "order": 0,
+      "column": 2
+    },
+    "date": {
+      "visible": true,
+      "section": "Fulfillment Terms",
+      "order": 0,
+      "column": 2
+    },
+    "notes": {
+      "visible": true,
+      "section": "Fulfillment Terms",
+      "order": 0,
+      "column": 3
+    },
+    "createdAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 1
+    },
+    "updatedAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 2
+    }
+  },
+  "referenceLayouts": [
+    {
+      "id": "reference-salesOrder-1",
+      "referenceId": "salesOrder",
+      "formColumns": 2,
+      "rows": 3,
+      "fields": {
+        "salesOrderDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 0
+        },
+        "salesOrderNumber": {
+          "visible": true,
+          "column": 1,
+          "order": 0
+        },
+        "salesOrderStatus": {
+          "visible": true,
+          "column": 1,
+          "order": 1
+        },
+        "salesOrderTotal": {
+          "visible": true,
+          "column": 2,
+          "order": 0
+        },
+        "salesOrderCustomerDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 2
+        },
+        "salesOrderUserDbId": {
+          "visible": false,
+          "column": 2,
+          "order": 2
+        },
+        "salesOrderQuoteDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 3
+        },
+        "salesOrderSubsidiaryDbId": {
+          "visible": false,
+          "column": 2,
+          "order": 3
+        },
+        "salesOrderCurrencyDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 4
+        },
+        "salesOrderCreatedAt": {
+          "visible": true,
+          "column": 2,
+          "order": 1
+        },
+        "salesOrderUpdatedAt": {
+          "visible": false,
+          "column": 1,
+          "order": 5
+        }
+      }
+    }
+  ],
+  "lineSettings": {
+    "fontSize": "sm"
+  },
+  "lineColumns": {
+    "line": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "item-id": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "wide",
+      "editDisplay": "idAndLabel",
+      "viewDisplay": "idAndLabel",
+      "dropdownDisplay": "idAndLabel",
+      "dropdownSort": "id"
+    },
+    "description": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "wide",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    },
+    "ordered-qty": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "fulfilled-qty": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "open-qty": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "notes": {
+      "visible": true,
+      "order": 6,
+      "widthMode": "wide",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    }
+  },
+  "statCards": [
+    {
+      "id": "fulfillment-status",
+      "metric": "status",
+      "visible": true,
+      "order": 0,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "fulfillment-sales-order",
+      "metric": "salesOrder",
+      "visible": true,
+      "order": 1,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "fulfillment-date",
+      "metric": "date",
+      "visible": true,
+      "order": 2,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "fulfillment-quantity",
+      "metric": "totalQuantity",
+      "visible": true,
+      "order": 3,
+      "size": "md",
+      "colorized": true,
+      "linked": true
+    }
+  ]
+}

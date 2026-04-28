@@ -1,4 +1,5 @@
 import { getListSourceText, type FieldSourceType } from '@/lib/list-source'
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 export type ContactFormFieldKey =
   | 'contactNumber'
@@ -34,7 +35,21 @@ export type ContactFormCustomizationConfig = {
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<ContactFormFieldKey, ContactFormFieldCustomization>
+  statCards?: Array<TransactionStatCardSlot<ContactStatCardMetric>>
 }
+
+export type ContactStatCardMetric =
+  | 'accountType'
+  | 'account'
+  | 'owner'
+  | 'activityCount'
+
+export const CONTACT_STAT_CARDS: Array<{ id: ContactStatCardMetric; label: string }> = [
+  { id: 'accountType', label: 'Account Type' },
+  { id: 'account', label: 'Account' },
+  { id: 'owner', label: 'Owner' },
+  { id: 'activityCount', label: 'Activity Count' },
+]
 
 export const CONTACT_FORM_FIELDS: ContactFormFieldMeta[] = [
   { id: 'contactNumber', label: 'Contact ID', fieldType: 'text', description: 'System-generated contact identifier.' },
@@ -116,5 +131,14 @@ export function defaultContactFormCustomization(): ContactFormCustomizationConfi
         },
       ])
     ) as Record<ContactFormFieldKey, ContactFormFieldCustomization>,
+    statCards: CONTACT_STAT_CARDS.map((card, index) => ({
+      id: `contact-stat-${card.id}`,
+      metric: card.id,
+      visible: true,
+      order: index,
+      size: 'md',
+      colorized: true,
+      linked: true,
+    })),
   }
 }

@@ -108,10 +108,14 @@ export default async function CRMPage({
             <tr style={MASTER_DATA_TABLE_DIVIDER_STYLE}>
               <MasterDataHeaderCell columnId="number">Customer Id</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="name">Name</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="email">Email</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="phone">Phone</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="industry">Industry</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="subsidiary">Primary Subsidiary</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="currency">Primary Currency</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="address">Billing Address</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="inactive">Inactive</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="db-id">DB Id</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="last-modified">Last Modified</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
@@ -119,7 +123,7 @@ export default async function CRMPage({
           </thead>
           <tbody>
             {customers.length === 0 ? (
-              <MasterDataEmptyStateRow colSpan={9}>No customers found</MasterDataEmptyStateRow>
+              <MasterDataEmptyStateRow colSpan={13}>No customers found</MasterDataEmptyStateRow>
             ) : (
               customers.map((customer, index) => (
                 <tr key={customer.id} style={getMasterDataRowStyle(index, customers.length)}>
@@ -129,10 +133,14 @@ export default async function CRMPage({
                     </Link>
                   </MasterDataBodyCell>
                   <MasterDataBodyCell columnId="name" className="px-4 py-2 text-sm text-white">{customer.name}</MasterDataBodyCell>
+                  <MasterDataMutedCell columnId="email">{displayMasterDataValue(customer.email)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="phone">{displayMasterDataValue(normalizePhone(customer.phone))}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="industry">{displayMasterDataValue(customer.industry)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="subsidiary">{customer.subsidiary ? `${customer.subsidiary.subsidiaryId} (${customer.subsidiary.name})` : displayMasterDataValue(null)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="currency">{displayMasterDataValue(customer.currency?.code)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="address">{displayMasterDataValue(customer.address)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="inactive">{customer.inactive ? 'Yes' : 'No'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="db-id">{customer.id}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="created">{formatMasterDataDate(customer.createdAt)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(customer.updatedAt)}</MasterDataMutedCell>
                   <MasterDataBodyCell columnId="actions">

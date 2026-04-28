@@ -1,0 +1,39 @@
+{
+  "OPP-STAGE": {
+    "LIST-OPP-STAGE-0001": {
+      "colorTone": "default"
+    },
+    "LIST-OPP-STAGE-0002": {
+      "colorTone": "purple"
+    },
+    "LIST-OPP-STAGE-0003": {
+      "colorTone": "yellow"
+    },
+    "LIST-OPP-STAGE-0004": {
+      "colorTone": "accent"
+    },
+    "LIST-OPP-STAGE-0005": {
+      "colorTone": "green"
+    },
+    "LIST-OPP-STAGE-0006": {
+      "colorTone": "red"
+    }
+  },
+  "FULFILL-STATUS": {
+    "LIST-FULFILL-STATUS-0001": {
+      "colorTone": "default"
+    },
+    "LIST-FULFILL-STATUS-0002": {
+      "colorTone": "yellow"
+    },
+    "LIST-FULFILL-STATUS-0003": {
+      "colorTone": "accent"
+    },
+    "LIST-FULFILL-STATUS-0004": {
+      "colorTone": "green"
+    },
+    "LIST-FULFILL-STATUS-0005": {
+      "colorTone": "red"
+    }
+  }
+}

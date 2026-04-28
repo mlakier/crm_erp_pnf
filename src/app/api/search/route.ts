@@ -24,7 +24,7 @@ const PAGES = [
   { label: 'Chart of Accounts',     href: '/chart-of-accounts' },
   { label: 'Departments',           href: '/departments' },
   { label: 'Employees',             href: '/employees' },
-  { label: 'OTC Workflow',          href: '/otc-workflow' },
+  { label: 'LTC Workflow',          href: '/otc-workflow' },
   { label: 'PTP Workflow',          href: '/ptp-workflow' },
   { label: 'Leads',                 href: '/leads' },
   { label: 'Opportunities',         href: '/opportunities' },

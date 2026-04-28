@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs'
 import path from 'path'
-import { FORM_REQUIREMENTS, FormKey, FormRequirementsMap } from '@/lib/form-requirements'
+import { FORM_REQUIREMENTS, FormKey, FormRequirementsMap, LOCKED_FORM_REQUIREMENTS } from '@/lib/form-requirements'
 
 const STORE_PATH = path.join(process.cwd(), 'config', 'form-requirements.json')
 
@@ -10,6 +10,21 @@ function cloneDefaults(): FormRequirementsMap {
 
 function normalizeBoolean(value: unknown): boolean {
   return value === true
+}
+
+function applyLockedRequirements(config: FormRequirementsMap) {
+  for (const form of Object.keys(LOCKED_FORM_REQUIREMENTS) as FormKey[]) {
+    const lockedFields = LOCKED_FORM_REQUIREMENTS[form]
+    if (!lockedFields) continue
+
+    for (const field of Object.keys(lockedFields)) {
+      if (lockedFields[field]) {
+        config[form][field] = true
+      }
+    }
+  }
+
+  return config
 }
 
 function mergeWithDefaults(overrides: Partial<FormRequirementsMap>): FormRequirementsMap {
@@ -26,7 +41,7 @@ function mergeWithDefaults(overrides: Partial<FormRequirementsMap>): FormRequire
     }
   }
 
-  return merged
+  return applyLockedRequirements(merged)
 }
 
 export async function loadFormRequirements(): Promise<FormRequirementsMap> {

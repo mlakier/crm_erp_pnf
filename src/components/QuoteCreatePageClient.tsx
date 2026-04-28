@@ -2,16 +2,17 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import PurchaseOrderHeaderSections, {
-  type PurchaseOrderHeaderField,
-  type PurchaseOrderHeaderSection,
-} from '@/components/PurchaseOrderHeaderSections'
+import TransactionHeaderSections, {
+  type TransactionHeaderField,
+  type TransactionHeaderSection,
+} from '@/components/TransactionHeaderSections'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import {
   RecordDetailStatCard,
 } from '@/components/RecordDetailPanels'
-import PurchaseOrderLineItemsSection from '@/components/PurchaseOrderLineItemsSection'
+import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
+import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/lib/form-requirements-client'
 import {
   QUOTE_DETAIL_FIELDS,
   type QuoteDetailCustomizationConfig,
@@ -73,6 +74,7 @@ export default function QuoteCreatePageClient({
   statusOptions: Array<{ value: string; label: string }>
 }) {
   const router = useRouter()
+  const { req, isLocked } = useFormRequirementsState('quoteCreate')
   const initialOpportunity = opportunities[0] ?? null
   const [headerValues, setHeaderValues] = useState<Record<string, string>>(() => ({
     opportunity: initialOpportunity?.id ?? '',
@@ -139,7 +141,7 @@ export default function QuoteCreatePageClient({
     label: `${currency.code ?? currency.currencyId} - ${currency.name}`,
   }))
 
-  const headerFieldDefinitions: Record<QuoteDetailFieldKey, PurchaseOrderHeaderField & { key: QuoteDetailFieldKey }> = {
+  const headerFieldDefinitions: Record<QuoteDetailFieldKey, TransactionHeaderField & { key: QuoteDetailFieldKey }> = {
     customerId: {
       key: 'customerId',
       label: 'Customer',
@@ -323,8 +325,10 @@ export default function QuoteCreatePageClient({
       fieldType: 'text',
     },
   }
+  applyRequirementsToEditableFields(headerFieldDefinitions, req, isLocked)
 
-  const headerSections: PurchaseOrderHeaderSection[] = buildConfiguredTransactionSections({
+
+  const headerSections: TransactionHeaderSection[] = buildConfiguredTransactionSections({
     fields: QUOTE_DETAIL_FIELDS,
     layout: customization,
     fieldDefinitions: headerFieldDefinitions,
@@ -422,7 +426,7 @@ export default function QuoteCreatePageClient({
         <RecordDetailStatCard label="Status" value={headerValues.status ? headerValues.status.charAt(0).toUpperCase() + headerValues.status.slice(1) : 'Draft'} />
       </div>
 
-      <PurchaseOrderHeaderSections
+      <TransactionHeaderSections
         editing
         sections={headerSections}
         columns={customization.formColumns}
@@ -452,7 +456,7 @@ export default function QuoteCreatePageClient({
         }}
       />
 
-      <PurchaseOrderLineItemsSection
+      <TransactionLineItemsSection
         rows={(selectedOpportunity?.lineItems ?? []).map((line, index) => ({
           id: line.id,
           displayOrder: index,
@@ -490,3 +494,4 @@ export default function QuoteCreatePageClient({
     </RecordDetailPageShell>
   )
 }
+

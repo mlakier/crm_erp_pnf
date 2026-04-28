@@ -4,6 +4,13 @@ import { createFieldChangeSummary, logActivity } from '@/lib/activity'
 import { generateNextQuoteNumber } from '@/lib/quote-number'
 import { calcLineTotal, sumMoney } from '@/lib/money'
 import { toNumericValue } from '@/lib/format'
+import {
+  coerceWorkflowValueForStep,
+  getDefaultWorkflowStatus,
+  getWorkflowDocumentAction,
+  isWorkflowActionIdAllowed,
+  loadOtcWorkflowRuntime,
+} from '@/lib/otc-workflow-runtime'
 
 export async function GET() {
   try {
@@ -25,6 +32,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { opportunityId, number: requestedNumber, status, validUntil: requestedValidUntil, notes, subsidiaryId, currencyId } = body
+    const workflow = await loadOtcWorkflowRuntime()
 
     if (!opportunityId) {
       return NextResponse.json({ error: 'Missing opportunity id' }, { status: 400 })
@@ -45,6 +53,11 @@ export async function POST(request: NextRequest) {
 
     if (opportunity.quote) {
       return NextResponse.json({ error: 'Quote already exists for this opportunity', quoteId: opportunity.quote.id }, { status: 409 })
+    }
+
+    const quoteCreateAction = getWorkflowDocumentAction(workflow, 'opportunity', 'quote', opportunity.stage)
+    if (!quoteCreateAction) {
+      return NextResponse.json({ error: 'Workflow does not currently allow quote creation from this opportunity status' }, { status: 409 })
     }
 
     const number = requestedNumber?.trim() || (await generateNextQuoteNumber())
@@ -68,7 +81,11 @@ export async function POST(request: NextRequest) {
     const quote = await prisma.quote.create({
       data: {
         number,
-        status: status || 'draft',
+        status: coerceWorkflowValueForStep(
+          workflow,
+          'quote',
+          typeof status === 'string' && status.trim() ? status : quoteCreateAction.resultStatus || getDefaultWorkflowStatus(workflow, 'quote'),
+        ),
         total,
         validUntil,
         notes: notes ?? `Generated from opportunity ${opportunity.opportunityNumber ?? opportunity.name}`,
@@ -109,18 +126,29 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { number, status, validUntil, notes, subsidiaryId, currencyId, customerId } = body
+    const { number, status, validUntil, notes, subsidiaryId, currencyId, customerId, workflowStep, workflowActionId } = body
     const before = await prisma.quote.findUnique({ where: { id } })
 
     if (!before) {
       return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
     }
 
+    const workflow = await loadOtcWorkflowRuntime()
+    const nextStatus = status === undefined ? before.status : coerceWorkflowValueForStep(workflow, 'quote', status)
+
+    if (
+      workflowStep === 'quote'
+      && typeof workflowActionId === 'string'
+      && !isWorkflowActionIdAllowed(workflow, 'quote', workflowActionId, before.status, nextStatus)
+    ) {
+      return NextResponse.json({ error: 'Workflow transition is not allowed' }, { status: 409 })
+    }
+
     const quote = await prisma.quote.update({
       where: { id },
       data: {
         ...(number !== undefined ? { number: String(number || '').trim() || undefined } : {}),
-        ...(status !== undefined ? { status } : {}),
+        ...(status !== undefined ? { status: nextStatus } : {}),
         ...(validUntil !== undefined ? { validUntil: validUntil ? new Date(validUntil) : null } : {}),
         ...(notes !== undefined ? { notes: notes || null } : {}),
         ...(subsidiaryId !== undefined ? { subsidiaryId: subsidiaryId || null } : {}),

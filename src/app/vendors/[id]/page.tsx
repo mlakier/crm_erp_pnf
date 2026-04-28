@@ -12,7 +12,7 @@ import VendorContactsSection from '@/components/VendorContactsSection'
 import VendorRelatedDocuments from '@/components/VendorRelatedDocuments'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import SystemNotesSection from '@/components/SystemNotesSection'
-import { RecordDetailStatCard } from '@/components/RecordDetailPanels'
+import TransactionStatsRow from '@/components/TransactionStatsRow'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
 import { loadVendorFormCustomization } from '@/lib/vendor-form-customization-store'
 import { VENDOR_FORM_FIELDS, type VendorFormFieldKey } from '@/lib/vendor-form-customization'
@@ -220,6 +220,18 @@ export default async function VendorDetailPage({
   }
 
   const customizeFields = buildCustomizePreviewFields(VENDOR_FORM_FIELDS, fieldDefinitions)
+  const statPreviewCards = [
+    { id: 'contacts', label: 'Contacts', value: vendor.contacts.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+    { id: 'purchaseOrders', label: 'Purchase Orders', value: vendor.purchaseOrders.length, cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
+    { id: 'totalSpend', label: 'Total Spend', value: fmtCurrency(totalSpend, undefined, moneySettings), accent: 'green', cardTone: 'green', valueTone: 'green', supportsColorized: true, supportsLink: false },
+    { id: 'openInvoices', label: 'Open AP Invoices', value: openInvoices.length, accent: openInvoices.length > 0 ? 'yellow' : 'default', cardTone: openInvoices.length > 0 ? 'yellow' : 'default', valueTone: openInvoices.length > 0 ? 'yellow' : 'default', supportsColorized: true, supportsLink: false },
+  ]
+  const statDefinitions = [
+    { id: 'contacts', label: 'Contacts', getValue: () => vendor.contacts.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
+    { id: 'purchaseOrders', label: 'Purchase Orders', getValue: () => vendor.purchaseOrders.length, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
+    { id: 'totalSpend', label: 'Total Spend', getValue: () => fmtCurrency(totalSpend, undefined, moneySettings), accent: 'green' as const, getCardTone: () => 'green' as const, getValueTone: () => 'green' as const },
+    { id: 'openInvoices', label: 'Open AP Invoices', getValue: () => openInvoices.length, accent: openInvoices.length > 0 ? 'yellow' as const : undefined, getCardTone: () => (openInvoices.length > 0 ? 'yellow' : 'default') as const, getValueTone: () => (openInvoices.length > 0 ? 'yellow' : 'default') as const },
+  ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: VENDOR_FORM_FIELDS,
     layout: formCustomization,
@@ -289,8 +301,17 @@ export default async function VendorDetailPage({
             initialRequirements={{ ...formRequirements.vendorCreate }}
             fields={customizeFields}
             sectionDescriptions={sectionDescriptions}
+            statPreviewCards={statPreviewCards}
           />
         ) : (
+          <>
+          <div className="mb-8">
+            <TransactionStatsRow
+              record={vendor}
+              stats={statDefinitions}
+              visibleStatCards={formCustomization.statCards as Array<{ id: string; metric: string; visible: boolean; order: number; size?: 'sm' | 'md' | 'lg'; colorized?: boolean; linked?: boolean }> | undefined}
+            />
+          </div>
           <InlineRecordDetails
             resource="vendors"
             id={vendor.id}
@@ -300,33 +321,31 @@ export default async function VendorDetailPage({
             columns={formCustomization.formColumns}
             showInternalActions={false}
           />
+          </>
         )}
 
-        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} /> : null}
+        {!isCustomizing ? (
+          <>
+            <MasterDataSystemInfoSection info={systemInfo} internalId={vendor.id} />
 
-        <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <RecordDetailStatCard label="Contacts" value={vendor.contacts.length} />
-          <RecordDetailStatCard label="Purchase orders" value={vendor.purchaseOrders.length} />
-          <RecordDetailStatCard label="Total spend" value={fmtCurrency(totalSpend, undefined, moneySettings)} accent="teal" />
-          <RecordDetailStatCard label="Open AP invoices" value={openInvoices.length} accent={openInvoices.length > 0 ? 'yellow' : undefined} />
-        </div>
+            <VendorContactsSection
+              vendorId={vendor.id}
+              userId={defaultUser?.id ?? null}
+              contacts={vendor.contacts.map((contact) => ({
+                id: contact.id,
+                contactNumber: contact.contactNumber,
+                firstName: contact.firstName,
+                lastName: contact.lastName,
+                email: contact.email,
+                phone: contact.phone,
+                position: contact.position,
+              }))}
+            />
 
-        <VendorContactsSection
-          vendorId={vendor.id}
-          userId={defaultUser?.id ?? null}
-          contacts={vendor.contacts.map((contact) => ({
-            id: contact.id,
-            contactNumber: contact.contactNumber,
-            firstName: contact.firstName,
-            lastName: contact.lastName,
-            email: contact.email,
-            phone: contact.phone,
-            position: contact.position,
-          }))}
-        />
-
-        <VendorRelatedDocuments purchaseRequisitions={relatedRequisitions} purchaseOrders={relatedPurchaseOrders} receipts={relatedReceipts} bills={relatedBills} billPayments={relatedBillPayments} />
-        <SystemNotesSection notes={systemNotes} />
+            <VendorRelatedDocuments purchaseRequisitions={relatedRequisitions} purchaseOrders={relatedPurchaseOrders} receipts={relatedReceipts} bills={relatedBills} billPayments={relatedBillPayments} />
+            <SystemNotesSection notes={systemNotes} />
+          </>
+        ) : null}
     </RecordDetailPageShell>
   )
 }

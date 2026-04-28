@@ -4,6 +4,13 @@ import { logActivity, logCommunicationActivity, logFieldChangeActivities } from 
 import { generateNextInvoiceNumber } from '@/lib/invoice-number'
 import { calcLineTotal, sumMoney } from '@/lib/money'
 import { toNumericValue } from '@/lib/format'
+import {
+  coerceWorkflowValueForStep,
+  getDefaultWorkflowStatus,
+  getWorkflowDocumentAction,
+  isWorkflowActionIdAllowed,
+  loadOtcWorkflowRuntime,
+} from '@/lib/otc-workflow-runtime'
 
 export async function GET() {
   try {
@@ -81,10 +88,8 @@ export async function POST(request: NextRequest) {
     const customerId = typeof body.customerId === 'string' && body.customerId.trim() ? body.customerId.trim() : null
     const subsidiaryId = typeof body.subsidiaryId === 'string' && body.subsidiaryId.trim() ? body.subsidiaryId.trim() : null
     const currencyId = typeof body.currencyId === 'string' && body.currencyId.trim() ? body.currencyId.trim() : null
-    const status =
-      typeof body.status === 'string' && body.status.trim()
-        ? body.status.trim()
-        : 'draft'
+    const workflow = await loadOtcWorkflowRuntime()
+    const requestedStatus = typeof body.status === 'string' && body.status.trim() ? body.status.trim() : null
     const providedDueDate =
       typeof body.dueDate === 'string' && body.dueDate.trim() ? new Date(body.dueDate) : null
     const paidDate =
@@ -127,7 +132,7 @@ export async function POST(request: NextRequest) {
       const invoice = await prisma.invoice.create({
         data: {
           number,
-          status: 'draft',
+          status: getDefaultWorkflowStatus(workflow, 'invoice'),
           total,
           dueDate: providedDueDate ?? sourceInvoice.dueDate,
           paidDate: null,
@@ -179,7 +184,11 @@ export async function POST(request: NextRequest) {
       const invoice = await prisma.invoice.create({
         data: {
           number,
-          status,
+          status: coerceWorkflowValueForStep(
+            workflow,
+            'invoice',
+            requestedStatus || getDefaultWorkflowStatus(workflow, 'invoice'),
+          ),
           total: 0,
           dueDate: providedDueDate,
           paidDate,
@@ -217,6 +226,10 @@ export async function POST(request: NextRequest) {
     if (salesOrder.invoices.length > 0) {
       return NextResponse.json({ error: 'Invoice already exists for this sales order', invoiceId: salesOrder.invoices[0].id }, { status: 409 })
     }
+    const invoiceCreateAction = getWorkflowDocumentAction(workflow, 'sales-order', 'invoice', salesOrder.status)
+    if (!invoiceCreateAction) {
+      return NextResponse.json({ error: 'Workflow does not currently allow invoice creation from this sales order status' }, { status: 409 })
+    }
     const defaultDueDate = new Date()
     defaultDueDate.setDate(defaultDueDate.getDate() + 30)
     const normalizedLineItems = salesOrder.lineItems.map((line) => ({
@@ -234,7 +247,11 @@ export async function POST(request: NextRequest) {
     const invoice = await prisma.invoice.create({
         data: {
           number,
-        status,
+        status: coerceWorkflowValueForStep(
+          workflow,
+          'invoice',
+          requestedStatus || invoiceCreateAction.resultStatus || getDefaultWorkflowStatus(workflow, 'invoice'),
+        ),
         total,
         dueDate: providedDueDate ?? defaultDueDate,
         paidDate,
@@ -275,6 +292,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
+    const workflow = await loadOtcWorkflowRuntime()
     const existing = await prisma.invoice.findUnique({
       where: { id },
       include: {
@@ -288,12 +306,24 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
     }
 
-    const nextStatus = typeof body.status === 'string' ? body.status : existing.status
+    const nextStatus = coerceWorkflowValueForStep(
+      workflow,
+      'invoice',
+      typeof body.status === 'string' ? body.status : existing.status,
+    )
     const nextNumber = typeof body.number === 'string' && body.number.trim() ? body.number.trim() : existing.number
     const nextSubsidiaryId =
       body.subsidiaryId === '' ? null : typeof body.subsidiaryId === 'string' ? body.subsidiaryId : existing.subsidiaryId
     const nextCurrencyId =
       body.currencyId === '' ? null : typeof body.currencyId === 'string' ? body.currencyId : existing.currencyId
+    if (
+      body.workflowStep === 'invoice'
+      && typeof body.workflowActionId === 'string'
+      && !isWorkflowActionIdAllowed(workflow, 'invoice', body.workflowActionId, existing.status, nextStatus)
+    ) {
+      return NextResponse.json({ error: 'Workflow transition is not allowed' }, { status: 409 })
+    }
+
     const nextDueDate =
       body.dueDate === ''
         ? null
@@ -305,7 +335,7 @@ export async function PUT(request: NextRequest) {
         ? null
         : typeof body.paidDate === 'string'
           ? new Date(body.paidDate)
-          : nextStatus === 'paid'
+          : nextStatus.toLowerCase() === 'paid'
             ? existing.paidDate ?? new Date()
             : null
 
@@ -317,7 +347,7 @@ export async function PUT(request: NextRequest) {
         subsidiaryId: nextSubsidiaryId,
         currencyId: nextCurrencyId,
         dueDate: nextDueDate,
-        paidDate: nextStatus === 'paid' ? nextPaidDate ?? new Date() : nextPaidDate,
+        paidDate: nextStatus.toLowerCase() === 'paid' ? nextPaidDate ?? new Date() : nextPaidDate,
       },
       include: {
         user: { select: { userId: true } },

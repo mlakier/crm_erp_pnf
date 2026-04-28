@@ -9,6 +9,8 @@ export type CredentialField = {
   hint?: string
 }
 
+export type IntegrationWorkflowCapability = 'signature' | 'email'
+
 export type IntegrationDefinition = {
   key: string
   label: string
@@ -20,6 +22,7 @@ export type IntegrationDefinition = {
   setupFields: string[]
   /** Used by the generic setup page to render credential inputs */
   credentials?: CredentialField[]
+  workflowCapabilities?: IntegrationWorkflowCapability[]
 }
 
 export const INTEGRATIONS: IntegrationDefinition[] = [
@@ -87,6 +90,7 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     category: 'Messaging',
     statusLabel: 'Configured via API key',
     setupFields: ['API Key', 'From Email'],
+    workflowCapabilities: ['email'],
     credentials: [
       { key: 'apiKey', label: 'API Key', type: 'password', required: true, placeholder: 'SG.••••••••' },
       { key: 'fromEmail', label: 'From Email Address', type: 'email', required: true, placeholder: 'noreply@yourcompany.com' },
@@ -278,6 +282,67 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
         required: false,
         placeholder: 'topics',
         hint: 'Optional. The group within the board where new items are placed.',
+      },
+    ],
+  },
+  {
+    key: 'docusign',
+    label: 'Signature Workflow',
+    provider: 'DocuSign',
+    href: '/integrations/docusign',
+    summary: 'Send quotes, sales orders, and other documents for e-signature and receive status callbacks back into workflow.',
+    category: 'Other',
+    statusLabel: 'Integration key and account details required',
+    setupFields: ['Integration Key', 'Account ID', 'Base URL'],
+    workflowCapabilities: ['signature'],
+    credentials: [
+      {
+        key: 'integrationKey',
+        label: 'Integration Key',
+        type: 'text',
+        required: true,
+        placeholder: 'cc049669-d6d2-43b8-a241-bd7699194083',
+        hint: 'Your DocuSign Integration Key (also called Client ID) from the DocuSign Admin or Apps and Keys area.',
+      },
+      {
+        key: 'accountId',
+        label: 'Account ID',
+        type: 'text',
+        required: false,
+        placeholder: '12345678-1234-1234-1234-123456789abc',
+        hint: 'Optional but recommended. Used to route envelopes to the correct DocuSign account.',
+      },
+      {
+        key: 'baseUrl',
+        label: 'Base URL',
+        type: 'text',
+        required: false,
+        placeholder: 'https://demo.docusign.net/restapi',
+        hint: 'Use the DocuSign demo or production REST base URL for your account.',
+      },
+      {
+        key: 'clientSecret',
+        label: 'Client Secret',
+        type: 'password',
+        required: false,
+        placeholder: '••••••••',
+        hint: 'Required for OAuth flows that exchange the Integration Key for access tokens.',
+      },
+      {
+        key: 'redirectUri',
+        label: 'Redirect URI',
+        type: 'text',
+        required: false,
+        placeholder: 'https://your-domain.com/integrations/docusign/callback',
+        hint: 'Must match the redirect URI configured in your DocuSign app.',
+      },
+      {
+        key: 'webhookSecret',
+        label: 'Webhook Secret',
+        type: 'password',
+        required: false,
+        placeholder: '••••••••',
+        hint: 'Optional. Used to validate inbound DocuSign Connect webhook payloads.',
       },
     ],
   },

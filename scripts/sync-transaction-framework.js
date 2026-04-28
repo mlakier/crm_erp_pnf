@@ -90,8 +90,8 @@ function hasThinCreateSurface(content) {
   if (!content) return true
   const richCreateSignals = [
     'RecordDetailPageShell',
-    'PurchaseOrderHeaderSections',
-    'PurchaseOrderLineItemsSection',
+    'TransactionHeaderSections',
+    'TransactionLineItemsSection',
     'buildConfiguredTransactionSections',
     'RecordDetailSection',
   ]
@@ -106,7 +106,7 @@ function hasThinDetailSurface(content) {
     'RelatedDocuments',
     'CommunicationsSection',
     'SystemNotesSection',
-    'PurchaseOrderLineItemsSection',
+    'TransactionLineItemsSection',
   ]
   return countMatches(content, richnessSignals) < 2
 }
@@ -114,7 +114,7 @@ function hasThinDetailSurface(content) {
 function hasLineSection(content) {
   if (!content) return false
   return hasAny(content, [
-    'PurchaseOrderLineItemsSection',
+    'TransactionLineItemsSection',
     'Line Items',
     'LineItemsSection',
     'allowAddLines',
@@ -851,7 +851,7 @@ const ENTITY_AUDIT_CONFIGS = {
     requiresCustomerSection: false,
     detailShellCheck(contents) {
       return (
-        hasAll(contents.detailContent, ['RecordDetailPageShell', 'PurchaseOrderHeaderSections']) &&
+        hasAll(contents.detailContent, ['RecordDetailPageShell', 'TransactionHeaderSections']) &&
         !isStarterPlaceholder(contents.detailContent) &&
         !hasThinDetailSurface(contents.detailContent)
       )
@@ -886,7 +886,7 @@ const ENTITY_AUDIT_CONFIGS = {
     requiresCustomerSection: false,
     detailShellCheck(contents) {
       return (
-        hasAll(contents.detailContent, ['RecordDetailPageShell', 'PurchaseOrderHeaderSections']) &&
+        hasAll(contents.detailContent, ['RecordDetailPageShell', 'TransactionHeaderSections']) &&
         !isStarterPlaceholder(contents.detailContent) &&
         !hasThinDetailSurface(contents.detailContent)
       )
@@ -932,7 +932,7 @@ function buildChecks(contents) {
       file: files.detailPage,
       ok: entityAuditConfig?.detailShellCheck
         ? entityAuditConfig.detailShellCheck(contents)
-        : hasAll(contents.detailPage, ['RecordDetailPageShell', 'TransactionDetailFrame', 'PurchaseOrderHeaderSections']) &&
+        : hasAll(contents.detailPage, ['RecordDetailPageShell', 'TransactionDetailFrame', 'TransactionHeaderSections']) &&
           !isStarterPlaceholder(contents.detailPage) &&
           !hasThinDetailSurface(contents.detailPage),
     },
@@ -945,7 +945,7 @@ function buildChecks(contents) {
         ? entityAuditConfig.newShellCheck(contents)
         : Boolean(contents.createClient) &&
           (hasAll(contents.createClient, ['TransactionCreatePageShell']) ||
-            hasAll(contents.createClient, ['RecordDetailPageShell', 'PurchaseOrderHeaderSections']) ||
+            hasAll(contents.createClient, ['RecordDetailPageShell', 'TransactionHeaderSections']) ||
             hasAll(contents.createClient, ['RecordDetailPageShell', 'TransactionActionStack'])) &&
           contents.newPage?.includes(`${pascal}CreatePageClient`) &&
           !isStarterPlaceholder(contents.createClient) &&

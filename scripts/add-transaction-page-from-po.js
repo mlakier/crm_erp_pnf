@@ -89,9 +89,9 @@ const checklist = [
   `5. src/lib/${slug}-detail-customization-store.ts: load/save/merge/normalize customization config.`,
   `6. src/app/api/config/${slug}-detail-customization/route.ts: GET/POST customization API.`,
   `7. src/components/${pascal}DetailCustomizeMode.tsx: copy PO live section/grid customizer pattern, including section add/rename/reorder/delete, row counts, drag/drop field placement, visibility, required toggles, and line-column toggles if applicable.`,
-  `8. src/components/${pascal}CreatePageClient.tsx: PO-style full-page create shell using RecordDetailPageShell + PurchaseOrderHeaderSections equivalent.`,
+  `8. src/components/${pascal}CreatePageClient.tsx: PO-style full-page create shell using RecordDetailPageShell + TransactionHeaderSections equivalent.`,
   `9. src/components/${pascal}PageActions.tsx: top-right action row with + menu, export, Customize, Edit, Delete, Save/Cancel in edit mode.`,
-  `10. src/components/${pascal}HeaderSections.tsx or reuse PurchaseOrderHeaderSections: sectioned/grid header rendering for view/edit/new.`,
+  `10. src/components/${pascal}HeaderSections.tsx or reuse TransactionHeaderSections: sectioned/grid header rendering for view/edit/new.`,
   `11. src/components/${pascal}CreateForm.tsx and/or line form sections: ensure create uses the same section/grid layout as edit.`,
   `12. src/app/${slug}/new/page.tsx: full page only, no modal. Must match edit layout and support duplicateFrom.`,
   `13. src/app/${slug}/[id]/page.tsx: regular detail, edit detail, customize mode; wire Customize button, + New/Duplicate menu, export, related sections, system info, system notes.`,
@@ -113,7 +113,7 @@ const checklist = [
   '- If the transaction has lines, GL impact, or related docs, they sit in framed sections below the header area.',
   '',
   'Implementation notes:',
-  '- Prefer reusing RecordDetailPageShell, PurchaseOrderHeaderSections, PurchaseOrderDetailExportButton, and the journal transaction pattern where practical.',
+  '- Prefer reusing RecordDetailPageShell, TransactionHeaderSections, PurchaseOrderDetailExportButton, and the journal transaction pattern where practical.',
   '- Safe starter stubs may be generated, but existing files must never be overwritten.',
 ]
 
@@ -479,7 +479,7 @@ function createPageClientStub() {
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
-import PurchaseOrderHeaderSections, { type PurchaseOrderHeaderSection } from '@/components/PurchaseOrderHeaderSections'
+import TransactionHeaderSections, { type TransactionHeaderSection } from '@/components/TransactionHeaderSections'
 import type { ${detailConfigType} } from '@/lib/${slug}-detail-customization'
 
 export default function ${pascal}CreatePageClient({
@@ -494,7 +494,7 @@ export default function ${pascal}CreatePageClient({
     description: '',
   })
 
-  const headerSections: PurchaseOrderHeaderSection[] = useMemo(
+  const headerSections: TransactionHeaderSection[] = useMemo(
     () =>
       customization.sections.map((section) => ({
         title: section,
@@ -559,7 +559,7 @@ export default function ${pascal}CreatePageClient({
         </div>
       </div>
 
-      <PurchaseOrderHeaderSections
+      <TransactionHeaderSections
         editing
         sections={headerSections}
         columns={customization.formColumns}

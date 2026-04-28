@@ -13,6 +13,14 @@ type QuoteDoc = {
   opportunityName: string | null
 }
 
+type OpportunityDoc = {
+  id: string
+  number: string
+  name: string
+  status: string
+  total: number
+}
+
 type FulfillmentDoc = {
   id: string
   number: string
@@ -40,20 +48,63 @@ type CashReceiptDoc = {
 }
 
 export default function SalesOrderRelatedDocuments({
+  opportunities,
   quotes,
   fulfillments,
   invoices,
   cashReceipts,
+  showFulfillments = true,
 }: {
+  opportunities: OpportunityDoc[]
   quotes: QuoteDoc[]
   fulfillments: FulfillmentDoc[]
   invoices: InvoiceDoc[]
   cashReceipts: CashReceiptDoc[]
+  showFulfillments?: boolean
 }) {
+  const fulfillmentTab = {
+    key: 'fulfillments',
+    label: 'Fulfillments',
+    count: fulfillments.length,
+    tone: 'downstream' as const,
+    emptyMessage: 'No fulfillments are linked to this sales order yet.',
+    headers: ['Txn ID', 'Date', 'Status', 'Notes'],
+    rows: fulfillments.map((fulfillment) => ({
+      id: fulfillment.id,
+      cells: [
+        <Link key="link" href={`/fulfillments/${fulfillment.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+          {fulfillment.number}
+        </Link>,
+        fmtDocumentDate(fulfillment.date),
+        <RelatedDocumentsStatusBadge key="status" status={fulfillment.status} />,
+        fulfillment.notes ?? '-',
+      ],
+    })),
+  }
+
   return (
     <TransactionRelatedDocumentsTabs
-      defaultActiveKey="quotes"
+      defaultActiveKey="opportunities"
       tabs={[
+        {
+          key: 'opportunities',
+          label: 'Opportunities',
+          count: opportunities.length,
+          tone: 'upstream',
+          emptyMessage: 'No opportunity is linked to this sales order.',
+          headers: ['Txn ID', 'Name', 'Status', 'Total'],
+          rows: opportunities.map((opportunity) => ({
+            id: opportunity.id,
+            cells: [
+              <Link key="link" href={`/opportunities/${opportunity.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                {opportunity.number}
+              </Link>,
+              opportunity.name,
+              <RelatedDocumentsStatusBadge key="status" status={opportunity.status} />,
+              fmtCurrency(opportunity.total),
+            ],
+          })),
+        },
         {
           key: 'quotes',
           label: 'Quotes',
@@ -74,25 +125,7 @@ export default function SalesOrderRelatedDocuments({
             ],
           })),
         },
-        {
-          key: 'fulfillments',
-          label: 'Fulfillments',
-          count: fulfillments.length,
-          tone: 'downstream',
-          emptyMessage: 'No fulfillments are linked to this sales order yet.',
-          headers: ['Txn ID', 'Date', 'Status', 'Notes'],
-          rows: fulfillments.map((fulfillment) => ({
-            id: fulfillment.id,
-            cells: [
-              <Link key="link" href={`/fulfillments/${fulfillment.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                {fulfillment.number}
-              </Link>,
-              fmtDocumentDate(fulfillment.date),
-              <RelatedDocumentsStatusBadge key="status" status={fulfillment.status} />,
-              fulfillment.notes ?? '-',
-            ],
-          })),
-        },
+        ...(showFulfillments ? [fulfillmentTab] : []),
         {
           key: 'invoices',
           label: 'Invoices',

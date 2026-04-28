@@ -15,6 +15,7 @@ import {
   RecordDetailHeaderCell,
   RecordDetailSection,
 } from '@/components/RecordDetailPanels'
+import TransactionStatsRow from '@/components/TransactionStatsRow'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
 import { loadChartOfAccountsFormCustomization } from '@/lib/chart-of-accounts-form-customization-store'
 import {
@@ -110,6 +111,9 @@ export default async function ChartOfAccountDetailPage({
       orderBy: { subsidiaryId: 'asc' },
     }),
   ])
+  const childAccountCount = await prisma.chartOfAccounts.count({
+    where: { parentAccountId: account.id },
+  })
 
   const accountOptions = await prisma.chartOfAccounts.findMany({
     where: { NOT: { id } },
@@ -220,6 +224,20 @@ export default async function ChartOfAccountDetailPage({
   }
 
   const customizeFields = buildCustomizePreviewFields(CHART_OF_ACCOUNTS_FORM_FIELDS, fieldDefinitions)
+  const postingStatus = account.isPosting ? 'Posting' : 'Non-Posting'
+  const summaryStatus = account.summary ? 'Summary' : 'Detail'
+  const statPreviewCards = [
+    { id: 'subsidiaries', label: 'Subsidiaries', value: subsidiaries.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+    { id: 'childAccounts', label: 'Child Accounts', value: childAccountCount, accent: 'teal', cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
+    { id: 'posting', label: 'Posting', value: postingStatus, accent: 'yellow', cardTone: account.isPosting ? 'yellow' : 'default', valueTone: account.isPosting ? 'yellow' : 'default', supportsColorized: true, supportsLink: false },
+    { id: 'summary', label: 'Summary', value: summaryStatus, cardTone: account.summary ? 'green' : 'default', valueTone: account.summary ? 'green' : 'default', supportsColorized: true, supportsLink: false },
+  ]
+  const statDefinitions = [
+    { id: 'subsidiaries', label: 'Subsidiaries', getValue: () => subsidiaries.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
+    { id: 'childAccounts', label: 'Child Accounts', getValue: () => childAccountCount, accent: 'teal' as const, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
+    { id: 'posting', label: 'Posting', getValue: () => postingStatus, accent: 'yellow' as const, getCardTone: () => (account.isPosting ? 'yellow' : 'default') as const, getValueTone: () => (account.isPosting ? 'yellow' : 'default') as const },
+    { id: 'summary', label: 'Summary', getValue: () => summaryStatus, getCardTone: () => (account.summary ? 'green' : 'default') as const, getValueTone: () => (account.summary ? 'green' : 'default') as const },
+  ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: CHART_OF_ACCOUNTS_FORM_FIELDS,
     layout: chartFormCustomization,
@@ -290,6 +308,16 @@ export default async function ChartOfAccountDetailPage({
         </>
       }
     >
+        {!isCustomizing ? (
+          <div className="mb-8">
+            <TransactionStatsRow
+              record={account}
+              stats={statDefinitions}
+              visibleStatCards={chartFormCustomization.statCards as Array<{ id: string; metric: string; visible: boolean; order: number; size?: 'sm' | 'md' | 'lg'; colorized?: boolean; linked?: boolean }> | undefined}
+            />
+          </div>
+        ) : null}
+
         {isCustomizing ? (
           <ChartOfAccountsDetailCustomizeMode
             detailHref={detailHref}
@@ -297,6 +325,7 @@ export default async function ChartOfAccountDetailPage({
             initialRequirements={{ ...formRequirements.chartOfAccountCreate }}
             fields={customizeFields}
             sectionDescriptions={sectionDescriptions}
+            statPreviewCards={statPreviewCards}
           />
         ) : (
           <InlineRecordDetails
@@ -310,8 +339,9 @@ export default async function ChartOfAccountDetailPage({
           />
         )}
 
-        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} /> : null}
+        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} internalId={account.id} /> : null}
 
+        {!isCustomizing ? (
         <RecordDetailSection title="Subsidiaries in Scope" count={subsidiaries.length}>
           {subsidiaries.length === 0 ? (
             <RecordDetailEmptyState message="No subsidiaries assigned." />
@@ -334,7 +364,8 @@ export default async function ChartOfAccountDetailPage({
             </table>
           )}
         </RecordDetailSection>
-        <SystemNotesSection notes={systemNotes} />
+        ) : null}
+        {!isCustomizing ? <SystemNotesSection notes={systemNotes} /> : null}
     </RecordDetailPageShell>
   )
 }

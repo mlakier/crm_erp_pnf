@@ -36,16 +36,27 @@ type InvoiceDoc = {
   createdAt: string
 }
 
+type InvoiceReceiptDoc = {
+  id: string
+  number: string
+  amount: number
+  date: string
+  method: string | null
+  reference: string | null
+}
+
 export default function QuoteRelatedDocuments({
   opportunities,
   salesOrders,
   fulfillments,
   invoices,
+  invoiceReceipts,
 }: {
   opportunities: OpportunityDoc[]
   salesOrders: SalesOrderDoc[]
   fulfillments: FulfillmentDoc[]
   invoices: InvoiceDoc[]
+  invoiceReceipts: InvoiceReceiptDoc[]
 }) {
   return (
     <TransactionRelatedDocumentsTabs
@@ -122,6 +133,26 @@ export default function QuoteRelatedDocuments({
               invoice.dueDate ? fmtDocumentDate(invoice.dueDate) : '-',
               <RelatedDocumentsStatusBadge key="status" status={invoice.status} />,
               fmtCurrency(invoice.total),
+            ],
+          })),
+        },
+        {
+          key: 'invoice-receipts',
+          label: 'Invoice Receipts',
+          count: invoiceReceipts.length,
+          tone: 'downstream',
+          emptyMessage: 'No invoice receipts are linked downstream from this quote yet.',
+          headers: ['Txn ID', 'Date', 'Method', 'Reference', 'Amount'],
+          rows: invoiceReceipts.map((receipt) => ({
+            id: receipt.id,
+            cells: [
+              <Link key="link" href={`/invoice-receipts/${receipt.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                {receipt.number}
+              </Link>,
+              fmtDocumentDate(receipt.date),
+              receipt.method ?? '-',
+              receipt.reference ?? '-',
+              fmtCurrency(receipt.amount),
             ],
           })),
         },

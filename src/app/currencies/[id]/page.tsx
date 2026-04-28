@@ -9,12 +9,12 @@ import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSectio
 import CurrencyDetailCustomizeMode from '@/components/CurrencyDetailCustomizeMode'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import SystemNotesSection from '@/components/SystemNotesSection'
+import TransactionStatsRow from '@/components/TransactionStatsRow'
 import {
   RecordDetailCell,
   RecordDetailEmptyState,
   RecordDetailHeaderCell,
   RecordDetailSection,
-  RecordDetailStatCard,
 } from '@/components/RecordDetailPanels'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
@@ -80,6 +80,16 @@ export default async function CurrencyDetailPage({
     inactive: { name: 'inactive', label: 'Inactive', value: String(!currency.active), type: 'select', options: inactiveOptions, helpText: 'Marks the currency unavailable for new records while preserving history.', sourceText: getFieldSourceText(fieldMetaById, 'inactive') },
   }
   const customizeFields = buildCustomizePreviewFields(CURRENCY_FORM_FIELDS, fieldDefinitions)
+  const statPreviewCards = [
+    { id: 'subsidiaries', label: 'Subsidiaries', value: currency.defaultCurrencySubsidiaries.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+    { id: 'customers', label: 'Customers', value: currency.customers.length, cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
+    { id: 'vendors', label: 'Vendors', value: currency.vendors.length, cardTone: 'yellow', valueTone: 'yellow', supportsColorized: true, supportsLink: false },
+  ]
+  const statDefinitions = [
+    { id: 'subsidiaries', label: 'Subsidiaries', getValue: () => currency.defaultCurrencySubsidiaries.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
+    { id: 'customers', label: 'Customers', getValue: () => currency.customers.length, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
+    { id: 'vendors', label: 'Vendors', getValue: () => currency.vendors.length, getCardTone: () => 'yellow' as const, getValueTone: () => 'yellow' as const },
+  ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: CURRENCY_FORM_FIELDS,
     layout: currencyFormCustomization,
@@ -151,11 +161,15 @@ export default async function CurrencyDetailPage({
         </>
       }
     >
-        <div className="mb-8 grid gap-4 sm:grid-cols-3">
-          <RecordDetailStatCard label="Subsidiaries" value={currency.defaultCurrencySubsidiaries.length} />
-          <RecordDetailStatCard label="Customers" value={currency.customers.length} />
-          <RecordDetailStatCard label="Vendors" value={currency.vendors.length} />
-        </div>
+        {!isCustomizing ? (
+          <div className="mb-8">
+            <TransactionStatsRow
+              record={currency}
+              stats={statDefinitions}
+              visibleStatCards={currencyFormCustomization.statCards as Array<{ id: string; metric: string; visible: boolean; order: number; size?: 'sm' | 'md' | 'lg'; colorized?: boolean; linked?: boolean }> | undefined}
+            />
+          </div>
+        ) : null}
 
         {isCustomizing ? (
           <CurrencyDetailCustomizeMode
@@ -164,6 +178,7 @@ export default async function CurrencyDetailPage({
             initialRequirements={{ ...formRequirements.currencyCreate }}
             fields={customizeFields}
             sectionDescriptions={sectionDescriptions}
+            statPreviewCards={statPreviewCards}
           />
         ) : (
           <InlineRecordDetails
@@ -177,7 +192,9 @@ export default async function CurrencyDetailPage({
           />
         )}
 
-        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} /> : null}
+        {!isCustomizing ? (
+        <>
+        <MasterDataSystemInfoSection info={systemInfo} internalId={currency.id} />
 
         <RecordDetailSection title="Subsidiaries (Default Currency)" count={currency.defaultCurrencySubsidiaries.length}>
           {currency.defaultCurrencySubsidiaries.length === 0 ? (
@@ -260,6 +277,8 @@ export default async function CurrencyDetailPage({
           )}
         </RecordDetailSection>
         <SystemNotesSection notes={systemNotes} />
+        </>
+        ) : null}
     </RecordDetailPageShell>
   )
 }

@@ -10,9 +10,15 @@ type Item = { id: string; name: string; listPrice: number }
 export default function RequisitionLineItemForm({
   requisitionId,
   items,
+  embedded = false,
+  showHeading = true,
+  onSuccess,
 }: {
   requisitionId: string
   items: Item[]
+  embedded?: boolean
+  showHeading?: boolean
+  onSuccess?: () => void
 }) {
   const router = useRouter()
   const [description, setDescription] = useState('')
@@ -82,6 +88,7 @@ export default function RequisitionLineItemForm({
       setSaving(false)
       window.setTimeout(() => setSuccess(''), 2200)
       router.refresh()
+      onSuccess?.()
       if (createdId) focusRow(`req-line-item-${createdId}`)
     } catch {
       setError('Unable to add line item')
@@ -90,13 +97,24 @@ export default function RequisitionLineItemForm({
   }
 
   return (
-    <section className="rounded-xl border p-5" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
+    <section
+      className={embedded ? '' : 'rounded-xl border p-5'}
+      style={
+        embedded
+          ? undefined
+          : { backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }
+      }
+    >
       {success ? (
         <div className="fixed right-4 top-4 z-[130] rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-lg">
           {success}
         </div>
       ) : null}
-      <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Add Line Item</h3>
+      {showHeading ? (
+        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+          Add Line Item
+        </h3>
+      ) : null}
       <form className="space-y-3" onSubmit={handleSubmit}>
         {items.length > 0 ? (
           <div>

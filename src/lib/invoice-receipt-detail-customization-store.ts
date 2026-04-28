@@ -4,8 +4,10 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import {
   defaultInvoiceReceiptDetailCustomization,
+  INVOICE_RECEIPT_REFERENCE_SOURCES,
   type InvoiceReceiptDetailCustomizationConfig,
 } from '@/lib/invoice-receipt-detail-customization'
+import { mergeTransactionReferenceLayouts } from '@/lib/transaction-reference-layouts'
 
 const STORE_PATH = path.join(process.cwd(), 'config', 'invoice-receipt-detail-customization.json')
 
@@ -16,14 +18,26 @@ function cloneDefaults(): InvoiceReceiptDetailCustomizationConfig {
 export async function loadInvoiceReceiptDetailCustomization(): Promise<InvoiceReceiptDetailCustomizationConfig> {
   try {
     const raw = await fs.readFile(STORE_PATH, 'utf8')
-    return { ...cloneDefaults(), ...(JSON.parse(raw) as Partial<InvoiceReceiptDetailCustomizationConfig>) }
+    const defaults = cloneDefaults()
+    const parsed = JSON.parse(raw) as Partial<InvoiceReceiptDetailCustomizationConfig>
+    return {
+      ...defaults,
+      ...parsed,
+      referenceLayouts: mergeTransactionReferenceLayouts(parsed.referenceLayouts, defaults.referenceLayouts, INVOICE_RECEIPT_REFERENCE_SOURCES),
+    }
   } catch {
     return cloneDefaults()
   }
 }
 
 export async function saveInvoiceReceiptDetailCustomization(nextConfig: InvoiceReceiptDetailCustomizationConfig): Promise<InvoiceReceiptDetailCustomizationConfig> {
+  const defaults = cloneDefaults()
+  const normalized = {
+    ...defaults,
+    ...nextConfig,
+    referenceLayouts: mergeTransactionReferenceLayouts(nextConfig.referenceLayouts, defaults.referenceLayouts, INVOICE_RECEIPT_REFERENCE_SOURCES),
+  }
   await fs.mkdir(path.dirname(STORE_PATH), { recursive: true })
-  await fs.writeFile(STORE_PATH, `${JSON.stringify(nextConfig, null, 2)}\n`, 'utf8')
-  return nextConfig
+  await fs.writeFile(STORE_PATH, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8')
+  return normalized
 }

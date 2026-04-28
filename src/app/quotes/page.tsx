@@ -9,9 +9,11 @@ import { getPagination } from '@/lib/pagination'
 import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
 import { loadListValues } from '@/lib/load-list-values'
+import { buildMasterDataExportUrl } from '@/lib/master-data-export-url'
 import DeleteButton from '@/components/DeleteButton'
 import { RecordListHeaderLabel } from '@/components/RecordListHeaderLabel'
 import { DEFAULT_RECORD_LIST_SORT, prependIdSortOption } from '@/lib/record-list-sort'
+import { createRecordLabelMapFromValues, formatRecordLabel } from '@/lib/record-status-label'
 
 const QUOTE_COLUMNS = [
   { id: 'quote-number', label: 'Quote Id' },
@@ -24,6 +26,7 @@ const QUOTE_COLUMNS = [
   { id: 'subsidiary', label: 'Subsidiary' },
   { id: 'currency', label: 'Currency' },
   { id: 'notes', label: 'Notes' },
+  { id: 'db-id', label: 'DB Id' },
   { id: 'created', label: 'Created' },
   { id: 'last-modified', label: 'Last Modified' },
   { id: 'actions', label: 'Actions' },
@@ -79,6 +82,7 @@ export default async function QuotesPage({
   ])
 
   const STATUS_OPTIONS = ['all', ...statusValues.map(v => v.toLowerCase())]
+  const statusLabelMap = createRecordLabelMapFromValues(statusValues)
 
   const pagination = getPagination(totalQuotes, params.page)
 
@@ -153,7 +157,7 @@ export default async function QuotesPage({
                   : { backgroundColor: 'var(--card)', color: 'var(--text-secondary)', border: '1px solid var(--border-muted)' }
               }
             >
-              {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+              {s === 'all' ? 'All' : formatRecordLabel(s, statusLabelMap)}
             </Link>
           )
         })}
@@ -177,7 +181,13 @@ export default async function QuotesPage({
               ))}
             </select>
             <input type="hidden" name="page" value="1" />
-            <ExportButton tableId="estimates-list" fileName="estimates" />
+            <ExportButton
+              tableId="estimates-list"
+              fileName="estimates"
+              exportAllUrl={buildMasterDataExportUrl('quotes', params.q, sort, {
+                status: statusFilter !== 'all' ? statusFilter : undefined,
+              })}
+            />
             <ColumnSelector tableId="estimates-list" columns={QUOTE_COLUMNS} />
           </div>
         </form>
@@ -196,7 +206,7 @@ export default async function QuotesPage({
             <tbody>
               {quotes.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No quotes yet. Create one from an opportunity.</td>
+                  <td colSpan={14} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No quotes yet. Create one from an opportunity.</td>
                 </tr>
               ) : (
                 quotes.map((quote, index) => (
@@ -206,15 +216,52 @@ export default async function QuotesPage({
                         {quote.number}
                       </Link>
                     </td>
-                    <td data-column="customer" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{quote.customer.name}</td>
-                    <td data-column="opportunity" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{quote.opportunity?.name ?? '—'}</td>
-                    <td data-column="sales-order" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{quote.salesOrder?.number ?? '—'}</td>
-                    <td data-column="status" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{quote.status}</td>
+                    <td data-column="customer" className="px-4 py-2 text-sm">
+                      <Link href={`/customers/${quote.customer.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                        {quote.customer.name}
+                      </Link>
+                    </td>
+                    <td data-column="opportunity" className="px-4 py-2 text-sm">
+                      {quote.opportunity ? (
+                        <Link href={`/opportunities/${quote.opportunity.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {quote.opportunity.name}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>{'—'}</span>
+                      )}
+                    </td>
+                    <td data-column="sales-order" className="px-4 py-2 text-sm">
+                      {quote.salesOrder ? (
+                        <Link href={`/sales-orders/${quote.salesOrder.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {quote.salesOrder.number}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>{'—'}</span>
+                      )}
+                    </td>
+                    <td data-column="status" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{formatRecordLabel(quote.status, statusLabelMap)}</td>
                     <td data-column="total" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtCurrency(quote.total, undefined, moneySettings)}</td>
                     <td data-column="valid-until" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{quote.validUntil ? fmtDocumentDate(quote.validUntil, moneySettings) : '—'}</td>
-                    <td data-column="subsidiary" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{(quote).subsidiary?.name ?? '—'}</td>
-                    <td data-column="currency" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{(quote).currency?.code ?? '—'}</td>
+                    <td data-column="subsidiary" className="px-4 py-2 text-sm">
+                      {quote.subsidiary ? (
+                        <Link href={`/subsidiaries/${quote.subsidiary.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {quote.subsidiary.name}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>{'—'}</span>
+                      )}
+                    </td>
+                    <td data-column="currency" className="px-4 py-2 text-sm">
+                      {quote.currency ? (
+                        <Link href={`/currencies/${quote.currency.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {quote.currency.code}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>{'—'}</span>
+                      )}
+                    </td>
                     <td data-column="notes" className="px-4 py-2 text-sm truncate max-w-[200px]" style={{ color: 'var(--text-secondary)' }}>{quote.notes ?? '—'}</td>
+                    <td data-column="db-id" className="px-4 py-2 font-mono text-sm" style={{ color: 'var(--text-secondary)' }}>{quote.id}</td>
                     <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtDocumentDate(quote.createdAt, moneySettings)}</td>
                     <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtDocumentDate(quote.updatedAt, moneySettings)}</td>
                     <td data-column="actions" className="px-4 py-2 text-sm">

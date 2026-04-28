@@ -1,0 +1,96 @@
+{
+  "formColumns": 2,
+  "sections": [
+    "Core",
+    "Controls"
+  ],
+  "sectionRows": {
+    "Core": 3,
+    "Controls": 3
+  },
+  "fields": {
+    "name": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 1
+    },
+    "startDate": {
+      "visible": true,
+      "section": "Core",
+      "order": 1,
+      "column": 1
+    },
+    "endDate": {
+      "visible": true,
+      "section": "Core",
+      "order": 1,
+      "column": 2
+    },
+    "subsidiaryId": {
+      "visible": true,
+      "section": "Core",
+      "order": 2,
+      "column": 1
+    },
+    "status": {
+      "visible": true,
+      "section": "Controls",
+      "order": 0,
+      "column": 1
+    },
+    "closed": {
+      "visible": true,
+      "section": "Controls",
+      "order": 0,
+      "column": 2
+    },
+    "arLocked": {
+      "visible": true,
+      "section": "Controls",
+      "order": 1,
+      "column": 1
+    },
+    "apLocked": {
+      "visible": true,
+      "section": "Controls",
+      "order": 1,
+      "column": 2
+    },
+    "inventoryLocked": {
+      "visible": true,
+      "section": "Controls",
+      "order": 2,
+      "column": 1
+    }
+  },
+  "statCards": [
+    {
+      "id": "accounting-period-stat-journalEntries",
+      "metric": "journalEntries",
+      "visible": true,
+      "order": 0,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "accounting-period-stat-closed",
+      "metric": "closed",
+      "visible": true,
+      "order": 1,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "accounting-period-stat-lockedAreas",
+      "metric": "lockedAreas",
+      "visible": true,
+      "order": 2,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    }
+  ]
+}

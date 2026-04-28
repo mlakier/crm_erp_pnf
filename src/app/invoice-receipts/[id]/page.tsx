@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { connection } from 'next/server'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { fmtCurrency, fmtDocumentDate } from '@/lib/format'
@@ -6,7 +7,7 @@ import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
 import { loadListValues } from '@/lib/load-list-values'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
-import PurchaseOrderHeaderSections, { type PurchaseOrderHeaderField } from '@/components/PurchaseOrderHeaderSections'
+import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
 import InvoiceReceiptDetailCustomizeMode from '@/components/InvoiceReceiptDetailCustomizeMode'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import SystemNotesSection from '@/components/SystemNotesSection'
@@ -14,9 +15,14 @@ import CommunicationsSection from '@/components/CommunicationsSection'
 import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
 import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
 import TransactionActionStack from '@/components/TransactionActionStack'
+import DeleteButton from '@/components/DeleteButton'
 import InvoiceReceiptRelatedDocuments from '@/components/InvoiceReceiptRelatedDocuments'
 import InvoiceReceiptGlImpactSection from '@/components/InvoiceReceiptGlImpactSection'
 import { parseCommunicationSummary, parseFieldChangeSummary } from '@/lib/activity'
+import {
+  buildLinkedReferenceFieldDefinitions,
+  buildLinkedReferencePreviewSources,
+} from '@/lib/linked-record-reference-catalogs'
 import { buildTransactionCommunicationComposePayload } from '@/lib/transaction-communications'
 import {
   buildConfiguredTransactionSections,
@@ -25,6 +31,7 @@ import {
 } from '@/lib/transaction-detail-helpers'
 import {
   INVOICE_RECEIPT_DETAIL_FIELDS,
+  INVOICE_RECEIPT_REFERENCE_SOURCES,
   INVOICE_RECEIPT_STAT_CARDS,
   type InvoiceReceiptDetailFieldKey,
 } from '@/lib/invoice-receipt-detail-customization'
@@ -33,7 +40,7 @@ import type { TransactionStatDefinition } from '@/lib/transaction-page-config'
 
 type InvoiceReceiptHeaderField = {
   key: InvoiceReceiptDetailFieldKey
-} & PurchaseOrderHeaderField
+} & TransactionHeaderField
 
 export default async function InvoiceReceiptDetailPage({
   params,
@@ -42,6 +49,7 @@ export default async function InvoiceReceiptDetailPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ edit?: string; customize?: string }>
 }) {
+  await connection()
   const { id } = await params
   const { edit, customize } = await searchParams
   const isEditing = edit === '1'
@@ -93,8 +101,11 @@ export default async function InvoiceReceiptDetailPage({
   }))
 
   const sectionDescriptions: Record<string, string> = {
-    Customer: 'Customer context derived from the linked invoice.',
-    'Invoice Receipt Details': 'Core receipt fields, invoice link, and system dates.',
+    'Document Identity': 'Primary invoice receipt identifier and linked invoice context.',
+    'Customer Snapshot': 'Customer context derived from the linked invoice.',
+    'Receipt Terms': 'Monetary amount, receipt date, payment method, and reference context.',
+    'Record Keys': 'Internal database identifiers for this receipt.',
+    'System Dates': 'System-managed timestamps for this receipt.',
   }
 
   const receiptStats: TransactionStatDefinition<typeof receipt>[] = [
@@ -123,6 +134,17 @@ export default async function InvoiceReceiptDetailPage({
       getValueTone: () => 'accent',
     },
   ]
+  const statPreviewCards = receiptStats.map((stat) => ({
+    id: stat.id,
+    label: stat.label,
+    value: stat.getValue(receipt),
+    href: stat.getHref?.(receipt) ?? null,
+    accent: stat.accent,
+    valueTone: stat.getValueTone?.(receipt),
+    cardTone: stat.getCardTone?.(receipt),
+    supportsColorized: Boolean(stat.accent || stat.getValueTone || stat.getCardTone),
+    supportsLink: Boolean(stat.getHref),
+  }))
   const activities = await prisma.activity.findMany({
     where: {
       entityType: 'invoice-receipt',
@@ -268,16 +290,31 @@ export default async function InvoiceReceiptDetailPage({
     },
   }
 
+  const customerHref = `/customers/${receipt.invoice.customer.id}`
+  const invoiceHref = `/invoices/${receipt.invoice.id}`
+
+  headerFieldDefinitions.customerNumber.href = customerHref
+  headerFieldDefinitions.invoiceId.href = invoiceHref
+
   const headerSections = buildConfiguredTransactionSections({
     fields: INVOICE_RECEIPT_DETAIL_FIELDS,
     layout: customization,
     fieldDefinitions: headerFieldDefinitions,
     sectionDescriptions,
   })
+  const referenceFieldDefinitions = buildLinkedReferenceFieldDefinitions(INVOICE_RECEIPT_REFERENCE_SOURCES, {
+    invoice: receipt.invoice,
+  }, {
+    invoice: invoiceHref,
+  })
+  const allFieldDefinitions = {
+    ...headerFieldDefinitions,
+    ...referenceFieldDefinitions,
+  }
 
   const customizeFields = buildTransactionCustomizePreviewFields({
     fields: INVOICE_RECEIPT_DETAIL_FIELDS,
-    fieldDefinitions: headerFieldDefinitions,
+    fieldDefinitions: allFieldDefinitions,
     previewOverrides: {
       amount: fmtCurrency(receipt.amount, undefined, moneySettings),
       date: fmtDocumentDate(receipt.date, moneySettings),
@@ -316,6 +353,38 @@ export default async function InvoiceReceiptDetailPage({
       }
     })
     .filter((communication): communication is Exclude<typeof communication, null> => Boolean(communication))
+  const referenceSourceDefinitions = buildLinkedReferencePreviewSources(INVOICE_RECEIPT_REFERENCE_SOURCES, {
+    invoice: receipt.invoice,
+  })
+  const referenceSections = (customization.referenceLayouts ?? [])
+    .map((referenceLayout) => {
+      const source = INVOICE_RECEIPT_REFERENCE_SOURCES.find((entry) => entry.id === referenceLayout.referenceId)
+      if (!source) return null
+      const fields = source.fields
+        .filter((field) => referenceLayout.fields[field.id]?.visible)
+        .sort((left, right) => {
+          const leftConfig = referenceLayout.fields[left.id]
+          const rightConfig = referenceLayout.fields[right.id]
+          if (!leftConfig || !rightConfig) return 0
+          if (leftConfig.column !== rightConfig.column) return leftConfig.column - rightConfig.column
+          return leftConfig.order - rightConfig.order
+        })
+        .map((field) => ({
+          ...allFieldDefinitions[field.id],
+          column: referenceLayout.fields[field.id]?.column ?? 1,
+          order: referenceLayout.fields[field.id]?.order ?? 0,
+        }))
+      if (fields.length === 0) return null
+      return {
+        title: source.label,
+        description: source.description,
+        columns: referenceLayout.formColumns,
+        rows: Math.max(1, ...fields.map((field) => Math.max(1, (field.order ?? 0) + 1))),
+        fields,
+      }
+    })
+    .filter((section): section is { title: string; description: string; columns: number; rows: number; fields: TransactionHeaderField[] } => Boolean(section))
+  const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
 
   return (
     <RecordDetailPageShell
@@ -332,7 +401,15 @@ export default async function InvoiceReceiptDetailPage({
             formId={`inline-record-form-${receipt.id}`}
             recordId={receipt.id}
             primaryActions={
-              !isEditing ? (
+              isEditing ? (
+                <Link
+                  href={`${detailHref}?customize=1`}
+                  className="rounded-md border px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+                >
+                  Customize
+                </Link>
+              ) : (
                 <>
                   <MasterDataDetailCreateMenu
                     newHref="/invoice-receipts/new"
@@ -360,25 +437,25 @@ export default async function InvoiceReceiptDetailPage({
                   >
                     Edit
                   </Link>
+                  <DeleteButton resource="invoice-receipts" id={receipt.id} />
                 </>
-              ) : null
+              )
             }
           />
         )
       }
     >
       <TransactionDetailFrame
+        showFooterSections={!isCustomizing}
         stats={
-          <TransactionStatsRow
-            record={receipt}
-            stats={receiptStats}
-            visibleStatIds={
-              customization.statCards
-                ?.filter((card) => card.visible)
-                .sort((left, right) => left.order - right.order)
-                .map((card) => card.metric) ?? INVOICE_RECEIPT_STAT_CARDS.map((card) => card.id)
-            }
-          />
+          isCustomizing ? null : (
+            <TransactionStatsRow
+              record={receipt}
+              stats={receiptStats}
+              visibleStatCards={customization.statCards}
+              visibleStatIds={INVOICE_RECEIPT_STAT_CARDS.map((card) => card.id)}
+            />
+          )
         }
         header={
           isCustomizing ? (
@@ -386,21 +463,49 @@ export default async function InvoiceReceiptDetailPage({
               detailHref={detailHref}
               initialLayout={customization}
               fields={customizeFields}
+              referenceSourceDefinitions={referenceSourceDefinitions}
               sectionDescriptions={sectionDescriptions}
+              statPreviewCards={statPreviewCards}
             />
           ) : (
-            <PurchaseOrderHeaderSections
-              purchaseOrderId={receipt.id}
-              editing={isEditing}
-              sections={headerSections}
-              columns={customization.formColumns}
-              updateUrl={`/api/invoice-receipts?id=${encodeURIComponent(receipt.id)}`}
-            />
+            <div className="space-y-6">
+              {referenceSections.length > 0 ? (
+                <TransactionHeaderSections
+                  editing={false}
+                  sections={referenceSections.map((section) => ({
+                    title: section.title,
+                    description: section.description,
+                    rows: section.rows,
+                    fields: section.fields,
+                  }))}
+                  columns={referenceColumns}
+                  containerTitle="Reference Details"
+                  containerDescription="Expanded context from linked records on this invoice receipt."
+                  showSubsections={false}
+                />
+              ) : null}
+              <TransactionHeaderSections
+                purchaseOrderId={receipt.id}
+                editing={isEditing}
+                sections={headerSections}
+                columns={customization.formColumns}
+                containerTitle="Invoice Receipt Details"
+                containerDescription="Core invoice receipt fields organized into configurable sections."
+                showSubsections={false}
+                updateUrl={`/api/invoice-receipts?id=${encodeURIComponent(receipt.id)}`}
+              />
+            </div>
           )
         }
         lineItems={null}
-        relatedDocuments={
+        relatedDocuments={isCustomizing ? null : (
           <InvoiceReceiptRelatedDocuments
+            invoice={{
+              id: receipt.invoice.id,
+              number: receipt.invoice.number,
+              status: receipt.invoice.status,
+              total: Number(receipt.invoice.total),
+            }}
             salesOrder={
               receipt.invoice.salesOrder
                 ? {
@@ -434,19 +539,11 @@ export default async function InvoiceReceiptDetailPage({
                   }
                 : null
             }
-            cashReceipts={receipt.invoice.cashReceipts.map((linkedReceipt) => ({
-              id: linkedReceipt.id,
-              number: linkedReceipt.number ?? null,
-              amount: Number(linkedReceipt.amount),
-              date: linkedReceipt.date.toISOString(),
-              method: linkedReceipt.method,
-              reference: linkedReceipt.reference ?? null,
-            }))}
             moneySettings={moneySettings}
           />
-        }
-        supplementarySections={<InvoiceReceiptGlImpactSection rows={[]} />}
-        communications={
+        )}
+        supplementarySections={isCustomizing ? null : <InvoiceReceiptGlImpactSection rows={[]} />}
+        communications={isCustomizing ? null : (
           <CommunicationsSection
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
@@ -459,8 +556,8 @@ export default async function InvoiceReceiptDetailPage({
               lineItems: [],
             })}
           />
-        }
-        systemNotes={<SystemNotesSection notes={systemNotes} />}
+        )}
+        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
       />
     </RecordDetailPageShell>
   )

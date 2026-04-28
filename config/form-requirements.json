@@ -41,12 +41,138 @@
     "primaryCurrencyId": false,
     "inactive": false
   },
+  "leadCreate": {
+    "firstName": true,
+    "lastName": true,
+    "email": true,
+    "phone": false,
+    "company": true,
+    "title": false,
+    "website": false,
+    "industry": false,
+    "status": true,
+    "source": false,
+    "rating": false,
+    "expectedValue": false,
+    "subsidiaryId": false,
+    "currencyId": false,
+    "address": false,
+    "notes": false,
+    "lastContactedAt": false,
+    "qualifiedAt": false,
+    "convertedAt": false
+  },
   "opportunityCreate": {
     "name": true,
     "customerId": true,
     "amount": false,
-    "stage": false,
-    "closeDate": false
+    "stage": true,
+    "closeDate": true
+  },
+  "quoteCreate": {
+    "opportunity": true,
+    "customerId": false,
+    "number": false,
+    "status": true,
+    "validUntil": true,
+    "subsidiaryId": false,
+    "currencyId": false,
+    "notes": false
+  },
+  "salesOrderCreate": {
+    "customerId": true,
+    "userId": false,
+    "quoteId": false,
+    "number": false,
+    "subsidiaryId": false,
+    "currencyId": false,
+    "status": true,
+    "total": false
+  },
+  "fulfillmentCreate": {
+    "salesOrderId": true,
+    "status": true,
+    "date": false,
+    "notes": false,
+    "subsidiaryId": false,
+    "currencyId": false
+  },
+  "invoiceCreate": {
+    "salesOrderId": false,
+    "customerId": true,
+    "status": true,
+    "dueDate": true,
+    "paidDate": false,
+    "subsidiaryId": false,
+    "currencyId": false
+  },
+  "invoiceReceiptCreate": {
+    "invoiceId": true,
+    "amount": true,
+    "date": true,
+    "method": true,
+    "reference": false
+  },
+  "purchaseRequisitionCreate": {
+    "number": false,
+    "status": true,
+    "priority": false,
+    "title": true,
+    "description": false,
+    "neededByDate": true,
+    "notes": false,
+    "vendorId": true,
+    "departmentId": true,
+    "subsidiaryId": false,
+    "currencyId": false
+  },
+  "purchaseOrderCreate": {
+    "number": false,
+    "vendorId": true,
+    "subsidiaryId": false,
+    "status": true
+  },
+  "receiptCreate": {
+    "purchaseOrderId": true,
+    "quantity": true,
+    "date": true,
+    "status": true,
+    "notes": false
+  },
+  "billCreate": {
+    "number": false,
+    "vendorId": true,
+    "purchaseOrderId": false,
+    "subsidiaryId": false,
+    "currencyId": false,
+    "total": false,
+    "date": true,
+    "dueDate": false,
+    "status": true,
+    "notes": false
+  },
+  "billPaymentCreate": {
+    "billId": true,
+    "amount": true,
+    "date": true,
+    "method": true,
+    "status": true,
+    "reference": false,
+    "notes": false
+  },
+  "journalCreate": {
+    "number": false,
+    "date": true,
+    "description": false,
+    "total": false,
+    "status": true,
+    "subsidiaryId": false,
+    "currencyId": false,
+    "accountingPeriodId": false,
+    "sourceType": false,
+    "sourceId": false,
+    "postedByEmployeeId": false,
+    "approvedByEmployeeId": false
   },
   "itemCreate": {
     "name": true,
@@ -103,6 +229,17 @@
     "isBase": false,
     "inactive": false
   },
+  "accountingPeriodCreate": {
+    "name": true,
+    "startDate": true,
+    "endDate": true,
+    "subsidiaryId": false,
+    "status": false,
+    "closed": false,
+    "arLocked": false,
+    "apLocked": false,
+    "inventoryLocked": false
+  },
   "locationCreate": {
     "locationId": true,
     "code": true,
@@ -123,6 +260,7 @@
     "normalBalance": false,
     "financialStatementSection": false,
     "financialStatementGroup": false,
+    "financialStatementCategory": false,
     "subsidiaryIds": false,
     "includeChildren": false,
     "parentAccountId": false,

@@ -1,0 +1,433 @@
+{
+  "formColumns": 3,
+  "sections": [
+    "Document Identity",
+    "Customer Snapshot",
+    "Source Context",
+    "Financial Terms",
+    "Record Keys",
+    "System Dates"
+  ],
+  "sectionRows": {
+    "Document Identity": 1,
+    "Customer Snapshot": 3,
+    "Source Context": 2,
+    "Financial Terms": 2,
+    "Record Keys": 1,
+    "System Dates": 1
+  },
+  "lineSettings": {
+    "fontSize": "sm"
+  },
+  "fields": {
+    "customerName": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 0,
+      "column": 2
+    },
+    "customerNumber": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 0,
+      "column": 1
+    },
+    "customerEmail": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 0,
+      "column": 3
+    },
+    "customerPhone": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 1,
+      "column": 1
+    },
+    "customerAddress": {
+      "visible": false,
+      "section": "Customer Snapshot",
+      "order": 1,
+      "column": 2
+    },
+    "customerPrimarySubsidiary": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 2,
+      "column": 1
+    },
+    "customerPrimaryCurrency": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 2,
+      "column": 2
+    },
+    "customerInactive": {
+      "visible": false,
+      "section": "Customer Snapshot",
+      "order": 2,
+      "column": 3
+    },
+    "id": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 1
+    },
+    "customerId": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 3
+    },
+    "salesOrderId": {
+      "visible": true,
+      "section": "Source Context",
+      "order": 0,
+      "column": 2
+    },
+    "userId": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 2
+    },
+    "number": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 1
+    },
+    "createdBy": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 2
+    },
+    "createdFrom": {
+      "visible": true,
+      "section": "Source Context",
+      "order": 0,
+      "column": 1
+    },
+    "quoteId": {
+      "visible": true,
+      "section": "Source Context",
+      "order": 0,
+      "column": 3
+    },
+    "opportunityId": {
+      "visible": true,
+      "section": "Source Context",
+      "order": 1,
+      "column": 1
+    },
+    "subsidiaryId": {
+      "visible": true,
+      "section": "Financial Terms",
+      "order": 0,
+      "column": 2
+    },
+    "currencyId": {
+      "visible": true,
+      "section": "Financial Terms",
+      "order": 0,
+      "column": 3
+    },
+    "status": {
+      "visible": true,
+      "section": "Financial Terms",
+      "order": 0,
+      "column": 1
+    },
+    "total": {
+      "visible": true,
+      "section": "Financial Terms",
+      "order": 1,
+      "column": 1
+    },
+    "dueDate": {
+      "visible": true,
+      "section": "Financial Terms",
+      "order": 1,
+      "column": 2
+    },
+    "paidDate": {
+      "visible": false,
+      "section": "Financial Terms",
+      "order": 1,
+      "column": 3
+    },
+    "createdAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 1
+    },
+    "updatedAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 2
+    }
+  },
+  "referenceLayouts": [
+    {
+      "id": "reference-customer-1",
+      "referenceId": "customer",
+      "formColumns": 2,
+      "rows": 3,
+      "fields": {
+        "customerDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 0
+        },
+        "customerNumber": {
+          "visible": true,
+          "column": 1,
+          "order": 0
+        },
+        "customerName": {
+          "visible": true,
+          "column": 1,
+          "order": 1
+        },
+        "customerEmail": {
+          "visible": true,
+          "column": 2,
+          "order": 1
+        },
+        "customerPhone": {
+          "visible": true,
+          "column": 2,
+          "order": 0
+        },
+        "customerAddress": {
+          "visible": false,
+          "column": 2,
+          "order": 2
+        },
+        "customerIndustry": {
+          "visible": false,
+          "column": 1,
+          "order": 3
+        },
+        "customerUserDbId": {
+          "visible": false,
+          "column": 2,
+          "order": 3
+        },
+        "customerSubsidiaryDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 4
+        },
+        "customerCurrencyDbId": {
+          "visible": false,
+          "column": 2,
+          "order": 4
+        },
+        "customerInactive": {
+          "visible": false,
+          "column": 1,
+          "order": 5
+        },
+        "customerCreatedAt": {
+          "visible": false,
+          "column": 2,
+          "order": 5
+        },
+        "customerUpdatedAt": {
+          "visible": false,
+          "column": 1,
+          "order": 6
+        }
+      }
+    }
+  ],
+  "lineColumns": {
+    "line": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "item-id": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "wide",
+      "editDisplay": "idAndLabel",
+      "viewDisplay": "idAndLabel",
+      "dropdownDisplay": "idAndLabel",
+      "dropdownSort": "id"
+    },
+    "description": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "wide",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    },
+    "quantity": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "unit-price": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "line-total": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "notes": {
+      "visible": false,
+      "order": 6,
+      "widthMode": "wide",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    },
+    "department": {
+      "visible": false,
+      "order": 7,
+      "widthMode": "wide",
+      "editDisplay": "idAndLabel",
+      "viewDisplay": "idAndLabel",
+      "dropdownDisplay": "idAndLabel",
+      "dropdownSort": "label"
+    },
+    "location": {
+      "visible": false,
+      "order": 8,
+      "widthMode": "wide",
+      "editDisplay": "idAndLabel",
+      "viewDisplay": "idAndLabel",
+      "dropdownDisplay": "idAndLabel",
+      "dropdownSort": "label"
+    },
+    "project": {
+      "visible": false,
+      "order": 9,
+      "widthMode": "wide",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    },
+    "service-start": {
+      "visible": false,
+      "order": 10,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "service-end": {
+      "visible": false,
+      "order": 11,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "rev-rec-template": {
+      "visible": false,
+      "order": 12,
+      "widthMode": "wide",
+      "editDisplay": "idAndLabel",
+      "viewDisplay": "idAndLabel",
+      "dropdownDisplay": "idAndLabel",
+      "dropdownSort": "label"
+    },
+    "performance-obligation-code": {
+      "visible": false,
+      "order": 13,
+      "widthMode": "wide",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    },
+    "ssp": {
+      "visible": false,
+      "order": 14,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "allocated-amount": {
+      "visible": false,
+      "order": 15,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    }
+  },
+  "statCards": [
+    {
+      "id": "slot-1",
+      "metric": "total",
+      "visible": true,
+      "order": 0,
+      "size": "md",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-2",
+      "metric": "status",
+      "visible": true,
+      "order": 1,
+      "size": "md",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-3",
+      "metric": "dueDate",
+      "visible": true,
+      "order": 2,
+      "size": "md",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-4",
+      "metric": "paidDate",
+      "visible": true,
+      "order": 3,
+      "size": "md",
+      "colorized": true,
+      "linked": true
+    }
+  ]
+}

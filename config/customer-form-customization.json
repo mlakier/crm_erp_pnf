@@ -1,0 +1,109 @@
+{
+  "formColumns": 2,
+  "sections": [
+    "Core",
+    "Contact",
+    "Financial",
+    "Status"
+  ],
+  "sectionRows": {
+    "Core": 1,
+    "Contact": 2,
+    "Financial": 2,
+    "Status": 1
+  },
+  "fields": {
+    "customerId": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 1
+    },
+    "name": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 2
+    },
+    "email": {
+      "visible": true,
+      "section": "Contact",
+      "order": 0,
+      "column": 1
+    },
+    "phone": {
+      "visible": true,
+      "section": "Contact",
+      "order": 0,
+      "column": 2
+    },
+    "address": {
+      "visible": true,
+      "section": "Contact",
+      "order": 1,
+      "column": 1
+    },
+    "industry": {
+      "visible": true,
+      "section": "Financial",
+      "order": 0,
+      "column": 1
+    },
+    "primarySubsidiaryId": {
+      "visible": true,
+      "section": "Financial",
+      "order": 0,
+      "column": 2
+    },
+    "primaryCurrencyId": {
+      "visible": true,
+      "section": "Financial",
+      "order": 1,
+      "column": 1
+    },
+    "inactive": {
+      "visible": true,
+      "section": "Status",
+      "order": 0,
+      "column": 1
+    }
+  },
+  "statCards": [
+    {
+      "id": "customer-stat-contacts",
+      "metric": "contacts",
+      "visible": true,
+      "order": 0,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "customer-stat-opportunities",
+      "metric": "opportunities",
+      "visible": true,
+      "order": 1,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "customer-stat-pipelineValue",
+      "metric": "pipelineValue",
+      "visible": true,
+      "order": 2,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "customer-stat-status",
+      "metric": "status",
+      "visible": true,
+      "order": 3,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    }
+  ]
+}

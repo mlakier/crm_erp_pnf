@@ -109,6 +109,7 @@ export default async function VendorsPage({
               <MasterDataHeaderCell columnId="address" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Address</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="tax-id" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Tax ID</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="inactive" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Inactive</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="db-id" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">DB Id</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="created" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Created</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="last-modified" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Last Modified</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="actions" className="sticky top-0 z-10 whitespace-nowrap px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Actions</MasterDataHeaderCell>
@@ -116,7 +117,7 @@ export default async function VendorsPage({
           </thead>
           <tbody>
             {vendors.length === 0 ? (
-              <MasterDataEmptyStateRow colSpan={12}>No vendors found</MasterDataEmptyStateRow>
+              <MasterDataEmptyStateRow colSpan={13}>No vendors found</MasterDataEmptyStateRow>
             ) : vendors.map((vendor, index) => (
               <tr key={vendor.id} style={getMasterDataRowStyle(index, vendors.length)}>
                 <MasterDataBodyCell columnId="vendor-number" className="whitespace-nowrap px-4 py-2 text-sm font-medium">
@@ -132,6 +133,7 @@ export default async function VendorsPage({
                 <MasterDataMutedCell columnId="address" className="whitespace-nowrap px-4 py-2 text-sm">{vendor.address ?? '-'}</MasterDataMutedCell>
                 <MasterDataMutedCell columnId="tax-id" className="whitespace-nowrap px-4 py-2 text-sm">{vendor.taxId ?? '-'}</MasterDataMutedCell>
                 <MasterDataMutedCell columnId="inactive" className="whitespace-nowrap px-4 py-2 text-sm">{vendor.inactive ? 'Yes' : 'No'}</MasterDataMutedCell>
+                <MasterDataMutedCell columnId="db-id" className="whitespace-nowrap px-4 py-2 text-sm">{vendor.id}</MasterDataMutedCell>
                 <MasterDataMutedCell columnId="created" className="whitespace-nowrap px-4 py-2 text-sm">{formatMasterDataDate(vendor.createdAt)}</MasterDataMutedCell>
                 <MasterDataMutedCell columnId="last-modified" className="whitespace-nowrap px-4 py-2 text-sm">{formatMasterDataDate(vendor.updatedAt)}</MasterDataMutedCell>
                 <MasterDataBodyCell columnId="actions" className="whitespace-nowrap px-4 py-2 text-sm">

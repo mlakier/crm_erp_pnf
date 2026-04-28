@@ -129,6 +129,7 @@ export default async function LocationsPage({
               <MasterDataHeaderCell columnId="make-inventory-available">Make Inventory Available</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="address">Address</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="inactive">Inactive</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="db-id">DB Id</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="last-modified">Last Modified</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
@@ -136,7 +137,7 @@ export default async function LocationsPage({
           </thead>
           <tbody>
             {locations.length === 0 ? (
-              <MasterDataEmptyStateRow colSpan={12}>No locations found</MasterDataEmptyStateRow>
+              <MasterDataEmptyStateRow colSpan={13}>No locations found</MasterDataEmptyStateRow>
             ) : (
               locations.map((location, index) => (
                 <tr key={location.id} style={getMasterDataRowStyle(index, locations.length)}>
@@ -155,6 +156,7 @@ export default async function LocationsPage({
                   <MasterDataMutedCell columnId="make-inventory-available">{formatBool(location.makeInventoryAvailable)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="address">{location.address ?? '-'}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="inactive">{formatBool(location.inactive)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="db-id">{location.id}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="created">{formatMasterDataDate(location.createdAt)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(location.updatedAt)}</MasterDataMutedCell>
                   <MasterDataBodyCell columnId="actions">

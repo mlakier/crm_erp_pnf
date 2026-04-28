@@ -91,7 +91,7 @@ export default function PurchaseOrderRelatedDocuments({
           rows: receipts.map((receipt) => ({
             id: receipt.id,
             cells: [
-              <Link key="link" href="/receipts" className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+              <Link key="link" href={`/receipts/${receipt.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                 {receipt.number}
               </Link>,
               fmtDocumentDate(receipt.date),
@@ -133,7 +133,7 @@ export default function PurchaseOrderRelatedDocuments({
           rows: billPayments.map((payment) => ({
             id: payment.id,
             cells: [
-              <Link key="link" href="/bill-payments" className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+              <Link key="link" href={`/bill-payments/${payment.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                 {payment.number}
               </Link>,
               fmtDocumentDate(payment.date),

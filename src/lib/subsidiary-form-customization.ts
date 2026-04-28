@@ -1,4 +1,5 @@
 import { getListSourceText, type FieldSourceType } from '@/lib/list-source'
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 export type SubsidiaryFormFieldKey =
   | 'subsidiaryId'
@@ -44,7 +45,21 @@ export type SubsidiaryFormCustomizationConfig = {
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<SubsidiaryFormFieldKey, SubsidiaryFormFieldCustomization>
+  statCards?: Array<TransactionStatCardSlot<SubsidiaryStatCardMetric>>
 }
+
+export type SubsidiaryStatCardMetric =
+  | 'childSubsidiaries'
+  | 'employees'
+  | 'customers'
+  | 'vendors'
+
+export const SUBSIDIARY_STAT_CARDS: Array<{ id: SubsidiaryStatCardMetric; label: string }> = [
+  { id: 'childSubsidiaries', label: 'Child Subsidiaries' },
+  { id: 'employees', label: 'Employees' },
+  { id: 'customers', label: 'Customers' },
+  { id: 'vendors', label: 'Vendors' },
+]
 
 export const SUBSIDIARY_FORM_FIELDS: SubsidiaryFormFieldMeta[] = [
   { id: 'subsidiaryId', label: 'Subsidiary ID', fieldType: 'text', description: 'System-generated legal Subsidiary code.' },
@@ -172,5 +187,14 @@ export function defaultSubsidiaryFormCustomization(): SubsidiaryFormCustomizatio
         },
       ])
     ) as Record<SubsidiaryFormFieldKey, SubsidiaryFormFieldCustomization>,
+    statCards: SUBSIDIARY_STAT_CARDS.map((card, index) => ({
+      id: `subsidiary-stat-${card.id}`,
+      metric: card.id,
+      visible: true,
+      order: index,
+      size: 'md',
+      colorized: true,
+      linked: true,
+    })),
   }
 }

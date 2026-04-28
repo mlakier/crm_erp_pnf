@@ -1,0 +1,319 @@
+{
+  "formColumns": 3,
+  "sections": [
+    "Document Identity",
+    "Customer Snapshot",
+    "Pipeline & Forecast",
+    "Commercial Context",
+    "Record Keys",
+    "System Dates"
+  ],
+  "sectionRows": {
+    "Document Identity": 1,
+    "Customer Snapshot": 2,
+    "Pipeline & Forecast": 2,
+    "Commercial Context": 1,
+    "Record Keys": 1,
+    "System Dates": 1
+  },
+  "lineSettings": {
+    "fontSize": "xs"
+  },
+  "fields": {
+    "id": {
+      "visible": false,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 1
+    },
+    "customerId": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 0,
+      "column": 1
+    },
+    "customerName": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 0,
+      "column": 2
+    },
+    "customerEmail": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 0,
+      "column": 3
+    },
+    "customerPhone": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 1,
+      "column": 1
+    },
+    "userId": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 2
+    },
+    "opportunityNumber": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 1
+    },
+    "name": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 2
+    },
+    "stage": {
+      "visible": true,
+      "section": "Pipeline & Forecast",
+      "order": 0,
+      "column": 1
+    },
+    "amount": {
+      "visible": true,
+      "section": "Pipeline & Forecast",
+      "order": 0,
+      "column": 2
+    },
+    "closeDate": {
+      "visible": true,
+      "section": "Pipeline & Forecast",
+      "order": 0,
+      "column": 3
+    },
+    "probability": {
+      "visible": true,
+      "section": "Pipeline & Forecast",
+      "order": 1,
+      "column": 1
+    },
+    "subsidiaryId": {
+      "visible": true,
+      "section": "Commercial Context",
+      "order": 0,
+      "column": 1
+    },
+    "currencyId": {
+      "visible": true,
+      "section": "Commercial Context",
+      "order": 0,
+      "column": 2
+    },
+    "quoteNumber": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 3
+    },
+    "inactive": {
+      "visible": false,
+      "section": "Pipeline & Forecast",
+      "order": 1,
+      "column": 2
+    },
+    "createdAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 1
+    },
+    "updatedAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 2
+    }
+  },
+  "referenceLayouts": [
+    {
+      "id": "reference-customer-1",
+      "referenceId": "quote",
+      "formColumns": 2,
+      "rows": 3,
+      "fields": {
+        "quoteDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 0
+        },
+        "quoteNumber": {
+          "visible": true,
+          "column": 1,
+          "order": 0
+        },
+        "quoteStatus": {
+          "visible": false,
+          "column": 1,
+          "order": 2
+        },
+        "quoteTotal": {
+          "visible": false,
+          "column": 1,
+          "order": 3
+        },
+        "quoteValidUntil": {
+          "visible": false,
+          "column": 1,
+          "order": 4
+        },
+        "quoteNotes": {
+          "visible": true,
+          "column": 2,
+          "order": 0
+        },
+        "quoteCustomerDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 6
+        },
+        "quoteUserDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 7
+        },
+        "quoteOpportunityDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 8
+        },
+        "quoteSubsidiaryDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 9
+        },
+        "quoteCurrencyDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 10
+        },
+        "quoteCreatedAt": {
+          "visible": true,
+          "column": 1,
+          "order": 1
+        },
+        "quoteUpdatedAt": {
+          "visible": false,
+          "column": 1,
+          "order": 12
+        }
+      }
+    }
+  ],
+  "lineColumns": {
+    "line": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "item-id": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "wide",
+      "editDisplay": "idAndLabel",
+      "viewDisplay": "idAndLabel",
+      "dropdownDisplay": "idAndLabel",
+      "dropdownSort": "id"
+    },
+    "description": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "wide",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    },
+    "quantity": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "unit-price": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "line-total": {
+      "visible": true,
+      "order": 6,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "notes": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "wide",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    }
+  },
+  "statCards": [
+    {
+      "id": "slot-2",
+      "metric": "closeDate",
+      "visible": true,
+      "order": 0,
+      "size": "md",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-3",
+      "metric": "lineCount",
+      "visible": true,
+      "order": 1,
+      "size": "md",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-4",
+      "metric": "stage",
+      "visible": true,
+      "order": 2,
+      "size": "md",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-1777333656455",
+      "metric": "quoteNumber",
+      "visible": true,
+      "order": 3,
+      "size": "md",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-1",
+      "metric": "amount",
+      "visible": true,
+      "order": 4,
+      "size": "md",
+      "colorized": true,
+      "linked": true
+    }
+  ]
+}

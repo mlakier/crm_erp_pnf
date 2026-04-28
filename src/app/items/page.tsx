@@ -127,7 +127,17 @@ export default async function ItemsPage({
     account ? `${account.accountId} - ${account.name}` : '-'
 
   type ItemRow = (typeof items)[number]
-  type ItemListColumnId = ItemFormFieldKey | 'created' | 'last-modified' | 'actions'
+  const createdColumnIndex = itemListDefinition.columns.findIndex((column) => column.id === 'created')
+  const listColumns =
+    createdColumnIndex >= 0
+      ? [
+          ...itemListDefinition.columns.slice(0, createdColumnIndex),
+          { id: 'db-id', label: 'DB Id' },
+          ...itemListDefinition.columns.slice(createdColumnIndex),
+        ]
+      : itemListDefinition.columns
+
+  type ItemListColumnId = ItemFormFieldKey | 'db-id' | 'created' | 'last-modified' | 'actions'
 
   const formatNumber = (value: unknown) => (value == null ? '-' : toNumericValue(value).toFixed(2))
   const formatBoolean = (value: boolean) => (value ? 'Yes' : 'No')
@@ -182,6 +192,8 @@ export default async function ItemsPage({
       case 'canBeFulfilled':
       case 'directRevenuePosting':
         return formatBoolean(item[columnId])
+      case 'db-id':
+        return item.id
       case 'created':
         return formatMasterDataDate(item.createdAt)
       case 'last-modified':
@@ -212,14 +224,14 @@ export default async function ItemsPage({
         tableId={itemListDefinition.tableId}
         exportFileName={itemListDefinition.exportFileName}
         exportAllUrl={buildMasterDataExportUrl('items', params.q, sort)}
-        columns={itemListDefinition.columns}
+        columns={listColumns}
         sort={sort}
         sortOptions={itemListDefinition.sortOptions}
       >
         <table className="min-w-full" id={itemListDefinition.tableId}>
           <thead>
             <tr style={MASTER_DATA_TABLE_DIVIDER_STYLE}>
-              {itemListDefinition.columns.map((column) => (
+              {listColumns.map((column) => (
                 <MasterDataHeaderCell
                   key={column.id}
                   columnId={column.id}
@@ -232,11 +244,11 @@ export default async function ItemsPage({
           </thead>
           <tbody>
             {items.length === 0 ? (
-              <MasterDataEmptyStateRow colSpan={itemListDefinition.columns.length}>No items found</MasterDataEmptyStateRow>
+              <MasterDataEmptyStateRow colSpan={listColumns.length}>No items found</MasterDataEmptyStateRow>
             ) : (
               items.map((item, index) => (
                 <tr key={item.id} style={getMasterDataRowStyle(index, items.length)}>
-                  {itemListDefinition.columns.map((column) => {
+                  {listColumns.map((column) => {
                     if (column.id === 'actions') {
                       return (
                         <MasterDataBodyCell key={column.id} columnId={column.id}>

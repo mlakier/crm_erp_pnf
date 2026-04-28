@@ -1,4 +1,5 @@
 import { getListSourceText, type FieldSourceType } from '@/lib/list-source'
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 export type CurrencyFormFieldKey =
   | 'currencyId'
@@ -31,7 +32,19 @@ export type CurrencyFormCustomizationConfig = {
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<CurrencyFormFieldKey, CurrencyFormFieldCustomization>
+  statCards?: Array<TransactionStatCardSlot<CurrencyStatCardMetric>>
 }
+
+export type CurrencyStatCardMetric =
+  | 'subsidiaries'
+  | 'customers'
+  | 'vendors'
+
+export const CURRENCY_STAT_CARDS: Array<{ id: CurrencyStatCardMetric; label: string }> = [
+  { id: 'subsidiaries', label: 'Subsidiaries' },
+  { id: 'customers', label: 'Customers' },
+  { id: 'vendors', label: 'Vendors' },
+]
 
 export const CURRENCY_FORM_FIELDS: CurrencyFormFieldMeta[] = [
   { id: 'currencyId', label: 'Currency ID', fieldType: 'text', description: 'System-generated currency master record identifier.' },
@@ -97,5 +110,14 @@ export function defaultCurrencyFormCustomization(): CurrencyFormCustomizationCon
         },
       ])
     ) as Record<CurrencyFormFieldKey, CurrencyFormFieldCustomization>,
+    statCards: CURRENCY_STAT_CARDS.map((card, index) => ({
+      id: `currency-stat-${card.id}`,
+      metric: card.id,
+      visible: true,
+      order: index,
+      size: 'md',
+      colorized: true,
+      linked: true,
+    })),
   }
 }

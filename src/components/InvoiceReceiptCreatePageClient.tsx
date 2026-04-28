@@ -4,10 +4,11 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionActionStack from '@/components/TransactionActionStack'
-import PurchaseOrderHeaderSections, {
-  type PurchaseOrderHeaderField,
-} from '@/components/PurchaseOrderHeaderSections'
+import TransactionHeaderSections, {
+  type TransactionHeaderField,
+} from '@/components/TransactionHeaderSections'
 import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
+import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/lib/form-requirements-client'
 import {
   INVOICE_RECEIPT_DETAIL_FIELDS,
   type InvoiceReceiptDetailCustomizationConfig,
@@ -28,7 +29,7 @@ type Option = { value: string; label: string }
 
 type InvoiceReceiptHeaderField = {
   key: InvoiceReceiptDetailFieldKey
-} & PurchaseOrderHeaderField
+} & TransactionHeaderField
 
 const sectionDescriptions: Record<string, string> = {
   Customer: 'Customer context derived from the selected invoice.',
@@ -47,6 +48,7 @@ export default function InvoiceReceiptCreatePageClient({
   initialHeaderValues?: Partial<Record<string, string>>
 }) {
   const router = useRouter()
+  const { req, isLocked } = useFormRequirementsState('invoiceReceiptCreate')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [headerValues, setHeaderValues] = useState<Record<string, string>>({
@@ -191,6 +193,8 @@ export default function InvoiceReceiptCreatePageClient({
       subsectionDescription: 'System-managed timestamps for this receipt.',
     },
   }
+  applyRequirementsToEditableFields(headerFieldDefinitions, req, isLocked)
+
 
   const headerSections = buildConfiguredTransactionSections({
     fields: INVOICE_RECEIPT_DETAIL_FIELDS,
@@ -242,7 +246,7 @@ export default function InvoiceReceiptCreatePageClient({
       widthClassName="w-full max-w-none"
       actions={<TransactionActionStack mode="create" cancelHref="/invoice-receipts" formId="create-invoice-receipt-form" />}
     >
-      <PurchaseOrderHeaderSections
+      <TransactionHeaderSections
         editing
         sections={headerSections}
         columns={customization.formColumns}
@@ -264,3 +268,4 @@ export default function InvoiceReceiptCreatePageClient({
     </RecordDetailPageShell>
   )
 }
+

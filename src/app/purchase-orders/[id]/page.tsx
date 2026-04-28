@@ -1,26 +1,29 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { fmtCurrency, fmtPhone, fmtDocumentDate, toNumericValue } from '@/lib/format'
+import { fmtCurrency, fmtDocumentDate, toNumericValue } from '@/lib/format'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
 import { sumMoney } from '@/lib/money'
 import PurchaseOrderDetailCustomizeMode from '@/components/PurchaseOrderDetailCustomizeMode'
 import PurchaseOrderDetailExportButton from '@/components/PurchaseOrderDetailExportButton'
 import PurchaseOrderGlImpactSection from '@/components/PurchaseOrderGlImpactSection'
-import PurchaseOrderHeaderSections, {
-  type PurchaseOrderHeaderField,
-} from '@/components/PurchaseOrderHeaderSections'
-import PurchaseOrderLineItemsSection from '@/components/PurchaseOrderLineItemsSection'
+import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
+import TransactionHeaderSections, {
+  type TransactionHeaderField,
+} from '@/components/TransactionHeaderSections'
+import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import PurchaseOrderPageActions from '@/components/PurchaseOrderPageActions'
 import PurchaseOrderRelatedDocuments from '@/components/PurchaseOrderRelatedDocuments'
 import CommunicationsSection from '@/components/CommunicationsSection'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
+import TransactionStatsRow from '@/components/TransactionStatsRow'
 import { parseCommunicationSummary, parseFieldChangeSummary } from '@/lib/activity'
 import {
   PURCHASE_ORDER_DETAIL_FIELDS,
   PURCHASE_ORDER_LINE_COLUMNS,
+  PURCHASE_ORDER_REFERENCE_SOURCES,
   type PurchaseOrderDetailFieldKey,
 } from '@/lib/purchase-order-detail-customization'
 import { loadPurchaseOrderDetailCustomization } from '@/lib/purchase-order-detail-customization-store'
@@ -31,6 +34,10 @@ import {
   buildTransactionExportHeaderFields,
   getOrderedVisibleTransactionLineColumns,
 } from '@/lib/transaction-detail-helpers'
+import {
+  buildLinkedReferenceFieldDefinitions,
+  buildLinkedReferencePreviewSources,
+} from '@/lib/linked-record-reference-catalogs'
 import { purchaseOrderPageConfig } from '@/lib/transaction-page-configs/purchase-order'
 import { buildTransactionCommunicationComposePayload } from '@/lib/transaction-communications'
 
@@ -43,7 +50,7 @@ const PURCHASE_ORDER_STATUS_OPTIONS = [
 ]
 
 const SYSTEM_NOTE_CURRENCY_FIELDS = new Set(['Total', 'Unit Price', 'Line Total'])
-type PurchaseOrderDetailHeaderField = PurchaseOrderHeaderField & { key: PurchaseOrderDetailFieldKey }
+type PurchaseOrderDetailHeaderField = TransactionHeaderField & { key: PurchaseOrderDetailFieldKey }
 
 export default async function PurchaseOrderDetailPage({
   params,
@@ -309,86 +316,20 @@ export default async function PurchaseOrderDetailPage({
     label: `${subsidiary.subsidiaryId} - ${subsidiary.name}`,
   }))
 
+  const createdByLabel =
+    po.user?.userId && po.user?.name
+      ? `${po.user.userId} - ${po.user.name}`
+      : po.user?.userId ?? po.user?.name ?? po.user?.email ?? '-'
+
   const headerFieldDefinitions: Record<PurchaseOrderDetailFieldKey, PurchaseOrderDetailHeaderField> = {
-    vendorName: {
-      key: 'vendorName',
-      label: 'Vendor Name',
-      value: po.vendor.name,
-      helpText: 'Display name from the linked vendor record.',
+    id: {
+      key: 'id',
+      label: 'DB Id',
+      value: po.id,
+      helpText: 'Internal database identifier for the purchase order record.',
       fieldType: 'text',
-      sourceText: 'Vendors master data',
-    },
-    vendorNumber: {
-      key: 'vendorNumber',
-      label: 'Vendor #',
-      value: po.vendor.vendorNumber ?? '',
-      displayValue:
-        po.vendor.vendorNumber != null ? (
-          <Link href={`/vendors/${po.vendor.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-            {po.vendor.vendorNumber}
-          </Link>
-        ) : (
-          '-'
-        ),
-      helpText: 'Internal vendor identifier from the linked vendor record.',
-      fieldType: 'text',
-      sourceText: 'Vendors master data',
-    },
-    vendorEmail: {
-      key: 'vendorEmail',
-      label: 'Email',
-      value: po.vendor.email ?? '',
-      helpText: 'Primary vendor email address.',
-      fieldType: 'email',
-      sourceText: 'Vendors master data',
-    },
-    vendorPhone: {
-      key: 'vendorPhone',
-      label: 'Phone',
-      value: fmtPhone(po.vendor.phone),
-      helpText: 'Primary vendor phone number.',
-      fieldType: 'text',
-      sourceText: 'Vendors master data',
-    },
-    vendorTaxId: {
-      key: 'vendorTaxId',
-      label: 'Tax ID',
-      value: po.vendor.taxId ?? '',
-      helpText: 'Vendor tax registration or identification number.',
-      fieldType: 'text',
-      sourceText: 'Vendors master data',
-    },
-    vendorAddress: {
-      key: 'vendorAddress',
-      label: 'Address',
-      value: po.vendor.address ?? '',
-      helpText: 'Mailing or remittance address from the linked vendor record.',
-      fieldType: 'text',
-      sourceText: 'Vendors master data',
-    },
-    vendorPrimarySubsidiary: {
-      key: 'vendorPrimarySubsidiary',
-      label: 'Primary Subsidiary',
-      value: po.vendor.subsidiary ? `${po.vendor.subsidiary.subsidiaryId} - ${po.vendor.subsidiary.name}` : '',
-      helpText: 'Default subsidiary context from the linked vendor record.',
-      fieldType: 'list',
-      sourceText: 'Vendors master data',
-    },
-    vendorPrimaryCurrency: {
-      key: 'vendorPrimaryCurrency',
-      label: 'Primary Currency',
-      value: po.vendor.currency ? `${po.vendor.currency.code} - ${po.vendor.currency.name}` : '',
-      helpText: 'Default transaction currency from the linked vendor record.',
-      fieldType: 'list',
-      sourceText: 'Vendors master data',
-    },
-    vendorInactive: {
-      key: 'vendorInactive',
-      label: 'Inactive',
-      value: po.vendor.inactive ? 'Yes' : 'No',
-      helpText: 'Indicates whether the linked vendor is inactive for new activity.',
-      fieldType: 'checkbox',
-      sourceText: 'Vendors master data',
+      subsectionTitle: 'Record Keys',
+      subsectionDescription: 'Internal and linked transaction identifiers for this purchase order.',
     },
     number: {
       key: 'number',
@@ -396,19 +337,66 @@ export default async function PurchaseOrderDetailPage({
       value: po.number,
       editable: true,
       type: 'text',
-      helpText: 'Unique purchase order number used across procurement workflows.',
+      helpText: 'Unique purchase order number used across procure-to-pay workflows.',
       fieldType: 'text',
       subsectionTitle: 'Document Identity',
       subsectionDescription: 'Document numbering, provenance, and ownership for the purchase order.',
     },
+    userId: {
+      key: 'userId',
+      label: 'User Id',
+      value: po.user?.userId ?? '',
+      helpText: 'Internal user identifier for the purchase order creator.',
+      fieldType: 'text',
+      sourceText: 'Users master data',
+      subsectionTitle: 'Record Keys',
+      subsectionDescription: 'Internal and linked transaction identifiers for this purchase order.',
+    },
+    vendorRecordId: {
+      key: 'vendorRecordId',
+      label: 'Vendor Id',
+      value: po.vendor?.vendorNumber ?? '',
+      helpText: 'Internal vendor identifier linked to this purchase order.',
+      fieldType: 'text',
+      sourceText: 'Vendors master data',
+      subsectionTitle: 'Record Keys',
+      subsectionDescription: 'Internal and linked transaction identifiers for this purchase order.',
+    },
+    subsidiaryRecordId: {
+      key: 'subsidiaryRecordId',
+      label: 'Subsidiary Id',
+      value: po.subsidiary?.subsidiaryId ?? '',
+      helpText: 'Internal subsidiary identifier linked to this purchase order.',
+      fieldType: 'text',
+      sourceText: 'Subsidiaries master data',
+      subsectionTitle: 'Record Keys',
+      subsectionDescription: 'Internal and linked transaction identifiers for this purchase order.',
+    },
+    currencyRecordId: {
+      key: 'currencyRecordId',
+      label: 'Currency Id',
+      value: po.currency?.currencyId ?? po.currency?.code ?? '',
+      helpText: 'Internal currency identifier linked to this purchase order.',
+      fieldType: 'text',
+      sourceText: 'Currencies master data',
+      subsectionTitle: 'Record Keys',
+      subsectionDescription: 'Internal and linked transaction identifiers for this purchase order.',
+    },
+    requisitionRecordId: {
+      key: 'requisitionRecordId',
+      label: 'Requisition Id',
+      value: po.requisition?.number ?? '',
+      helpText: 'Internal requisition identifier linked as the source document.',
+      fieldType: 'text',
+      sourceText: 'Purchase requisition transaction',
+      subsectionTitle: 'Record Keys',
+      subsectionDescription: 'Internal and linked transaction identifiers for this purchase order.',
+    },
     createdBy: {
       key: 'createdBy',
       label: 'Created By',
-      value: po.user?.userId ?? po.user?.name ?? po.user?.email ?? '',
-      displayValue:
-        po.user?.userId && po.user?.name
-          ? `${po.user.userId} - ${po.user.name}`
-          : po.user?.userId ?? po.user?.name ?? po.user?.email ?? '-',
+      value: createdByLabel,
+      displayValue: createdByLabel,
       helpText: 'User who created the purchase order.',
       fieldType: 'text',
       sourceText: 'Users master data',
@@ -420,15 +408,19 @@ export default async function PurchaseOrderDetailPage({
       label: 'Created From',
       value: po.requisition?.number ?? '',
       displayValue: po.requisition ? (
-        <Link href={`/purchase-requisitions/${po.requisition.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+        <Link
+          href={`/purchase-requisitions/${po.requisition.id}`}
+          className="hover:underline"
+          style={{ color: 'var(--accent-primary-strong)' }}
+        >
           {po.requisition.number}
         </Link>
       ) : (
         '-'
       ),
-      helpText: 'Source transaction that created this purchase order.',
+      helpText: 'Source purchase requisition that created this purchase order.',
       fieldType: 'text',
-      sourceText: 'Source transaction',
+      sourceText: 'Purchase requisition transaction',
       subsectionTitle: 'Document Identity',
       subsectionDescription: 'Document numbering, provenance, and ownership for the purchase order.',
     },
@@ -440,34 +432,8 @@ export default async function PurchaseOrderDetailPage({
       helpText: 'User who approved the purchase order based on the approval activity trail.',
       fieldType: 'text',
       sourceText: 'System Notes / activity history',
-      subsectionTitle: 'Document Identity',
-      subsectionDescription: 'Document numbering, provenance, and ownership for the purchase order.',
-    },
-    subsidiaryId: {
-      key: 'subsidiaryId',
-      label: 'Subsidiary',
-      value: po.subsidiaryId ?? '',
-      editable: true,
-      type: 'select',
-      options: [{ value: '', label: 'None' }, ...subsidiaryOptions],
-      helpText: 'Legal Subsidiary or subsidiary that owns the purchase order.',
-      fieldType: 'list',
-      sourceText: 'Subsidiaries master data',
-      subsectionTitle: 'Procurement Controls',
-      subsectionDescription: 'Vendor linkage, lifecycle status, and commercial controls for the purchase order.',
-    },
-    vendorId: {
-      key: 'vendorId',
-      label: 'Vendor',
-      value: po.vendorId,
-      editable: true,
-      type: 'select',
-      options: vendorOptions,
-      helpText: 'Vendor record linked to this purchase order.',
-      fieldType: 'list',
-      sourceText: 'Vendors master data',
-      subsectionTitle: 'Procurement Controls',
-      subsectionDescription: 'Vendor linkage, lifecycle status, and commercial controls for the purchase order.',
+      subsectionTitle: 'Workflow & Approval',
+      subsectionDescription: 'Current workflow status and approval ownership for the purchase order.',
     },
     status: {
       key: 'status',
@@ -479,8 +445,48 @@ export default async function PurchaseOrderDetailPage({
       helpText: 'Current lifecycle stage of the purchase order.',
       fieldType: 'list',
       sourceText: 'System purchase order statuses',
-      subsectionTitle: 'Procurement Controls',
-      subsectionDescription: 'Vendor linkage, lifecycle status, and commercial controls for the purchase order.',
+      subsectionTitle: 'Workflow & Approval',
+      subsectionDescription: 'Current workflow status and approval ownership for the purchase order.',
+    },
+    vendorId: {
+      key: 'vendorId',
+      label: 'Vendor',
+      value: po.vendorId,
+      editable: true,
+      type: 'select',
+      options: vendorOptions,
+      displayValue: `${po.vendor.vendorNumber ?? 'VENDOR'} - ${po.vendor.name}`,
+      helpText: 'Vendor record linked to this purchase order.',
+      fieldType: 'list',
+      sourceText: 'Vendors master data',
+      subsectionTitle: 'Sourcing & Financials',
+      subsectionDescription: 'Vendor, subsidiary, currency, and total purchasing context for the order.',
+    },
+    subsidiaryId: {
+      key: 'subsidiaryId',
+      label: 'Subsidiary',
+      value: po.subsidiaryId ?? '',
+      editable: true,
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...subsidiaryOptions],
+      displayValue: po.subsidiary ? `${po.subsidiary.subsidiaryId} - ${po.subsidiary.name}` : '-',
+      helpText: 'Subsidiary that owns this purchase order.',
+      fieldType: 'list',
+      sourceText: 'Subsidiaries master data',
+      subsectionTitle: 'Sourcing & Financials',
+      subsectionDescription: 'Vendor, subsidiary, currency, and total purchasing context for the order.',
+    },
+    currencyId: {
+      key: 'currencyId',
+      label: 'Currency',
+      value: po.currencyId ?? '',
+      editable: false,
+      displayValue: po.currency ? `${po.currency.code ?? po.currency.currencyId} - ${po.currency.name}` : '-',
+      helpText: 'Transaction currency for this purchase order.',
+      fieldType: 'list',
+      sourceText: 'Currencies master data',
+      subsectionTitle: 'Sourcing & Financials',
+      subsectionDescription: 'Vendor, subsidiary, currency, and total purchasing context for the order.',
     },
     total: {
       key: 'total',
@@ -489,8 +495,28 @@ export default async function PurchaseOrderDetailPage({
       displayValue: fmtCurrency(computedTotal, undefined, moneySettings),
       helpText: 'Current document total based on all purchase order line amounts.',
       fieldType: 'currency',
-      subsectionTitle: 'Procurement Controls',
-      subsectionDescription: 'Vendor linkage, lifecycle status, and commercial controls for the purchase order.',
+      subsectionTitle: 'Sourcing & Financials',
+      subsectionDescription: 'Vendor, subsidiary, currency, and total purchasing context for the order.',
+    },
+    createdAt: {
+      key: 'createdAt',
+      label: 'Created',
+      value: po.createdAt.toISOString(),
+      displayValue: fmtDocumentDate(po.createdAt, moneySettings),
+      helpText: 'Date/time the purchase order record was created.',
+      fieldType: 'date',
+      subsectionTitle: 'System Dates',
+      subsectionDescription: 'System-managed timestamps for this purchase order.',
+    },
+    updatedAt: {
+      key: 'updatedAt',
+      label: 'Last Modified',
+      value: po.updatedAt.toISOString(),
+      displayValue: fmtDocumentDate(po.updatedAt, moneySettings),
+      helpText: 'Date/time the purchase order record was last modified.',
+      fieldType: 'date',
+      subsectionTitle: 'System Dates',
+      subsectionDescription: 'System-managed timestamps for this purchase order.',
     },
   }
 
@@ -505,25 +531,123 @@ export default async function PurchaseOrderDetailPage({
     fields: PURCHASE_ORDER_DETAIL_FIELDS,
     fieldDefinitions: headerFieldDefinitions,
     previewOverrides: {
-      vendorId: vendorOptions.find((option) => option.value === po.vendorId)?.label ?? po.vendor.name,
+      id: po.id,
+      userId: po.user?.userId ?? '',
+      vendorRecordId: po.vendor?.vendorNumber ?? '',
+      subsidiaryRecordId: po.subsidiary?.subsidiaryId ?? '',
+      currencyRecordId: po.currency?.currencyId ?? po.currency?.code ?? '',
+      requisitionRecordId: po.requisition?.number ?? '',
+      createdBy: createdByLabel,
+      createdFrom: po.requisition?.number ?? '',
+      approvedBy: approvedByLabel,
       status:
         PURCHASE_ORDER_STATUS_OPTIONS.find((option) => option.value === (po.status ?? ''))?.label ??
         (po.status ?? ''),
-      createdBy:
-        po.user?.userId && po.user?.name
-          ? `${po.user.userId} - ${po.user.name}`
-          : po.user?.userId ?? po.user?.name ?? po.user?.email ?? '',
-      createdFrom: po.requisition?.number ?? '',
-      approvedBy: approvedByLabel,
+      vendorId: `${po.vendor.vendorNumber ?? 'VENDOR'} - ${po.vendor.name}`,
       subsidiaryId: po.subsidiary ? `${po.subsidiary.subsidiaryId} - ${po.subsidiary.name}` : '',
+      currencyId: po.currency ? `${po.currency.code ?? po.currency.currencyId} - ${po.currency.name}` : '',
       total: fmtCurrency(computedTotal, undefined, moneySettings),
-      vendorPrimarySubsidiary: po.vendor.subsidiary ? `${po.vendor.subsidiary.subsidiaryId} - ${po.vendor.subsidiary.name}` : '',
-      vendorPrimaryCurrency: po.vendor.currency ? `${po.vendor.currency.code} - ${po.vendor.currency.name}` : '',
-      vendorInactive: po.vendor.inactive ? 'Yes' : 'No',
+      createdAt: fmtDocumentDate(po.createdAt, moneySettings),
+      updatedAt: fmtDocumentDate(po.updatedAt, moneySettings),
     },
   })
 
-  const exportHeaderFields = buildTransactionExportHeaderFields<PurchaseOrderDetailFieldKey, PurchaseOrderDetailHeaderField>(headerSections, {
+  const statsRecord = {
+    total: computedTotal,
+    lineCount: derivedLineRows.length,
+    receiptCount: po.receipts.length,
+    statusLabel: po.status ? po.status.charAt(0).toUpperCase() + po.status.slice(1).toLowerCase() : 'Unknown',
+    moneySettings,
+  } as const
+  const statPreviewCards = purchaseOrderPageConfig.stats.map((stat) => ({
+    id: stat.id,
+    label: stat.label,
+    value: stat.getValue(statsRecord),
+    href: stat.getHref?.(statsRecord) ?? null,
+    accent: stat.accent,
+    valueTone: stat.getValueTone?.(statsRecord),
+    cardTone: stat.getCardTone?.(statsRecord),
+    supportsColorized: Boolean(stat.accent || stat.getValueTone || stat.getCardTone),
+    supportsLink: Boolean(stat.getHref),
+  }))
+
+  const referenceFieldDefinitions = buildLinkedReferenceFieldDefinitions(
+    PURCHASE_ORDER_REFERENCE_SOURCES,
+    {
+      vendor: po.vendor,
+      requisition: po.requisition,
+      owner: po.user,
+      subsidiary: po.subsidiary,
+      currency: po.currency,
+    },
+    {
+      vendor: po.vendor ? `/vendors/${po.vendor.id}` : null,
+      requisition: po.requisition ? `/purchase-requisitions/${po.requisition.id}` : null,
+      owner: po.user ? `/users/${po.user.id}` : null,
+      subsidiary: po.subsidiary ? `/subsidiaries/${po.subsidiary.id}` : null,
+      currency: po.currency ? `/currencies/${po.currency.id}` : null,
+    },
+  )
+  const allFieldDefinitions = {
+    ...headerFieldDefinitions,
+    ...referenceFieldDefinitions,
+  }
+  const referenceSourceDefinitions = buildLinkedReferencePreviewSources(
+    PURCHASE_ORDER_REFERENCE_SOURCES,
+    {
+      vendor: po.vendor,
+      requisition: po.requisition,
+      owner: po.user,
+      subsidiary: po.subsidiary,
+      currency: po.currency,
+    },
+  )
+  const referenceSections = (customization.referenceLayouts ?? [])
+    .map((referenceLayout) => {
+      const source = PURCHASE_ORDER_REFERENCE_SOURCES.find(
+        (entry) => entry.id === referenceLayout.referenceId,
+      )
+      if (!source) return null
+      const fields = source.fields
+        .filter((field) => referenceLayout.fields[field.id]?.visible)
+        .sort((left, right) => {
+          const leftConfig = referenceLayout.fields[left.id]
+          const rightConfig = referenceLayout.fields[right.id]
+          if (!leftConfig || !rightConfig) return 0
+          if (leftConfig.column !== rightConfig.column) return leftConfig.column - rightConfig.column
+          return leftConfig.order - rightConfig.order
+        })
+        .map((field) => ({
+          ...allFieldDefinitions[field.id],
+          column: referenceLayout.fields[field.id]?.column ?? 1,
+          order: referenceLayout.fields[field.id]?.order ?? 0,
+        }))
+
+      if (fields.length === 0) return null
+
+      return {
+        title: source.label,
+        description: source.description,
+        columns: referenceLayout.formColumns,
+        rows: Math.max(1, ...fields.map((field) => Math.max(1, (field.order ?? 0) + 1))),
+        fields,
+      }
+    })
+    .filter(
+      (section): section is {
+        title: string
+        description: string
+        columns: number
+        rows: number
+        fields: TransactionHeaderField[]
+      } => Boolean(section),
+    )
+  const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
+
+  const exportHeaderFields = buildTransactionExportHeaderFields<
+    PurchaseOrderDetailFieldKey,
+    PurchaseOrderDetailHeaderField
+  >(headerSections, {
     total: () => fmtCurrency(computedTotal, undefined, moneySettings),
   })
 
@@ -553,6 +677,12 @@ export default async function PurchaseOrderDetailPage({
       actions={
         isCustomizing ? null : (
           <>
+            {!isEditing ? (
+              <MasterDataDetailCreateMenu
+                newHref="/purchase-orders/new"
+                duplicateHref={`/purchase-orders/new?duplicateFrom=${encodeURIComponent(po.id)}`}
+              />
+            ) : null}
             <PurchaseOrderDetailExportButton
               number={po.number}
               vendorName={po.vendor.name}
@@ -602,6 +732,16 @@ export default async function PurchaseOrderDetailPage({
       }
     >
       <TransactionDetailFrame
+        showFooterSections={!isCustomizing}
+        stats={
+          isCustomizing ? null : (
+            <TransactionStatsRow
+              record={statsRecord}
+              stats={purchaseOrderPageConfig.stats}
+              visibleStatCards={customization.statCards}
+            />
+          )
+        }
         header={
           isCustomizing ? (
             <div className="mb-7">
@@ -609,38 +749,64 @@ export default async function PurchaseOrderDetailPage({
                 detailHref={detailHref}
                 initialLayout={customization}
                 fields={customizeFields}
+                referenceSourceDefinitions={referenceSourceDefinitions}
                 sectionDescriptions={purchaseOrderPageConfig.sectionDescriptions}
+                statPreviewCards={statPreviewCards}
               />
             </div>
           ) : (
-            <PurchaseOrderHeaderSections
-              purchaseOrderId={po.id}
-              editing={isEditing}
-              sections={headerSections}
-              columns={customization.formColumns}
-            />
+            <div className="space-y-6">
+              {referenceSections.length > 0 ? (
+                <TransactionHeaderSections
+                  editing={false}
+                  sections={referenceSections.map((section) => ({
+                    title: section.title,
+                    description: section.description,
+                    rows: section.rows,
+                    fields: section.fields,
+                  }))}
+                  columns={referenceColumns}
+                  containerTitle="Reference Details"
+                  containerDescription="Expanded context from linked records on this purchase order."
+                  showSubsections={false}
+                />
+              ) : null}
+              <TransactionHeaderSections
+                purchaseOrderId={po.id}
+                editing={isEditing}
+                sections={headerSections}
+                columns={customization.formColumns}
+                containerTitle="Purchase Order Details"
+                containerDescription="Core purchase order fields organized into configurable sections."
+                showSubsections={false}
+              />
+            </div>
           )
         }
         lineItems={
-          <PurchaseOrderLineItemsSection
-            editing={isEditing}
-            rows={derivedLineRows}
-            purchaseOrderId={po.id}
-            userId={po.userId}
-            lineColumns={orderedVisibleLineColumns}
-            itemOptions={items.map((item) => ({
-              id: item.id,
-              itemId: item.itemId ?? 'Pending',
-              name: item.name,
-              unitPrice: toNumericValue(item.listPrice, 0),
-              itemDrivenValues: {
-                description: item.name,
-                unitPrice: String(toNumericValue(item.listPrice, 0)),
-              },
-            }))}
-          />
+          isCustomizing ? null : (
+            <TransactionLineItemsSection
+              editing={isEditing}
+              rows={derivedLineRows}
+              purchaseOrderId={po.id}
+              userId={po.userId}
+              lineColumns={orderedVisibleLineColumns}
+              lineSettings={customization.lineSettings}
+              lineColumnCustomization={customization.lineColumns}
+              itemOptions={items.map((item) => ({
+                id: item.id,
+                itemId: item.itemId ?? 'Pending',
+                name: item.name,
+                unitPrice: toNumericValue(item.listPrice, 0),
+                itemDrivenValues: {
+                  description: item.name,
+                  unitPrice: String(toNumericValue(item.listPrice, 0)),
+                },
+              }))}
+            />
+          )
         }
-        relatedDocuments={
+        relatedDocuments={isCustomizing ? null : (
           <PurchaseOrderRelatedDocuments
             requisitions={
               po.requisition
@@ -688,9 +854,9 @@ export default async function PurchaseOrderDetailPage({
               }))
             )}
           />
-        }
-        supplementarySections={<PurchaseOrderGlImpactSection rows={glImpactRows} />}
-        communications={
+        )}
+        supplementarySections={isCustomizing ? null : <PurchaseOrderGlImpactSection rows={glImpactRows} />}
+        communications={isCustomizing ? null : (
           <CommunicationsSection
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
@@ -715,8 +881,8 @@ export default async function PurchaseOrderDetailPage({
               })),
             })}
           />
-        }
-        systemNotes={<SystemNotesSection notes={systemNotes} />}
+        )}
+        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
       />
     </RecordDetailPageShell>
   )

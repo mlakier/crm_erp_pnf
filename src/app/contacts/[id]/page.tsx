@@ -16,8 +16,8 @@ import {
   RecordDetailField,
   RecordDetailHeaderCell,
   RecordDetailSection,
-  RecordDetailStatCard,
 } from '@/components/RecordDetailPanels'
+import TransactionStatsRow from '@/components/TransactionStatsRow'
 import { loadContactFormCustomization } from '@/lib/contact-form-customization-store'
 import { CONTACT_FORM_FIELDS, type ContactFormFieldKey } from '@/lib/contact-form-customization'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
@@ -153,6 +153,22 @@ export default async function ContactDetailPage({
   }
 
   const customizeFields = buildCustomizePreviewFields(CONTACT_FORM_FIELDS, fieldDefinitions)
+  const accountType = contact.customer ? 'Customer' : 'Vendor'
+  const accountName = contact.customer?.name ?? contact.vendor?.name ?? '-'
+  const ownerName = contact.user.name ?? contact.user.email
+  const activityCount = contact.customer ? contact.customer.opportunities.length : contact.vendor?.purchaseOrders.length ?? 0
+  const statPreviewCards = [
+    { id: 'accountType', label: 'Account Type', value: accountType, cardTone: contact.customer ? 'blue' : 'yellow', valueTone: contact.customer ? 'blue' : 'yellow', supportsColorized: true, supportsLink: false },
+    { id: 'account', label: 'Account', value: accountName, href: contact.customer ? `/customers/${contact.customer.id}` : contact.vendor ? `/vendors/${contact.vendor.id}` : null, cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: true },
+    { id: 'owner', label: 'Owner', value: ownerName, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+    { id: 'activityCount', label: contact.customer ? 'Open Opportunities' : 'Purchase Orders', value: activityCount, accent: true, cardTone: 'green', valueTone: 'green', supportsColorized: true, supportsLink: false },
+  ]
+  const statDefinitions = [
+    { id: 'accountType', label: 'Account Type', getValue: () => accountType, getCardTone: () => (contact.customer ? 'blue' : 'yellow') as const, getValueTone: () => (contact.customer ? 'blue' : 'yellow') as const },
+    { id: 'account', label: 'Account', getValue: () => accountName, getHref: () => (contact.customer ? `/customers/${contact.customer.id}` : contact.vendor ? `/vendors/${contact.vendor.id}` : null), accent: 'teal' as const, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
+    { id: 'owner', label: 'Owner', getValue: () => ownerName, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
+    { id: 'activityCount', label: contact.customer ? 'Open Opportunities' : 'Purchase Orders', getValue: () => activityCount, accent: true as const, getCardTone: () => 'green' as const, getValueTone: () => 'green' as const },
+  ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: CONTACT_FORM_FIELDS,
     layout: formCustomization,
@@ -225,8 +241,17 @@ export default async function ContactDetailPage({
             initialRequirements={{ ...formRequirements.contactCreate }}
             fields={customizeFields}
             sectionDescriptions={sectionDescriptions}
+            statPreviewCards={statPreviewCards}
           />
         ) : (
+          <>
+          <div className="mb-8">
+            <TransactionStatsRow
+              record={contact}
+              stats={statDefinitions}
+              visibleStatCards={formCustomization.statCards as Array<{ id: string; metric: string; visible: boolean; order: number; size?: 'sm' | 'md' | 'lg'; colorized?: boolean; linked?: boolean }> | undefined}
+            />
+          </div>
           <InlineRecordDetails
             resource="contacts"
             id={contact.id}
@@ -236,127 +261,121 @@ export default async function ContactDetailPage({
             columns={formCustomization.formColumns}
             showInternalActions={false}
           />
+          </>
         )}
 
-        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} /> : null}
-
-        <div className="mb-8 grid gap-4 sm:grid-cols-3">
-          <RecordDetailStatCard label="Account Type" value={contact.customer ? 'Customer' : 'Vendor'} />
-          <RecordDetailStatCard label="Account" value={contact.customer?.name ?? contact.vendor?.name ?? '-'} />
-          <RecordDetailStatCard label="Owner" value={contact.user.name ?? contact.user.email} />
-          <RecordDetailStatCard
-            label={contact.customer ? 'Open opportunities' : 'Purchase orders'}
-            value={contact.customer ? contact.customer.opportunities.length : contact.vendor?.purchaseOrders.length ?? 0}
-            accent
-          />
-        </div>
-
-        {contact.customer ? (
+        {!isCustomizing ? (
           <>
-            <RecordDetailSection title="Linked customer" count={1}>
-              <div className="mb-4 flex items-center justify-between px-6 pt-6">
-                <Link href={`/customers/${contact.customer.id}`} className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                  {'View customer ->'}
-                </Link>
-              </div>
-              <div className="px-6 pb-6">
-                <p className="text-lg font-semibold text-white">{contact.customer.name}</p>
-                <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <RecordDetailField label="Industry">{contact.customer.industry ?? '-'}</RecordDetailField>
-                  <RecordDetailField label="Customer email">{contact.customer.email ?? '-'}</RecordDetailField>
-                  <RecordDetailField label="Customer phone">{fmtPhone(contact.customer.phone)}</RecordDetailField>
-                  <RecordDetailField label="Address">{contact.customer.address ?? '-'}</RecordDetailField>
-                </dl>
-              </div>
-            </RecordDetailSection>
+            <MasterDataSystemInfoSection info={systemInfo} internalId={contact.id} />
 
-            <RecordDetailSection title="Recent customer opportunities" count={contact.customer.opportunities.length}>
-              {contact.customer.opportunities.length === 0 ? (
-                <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>No opportunities for this customer yet.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full">
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                        <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
-                        <RecordDetailHeaderCell>Stage</RecordDetailHeaderCell>
-                        <RecordDetailHeaderCell>Amount</RecordDetailHeaderCell>
-                        <RecordDetailHeaderCell>Close Date</RecordDetailHeaderCell>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {contact.customer.opportunities.map((opportunity, index) => (
-                        <tr key={opportunity.id} style={index < contact.customer!.opportunities.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                          <RecordDetailCell>
-                            <Link href={`/opportunities/${opportunity.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                              {opportunity.name}
-                            </Link>
-                          </RecordDetailCell>
-                          <RecordDetailCell>{opportunity.stage}</RecordDetailCell>
-                          <RecordDetailCell>{fmtCurrency(opportunity.amount, undefined, moneySettings)}</RecordDetailCell>
-                          <RecordDetailCell>{opportunity.closeDate ? fmtDocumentDate(opportunity.closeDate, moneySettings) : '-'}</RecordDetailCell>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </RecordDetailSection>
-          </>
-        ) : contact.vendor ? (
-          <>
-            <RecordDetailSection title="Linked vendor" count={1}>
-              <div className="mb-4 flex items-center justify-between px-6 pt-6">
-                <Link href={`/vendors/${contact.vendor.id}`} className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                  {'View vendor ->'}
-                </Link>
-              </div>
-              <div className="px-6 pb-6">
-                <p className="text-lg font-semibold text-white">{contact.vendor.name}</p>
-                <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <RecordDetailField label="Vendor email">{contact.vendor.email ?? '-'}</RecordDetailField>
-                  <RecordDetailField label="Vendor phone">{fmtPhone(contact.vendor.phone)}</RecordDetailField>
-                  <RecordDetailField label="Tax ID">{contact.vendor.taxId ?? '-'}</RecordDetailField>
-                  <RecordDetailField label="Address">{contact.vendor.address ?? '-'}</RecordDetailField>
-                </dl>
-              </div>
-            </RecordDetailSection>
+            {contact.customer ? (
+              <>
+                <RecordDetailSection title="Linked customer" count={1}>
+                  <div className="mb-4 flex items-center justify-between px-6 pt-6">
+                    <Link href={`/customers/${contact.customer.id}`} className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                      {'View customer ->'}
+                    </Link>
+                  </div>
+                  <div className="px-6 pb-6">
+                    <p className="text-lg font-semibold text-white">{contact.customer.name}</p>
+                    <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <RecordDetailField label="Industry">{contact.customer.industry ?? '-'}</RecordDetailField>
+                      <RecordDetailField label="Customer email">{contact.customer.email ?? '-'}</RecordDetailField>
+                      <RecordDetailField label="Customer phone">{fmtPhone(contact.customer.phone)}</RecordDetailField>
+                      <RecordDetailField label="Address">{contact.customer.address ?? '-'}</RecordDetailField>
+                    </dl>
+                  </div>
+                </RecordDetailSection>
 
-            <RecordDetailSection title="Recent vendor purchase orders" count={contact.vendor.purchaseOrders.length}>
-              {contact.vendor.purchaseOrders.length === 0 ? (
-                <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>No purchase orders for this vendor yet.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full">
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                        <RecordDetailHeaderCell>Number</RecordDetailHeaderCell>
-                        <RecordDetailHeaderCell>Status</RecordDetailHeaderCell>
-                        <RecordDetailHeaderCell>Total</RecordDetailHeaderCell>
-                        <RecordDetailHeaderCell>Date</RecordDetailHeaderCell>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {contact.vendor.purchaseOrders.map((purchaseOrder, index) => (
-                        <tr key={purchaseOrder.id} style={index < contact.vendor!.purchaseOrders.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                          <RecordDetailCell>
-                            <Link href={`/purchase-orders/${purchaseOrder.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                              {purchaseOrder.number}
-                            </Link>
-                          </RecordDetailCell>
-                          <RecordDetailCell>{purchaseOrder.status}</RecordDetailCell>
-                          <RecordDetailCell>{fmtCurrency(purchaseOrder.total, undefined, moneySettings)}</RecordDetailCell>
-                          <RecordDetailCell>{fmtDocumentDate(purchaseOrder.createdAt, moneySettings)}</RecordDetailCell>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </RecordDetailSection>
+                <RecordDetailSection title="Recent customer opportunities" count={contact.customer.opportunities.length}>
+                  {contact.customer.opportunities.length === 0 ? (
+                    <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>No opportunities for this customer yet.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full">
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
+                            <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
+                            <RecordDetailHeaderCell>Stage</RecordDetailHeaderCell>
+                            <RecordDetailHeaderCell>Amount</RecordDetailHeaderCell>
+                            <RecordDetailHeaderCell>Close Date</RecordDetailHeaderCell>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {contact.customer.opportunities.map((opportunity, index) => (
+                            <tr key={opportunity.id} style={index < contact.customer!.opportunities.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
+                              <RecordDetailCell>
+                                <Link href={`/opportunities/${opportunity.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                                  {opportunity.name}
+                                </Link>
+                              </RecordDetailCell>
+                              <RecordDetailCell>{opportunity.stage}</RecordDetailCell>
+                              <RecordDetailCell>{fmtCurrency(opportunity.amount, undefined, moneySettings)}</RecordDetailCell>
+                              <RecordDetailCell>{opportunity.closeDate ? fmtDocumentDate(opportunity.closeDate, moneySettings) : '-'}</RecordDetailCell>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </RecordDetailSection>
+              </>
+            ) : contact.vendor ? (
+              <>
+                <RecordDetailSection title="Linked vendor" count={1}>
+                  <div className="mb-4 flex items-center justify-between px-6 pt-6">
+                    <Link href={`/vendors/${contact.vendor.id}`} className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                      {'View vendor ->'}
+                    </Link>
+                  </div>
+                  <div className="px-6 pb-6">
+                    <p className="text-lg font-semibold text-white">{contact.vendor.name}</p>
+                    <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <RecordDetailField label="Vendor email">{contact.vendor.email ?? '-'}</RecordDetailField>
+                      <RecordDetailField label="Vendor phone">{fmtPhone(contact.vendor.phone)}</RecordDetailField>
+                      <RecordDetailField label="Tax ID">{contact.vendor.taxId ?? '-'}</RecordDetailField>
+                      <RecordDetailField label="Address">{contact.vendor.address ?? '-'}</RecordDetailField>
+                    </dl>
+                  </div>
+                </RecordDetailSection>
+
+                <RecordDetailSection title="Recent vendor purchase orders" count={contact.vendor.purchaseOrders.length}>
+                  {contact.vendor.purchaseOrders.length === 0 ? (
+                    <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>No purchase orders for this vendor yet.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full">
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
+                            <RecordDetailHeaderCell>Number</RecordDetailHeaderCell>
+                            <RecordDetailHeaderCell>Status</RecordDetailHeaderCell>
+                            <RecordDetailHeaderCell>Total</RecordDetailHeaderCell>
+                            <RecordDetailHeaderCell>Date</RecordDetailHeaderCell>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {contact.vendor.purchaseOrders.map((purchaseOrder, index) => (
+                            <tr key={purchaseOrder.id} style={index < contact.vendor!.purchaseOrders.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
+                              <RecordDetailCell>
+                                <Link href={`/purchase-orders/${purchaseOrder.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                                  {purchaseOrder.number}
+                                </Link>
+                              </RecordDetailCell>
+                              <RecordDetailCell>{purchaseOrder.status}</RecordDetailCell>
+                              <RecordDetailCell>{fmtCurrency(purchaseOrder.total, undefined, moneySettings)}</RecordDetailCell>
+                              <RecordDetailCell>{fmtDocumentDate(purchaseOrder.createdAt, moneySettings)}</RecordDetailCell>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </RecordDetailSection>
+              </>
+            ) : null}
+            <SystemNotesSection notes={systemNotes} />
           </>
         ) : null}
-        <SystemNotesSection notes={systemNotes} />
     </RecordDetailPageShell>
   )
 }

@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateFulfillmentNumber } from '@/lib/fulfillment-number'
 import { logActivity, logCommunicationActivity, logFieldChangeActivities } from '@/lib/activity'
+import {
+  coerceWorkflowValueForStep,
+  getDefaultWorkflowStatus,
+  getWorkflowDocumentAction,
+  isWorkflowActionIdAllowed,
+  loadOtcWorkflowRuntime,
+} from '@/lib/otc-workflow-runtime'
 
 function toOptionalString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
@@ -184,7 +191,6 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const salesOrderId = toOptionalString(body.salesOrderId)
-    const status = toOptionalString(body.status) ?? 'pending'
     const notes = toOptionalString(body.notes)
     const subsidiaryId = toOptionalString(body.subsidiaryId)
     const currencyId = toOptionalString(body.currencyId)
@@ -195,9 +201,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Sales order is required' }, { status: 400 })
     }
 
+    const workflow = await loadOtcWorkflowRuntime()
     const availability = await buildSalesOrderLineAvailability(salesOrderId)
     if (!availability) {
       return NextResponse.json({ error: 'Sales order not found' }, { status: 404 })
+    }
+    const fulfillmentCreateAction = getWorkflowDocumentAction(
+      workflow,
+      'sales-order',
+      'fulfillment',
+      availability.salesOrder.status,
+    )
+    if (!fulfillmentCreateAction) {
+      return NextResponse.json({ error: 'Workflow does not currently allow fulfillment creation from this sales order status' }, { status: 409 })
     }
 
     const normalizedLines: FulfillmentLineInput[] = linesInput
@@ -229,7 +245,11 @@ export async function POST(req: NextRequest) {
     const row = await prisma.fulfillment.create({
       data: {
         number,
-        status,
+        status: coerceWorkflowValueForStep(
+          workflow,
+          'fulfillment',
+          toOptionalString(body.status) ?? fulfillmentCreateAction.resultStatus ?? getDefaultWorkflowStatus(workflow, 'fulfillment'),
+        ),
         date,
         notes,
         salesOrderId,
@@ -265,6 +285,7 @@ export async function PUT(req: NextRequest) {
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
     const body = await req.json()
+    const workflow = await loadOtcWorkflowRuntime()
     const existing = await prisma.fulfillment.findUnique({
       where: { id },
       include: {
@@ -287,13 +308,25 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Fulfillment not found' }, { status: 404 })
     }
 
-    const nextStatus = toOptionalString(body.status) ?? existing.status
+    const nextStatus = coerceWorkflowValueForStep(
+      workflow,
+      'fulfillment',
+      toOptionalString(body.status) ?? existing.status,
+    )
     const nextNotes = body.notes === '' ? null : toOptionalString(body.notes) ?? existing.notes
     const nextDate = parseDate(body.date, existing.date) ?? existing.date
     const nextSubsidiaryId =
       body.subsidiaryId === '' ? null : toOptionalString(body.subsidiaryId) ?? existing.subsidiaryId
     const nextCurrencyId =
       body.currencyId === '' ? null : toOptionalString(body.currencyId) ?? existing.currencyId
+
+    if (
+      body.workflowStep === 'fulfillment'
+      && typeof body.workflowActionId === 'string'
+      && !isWorkflowActionIdAllowed(workflow, 'fulfillment', body.workflowActionId, existing.status, nextStatus)
+    ) {
+      return NextResponse.json({ error: 'Workflow transition is not allowed' }, { status: 409 })
+    }
 
     const updated = await prisma.fulfillment.update({
       where: { id },

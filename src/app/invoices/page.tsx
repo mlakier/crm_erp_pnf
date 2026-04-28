@@ -13,6 +13,7 @@ import { loadListValues } from '@/lib/load-list-values'
 import DeleteButton from '@/components/DeleteButton'
 import { RecordListHeaderLabel } from '@/components/RecordListHeaderLabel'
 import { buildMasterDataExportUrl } from '@/lib/master-data-export-url'
+import { createRecordLabelMapFromValues, formatRecordLabel } from '@/lib/record-status-label'
 
 const INVOICE_COLUMNS = [
   { id: 'invoice-number', label: 'Invoice Id' },
@@ -66,6 +67,7 @@ export default async function InvoicesPage({
   ])
 
   const statusOptions = ['all', ...statusValues.map((value) => value.toLowerCase())]
+  const statusLabelMap = createRecordLabelMapFromValues(statusValues)
   const pagination = getPagination(totalInvoices, params.page)
 
   const invoices = await prisma.invoice.findMany({
@@ -142,7 +144,7 @@ export default async function InvoicesPage({
                     }
               }
             >
-              {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+              {status === 'all' ? 'All' : formatRecordLabel(status, statusLabelMap)}
             </Link>
           )
         })}
@@ -214,8 +216,10 @@ export default async function InvoicesPage({
                         {invoice.number}
                       </Link>
                     </td>
-                    <td data-column="customer" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {invoice.customer.name}
+                    <td data-column="customer" className="px-4 py-2 text-sm">
+                      <Link href={`/customers/${invoice.customer.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                        {invoice.customer.name}
+                      </Link>
                     </td>
                     <td data-column="sales-order" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
                       {invoice.salesOrder ? (
@@ -231,7 +235,7 @@ export default async function InvoicesPage({
                       )}
                     </td>
                     <td data-column="status" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {invoice.status}
+                      {formatRecordLabel(invoice.status, statusLabelMap)}
                     </td>
                     <td data-column="total" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
                       {fmtCurrency(invoice.total, undefined, moneySettings)}
@@ -242,11 +246,23 @@ export default async function InvoicesPage({
                     <td data-column="paid-date" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
                       {invoice.paidDate ? fmtDocumentDate(invoice.paidDate, moneySettings) : '—'}
                     </td>
-                    <td data-column="subsidiary" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {invoice.subsidiary?.name ?? '—'}
+                    <td data-column="subsidiary" className="px-4 py-2 text-sm">
+                      {invoice.subsidiary ? (
+                        <Link href={`/subsidiaries/${invoice.subsidiary.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {invoice.subsidiary.name}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>{'—'}</span>
+                      )}
                     </td>
-                    <td data-column="currency" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {invoice.currency?.code ?? '—'}
+                    <td data-column="currency" className="px-4 py-2 text-sm">
+                      {invoice.currency ? (
+                        <Link href={`/currencies/${invoice.currency.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {invoice.currency.code}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>{'—'}</span>
+                      )}
                     </td>
                     <td data-column="db-id" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
                       {invoice.id}

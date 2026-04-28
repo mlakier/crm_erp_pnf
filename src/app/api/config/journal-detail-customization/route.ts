@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   defaultJournalDetailCustomization,
   JOURNAL_DETAIL_FIELDS,
+  JOURNAL_GL_IMPACT_COLUMNS,
+  JOURNAL_LINE_COLUMNS,
   JOURNAL_STAT_CARDS,
   type JournalDetailCustomizationConfig,
   type JournalDetailFieldKey,
+  type JournalGlImpactColumnKey,
+  type JournalLineColumnKey,
   type JournalStatCardKey,
 } from '@/lib/journal-detail-customization'
 import {
@@ -29,12 +33,34 @@ function sanitizeInput(input: unknown): JournalDetailCustomizationConfig {
       ? (root.sectionRows as Record<string, unknown>)
       : {}
   const fieldsInput = root.fields && typeof root.fields === 'object' ? (root.fields as Record<string, unknown>) : {}
+  const lineSettingsInput =
+    root.lineSettings && typeof root.lineSettings === 'object'
+      ? (root.lineSettings as Record<string, unknown>)
+      : {}
+  const glImpactSettingsInput =
+    root.glImpactSettings && typeof root.glImpactSettings === 'object'
+      ? (root.glImpactSettings as Record<string, unknown>)
+      : root.secondarySettings && typeof root.secondarySettings === 'object'
+        ? (root.secondarySettings as Record<string, unknown>)
+      : {}
+  const lineColumnsInput =
+    root.lineColumns && typeof root.lineColumns === 'object'
+      ? (root.lineColumns as Record<string, unknown>)
+      : {}
+  const glImpactColumnsInput =
+    root.glImpactColumns && typeof root.glImpactColumns === 'object'
+      ? (root.glImpactColumns as Record<string, unknown>)
+      : root.secondaryColumns && typeof root.secondaryColumns === 'object'
+        ? (root.secondaryColumns as Record<string, unknown>)
+      : {}
 
   const fields = Object.fromEntries(
     JOURNAL_DETAIL_FIELDS.map((field) => {
       const fieldInput =
         fieldsInput[field.id] && typeof fieldsInput[field.id] === 'object'
           ? (fieldsInput[field.id] as Record<string, unknown>)
+          : field.id === 'total' && fieldsInput.computedTotal && typeof fieldsInput.computedTotal === 'object'
+            ? (fieldsInput.computedTotal as Record<string, unknown>)
           : {}
 
       return [
@@ -58,6 +84,93 @@ function sanitizeInput(input: unknown): JournalDetailCustomizationConfig {
   ) as Record<JournalDetailFieldKey, JournalDetailCustomizationConfig['fields'][JournalDetailFieldKey]>
 
   const finalSections = sections.length > 0 ? Array.from(new Set(sections)) : defaults.sections
+  const lineColumns = Object.fromEntries(
+    JOURNAL_LINE_COLUMNS.map((column, index) => {
+      const columnInput =
+        lineColumnsInput[column.id] && typeof lineColumnsInput[column.id] === 'object'
+          ? (lineColumnsInput[column.id] as Record<string, unknown>)
+          : {}
+
+      return [
+        column.id,
+        {
+          visible:
+            columnInput.visible === undefined
+              ? defaults.lineColumns[column.id].visible
+              : columnInput.visible === true,
+          order:
+            typeof columnInput.order === 'number' && Number.isFinite(columnInput.order)
+              ? Math.max(0, Math.trunc(columnInput.order))
+              : defaults.lineColumns[column.id].order ?? index,
+          widthMode:
+            columnInput.widthMode === 'auto'
+            || columnInput.widthMode === 'compact'
+            || columnInput.widthMode === 'normal'
+            || columnInput.widthMode === 'wide'
+              ? columnInput.widthMode
+              : defaults.lineColumns[column.id].widthMode,
+          editDisplay:
+            columnInput.editDisplay === 'label'
+            || columnInput.editDisplay === 'idAndLabel'
+            || columnInput.editDisplay === 'id'
+              ? columnInput.editDisplay
+              : defaults.lineColumns[column.id].editDisplay,
+          viewDisplay:
+            columnInput.viewDisplay === 'label'
+            || columnInput.viewDisplay === 'idAndLabel'
+            || columnInput.viewDisplay === 'id'
+              ? columnInput.viewDisplay
+              : defaults.lineColumns[column.id].viewDisplay,
+          dropdownDisplay:
+            columnInput.dropdownDisplay === 'label'
+            || columnInput.dropdownDisplay === 'idAndLabel'
+            || columnInput.dropdownDisplay === 'id'
+              ? columnInput.dropdownDisplay
+              : defaults.lineColumns[column.id].dropdownDisplay,
+          dropdownSort:
+            columnInput.dropdownSort === 'id'
+            || columnInput.dropdownSort === 'label'
+              ? columnInput.dropdownSort
+              : defaults.lineColumns[column.id].dropdownSort,
+        },
+      ]
+    }),
+  ) as Record<JournalLineColumnKey, JournalDetailCustomizationConfig['lineColumns'][JournalLineColumnKey]>
+  const glImpactColumns = Object.fromEntries(
+    JOURNAL_GL_IMPACT_COLUMNS.map((column, index) => {
+      const columnInput =
+        glImpactColumnsInput[column.id] && typeof glImpactColumnsInput[column.id] === 'object'
+          ? (glImpactColumnsInput[column.id] as Record<string, unknown>)
+          : {}
+
+      return [
+        column.id,
+        {
+          visible:
+            columnInput.visible === undefined
+              ? defaults.glImpactColumns[column.id].visible
+              : columnInput.visible === true,
+          order:
+            typeof columnInput.order === 'number' && Number.isFinite(columnInput.order)
+              ? Math.max(0, Math.trunc(columnInput.order))
+              : defaults.glImpactColumns[column.id].order ?? index,
+          widthMode:
+            columnInput.widthMode === 'auto'
+            || columnInput.widthMode === 'compact'
+            || columnInput.widthMode === 'normal'
+            || columnInput.widthMode === 'wide'
+              ? columnInput.widthMode
+              : defaults.glImpactColumns[column.id].widthMode,
+          viewDisplay:
+            columnInput.viewDisplay === 'label'
+            || columnInput.viewDisplay === 'idAndLabel'
+            || columnInput.viewDisplay === 'id'
+              ? columnInput.viewDisplay
+              : defaults.glImpactColumns[column.id].viewDisplay,
+        },
+      ]
+    }),
+  ) as Record<JournalGlImpactColumnKey, JournalDetailCustomizationConfig['glImpactColumns'][JournalGlImpactColumnKey]>
   const validStatMetrics = new Set(JOURNAL_STAT_CARDS.map((card) => card.id))
   const statCardInputs = Array.isArray(root.statCards) ? root.statCards : defaults.statCards
   const statCards = statCardInputs
@@ -92,6 +205,34 @@ function sanitizeInput(input: unknown): JournalDetailCustomizationConfig {
       ]),
     ),
     fields,
+    lineSettings: {
+      fontSize: lineSettingsInput.fontSize === 'sm' ? 'sm' : defaults.lineSettings.fontSize,
+    },
+    glImpactSettings: {
+      fontSize: glImpactSettingsInput.fontSize === 'sm' ? 'sm' : defaults.glImpactSettings.fontSize,
+    },
+    lineColumns: Object.fromEntries(
+      [...JOURNAL_LINE_COLUMNS]
+        .sort((left, right) => lineColumns[left.id].order - lineColumns[right.id].order)
+        .map((column, index) => [
+          column.id,
+          {
+            ...lineColumns[column.id],
+            order: index,
+          },
+        ]),
+    ) as JournalDetailCustomizationConfig['lineColumns'],
+    glImpactColumns: Object.fromEntries(
+      [...JOURNAL_GL_IMPACT_COLUMNS]
+        .sort((left, right) => glImpactColumns[left.id].order - glImpactColumns[right.id].order)
+        .map((column, index) => [
+          column.id,
+          {
+            ...glImpactColumns[column.id],
+            order: index,
+          },
+        ]),
+    ) as JournalDetailCustomizationConfig['glImpactColumns'],
     statCards: statCards.length > 0 ? statCards : defaults.statCards,
   }
 }

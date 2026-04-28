@@ -1,21 +1,33 @@
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
+import {
+  buildDefaultTransactionReferenceLayout,
+  type TransactionReferenceLayout,
+} from '@/lib/transaction-reference-layouts'
+import {
+  type LinkedRecordReferenceSource,
+  CURRENCY_FULL_REFERENCE_FIELDS,
+  SUBSIDIARY_FULL_REFERENCE_FIELDS,
+  USER_FULL_REFERENCE_FIELDS,
+} from '@/lib/linked-record-reference-catalogs'
+
 export type PurchaseOrderDetailFieldKey =
-  | 'vendorName'
-  | 'vendorNumber'
-  | 'vendorEmail'
-  | 'vendorPhone'
-  | 'vendorTaxId'
-  | 'vendorAddress'
-  | 'vendorPrimarySubsidiary'
-  | 'vendorPrimaryCurrency'
-  | 'vendorInactive'
+  | 'id'
   | 'number'
+  | 'userId'
+  | 'vendorRecordId'
+  | 'subsidiaryRecordId'
+  | 'currencyRecordId'
+  | 'requisitionRecordId'
   | 'createdBy'
   | 'createdFrom'
   | 'approvedBy'
-  | 'subsidiaryId'
-  | 'vendorId'
   | 'status'
+  | 'vendorId'
+  | 'subsidiaryId'
+  | 'currencyId'
   | 'total'
+  | 'createdAt'
+  | 'updatedAt'
 
 export type PurchaseOrderLineColumnKey =
   | 'line'
@@ -27,6 +39,11 @@ export type PurchaseOrderLineColumnKey =
   | 'billed-qty'
   | 'unit-price'
   | 'line-total'
+
+export type PurchaseOrderLineFontSize = 'xs' | 'sm'
+export type PurchaseOrderLineWidthMode = 'auto' | 'compact' | 'normal' | 'wide'
+export type PurchaseOrderLineDisplayMode = 'label' | 'idAndLabel' | 'id'
+export type PurchaseOrderLineDropdownSortMode = 'id' | 'label'
 
 export type PurchaseOrderDetailFieldMeta = {
   id: PurchaseOrderDetailFieldKey
@@ -52,134 +69,50 @@ export type PurchaseOrderDetailFieldCustomization = {
 export type PurchaseOrderLineColumnCustomization = {
   visible: boolean
   order: number
+  widthMode: PurchaseOrderLineWidthMode
+  editDisplay: PurchaseOrderLineDisplayMode
+  viewDisplay: PurchaseOrderLineDisplayMode
+  dropdownDisplay: PurchaseOrderLineDisplayMode
+  dropdownSort: PurchaseOrderLineDropdownSortMode
 }
+
+export type PurchaseOrderLineSettings = {
+  fontSize: PurchaseOrderLineFontSize
+}
+
+export type PurchaseOrderStatCardKey = 'total' | 'lineCount' | 'receiptCount' | 'status'
+
+export type PurchaseOrderStatCardSlot = TransactionStatCardSlot<PurchaseOrderStatCardKey>
 
 export type PurchaseOrderDetailCustomizationConfig = {
   formColumns: number
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<PurchaseOrderDetailFieldKey, PurchaseOrderDetailFieldCustomization>
+  referenceLayouts: TransactionReferenceLayout[]
+  lineSettings: PurchaseOrderLineSettings
   lineColumns: Record<PurchaseOrderLineColumnKey, PurchaseOrderLineColumnCustomization>
+  statCards: PurchaseOrderStatCardSlot[]
 }
 
 export const PURCHASE_ORDER_DETAIL_FIELDS: PurchaseOrderDetailFieldMeta[] = [
-  {
-    id: 'vendorName',
-    label: 'Vendor Name',
-    fieldType: 'text',
-    source: 'Vendors master data',
-    description: 'Display name from the linked vendor record.',
-  },
-  {
-    id: 'vendorNumber',
-    label: 'Vendor #',
-    fieldType: 'text',
-    source: 'Vendors master data',
-    description: 'Internal vendor identifier from the linked vendor record.',
-  },
-  {
-    id: 'vendorEmail',
-    label: 'Email',
-    fieldType: 'email',
-    source: 'Vendors master data',
-    description: 'Primary vendor email address.',
-  },
-  {
-    id: 'vendorPhone',
-    label: 'Phone',
-    fieldType: 'text',
-    source: 'Vendors master data',
-    description: 'Primary vendor phone number.',
-  },
-  {
-    id: 'vendorTaxId',
-    label: 'Tax ID',
-    fieldType: 'text',
-    source: 'Vendors master data',
-    description: 'Vendor tax registration or identification number.',
-  },
-  {
-    id: 'vendorAddress',
-    label: 'Address',
-    fieldType: 'text',
-    source: 'Vendors master data',
-    description: 'Mailing or remittance address from the linked vendor record.',
-  },
-  {
-    id: 'vendorPrimarySubsidiary',
-    label: 'Primary Subsidiary',
-    fieldType: 'list',
-    source: 'Vendors master data',
-    description: 'Default subsidiary context from the linked vendor record.',
-  },
-  {
-    id: 'vendorPrimaryCurrency',
-    label: 'Primary Currency',
-    fieldType: 'list',
-    source: 'Vendors master data',
-    description: 'Default transaction currency from the linked vendor record.',
-  },
-  {
-    id: 'vendorInactive',
-    label: 'Inactive',
-    fieldType: 'boolean',
-    source: 'Vendors master data',
-    description: 'Indicates whether the linked vendor is inactive for new activity.',
-  },
-  {
-    id: 'number',
-    label: 'Purchase Order #',
-    fieldType: 'text',
-    description: 'Unique purchase order number used across procurement workflows.',
-  },
-  {
-    id: 'createdBy',
-    label: 'Created By',
-    fieldType: 'text',
-    source: 'Users master data',
-    description: 'User who created the purchase order.',
-  },
-  {
-    id: 'createdFrom',
-    label: 'Created From',
-    fieldType: 'text',
-    source: 'Source transaction',
-    description: 'Source transaction that created this purchase order.',
-  },
-  {
-    id: 'approvedBy',
-    label: 'Approved By',
-    fieldType: 'text',
-    source: 'System Notes / activity history',
-    description: 'User who approved the purchase order based on the approval activity trail.',
-  },
-  {
-    id: 'subsidiaryId',
-    label: 'Subsidiary',
-    fieldType: 'list',
-    source: 'Subsidiaries master data',
-    description: 'Subsidiary that owns the purchase order.',
-  },
-  {
-    id: 'vendorId',
-    label: 'Vendor',
-    fieldType: 'list',
-    source: 'Vendors master data',
-    description: 'Vendor linked to this purchase order.',
-  },
-  {
-    id: 'status',
-    label: 'Status',
-    fieldType: 'list',
-    source: 'System purchase order statuses',
-    description: 'Current lifecycle stage of the purchase order.',
-  },
-  {
-    id: 'total',
-    label: 'Total',
-    fieldType: 'currency',
-    description: 'Document total based on all purchase order line amounts.',
-  },
+  { id: 'id', label: 'DB Id', fieldType: 'text', description: 'Internal database identifier for the purchase order record.' },
+  { id: 'number', label: 'Purchase Order Id', fieldType: 'text', description: 'Unique purchase order number used across procure-to-pay workflows.' },
+  { id: 'userId', label: 'User Id', fieldType: 'text', source: 'Users master data', description: 'Internal user identifier for the purchase order creator.' },
+  { id: 'vendorRecordId', label: 'Vendor Id', fieldType: 'text', source: 'Vendors master data', description: 'Internal vendor identifier linked to this purchase order.' },
+  { id: 'subsidiaryRecordId', label: 'Subsidiary Id', fieldType: 'text', source: 'Subsidiaries master data', description: 'Internal subsidiary identifier linked to this purchase order.' },
+  { id: 'currencyRecordId', label: 'Currency Id', fieldType: 'text', source: 'Currencies master data', description: 'Internal currency identifier linked to this purchase order.' },
+  { id: 'requisitionRecordId', label: 'Requisition Id', fieldType: 'text', source: 'Purchase requisition transaction', description: 'Internal requisition identifier linked as the source document.' },
+  { id: 'createdBy', label: 'Created By', fieldType: 'text', source: 'Users master data', description: 'User who created the purchase order.' },
+  { id: 'createdFrom', label: 'Created From', fieldType: 'text', source: 'Purchase requisition transaction', description: 'Source purchase requisition that created this purchase order.' },
+  { id: 'approvedBy', label: 'Approved By', fieldType: 'text', source: 'System Notes / activity history', description: 'User who approved the purchase order based on the approval activity trail.' },
+  { id: 'status', label: 'Status', fieldType: 'list', source: 'System purchase order statuses', description: 'Current lifecycle stage of the purchase order.' },
+  { id: 'vendorId', label: 'Vendor', fieldType: 'list', source: 'Vendors master data', description: 'Vendor record linked to this purchase order.' },
+  { id: 'subsidiaryId', label: 'Subsidiary', fieldType: 'list', source: 'Subsidiaries master data', description: 'Subsidiary that owns this purchase order.' },
+  { id: 'currencyId', label: 'Currency', fieldType: 'list', source: 'Currencies master data', description: 'Transaction currency for this purchase order.' },
+  { id: 'total', label: 'Total', fieldType: 'currency', description: 'Current document total based on all purchase order line amounts.' },
+  { id: 'createdAt', label: 'Created', fieldType: 'date', description: 'Date/time the purchase order record was created.' },
+  { id: 'updatedAt', label: 'Last Modified', fieldType: 'date', description: 'Date/time the purchase order record was last modified.' },
 ]
 
 export const PURCHASE_ORDER_LINE_COLUMNS: PurchaseOrderLineColumnMeta[] = [
@@ -194,101 +127,255 @@ export const PURCHASE_ORDER_LINE_COLUMNS: PurchaseOrderLineColumnMeta[] = [
   { id: 'line-total', label: 'Line Total', description: 'Extended line amount calculated from quantity and unit price.' },
 ]
 
-export const DEFAULT_PURCHASE_ORDER_DETAIL_SECTIONS = ['Vendor', 'Purchase Order Details'] as const
+export const PURCHASE_ORDER_STAT_CARDS: Array<{ id: PurchaseOrderStatCardKey; label: string }> = [
+  { id: 'total', label: 'Purchase Order Total' },
+  { id: 'lineCount', label: 'Line Items' },
+  { id: 'receiptCount', label: 'Receipts' },
+  { id: 'status', label: 'Status' },
+]
+
+const VENDOR_FULL_REFERENCE_FIELDS: LinkedRecordReferenceSource['fields'] = [
+  { id: 'vendorDbId', label: 'DB Id', fieldType: 'text', source: 'Vendors master data', description: 'Internal database identifier for the linked vendor.', path: ['id'] },
+  { id: 'vendorNumberRef', label: 'Vendor #', fieldType: 'text', source: 'Vendors master data', description: 'Internal vendor identifier from the linked vendor record.', path: ['vendorNumber'] },
+  { id: 'vendorNameRef', label: 'Vendor Name', fieldType: 'text', source: 'Vendors master data', description: 'Display name from the linked vendor record.', path: ['name'] },
+  { id: 'vendorEmailRef', label: 'Email', fieldType: 'email', source: 'Vendors master data', description: 'Primary vendor email address.', path: ['email'] },
+  { id: 'vendorPhoneRef', label: 'Phone', fieldType: 'text', source: 'Vendors master data', description: 'Primary vendor phone number.', path: ['phone'] },
+  { id: 'vendorAddressRef', label: 'Address', fieldType: 'text', source: 'Vendors master data', description: 'Mailing or remittance address from the linked vendor.', path: ['address'] },
+  { id: 'vendorTaxIdRef', label: 'Tax ID', fieldType: 'text', source: 'Vendors master data', description: 'Vendor tax registration or identification number.', path: ['taxId'] },
+  { id: 'vendorSubsidiaryDbIdRef', label: 'Subsidiary DB Id', fieldType: 'text', source: 'Vendors master data', description: 'Internal subsidiary identifier from the linked vendor.', path: ['subsidiaryId'] },
+  { id: 'vendorCurrencyDbIdRef', label: 'Currency DB Id', fieldType: 'text', source: 'Vendors master data', description: 'Internal currency identifier from the linked vendor.', path: ['currencyId'] },
+  { id: 'vendorInactiveRef', label: 'Inactive', fieldType: 'boolean', source: 'Vendors master data', description: 'Whether the linked vendor is inactive.', path: ['inactive'] },
+  { id: 'vendorCreatedAtRef', label: 'Created', fieldType: 'date', source: 'Vendors master data', description: 'Date/time the linked vendor record was created.', path: ['createdAt'] },
+  { id: 'vendorUpdatedAtRef', label: 'Last Modified', fieldType: 'date', source: 'Vendors master data', description: 'Date/time the linked vendor record was last modified.', path: ['updatedAt'] },
+]
+
+const PURCHASE_REQUISITION_FULL_REFERENCE_FIELDS: LinkedRecordReferenceSource['fields'] = [
+  { id: 'requisitionDbIdRef', label: 'DB Id', fieldType: 'text', source: 'Purchase requisition transaction', description: 'Internal database identifier for the linked purchase requisition.', path: ['id'] },
+  { id: 'requisitionNumberRef', label: 'Purchase Requisition #', fieldType: 'text', source: 'Purchase requisition transaction', description: 'Identifier for the linked purchase requisition.', path: ['number'] },
+  { id: 'requisitionStatusRef', label: 'Status', fieldType: 'list', source: 'Purchase requisition transaction', description: 'Status from the linked purchase requisition.', path: ['status'] },
+  { id: 'requisitionPriorityRef', label: 'Priority', fieldType: 'list', source: 'Purchase requisition transaction', description: 'Priority from the linked purchase requisition.', path: ['priority'] },
+  { id: 'requisitionTitleRef', label: 'Title', fieldType: 'text', source: 'Purchase requisition transaction', description: 'Title from the linked purchase requisition.', path: ['title'] },
+  { id: 'requisitionDescriptionRef', label: 'Description', fieldType: 'text', source: 'Purchase requisition transaction', description: 'Description from the linked purchase requisition.', path: ['description'] },
+  { id: 'requisitionNeededByRef', label: 'Needed By', fieldType: 'date', source: 'Purchase requisition transaction', description: 'Needed-by date from the linked purchase requisition.', path: ['neededByDate'] },
+  { id: 'requisitionTotalRef', label: 'Total', fieldType: 'currency', source: 'Purchase requisition transaction', description: 'Total from the linked purchase requisition.', path: ['total'] },
+  { id: 'requisitionUserDbIdRef', label: 'User DB Id', fieldType: 'text', source: 'Purchase requisition transaction', description: 'Internal user identifier from the linked purchase requisition.', path: ['userId'] },
+  { id: 'requisitionVendorDbIdRef', label: 'Vendor DB Id', fieldType: 'text', source: 'Purchase requisition transaction', description: 'Internal vendor identifier from the linked purchase requisition.', path: ['vendorId'] },
+  { id: 'requisitionDepartmentDbIdRef', label: 'Department DB Id', fieldType: 'text', source: 'Purchase requisition transaction', description: 'Internal department identifier from the linked purchase requisition.', path: ['departmentId'] },
+  { id: 'requisitionSubsidiaryDbIdRef', label: 'Subsidiary DB Id', fieldType: 'text', source: 'Purchase requisition transaction', description: 'Internal subsidiary identifier from the linked purchase requisition.', path: ['subsidiaryId'] },
+  { id: 'requisitionCurrencyDbIdRef', label: 'Currency DB Id', fieldType: 'text', source: 'Purchase requisition transaction', description: 'Internal currency identifier from the linked purchase requisition.', path: ['currencyId'] },
+  { id: 'requisitionCreatedAtRef', label: 'Created', fieldType: 'date', source: 'Purchase requisition transaction', description: 'Date/time the linked purchase requisition record was created.', path: ['createdAt'] },
+  { id: 'requisitionUpdatedAtRef', label: 'Last Modified', fieldType: 'date', source: 'Purchase requisition transaction', description: 'Date/time the linked purchase requisition record was last modified.', path: ['updatedAt'] },
+]
+
+export const PURCHASE_ORDER_REFERENCE_SOURCES: LinkedRecordReferenceSource[] = [
+  {
+    id: 'vendor',
+    label: 'Vendor',
+    linkedFieldLabel: 'Vendor',
+    description: 'Expand the linked vendor record for this purchase order.',
+    fields: VENDOR_FULL_REFERENCE_FIELDS,
+    defaultVisibleFieldIds: ['vendorNumberRef', 'vendorNameRef', 'vendorEmailRef', 'vendorPhoneRef'],
+    defaultColumns: 2,
+    defaultRows: 2,
+  },
+  {
+    id: 'requisition',
+    label: 'Created From',
+    linkedFieldLabel: 'Created From',
+    description: 'Expand the linked purchase requisition that created this purchase order.',
+    fields: PURCHASE_REQUISITION_FULL_REFERENCE_FIELDS,
+    defaultVisibleFieldIds: ['requisitionNumberRef', 'requisitionStatusRef', 'requisitionPriorityRef', 'requisitionNeededByRef'],
+    defaultColumns: 2,
+    defaultRows: 2,
+  },
+  {
+    id: 'owner',
+    label: 'Created By',
+    linkedFieldLabel: 'Created By',
+    description: 'Expand the linked user record for the purchase order creator.',
+    fields: USER_FULL_REFERENCE_FIELDS,
+    defaultVisibleFieldIds: ['ownerUserId', 'ownerName', 'ownerEmail'],
+    defaultColumns: 2,
+    defaultRows: 2,
+  },
+  {
+    id: 'subsidiary',
+    label: 'Subsidiary',
+    linkedFieldLabel: 'Subsidiary',
+    description: 'Expand the linked subsidiary record for this purchase order.',
+    fields: SUBSIDIARY_FULL_REFERENCE_FIELDS,
+    defaultVisibleFieldIds: ['subsidiaryNumber', 'subsidiaryName'],
+    defaultColumns: 2,
+    defaultRows: 1,
+  },
+  {
+    id: 'currency',
+    label: 'Currency',
+    linkedFieldLabel: 'Currency',
+    description: 'Expand the linked currency record for this purchase order.',
+    fields: CURRENCY_FULL_REFERENCE_FIELDS,
+    defaultVisibleFieldIds: ['currencyCode', 'currencyName'],
+    defaultColumns: 2,
+    defaultRows: 1,
+  },
+]
+
+const DEFAULT_PURCHASE_ORDER_SECTIONS = [
+  'Document Identity',
+  'Workflow & Approval',
+  'Sourcing & Financials',
+  'Record Keys',
+  'System Dates',
+] as const
+
+const DEFAULT_PURCHASE_ORDER_STAT_CARD_METRICS: PurchaseOrderStatCardKey[] = [
+  'total',
+  'lineCount',
+  'receiptCount',
+  'status',
+]
+
+const DEFAULT_PURCHASE_ORDER_LINE_WIDTHS: Record<PurchaseOrderLineColumnKey, PurchaseOrderLineWidthMode> = {
+  line: 'compact',
+  'item-id': 'wide',
+  description: 'wide',
+  quantity: 'compact',
+  'received-qty': 'compact',
+  'open-qty': 'compact',
+  'billed-qty': 'compact',
+  'unit-price': 'normal',
+  'line-total': 'normal',
+}
+
+const DEFAULT_PURCHASE_ORDER_LINE_EDIT_DISPLAY: Record<PurchaseOrderLineColumnKey, PurchaseOrderLineDisplayMode> = {
+  line: 'label',
+  'item-id': 'idAndLabel',
+  description: 'label',
+  quantity: 'label',
+  'received-qty': 'label',
+  'open-qty': 'label',
+  'billed-qty': 'label',
+  'unit-price': 'label',
+  'line-total': 'label',
+}
+
+const DEFAULT_PURCHASE_ORDER_LINE_DROPDOWN_SORT: Record<PurchaseOrderLineColumnKey, PurchaseOrderLineDropdownSortMode> = {
+  line: 'id',
+  'item-id': 'id',
+  description: 'label',
+  quantity: 'id',
+  'received-qty': 'id',
+  'open-qty': 'id',
+  'billed-qty': 'id',
+  'unit-price': 'id',
+  'line-total': 'id',
+}
 
 export function defaultPurchaseOrderDetailCustomization(): PurchaseOrderDetailCustomizationConfig {
   const sectionMap: Record<PurchaseOrderDetailFieldKey, string> = {
-    vendorName: 'Vendor',
-    vendorNumber: 'Vendor',
-    vendorEmail: 'Vendor',
-    vendorPhone: 'Vendor',
-    vendorTaxId: 'Vendor',
-    vendorAddress: 'Vendor',
-    vendorPrimarySubsidiary: 'Vendor',
-    vendorPrimaryCurrency: 'Vendor',
-    vendorInactive: 'Vendor',
-    number: 'Purchase Order Details',
-    createdBy: 'Purchase Order Details',
-    createdFrom: 'Purchase Order Details',
-    approvedBy: 'Purchase Order Details',
-    subsidiaryId: 'Purchase Order Details',
-    vendorId: 'Purchase Order Details',
-    status: 'Purchase Order Details',
-    total: 'Purchase Order Details',
+    id: 'Record Keys',
+    number: 'Document Identity',
+    userId: 'Record Keys',
+    vendorRecordId: 'Record Keys',
+    subsidiaryRecordId: 'Record Keys',
+    currencyRecordId: 'Record Keys',
+    requisitionRecordId: 'Record Keys',
+    createdBy: 'Document Identity',
+    createdFrom: 'Document Identity',
+    approvedBy: 'Workflow & Approval',
+    status: 'Workflow & Approval',
+    vendorId: 'Sourcing & Financials',
+    subsidiaryId: 'Sourcing & Financials',
+    currencyId: 'Sourcing & Financials',
+    total: 'Sourcing & Financials',
+    createdAt: 'System Dates',
+    updatedAt: 'System Dates',
   }
 
   const columnMap: Record<PurchaseOrderDetailFieldKey, number> = {
-    vendorName: 1,
-    vendorNumber: 2,
-    vendorEmail: 1,
-    vendorPhone: 2,
-    vendorTaxId: 2,
-    vendorAddress: 1,
-    vendorPrimarySubsidiary: 1,
-    vendorPrimaryCurrency: 2,
-    vendorInactive: 1,
+    id: 1,
     number: 1,
+    userId: 2,
+    vendorRecordId: 1,
+    subsidiaryRecordId: 2,
+    currencyRecordId: 3,
+    requisitionRecordId: 3,
     createdBy: 2,
-    createdFrom: 1,
-    approvedBy: 2,
-    subsidiaryId: 1,
-    vendorId: 2,
+    createdFrom: 3,
+    approvedBy: 1,
     status: 1,
-    total: 2,
+    vendorId: 1,
+    subsidiaryId: 1,
+    currencyId: 2,
+    total: 3,
+    createdAt: 1,
+    updatedAt: 2,
   }
 
   const rowMap: Record<PurchaseOrderDetailFieldKey, number> = {
-    vendorName: 0,
-    vendorNumber: 0,
-    vendorEmail: 1,
-    vendorPhone: 1,
-    vendorTaxId: 2,
-    vendorAddress: 2,
-    vendorPrimarySubsidiary: 3,
-    vendorPrimaryCurrency: 3,
-    vendorInactive: 4,
+    id: 0,
     number: 0,
+    userId: 0,
+    vendorRecordId: 1,
+    subsidiaryRecordId: 1,
+    currencyRecordId: 1,
+    requisitionRecordId: 0,
     createdBy: 0,
-    createdFrom: 1,
-    approvedBy: 1,
+    createdFrom: 0,
+    approvedBy: 0,
+    status: 0,
+    vendorId: 0,
     subsidiaryId: 1,
-    vendorId: 1,
-    status: 2,
-    total: 2,
+    currencyId: 1,
+    total: 1,
+    createdAt: 0,
+    updatedAt: 0,
   }
 
   return {
-    formColumns: 2,
-    sections: [...DEFAULT_PURCHASE_ORDER_DETAIL_SECTIONS],
+    formColumns: 3,
+    sections: [...DEFAULT_PURCHASE_ORDER_SECTIONS],
     sectionRows: {
-      Vendor: 3,
-      'Purchase Order Details': 3,
+      'Document Identity': 2,
+      'Workflow & Approval': 1,
+      'Sourcing & Financials': 2,
+      'Record Keys': 2,
+      'System Dates': 1,
+    },
+    lineSettings: {
+      fontSize: 'sm',
     },
     fields: Object.fromEntries(
       PURCHASE_ORDER_DETAIL_FIELDS.map((field) => [
         field.id,
         {
-          visible:
-            field.id === 'vendorAddress' ||
-            field.id === 'vendorPrimarySubsidiary' ||
-            field.id === 'vendorPrimaryCurrency' ||
-            field.id === 'vendorInactive'
-              ? false
-              : true,
+          visible: !['id', 'approvedBy', 'requisitionRecordId', 'userId', 'vendorRecordId', 'subsidiaryRecordId', 'currencyRecordId'].includes(field.id),
           section: sectionMap[field.id],
           order: rowMap[field.id],
           column: columnMap[field.id],
         },
-      ])
+      ]),
     ) as Record<PurchaseOrderDetailFieldKey, PurchaseOrderDetailFieldCustomization>,
+    referenceLayouts: [buildDefaultTransactionReferenceLayout(PURCHASE_ORDER_REFERENCE_SOURCES, 'vendor')],
     lineColumns: Object.fromEntries(
       PURCHASE_ORDER_LINE_COLUMNS.map((column, index) => [
         column.id,
         {
           visible: true,
           order: index,
+          widthMode: DEFAULT_PURCHASE_ORDER_LINE_WIDTHS[column.id],
+          editDisplay: DEFAULT_PURCHASE_ORDER_LINE_EDIT_DISPLAY[column.id],
+          viewDisplay: DEFAULT_PURCHASE_ORDER_LINE_EDIT_DISPLAY[column.id],
+          dropdownDisplay: DEFAULT_PURCHASE_ORDER_LINE_EDIT_DISPLAY[column.id],
+          dropdownSort: DEFAULT_PURCHASE_ORDER_LINE_DROPDOWN_SORT[column.id],
         },
-      ])
+      ]),
     ) as Record<PurchaseOrderLineColumnKey, PurchaseOrderLineColumnCustomization>,
+    statCards: DEFAULT_PURCHASE_ORDER_STAT_CARD_METRICS.map((metric, index) => ({
+      id: `slot-${index + 1}`,
+      metric,
+      visible: true,
+      order: index,
+    })),
   }
 }

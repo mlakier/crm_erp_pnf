@@ -22,6 +22,7 @@ export default function TransactionActionStack({
   if (mode === 'edit' || mode === 'create') {
     return (
       <div className="flex flex-wrap items-center gap-2">
+        {primaryActions}
         {cancelHref ? (
           <Link
             href={cancelHref}

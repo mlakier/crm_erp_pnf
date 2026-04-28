@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionActionStack from '@/components/TransactionActionStack'
-import PurchaseOrderHeaderSections, { type PurchaseOrderHeaderField } from '@/components/PurchaseOrderHeaderSections'
+import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
 import FulfillmentLineItemsSection, {
   type FulfillmentLineOption,
   type FulfillmentLineRow,
 } from '@/components/FulfillmentLineItemsSection'
 import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
+import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/lib/form-requirements-client'
 import {
   FULFILLMENT_DETAIL_FIELDS,
   FULFILLMENT_LINE_COLUMNS,
@@ -39,7 +40,7 @@ type SalesOrderOption = {
 
 type FulfillmentHeaderField = {
   key: FulfillmentDetailFieldKey
-} & PurchaseOrderHeaderField
+} & TransactionHeaderField
 
 function draftRow(option: FulfillmentLineOption): FulfillmentLineRow {
   return {
@@ -73,6 +74,7 @@ export default function FulfillmentCreatePageClient({
   initialLineRows?: FulfillmentLineRow[]
 }) {
   const router = useRouter()
+  const { req, isLocked } = useFormRequirementsState('fulfillmentCreate')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [headerValues, setHeaderValues] = useState<Record<string, string>>({
@@ -274,6 +276,8 @@ export default function FulfillmentCreatePageClient({
       subsectionDescription: 'System-managed timestamps for this fulfillment.',
     },
   }
+  applyRequirementsToEditableFields(headerFieldDefinitions, req, isLocked)
+
 
   const headerSections = buildConfiguredTransactionSections({
     fields: FULFILLMENT_DETAIL_FIELDS,
@@ -343,7 +347,7 @@ export default function FulfillmentCreatePageClient({
       widthClassName="w-full max-w-none"
       actions={<TransactionActionStack mode="create" cancelHref="/fulfillments" formId="create-fulfillment-form" />}
     >
-      <PurchaseOrderHeaderSections
+      <TransactionHeaderSections
         editing
         sections={headerSections}
         columns={customization.formColumns}
@@ -372,3 +376,4 @@ export default function FulfillmentCreatePageClient({
     </RecordDetailPageShell>
   )
 }
+

@@ -7,12 +7,12 @@ import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import AccountingPeriodDetailCustomizeMode from '@/components/AccountingPeriodDetailCustomizeMode'
 import MasterDataActionBar from '@/components/MasterDataActionBar'
+import TransactionStatsRow from '@/components/TransactionStatsRow'
 import {
   RecordDetailCell,
   RecordDetailEmptyState,
   RecordDetailHeaderCell,
   RecordDetailSection,
-  RecordDetailStatCard,
 } from '@/components/RecordDetailPanels'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
@@ -112,6 +112,16 @@ export default async function AccountingPeriodDetailPage({
   const systemNotes = await loadMasterDataSystemNotes({ entityType: 'accounting-period', entityId: period.id })
   const activeLocks = [period.arLocked, period.apLocked, period.inventoryLocked].filter(Boolean).length
   const statusLabel = statusOptions.find((option) => option.value === period.status)?.label ?? period.status
+  const statPreviewCards = [
+    { id: 'journalEntries', label: 'Journal Entries', value: period._count.journalEntries, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+    { id: 'closed', label: 'Closed', value: yesNo(period.closed), cardTone: period.closed ? 'green' : 'yellow', valueTone: period.closed ? 'green' : 'yellow', supportsColorized: true, supportsLink: false },
+    { id: 'lockedAreas', label: 'Locked Areas', value: activeLocks, cardTone: activeLocks > 0 ? 'yellow' : 'teal', valueTone: activeLocks > 0 ? 'yellow' : 'teal', supportsColorized: true, supportsLink: false },
+  ]
+  const statDefinitions = [
+    { id: 'journalEntries', label: 'Journal Entries', getValue: () => period._count.journalEntries, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
+    { id: 'closed', label: 'Closed', getValue: () => yesNo(period.closed), getCardTone: () => (period.closed ? 'green' : 'yellow') as const, getValueTone: () => (period.closed ? 'green' : 'yellow') as const },
+    { id: 'lockedAreas', label: 'Locked Areas', getValue: () => activeLocks, getCardTone: () => (activeLocks > 0 ? 'yellow' : 'teal') as const, getValueTone: () => (activeLocks > 0 ? 'yellow' : 'teal') as const },
+  ]
 
   return (
     <RecordDetailPageShell
@@ -147,11 +157,15 @@ export default async function AccountingPeriodDetailPage({
         ) : null
       }
     >
-      <div className="mb-8 grid gap-4 sm:grid-cols-3">
-        <RecordDetailStatCard label="Journal Entries" value={period._count.journalEntries} />
-        <RecordDetailStatCard label="Closed" value={yesNo(period.closed)} />
-        <RecordDetailStatCard label="Locked Areas" value={activeLocks} />
+      {!isCustomizing ? (
+      <div className="mb-8">
+        <TransactionStatsRow
+          record={period}
+          stats={statDefinitions}
+          visibleStatCards={customization.statCards as Array<{ id: string; metric: string; visible: boolean; order: number; size?: 'sm' | 'md' | 'lg'; colorized?: boolean; linked?: boolean }> | undefined}
+        />
       </div>
+      ) : null}
 
       {isCustomizing ? (
         <AccountingPeriodDetailCustomizeMode
@@ -160,6 +174,7 @@ export default async function AccountingPeriodDetailPage({
           initialRequirements={{ ...formRequirements.accountingPeriodCreate }}
           fields={customizeFields}
           sectionDescriptions={sectionDescriptions}
+          statPreviewCards={statPreviewCards}
         />
       ) : (
         <InlineRecordDetails
@@ -173,8 +188,9 @@ export default async function AccountingPeriodDetailPage({
         />
       )}
 
-      {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} /> : null}
+      {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} internalId={period.id} /> : null}
 
+      {!isCustomizing ? (
       <RecordDetailSection title="Journals" count={period.journalEntries.length}>
         {period.journalEntries.length === 0 ? (
           <RecordDetailEmptyState message="No journals in this accounting period" />
@@ -207,8 +223,9 @@ export default async function AccountingPeriodDetailPage({
           </table>
         )}
       </RecordDetailSection>
+      ) : null}
 
-      <SystemNotesSection notes={systemNotes} />
+      {!isCustomizing ? <SystemNotesSection notes={systemNotes} /> : null}
     </RecordDetailPageShell>
   )
 }

@@ -1,356 +1,113 @@
 {
   "entity": "leads",
-  "generatedAt": "2026-04-25T06:45:42.242Z",
+  "updatedAt": "2026-04-25",
   "mode": "audit-only",
-  "checks": [
-    {
-      "section": "foundation",
-      "id": "detail-shared-shell",
-      "label": "Detail page uses shared transaction detail framework",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "new-shared-shell",
-      "label": "+ New uses shared transaction create framework",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\new\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "customize-component",
-      "label": "Customize component exists",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\components\\LeadDetailCustomizeMode.tsx",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "customization-lib",
-      "label": "Customization lib exists",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\lib\\lead-detail-customization.ts",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "customization-store",
-      "label": "Customization store exists",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\lib\\lead-detail-customization-store.ts",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "customization-route",
-      "label": "Customization API route exists",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\api\\config\\lead-detail-customization\\route.ts",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "customize-shared-engine",
-      "label": "Customize flow uses shared transaction customize engine",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\components\\LeadDetailCustomizeMode.tsx",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "detail-customize-wired",
-      "label": "Detail page recognizes customize mode",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "detail-edit-wired",
-      "label": "Detail page recognizes edit mode",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "detail-duplicate-enabled",
-      "label": "Detail page create menu enables duplicate",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "header",
-      "id": "detail-export",
-      "label": "Detail page includes export action",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "header",
-      "id": "detail-stat-card-links",
-      "label": "Detail page supports linked stat card values where applicable",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\lib\\transaction-page-configs\\lead.ts",
-      "ok": false
-    },
-    {
-      "section": "header",
-      "id": "detail-stat-card-tones",
-      "label": "Detail page supports colored stat card values where applicable",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\lib\\transaction-page-configs\\lead.ts",
-      "ok": false
-    },
-    {
-      "section": "line",
-      "id": "line-section-add-button",
-      "label": "Line section includes add-line capability where applicable",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": true
-    },
-    {
-      "section": "detail",
-      "id": "detail-related-docs",
-      "label": "Detail page includes related documents section",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "detail",
-      "id": "detail-communications",
-      "label": "Detail page includes communications section",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "detail",
-      "id": "detail-communications-send-email",
-      "label": "Detail page wires send email in communications",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "detail",
-      "id": "detail-gl-impact",
-      "label": "Detail page includes GL impact section",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    }
-  ],
-  "missingFiles": [
-    {
-      "key": "newPage",
-      "filePath": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\new\\page.tsx"
-    },
-    {
-      "key": "createClient",
-      "filePath": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\components\\LeadCreatePageClient.tsx"
-    },
-    {
-      "key": "customizeComponent",
-      "filePath": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\components\\LeadDetailCustomizeMode.tsx"
-    },
-    {
-      "key": "customizationLib",
-      "filePath": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\lib\\lead-detail-customization.ts"
-    },
-    {
-      "key": "customizationStore",
-      "filePath": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\lib\\lead-detail-customization-store.ts"
-    },
-    {
-      "key": "customizationRoute",
-      "filePath": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\api\\config\\lead-detail-customization\\route.ts"
-    }
-  ],
-  "needsUpdate": [
-    {
-      "section": "foundation",
-      "id": "detail-shared-shell",
-      "label": "Detail page uses shared transaction detail framework",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "new-shared-shell",
-      "label": "+ New uses shared transaction create framework",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\new\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "customize-component",
-      "label": "Customize component exists",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\components\\LeadDetailCustomizeMode.tsx",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "customization-lib",
-      "label": "Customization lib exists",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\lib\\lead-detail-customization.ts",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "customization-store",
-      "label": "Customization store exists",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\lib\\lead-detail-customization-store.ts",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "customization-route",
-      "label": "Customization API route exists",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\api\\config\\lead-detail-customization\\route.ts",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "customize-shared-engine",
-      "label": "Customize flow uses shared transaction customize engine",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\components\\LeadDetailCustomizeMode.tsx",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "detail-customize-wired",
-      "label": "Detail page recognizes customize mode",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "detail-edit-wired",
-      "label": "Detail page recognizes edit mode",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "foundation",
-      "id": "detail-duplicate-enabled",
-      "label": "Detail page create menu enables duplicate",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "header",
-      "id": "detail-export",
-      "label": "Detail page includes export action",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "header",
-      "id": "detail-stat-card-links",
-      "label": "Detail page supports linked stat card values where applicable",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\lib\\transaction-page-configs\\lead.ts",
-      "ok": false
-    },
-    {
-      "section": "header",
-      "id": "detail-stat-card-tones",
-      "label": "Detail page supports colored stat card values where applicable",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\lib\\transaction-page-configs\\lead.ts",
-      "ok": false
-    },
-    {
-      "section": "detail",
-      "id": "detail-related-docs",
-      "label": "Detail page includes related documents section",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "detail",
-      "id": "detail-communications",
-      "label": "Detail page includes communications section",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "detail",
-      "id": "detail-communications-send-email",
-      "label": "Detail page wires send email in communications",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    },
-    {
-      "section": "detail",
-      "id": "detail-gl-impact",
-      "label": "Detail page includes GL impact section",
-      "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-      "ok": false
-    }
-  ],
+  "componentApplicability": {
+    "header": true,
+    "lines": false,
+    "glImpact": false,
+    "footer": true
+  },
   "checksBySection": [
     {
       "section": "foundation",
       "label": "Foundation",
       "checks": [
         {
-          "section": "foundation",
           "id": "detail-shared-shell",
-          "label": "Detail page uses shared transaction detail framework",
+          "label": "Detail page uses shared detail framework",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-          "ok": false
+          "ok": true
         },
         {
-          "section": "foundation",
           "id": "new-shared-shell",
-          "label": "+ New uses shared transaction create framework",
+          "label": "+ New uses shared create framework",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\new\\page.tsx",
-          "ok": false
+          "ok": true
         },
         {
-          "section": "foundation",
+          "id": "new-sectioned-layout",
+          "label": "+ New uses the same sectioned Lead Details presentation language as detail edit mode instead of a thin standalone form card",
+          "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\components\\LeadCreatePageClient.tsx",
+          "ok": true
+        },
+        {
           "id": "customize-component",
           "label": "Customize component exists",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\components\\LeadDetailCustomizeMode.tsx",
-          "ok": false
+          "ok": true
         },
         {
-          "section": "foundation",
           "id": "customization-lib",
           "label": "Customization lib exists",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\lib\\lead-detail-customization.ts",
-          "ok": false
+          "ok": true
         },
         {
-          "section": "foundation",
           "id": "customization-store",
           "label": "Customization store exists",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\lib\\lead-detail-customization-store.ts",
-          "ok": false
+          "ok": true
         },
         {
-          "section": "foundation",
           "id": "customization-route",
           "label": "Customization API route exists",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\api\\config\\lead-detail-customization\\route.ts",
-          "ok": false
+          "ok": true
         },
         {
-          "section": "foundation",
           "id": "customize-shared-engine",
           "label": "Customize flow uses shared transaction customize engine",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\components\\LeadDetailCustomizeMode.tsx",
-          "ok": false
+          "ok": true
         },
         {
-          "section": "foundation",
           "id": "detail-customize-wired",
           "label": "Detail page recognizes customize mode",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-          "ok": false
+          "ok": true
         },
         {
-          "section": "foundation",
           "id": "detail-edit-wired",
           "label": "Detail page recognizes edit mode",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-          "ok": false
+          "ok": true
         },
         {
-          "section": "foundation",
           "id": "detail-duplicate-enabled",
-          "label": "Detail page create menu enables duplicate",
+          "label": "Detail page create menu enables duplicate where applicable",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-          "ok": false
+          "ok": true
+        },
+        {
+          "id": "list-edit-link",
+          "label": "List page row edit action links to detail edit mode instead of only opening a modal edit flow",
+          "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\page.tsx",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "section": "list",
+      "label": "List Page",
+      "checks": [
+        {
+          "id": "status-filter-top",
+          "label": "Status filters are positioned at the top of the list page",
+          "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\page.tsx",
+          "ok": true
+        },
+        {
+          "id": "list-db-id-exposed",
+          "label": "Backend list field exposure includes DB Id where operationally useful",
+          "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\page.tsx",
+          "ok": true
+        },
+        {
+          "id": "list-db-id-before-created",
+          "label": "DB Id appears immediately before Created in the default list column order",
+          "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\page.tsx",
+          "ok": true
         }
       ]
     },
@@ -359,83 +116,129 @@
       "label": "Header Section",
       "checks": [
         {
-          "section": "header",
           "id": "detail-export",
           "label": "Detail page includes export action",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-          "ok": false
+          "ok": true
         },
         {
-          "section": "header",
           "id": "detail-stat-card-links",
           "label": "Detail page supports linked stat card values where applicable",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\lib\\transaction-page-configs\\lead.ts",
-          "ok": false
+          "ok": true
         },
         {
-          "section": "header",
           "id": "detail-stat-card-tones",
           "label": "Detail page supports colored stat card values where applicable",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\lib\\transaction-page-configs\\lead.ts",
-          "ok": false
-        }
-      ]
-    },
-    {
-      "section": "line",
-      "label": "Line Section",
-      "checks": [
+          "ok": true
+        },
         {
-          "section": "line",
-          "id": "line-section-add-button",
-          "label": "Line section includes add-line capability where applicable",
+          "id": "customize-stat-cards",
+          "label": "Customize flow supports configurable stat cards when the page uses stats",
+          "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\components\\LeadDetailCustomizeMode.tsx",
+          "ok": true
+        },
+        {
+          "id": "detail-stat-card-visible-slots",
+          "label": "Detail page renders stat cards from configured visible slots where the page adopts the shared framework",
+          "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
+          "ok": true
+        },
+        {
+          "id": "single-header-container",
+          "label": "Lead detail uses one top-level Lead Details container with customizable sections inside it",
+          "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
+          "ok": true
+        },
+        {
+          "id": "no-extra-subsection-chrome",
+          "label": "Header sections render without non-configurable nested subsection chrome in normal detail view",
+          "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\components\\TransactionHeaderSections.tsx",
+          "ok": true
+        },
+        {
+          "id": "derived-userid-exposure",
+          "label": "Backend field exposure is explicitly categorized for derived header fields such as userId -> Created By",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
           "ok": true
         }
       ]
     },
     {
-      "section": "detail",
-      "label": "Detail Section",
+      "section": "line",
+      "label": "Line Section Applicability",
       "checks": [
         {
-          "section": "detail",
-          "id": "detail-related-docs",
-          "label": "Detail page includes related documents section",
+          "id": "no-line-section-by-design",
+          "label": "Leads do not have a transaction line-items section by design; do not apply line-item audit or customization checks unless the product design changes",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-          "ok": false
+          "ok": true
+        }
+      ]
+    },
+    {
+      "section": "footer",
+      "label": "Footer Section",
+      "checks": [
+        {
+          "id": "detail-related-docs",
+          "label": "Detail page includes related documents or related-records section using the intended shared footer pattern",
+          "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
+          "ok": true
         },
         {
-          "section": "detail",
+          "id": "related-records-tabbed",
+          "label": "Related records use a tabbed presentation rather than a mixed table",
+          "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\components\\LeadRelatedRecordsSection.tsx",
+          "ok": true
+        },
+        {
+          "id": "indirect-relation-field-exposure",
+          "label": "Backend relation fields such as customerId, contactId, and opportunityId are treated as intentional indirect footer exposure rather than silent header omissions",
+          "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\components\\LeadRelatedRecordsSection.tsx",
+          "ok": true
+        },
+        {
           "id": "detail-communications",
           "label": "Detail page includes communications section",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-          "ok": false
+          "ok": true
         },
         {
-          "section": "detail",
           "id": "detail-communications-send-email",
-          "label": "Detail page wires send email in communications",
+          "label": "Detail page wires send email in communications where applicable",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-          "ok": false
+          "ok": true
         },
         {
-          "section": "detail",
-          "id": "detail-gl-impact",
-          "label": "Detail page includes GL impact section",
+          "id": "detail-system-notes",
+          "label": "Detail page includes system notes section",
           "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
-          "ok": false
+          "ok": true
+        },
+        {
+          "id": "footer-hidden-in-customize",
+          "label": "Fixed footer sections are hidden during customize mode because they do not expose admin-facing customization settings",
+          "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\components\\TransactionDetailFrame.tsx",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "section": "gl-impact",
+      "label": "GL Impact Applicability",
+      "checks": [
+        {
+          "id": "no-gl-impact-by-design",
+          "label": "Leads should not render a GL impact section by design; if one appears, treat it as design drift rather than a required audit target",
+          "file": "C:\\Users\\mlakier\\App\\crm_erp_pnf\\src\\app\\leads\\[id]\\page.tsx",
+          "ok": true
         }
       ]
     }
   ],
-  "writes": [],
-  "updates": [],
-  "summary": {
-    "passed": 1,
-    "failed": 17,
-    "touched": 0,
-    "updated": 0,
-    "untouched": false
-  }
+  "missingFiles": [],
+  "needsUpdate": [],
+  "residualFollowUp": []
 }

@@ -67,6 +67,7 @@ const MANAGED_LIST_DEFAULT_VALUES: Record<string, string[]> = {
   'EMP-LABOR-TYPE': ['FTE', 'PTE', 'IC', 'Intern'],
   'EXCHANGE-RATE-TYPE': ['Spot', 'Average', 'Closing', 'Budget'],
   'FULFILL-STATUS': ['Pending', 'Shipped', 'Delivered', 'Cancelled'],
+  'INV-STATUS': ['Draft', 'Open', 'Paid', 'Void'],
   'JOURNAL-STATUS': ['Draft', 'Posted', 'Void'],
   'JOURNAL-SOURCE-TYPE': ['Manual', 'Allocation', 'Accrual', 'Reclass', 'Elimination', 'Recurring'],
   'ITEM-RECOGNITION-METHOD': ['Point in Time', 'Over Time'],

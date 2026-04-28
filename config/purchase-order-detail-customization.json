@@ -1,153 +1,315 @@
 {
   "formColumns": 3,
   "sections": [
-    "Vendor",
-    "Purchase Order Details"
+    "Document Identity",
+    "Workflow & Approval",
+    "Sourcing & Financials",
+    "Record Keys",
+    "System Dates"
   ],
   "sectionRows": {
-    "Vendor": 3,
-    "Purchase Order Details": 3
+    "Document Identity": 2,
+    "Workflow & Approval": 1,
+    "Sourcing & Financials": 2,
+    "Record Keys": 2,
+    "System Dates": 1
+  },
+  "lineSettings": {
+    "fontSize": "sm"
   },
   "fields": {
-    "vendorName": {
+    "id": {
       "visible": true,
-      "section": "Vendor",
+      "section": "Record Keys",
       "order": 0,
       "column": 1
-    },
-    "vendorNumber": {
-      "visible": true,
-      "section": "Vendor",
-      "order": 1,
-      "column": 1
-    },
-    "vendorEmail": {
-      "visible": true,
-      "section": "Vendor",
-      "order": 0,
-      "column": 2
-    },
-    "vendorPhone": {
-      "visible": true,
-      "section": "Vendor",
-      "order": 1,
-      "column": 2
-    },
-    "vendorTaxId": {
-      "visible": true,
-      "section": "Vendor",
-      "order": 1,
-      "column": 3
-    },
-    "vendorAddress": {
-      "visible": true,
-      "section": "Vendor",
-      "order": 0,
-      "column": 3
-    },
-    "vendorPrimarySubsidiary": {
-      "visible": true,
-      "section": "Vendor",
-      "order": 2,
-      "column": 1
-    },
-    "vendorPrimaryCurrency": {
-      "visible": true,
-      "section": "Vendor",
-      "order": 2,
-      "column": 2
-    },
-    "vendorInactive": {
-      "visible": false,
-      "section": "Vendor",
-      "order": 2,
-      "column": 3
     },
     "number": {
       "visible": true,
-      "section": "Purchase Order Details",
+      "section": "Document Identity",
       "order": 0,
       "column": 1
     },
+    "userId": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 2
+    },
+    "vendorRecordId": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 1,
+      "column": 1
+    },
+    "subsidiaryRecordId": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 1,
+      "column": 2
+    },
+    "currencyRecordId": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 1,
+      "column": 3
+    },
+    "requisitionRecordId": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 3
+    },
     "createdBy": {
       "visible": true,
-      "section": "Purchase Order Details",
-      "order": 2,
+      "section": "Document Identity",
+      "order": 0,
       "column": 2
     },
     "createdFrom": {
       "visible": true,
-      "section": "Purchase Order Details",
+      "section": "Document Identity",
       "order": 0,
       "column": 3
     },
     "approvedBy": {
       "visible": true,
-      "section": "Purchase Order Details",
+      "section": "Workflow & Approval",
       "order": 0,
       "column": 2
     },
-    "subsidiaryId": {
+    "status": {
       "visible": true,
-      "section": "Purchase Order Details",
-      "order": 1,
+      "section": "Workflow & Approval",
+      "order": 0,
       "column": 1
     },
     "vendorId": {
       "visible": true,
-      "section": "Purchase Order Details",
-      "order": 2,
+      "section": "Sourcing & Financials",
+      "order": 0,
       "column": 1
     },
-    "status": {
+    "subsidiaryId": {
       "visible": true,
-      "section": "Purchase Order Details",
+      "section": "Sourcing & Financials",
+      "order": 1,
+      "column": 1
+    },
+    "currencyId": {
+      "visible": true,
+      "section": "Sourcing & Financials",
       "order": 1,
       "column": 2
     },
     "total": {
       "visible": true,
-      "section": "Purchase Order Details",
-      "order": 2,
+      "section": "Sourcing & Financials",
+      "order": 1,
       "column": 3
+    },
+    "createdAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 1
+    },
+    "updatedAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 2
     }
   },
+  "referenceLayouts": [
+    {
+      "id": "reference-vendor-1",
+      "referenceId": "vendor",
+      "formColumns": 2,
+      "rows": 3,
+      "fields": {
+        "vendorDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 0
+        },
+        "vendorNumberRef": {
+          "visible": true,
+          "column": 2,
+          "order": 0
+        },
+        "vendorNameRef": {
+          "visible": true,
+          "column": 1,
+          "order": 0
+        },
+        "vendorEmailRef": {
+          "visible": true,
+          "column": 2,
+          "order": 1
+        },
+        "vendorPhoneRef": {
+          "visible": true,
+          "column": 1,
+          "order": 1
+        },
+        "vendorAddressRef": {
+          "visible": false,
+          "column": 2,
+          "order": 2
+        },
+        "vendorTaxIdRef": {
+          "visible": false,
+          "column": 1,
+          "order": 3
+        },
+        "vendorSubsidiaryDbIdRef": {
+          "visible": false,
+          "column": 2,
+          "order": 3
+        },
+        "vendorCurrencyDbIdRef": {
+          "visible": false,
+          "column": 1,
+          "order": 4
+        },
+        "vendorInactiveRef": {
+          "visible": false,
+          "column": 2,
+          "order": 4
+        },
+        "vendorCreatedAtRef": {
+          "visible": false,
+          "column": 1,
+          "order": 5
+        },
+        "vendorUpdatedAtRef": {
+          "visible": false,
+          "column": 2,
+          "order": 5
+        }
+      }
+    }
+  ],
   "lineColumns": {
     "line": {
       "visible": true,
-      "order": 0
+      "order": 0,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
     },
     "item-id": {
       "visible": true,
-      "order": 1
+      "order": 1,
+      "widthMode": "wide",
+      "editDisplay": "idAndLabel",
+      "viewDisplay": "idAndLabel",
+      "dropdownDisplay": "idAndLabel",
+      "dropdownSort": "id"
     },
     "description": {
       "visible": true,
-      "order": 2
+      "order": 2,
+      "widthMode": "wide",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
     },
     "quantity": {
       "visible": true,
-      "order": 3
+      "order": 3,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
     },
     "received-qty": {
       "visible": true,
-      "order": 4
+      "order": 4,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
     },
     "open-qty": {
       "visible": true,
-      "order": 5
+      "order": 5,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
     },
     "billed-qty": {
       "visible": true,
-      "order": 6
+      "order": 6,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
     },
     "unit-price": {
       "visible": true,
-      "order": 7
+      "order": 7,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
     },
     "line-total": {
       "visible": true,
-      "order": 8
+      "order": 8,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
     }
-  }
+  },
+  "statCards": [
+    {
+      "id": "slot-2",
+      "metric": "lineCount",
+      "visible": true,
+      "order": 0,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-3",
+      "metric": "receiptCount",
+      "visible": true,
+      "order": 1,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-4",
+      "metric": "status",
+      "visible": true,
+      "order": 2,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-1",
+      "metric": "total",
+      "visible": true,
+      "order": 3,
+      "size": "lg",
+      "colorized": true,
+      "linked": true
+    }
+  ]
 }

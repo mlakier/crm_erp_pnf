@@ -1,0 +1,343 @@
+{
+  "formColumns": 3,
+  "sections": [
+    "Document Identity",
+    "Customer Snapshot",
+    "Opportunity Context",
+    "Commercial Terms",
+    "Record Keys",
+    "Quote Details"
+  ],
+  "sectionRows": {
+    "Document Identity": 1,
+    "Customer Snapshot": 3,
+    "Opportunity Context": 1,
+    "Commercial Terms": 3,
+    "Record Keys": 1,
+    "System Dates": 1,
+    "Quote Details": 2
+  },
+  "lineSettings": {
+    "fontSize": "xs"
+  },
+  "fields": {
+    "id": {
+      "visible": false,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 1
+    },
+    "customerId": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 3
+    },
+    "customerName": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 0,
+      "column": 1
+    },
+    "customerNumber": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 1,
+      "column": 1
+    },
+    "customerEmail": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 0,
+      "column": 2
+    },
+    "customerPhone": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 1,
+      "column": 2
+    },
+    "customerAddress": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 0,
+      "column": 3
+    },
+    "customerPrimarySubsidiary": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 2,
+      "column": 1
+    },
+    "customerPrimaryCurrency": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 1,
+      "column": 3
+    },
+    "customerInactive": {
+      "visible": false,
+      "section": "Customer Snapshot",
+      "order": 2,
+      "column": 2
+    },
+    "number": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 1
+    },
+    "userId": {
+      "visible": false,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 2
+    },
+    "createdBy": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 2
+    },
+    "opportunityId": {
+      "visible": false,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 3
+    },
+    "createdFrom": {
+      "visible": true,
+      "section": "Opportunity Context",
+      "order": 0,
+      "column": 1
+    },
+    "opportunity": {
+      "visible": true,
+      "section": "Opportunity Context",
+      "order": 0,
+      "column": 2
+    },
+    "subsidiaryId": {
+      "visible": true,
+      "section": "Commercial Terms",
+      "order": 0,
+      "column": 1
+    },
+    "currencyId": {
+      "visible": true,
+      "section": "Commercial Terms",
+      "order": 0,
+      "column": 2
+    },
+    "status": {
+      "visible": true,
+      "section": "Commercial Terms",
+      "order": 0,
+      "column": 3
+    },
+    "validUntil": {
+      "visible": true,
+      "section": "Commercial Terms",
+      "order": 1,
+      "column": 2
+    },
+    "total": {
+      "visible": true,
+      "section": "Commercial Terms",
+      "order": 1,
+      "column": 3
+    },
+    "notes": {
+      "visible": true,
+      "section": "Commercial Terms",
+      "order": 1,
+      "column": 1
+    },
+    "createdAt": {
+      "visible": true,
+      "section": "Quote Details",
+      "order": 0,
+      "column": 1
+    },
+    "updatedAt": {
+      "visible": true,
+      "section": "Quote Details",
+      "order": 0,
+      "column": 2
+    }
+  },
+  "referenceLayouts": [
+    {
+      "id": "reference-customer-1",
+      "referenceId": "opportunity",
+      "formColumns": 2,
+      "rows": 3,
+      "fields": {
+        "opportunityDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 0
+        },
+        "opportunityNumber": {
+          "visible": true,
+          "column": 1,
+          "order": 0
+        },
+        "opportunityName": {
+          "visible": true,
+          "column": 1,
+          "order": 1
+        },
+        "opportunityAmount": {
+          "visible": false,
+          "column": 2,
+          "order": 1
+        },
+        "opportunityStage": {
+          "visible": false,
+          "column": 1,
+          "order": 2
+        },
+        "opportunityCloseDate": {
+          "visible": true,
+          "column": 2,
+          "order": 0
+        },
+        "opportunityProbability": {
+          "visible": false,
+          "column": 1,
+          "order": 3
+        },
+        "opportunityCustomerDbId": {
+          "visible": false,
+          "column": 2,
+          "order": 3
+        },
+        "opportunityUserDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 4
+        },
+        "opportunitySubsidiaryDbId": {
+          "visible": false,
+          "column": 2,
+          "order": 4
+        },
+        "opportunityCurrencyDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 5
+        },
+        "opportunityInactive": {
+          "visible": false,
+          "column": 2,
+          "order": 5
+        },
+        "opportunityCreatedAt": {
+          "visible": true,
+          "column": 2,
+          "order": 1
+        },
+        "opportunityUpdatedAt": {
+          "visible": false,
+          "column": 2,
+          "order": 6
+        }
+      }
+    }
+  ],
+  "lineColumns": {
+    "line": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "item-id": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "wide",
+      "editDisplay": "idAndLabel",
+      "viewDisplay": "idAndLabel",
+      "dropdownDisplay": "idAndLabel",
+      "dropdownSort": "id"
+    },
+    "description": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "wide",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "label"
+    },
+    "quantity": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "compact",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "unit-price": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    },
+    "line-total": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "normal",
+      "editDisplay": "label",
+      "viewDisplay": "label",
+      "dropdownDisplay": "label",
+      "dropdownSort": "id"
+    }
+  },
+  "statCards": [
+    {
+      "id": "slot-1",
+      "metric": "total",
+      "visible": true,
+      "order": 0,
+      "size": "md",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-2",
+      "metric": "customerId",
+      "visible": true,
+      "order": 1,
+      "size": "md",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-3",
+      "metric": "validUntil",
+      "visible": true,
+      "order": 2,
+      "size": "md",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "slot-4",
+      "metric": "status",
+      "visible": true,
+      "order": 3,
+      "size": "md",
+      "colorized": true,
+      "linked": true
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import { getListSourceText, type FieldSourceType } from '@/lib/list-source'
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 export type UserFormFieldKey =
   | 'userId'
@@ -44,7 +45,25 @@ export type UserFormCustomizationConfig = {
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<UserFormFieldKey, UserFormFieldCustomization>
+  statCards?: Array<TransactionStatCardSlot<UserStatCardMetric>>
 }
+
+export type UserStatCardMetric =
+  | 'role'
+  | 'department'
+  | 'status'
+  | 'defaultSubsidiary'
+  | 'approvalLimit'
+  | 'lastLogin'
+
+export const USER_STAT_CARDS: Array<{ id: UserStatCardMetric; label: string }> = [
+  { id: 'role', label: 'Role' },
+  { id: 'department', label: 'Department' },
+  { id: 'status', label: 'Status' },
+  { id: 'defaultSubsidiary', label: 'Default Subsidiary' },
+  { id: 'approvalLimit', label: 'Approval Limit' },
+  { id: 'lastLogin', label: 'Last Login' },
+]
 
 export const USER_FORM_FIELDS: UserFormFieldMeta[] = [
   { id: 'userId', label: 'User ID', fieldType: 'text', description: 'System-generated user identifier.' },
@@ -172,5 +191,14 @@ export function defaultUserFormCustomization(): UserFormCustomizationConfig {
         },
       ])
     ) as Record<UserFormFieldKey, UserFormFieldCustomization>,
+    statCards: USER_STAT_CARDS.map((card, index) => ({
+      id: `user-stat-${card.id}`,
+      metric: card.id,
+      visible: index < 4,
+      order: index,
+      size: 'md',
+      colorized: true,
+      linked: true,
+    })),
   }
 }

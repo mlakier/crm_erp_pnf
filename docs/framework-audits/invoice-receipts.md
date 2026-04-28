@@ -3,6 +3,15 @@
 Mode: audit-only
 Generated: 2026-04-25T07:11:28.474Z
 
+## Component Applicability
+
+| Component | Applicable |
+| --- | --- |
+| Header | Yes |
+| Lines | No |
+| GL Impact | Yes |
+| Footer | Yes |
+
 ## Checks
 
 ### Foundation
@@ -36,14 +45,21 @@ Generated: 2026-04-25T07:11:28.474Z
 - [x] Detail page renders stat cards from the configured visible slots (src\app\invoice-receipts\[id]\page.tsx)
 - [x] Customize flow supports a configurable Customer section with available customer fields (src\lib\invoice-receipt-detail-customization.ts)
 
-### Line Section
-- [x] Line section includes add-line capability where applicable (src\app\invoice-receipts\[id]\page.tsx)
+### Line Section Applicability
+- [ ] Invoice Receipts do not have a transaction line-items section by design; do not apply line-item audit or customization checks unless the product design changes
 
-### Detail Section
+### Footer Section
 - [x] Detail page includes related documents section (src\app\invoice-receipts\[id]\page.tsx)
 - [x] Detail page includes communications section (src\app\invoice-receipts\[id]\page.tsx)
 - [x] Detail page wires send email in communications (src\app\invoice-receipts\[id]\page.tsx)
+- [x] Detail page includes system notes section (src\app\invoice-receipts\[id]\page.tsx)
 - [x] Detail page includes GL impact section (src\app\invoice-receipts\[id]\page.tsx)
+
+### GL Impact Presentation & Customize
+- [ ] Customize flow exposes a GL impact column customization block when the page has GL impact
+- [ ] GL impact customization supports visibility and order persistence where applicable
+- [ ] GL impact customization supports applicable width and view-display controls without dropdown-only settings
+- [ ] Saved GL impact customization is reflected in the rendered GL impact table after reload
 
 ## Missing Files
 - None

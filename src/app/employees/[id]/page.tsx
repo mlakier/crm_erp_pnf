@@ -15,6 +15,7 @@ import {
   RecordDetailHeaderCell,
   RecordDetailSection,
 } from '@/components/RecordDetailPanels'
+import TransactionStatsRow from '@/components/TransactionStatsRow'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
 import { loadEmployeeFormCustomization } from '@/lib/employee-form-customization-store'
 import { EMPLOYEE_FORM_FIELDS, type EmployeeFormFieldKey } from '@/lib/employee-form-customization'
@@ -72,6 +73,7 @@ export default async function EmployeeDetailPage({
 
   const linkedUserIdSet = new Set(linkedUsers.map((entry) => entry.userId).filter((value): value is string => Boolean(value)))
   const users = allUsers.filter((user) => user.id === employee.userId || !linkedUserIdSet.has(user.id))
+  const employeeStatus = employee.inactive ? 'Inactive' : 'Active'
 
   const detailHref = `/employees/${employee.id}`
   const sectionDescriptions: Record<string, string> = {
@@ -214,6 +216,18 @@ export default async function EmployeeDetailPage({
   }
 
   const customizeFields = buildCustomizePreviewFields(EMPLOYEE_FORM_FIELDS, fieldDefinitions)
+  const statPreviewCards = [
+    { id: 'directReports', label: 'Direct Reports', value: employee.directReports.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+    { id: 'subsidiaries', label: 'Subsidiaries', value: employee.employeeSubsidiaries.length, accent: 'teal', cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
+    { id: 'linkedUser', label: 'Linked User', value: employee.user ? (employee.user.name ?? employee.user.userId ?? 'Linked') : 'Not Linked', href: employee.user ? `/users/${employee.user.id}` : null, accent: 'yellow', cardTone: employee.user ? 'yellow' : 'default', valueTone: employee.user ? 'yellow' : 'default', supportsColorized: true, supportsLink: true },
+    { id: 'status', label: 'Status', value: employeeStatus, cardTone: employee.inactive ? 'red' : 'green', valueTone: employee.inactive ? 'red' : 'green', supportsColorized: true, supportsLink: false },
+  ]
+  const statDefinitions = [
+    { id: 'directReports', label: 'Direct Reports', getValue: () => employee.directReports.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
+    { id: 'subsidiaries', label: 'Subsidiaries', getValue: () => employee.employeeSubsidiaries.length, accent: 'teal' as const, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
+    { id: 'linkedUser', label: 'Linked User', getValue: () => (employee.user ? (employee.user.name ?? employee.user.userId ?? 'Linked') : 'Not Linked'), getHref: () => (employee.user ? `/users/${employee.user.id}` : null), accent: 'yellow' as const, getCardTone: () => (employee.user ? 'yellow' : 'default') as const, getValueTone: () => (employee.user ? 'yellow' : 'default') as const },
+    { id: 'status', label: 'Status', getValue: () => employeeStatus, getCardTone: () => (employee.inactive ? 'red' : 'green') as const, getValueTone: () => (employee.inactive ? 'red' : 'green') as const },
+  ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: EMPLOYEE_FORM_FIELDS,
     layout: formCustomization,
@@ -281,6 +295,16 @@ export default async function EmployeeDetailPage({
         </>
       }
     >
+        {!isCustomizing ? (
+          <div className="mb-8">
+            <TransactionStatsRow
+              record={employee}
+              stats={statDefinitions}
+              visibleStatCards={formCustomization.statCards as Array<{ id: string; metric: string; visible: boolean; order: number; size?: 'sm' | 'md' | 'lg'; colorized?: boolean; linked?: boolean }> | undefined}
+            />
+          </div>
+        ) : null}
+
         {isCustomizing ? (
           <EmployeeDetailCustomizeMode
             detailHref={detailHref}
@@ -288,6 +312,7 @@ export default async function EmployeeDetailPage({
             initialRequirements={{ ...formRequirements.employeeCreate }}
             fields={customizeFields}
             sectionDescriptions={sectionDescriptions}
+            statPreviewCards={statPreviewCards}
           />
         ) : (
           <InlineRecordDetails
@@ -301,8 +326,9 @@ export default async function EmployeeDetailPage({
           />
         )}
 
-        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} /> : null}
+        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} internalId={employee.id} /> : null}
 
+        {!isCustomizing ? (
         <RecordDetailSection title="Direct Reports" count={employee.directReports.length}>
           {employee.directReports.length === 0 ? (
             <RecordDetailEmptyState message="No direct reports" />
@@ -333,7 +359,9 @@ export default async function EmployeeDetailPage({
             </table>
           )}
         </RecordDetailSection>
+        ) : null}
 
+        {!isCustomizing ? (
         <RecordDetailSection title="Linked User" count={employee.user ? 1 : 0}>
           {employee.user ? (
             <table className="min-w-full">
@@ -365,7 +393,8 @@ export default async function EmployeeDetailPage({
             </div>
           )}
         </RecordDetailSection>
-        <SystemNotesSection notes={systemNotes} />
+        ) : null}
+        {!isCustomizing ? <SystemNotesSection notes={systemNotes} /> : null}
     </RecordDetailPageShell>
   )
 }

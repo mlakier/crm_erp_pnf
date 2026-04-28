@@ -128,13 +128,16 @@ export default async function ChartOfAccountsPage({
               <MasterDataHeaderCell columnId="summary">Summary</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="subsidiaries">Subsidiaries</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="include-children">Include Children</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="active">Active</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="db-id">DB Id</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="last-modified">Last Modified</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
             </tr>
           </thead>
           <tbody>
             {accounts.length === 0 ? (
-              <MasterDataEmptyStateRow colSpan={chartOfAccountsListDefinition.columns.length}>No chart accounts found</MasterDataEmptyStateRow>
+              <MasterDataEmptyStateRow colSpan={20}>No chart accounts found</MasterDataEmptyStateRow>
             ) : (
               accounts.map((account, index) => (
                 <tr key={account.id} style={getMasterDataRowStyle(index, accounts.length)}>
@@ -168,7 +171,10 @@ export default async function ChartOfAccountsPage({
                         : '-'}
                   </MasterDataMutedCell>
                   <MasterDataMutedCell columnId="include-children">{account.includeChildren ? 'Yes' : 'No'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="active">{account.active ? 'Yes' : 'No'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="db-id">{account.id}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="created">{formatMasterDataDate(account.createdAt)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(account.updatedAt)}</MasterDataMutedCell>
                   <MasterDataBodyCell columnId="actions">
                     <div className="flex items-center gap-2">
                       <EditButton

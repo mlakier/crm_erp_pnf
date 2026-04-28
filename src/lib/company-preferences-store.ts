@@ -6,12 +6,16 @@ import {
   type IdSettingKey,
   DEFAULT_ID_SETTINGS,
   DEFAULT_MONEY_SETTINGS,
+  DEFAULT_TRANSACTION_STATUS_COLOR_SETTINGS,
   type MoneySettings,
+  type SalesOrderStatusColorKey,
+  type TransactionStatusColorSettings,
 } from '@/lib/company-preferences-definitions'
 
 const DEFAULT_SETTINGS: CompanyPreferencesSettings = {
   idSettings: DEFAULT_ID_SETTINGS,
   moneySettings: DEFAULT_MONEY_SETTINGS,
+  transactionStatusColors: DEFAULT_TRANSACTION_STATUS_COLOR_SETTINGS,
 }
 
 const STORE_PATH = path.join(process.cwd(), 'config', 'company-preferences.json')
@@ -57,6 +61,31 @@ function sanitize(input: unknown): CompanyPreferencesSettings {
   return {
     idSettings,
     moneySettings: sanitizeMoneySettings(root.moneySettings),
+    transactionStatusColors: sanitizeTransactionStatusColorSettings(root.transactionStatusColors),
+  }
+}
+
+function sanitizeTransactionStatusColorSettings(input: unknown): TransactionStatusColorSettings {
+  const defaults = DEFAULT_TRANSACTION_STATUS_COLOR_SETTINGS
+  if (!input || typeof input !== 'object') return defaults
+  const root = input as Record<string, unknown>
+  const salesOrderInput =
+    root.salesOrder && typeof root.salesOrder === 'object'
+      ? (root.salesOrder as Record<string, unknown>)
+      : {}
+
+  return {
+    salesOrder: Object.fromEntries(
+      Object.entries(defaults.salesOrder).map(([status, fallback]) => {
+        const nextValue = salesOrderInput[status]
+        return [
+          status,
+          nextValue === 'gray' || nextValue === 'accent' || nextValue === 'teal' || nextValue === 'yellow' || nextValue === 'orange' || nextValue === 'green' || nextValue === 'red' || nextValue === 'purple' || nextValue === 'pink' || nextValue === 'default'
+            ? nextValue
+            : fallback,
+        ]
+      }),
+    ) as Record<SalesOrderStatusColorKey, TransactionStatusColorSettings['salesOrder'][SalesOrderStatusColorKey]>,
   }
 }
 

@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import CommunicationsSection, { type CommunicationRow } from '@/components/CommunicationsSection'
 import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
 import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
-import PurchaseOrderHeaderSections, { type PurchaseOrderHeaderSection } from '@/components/PurchaseOrderHeaderSections'
+import TransactionHeaderSections, { type TransactionHeaderSection } from '@/components/TransactionHeaderSections'
 import SystemNotesSection, { type SystemNoteRow } from '@/components/SystemNotesSection'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import {
@@ -17,32 +18,51 @@ import {
   RecordDetailHeaderCell,
   RecordDetailSection,
 } from '@/components/RecordDetailPanels'
-import { fmtCurrency } from '@/lib/format'
+import { fmtCurrency, parseMoneyInput } from '@/lib/format'
+import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/lib/form-requirements-client'
 import { moneyEquals, sumMoney } from '@/lib/money'
 import type { MoneySettings } from '@/lib/company-preferences-definitions'
 import JournalDetailCustomizeMode from '@/components/JournalDetailCustomizeMode'
 import {
+  JOURNAL_GL_IMPACT_COLUMNS,
+  JOURNAL_LINE_COLUMNS,
   JOURNAL_DETAIL_FIELDS,
   type JournalDetailCustomizationConfig,
+  type JournalGlImpactColumnCustomization,
+  type JournalGlImpactColumnKey,
+  type JournalLineColumnKey,
+  type JournalLineColumnCustomization,
+  type JournalLineDisplayMode,
+  type JournalLineDropdownSortMode,
 } from '@/lib/journal-detail-customization'
 import {
   buildConfiguredTransactionSections,
   buildTransactionCustomizePreviewFields,
+  getOrderedVisibleTransactionLineColumns,
 } from '@/lib/transaction-detail-helpers'
 import { buildTransactionCommunicationComposePayload } from '@/lib/transaction-communications'
 import { journalPageConfig } from '@/lib/transaction-page-configs/journal'
+import { findAccountingPeriodIdForDate } from '@/lib/accounting-periods'
 
 type EntityOption = { id: string; subsidiaryId: string; name: string }
-type AccountOption = { id: string; accountId: string; name: string }
-type DepartmentOption = { id: string; departmentId: string; name: string }
-type LocationOption = { id: string; locationId: string; name: string }
-type ProjectOption = { id: string; name: string }
+type AccountOption = { id: string; accountId: string; accountNumber: string; name: string }
+type DepartmentOption = { id: string; departmentId: string; departmentNumber: string | null; name: string }
+type LocationOption = { id: string; locationId: string; code: string; name: string }
+type ProjectOption = { id: string; name: string; description: string | null }
 type CustomerOption = { id: string; customerId: string | null; name: string }
 type VendorOption = { id: string; vendorNumber: string | null; name: string }
-type ItemOption = { id: string; itemId: string | null; name: string }
+type ItemOption = { id: string; itemId: string | null; sku: string | null; name: string }
 type CurrencyOption = { id: string; currencyId: string; code?: string; name: string }
-type PeriodOption = { id: string; name: string }
-type EmployeeOption = { id: string; employeeId: string | null; firstName: string; lastName: string }
+type PeriodOption = {
+  id: string
+  name: string
+  startDate: string
+  endDate: string
+  subsidiaryId?: string | null
+  closed?: boolean
+  status?: string | null
+}
+type EmployeeOption = { id: string; employeeId: string | null; eid: string | null; firstName: string; lastName: string }
 type SelectOption = { value: string; label: string }
 
 type JournalLineDraft = {
@@ -87,6 +107,7 @@ type JournalEntryDetailClientProps = {
   employees: EmployeeOption[]
   statusOptions: SelectOption[]
   sourceTypeOptions: SelectOption[]
+  createdByUserLabel?: string
   moneySettings: MoneySettings
   systemNotes?: SystemNoteRow[]
 }
@@ -115,10 +136,12 @@ export default function JournalEntryDetailClient({
   employees,
   statusOptions,
   sourceTypeOptions,
+  createdByUserLabel = '-',
   moneySettings,
   systemNotes = [],
 }: JournalEntryDetailClientProps) {
   const router = useRouter()
+  const { req, isLocked } = useFormRequirementsState('journalCreate')
   const [headerValues, setHeaderValues] = useState<Record<string, string>>(initialHeaderValues)
   const [lineItems, setLineItems] = useState<JournalLineDraft[]>(initialLineItems)
   const [saving, setSaving] = useState(false)
@@ -132,7 +155,10 @@ export default function JournalEntryDetailClient({
   const totalCredits = useMemo(() => sumMoney(lineItems.map((line) => line.credit)), [lineItems])
   const balance = useMemo(() => totalDebits - totalCredits, [totalCredits, totalDebits])
   const effectiveCurrencyCode = currencies.find((currency) => currency.id === headerValues.currencyId)?.code
-  const visibleTotal = fmtCurrency(totalDebits, effectiveCurrencyCode, moneySettings)
+  const persistedTotal = Number(headerValues.total || 0)
+  const computedTotalDisplay = fmtCurrency(totalDebits, effectiveCurrencyCode, moneySettings)
+  const persistedTotalDisplay = fmtCurrency(persistedTotal, effectiveCurrencyCode, moneySettings)
+  const detailTotalDisplay = editing || isNew ? computedTotalDisplay : persistedTotalDisplay
   const affectedSubsidiaries = useMemo(
     () =>
       new Set(
@@ -147,31 +173,52 @@ export default function JournalEntryDetailClient({
       lineItems.map((line) => ({
         key: line.key,
         lineNumber: line.displayOrder + 1,
-        account: renderEntityLabel(accounts, line.accountId, 'accountId'),
+        account: renderAccountLabel(accounts, line.accountId),
         description: line.description || line.memo || '-',
         subsidiary: renderEntityLabel(entities, (isIntercompany ? line.subsidiaryId : '') || headerValues.subsidiaryId, 'subsidiaryId'),
-        department: renderEntityLabel(departments, line.departmentId, 'departmentId'),
-        location: renderEntityLabel(locations, line.locationId, 'locationId'),
-        project: projects.find((project) => project.id === line.projectId)?.name ?? '-',
-        customer: customers.find((customer) => customer.id === line.customerId)?.name ?? '-',
-        vendor: vendors.find((vendor) => vendor.id === line.vendorId)?.name ?? '-',
-        item: items.find((item) => item.id === line.itemId)?.name ?? '-',
-        employee: employees.find((employee) => employee.id === line.employeeId)
-          ? `${employees.find((employee) => employee.id === line.employeeId)?.firstName} ${employees.find((employee) => employee.id === line.employeeId)?.lastName}`
-          : '-',
+        department: renderDepartmentLabel(departments, line.departmentId),
+        location: renderLocationLabel(locations, line.locationId),
+        project: renderProjectLabel(projects, line.projectId),
+        customer: renderCustomerLabel(customers, line.customerId),
+        vendor: renderVendorLabel(vendors, line.vendorId),
+        item: renderItemLabel(items, line.itemId),
+        employee: renderEmployeeLabel(employees, line.employeeId),
         debit: Number(line.debit || 0),
         credit: Number(line.credit || 0),
       })),
     [accounts, customers, departments, employees, entities, headerValues.subsidiaryId, isIntercompany, items, lineItems, locations, projects, vendors],
   )
-  const visibleStatIds = useMemo(
-    () =>
-      [...(activeCustomization?.statCards ?? [])]
-        .sort((left, right) => left.order - right.order)
-        .filter((card) => card.visible)
-        .map((card) => card.metric),
-    [activeCustomization?.statCards],
+  const lineColumnDefinitions = useMemo(
+    () => JOURNAL_LINE_COLUMNS.filter((column) => isIntercompany || column.id !== 'subsidiaryId'),
+    [isIntercompany],
   )
+  const visibleLineColumns = useMemo(
+    () =>
+      activeCustomization?.lineColumns
+        ? getOrderedVisibleTransactionLineColumns(lineColumnDefinitions, activeCustomization)
+        : lineColumnDefinitions.map((column) => ({ id: column.id, label: column.label })),
+    [activeCustomization, lineColumnDefinitions],
+  )
+  const glImpactColumnDefinitions = useMemo(
+    () => JOURNAL_GL_IMPACT_COLUMNS.filter((column) => isIntercompany || column.id !== 'subsidiaryId'),
+    [isIntercompany],
+  )
+  const visibleGlImpactColumns = useMemo(
+    () =>
+      activeCustomization?.glImpactColumns
+        ? getOrderedVisibleTransactionLineColumns(glImpactColumnDefinitions, { lineColumns: activeCustomization.glImpactColumns })
+        : glImpactColumnDefinitions.map((column) => ({ id: column.id, label: column.label })),
+    [activeCustomization?.glImpactColumns, glImpactColumnDefinitions],
+  )
+  const lineFontSize = activeCustomization?.lineSettings?.fontSize === 'sm' ? 'sm' : 'xs'
+  const lineInputClass = useMemo(
+    () =>
+      `w-full rounded-md border bg-transparent px-2.5 py-1.5 ${lineFontSize === 'sm' ? 'text-sm' : 'text-xs'} text-white`,
+    [lineFontSize],
+  )
+  const lineReadOnlyTextClass = lineFontSize === 'sm' ? 'text-sm leading-5' : 'text-xs leading-5'
+  const glImpactFontSize = activeCustomization?.glImpactSettings?.fontSize === 'sm' ? 'sm' : 'xs'
+  const glImpactTextClass = glImpactFontSize === 'sm' ? 'text-sm leading-5' : 'text-xs leading-5'
   const journalStatsRecord = useMemo(
     () => ({
       totalDebits,
@@ -198,17 +245,19 @@ export default function JournalEntryDetailClient({
           { label: 'Subsidiary', value: renderEntityLabel(entities, headerValues.subsidiaryId, 'subsidiaryId') },
           { label: 'Currency', value: currencies.find((currency) => currency.id === headerValues.currencyId)?.code ?? '-' },
           { label: 'Accounting Period', value: accountingPeriods.find((period) => period.id === headerValues.accountingPeriodId)?.name ?? '-' },
+          { label: 'Total', value: persistedTotalDisplay },
           { label: 'Total Debits', value: fmtCurrency(totalDebits, effectiveCurrencyCode, moneySettings) },
           { label: 'Total Credits', value: fmtCurrency(totalCredits, effectiveCurrencyCode, moneySettings) },
           { label: 'Balance', value: fmtCurrency(balance, effectiveCurrencyCode, moneySettings) },
           { label: 'Source Type', value: (sourceTypeOptions.find((option) => option.value === headerValues.sourceType)?.label ?? headerValues.sourceType) || '-' },
           { label: 'Source Id', value: headerValues.sourceId || '-' },
+          { label: 'Created By', value: createdByUserLabel },
           { label: 'Prepared By', value: employees.find((employee) => employee.id === headerValues.postedByEmployeeId) ? `${employees.find((employee) => employee.id === headerValues.postedByEmployeeId)?.firstName} ${employees.find((employee) => employee.id === headerValues.postedByEmployeeId)?.lastName}` : '-' },
           { label: 'Approved By', value: employees.find((employee) => employee.id === headerValues.approvedByEmployeeId) ? `${employees.find((employee) => employee.id === headerValues.approvedByEmployeeId)?.firstName} ${employees.find((employee) => employee.id === headerValues.approvedByEmployeeId)?.lastName}` : '-' },
         ],
       },
     ],
-    [accountingPeriods, balance, currencies, effectiveCurrencyCode, employees, entities, headerValues.accountingPeriodId, headerValues.approvedByEmployeeId, headerValues.currencyId, headerValues.date, headerValues.description, headerValues.number, headerValues.postedByEmployeeId, headerValues.sourceId, headerValues.sourceType, headerValues.status, headerValues.subsidiaryId, moneySettings, sourceTypeOptions, statusOptions, totalCredits, totalDebits],
+    [accountingPeriods, balance, createdByUserLabel, currencies, effectiveCurrencyCode, employees, entities, headerValues.accountingPeriodId, headerValues.approvedByEmployeeId, headerValues.currencyId, headerValues.date, headerValues.description, headerValues.number, headerValues.postedByEmployeeId, headerValues.sourceId, headerValues.sourceType, headerValues.status, headerValues.subsidiaryId, moneySettings, persistedTotalDisplay, sourceTypeOptions, statusOptions, totalCredits, totalDebits],
   )
   const relatedDocumentsCount = headerValues.sourceId ? 1 : 0
   const communicationRows = useMemo<CommunicationRow[]>(() => [], [])
@@ -219,10 +268,10 @@ export default function JournalEntryDetailClient({
           number: headerValues.number || initialNumber,
           counterpartyName: 'Journal stakeholders',
           status: statusOptions.find((option) => option.value === headerValues.status)?.label ?? headerValues.status ?? 'Draft',
-          total: visibleTotal,
+          total: persistedTotalDisplay,
           lineItems: lineItems.map((line, index) => ({
             line: index + 1,
-            itemId: renderEntityLabel(accounts, line.accountId, 'accountId'),
+            itemId: renderAccountLabel(accounts, line.accountId),
             description: line.description || line.memo || '-',
             quantity: Number(line.debit || 0),
             receivedQuantity: 0,
@@ -262,28 +311,31 @@ export default function JournalEntryDetailClient({
 
   const fieldDefinitions = {
     number: { key: 'number', label: 'Journal Id', value: headerValues.number, editable: editing || isNew, type: 'text', fieldType: 'text', helpText: 'Unique journal identifier.' },
-    date: { key: 'date', label: 'Date', value: headerValues.date, editable: editing || isNew, type: 'text', fieldType: 'date', helpText: 'Posting date for the journal entry.' },
+    date: { key: 'date', label: 'Date', value: headerValues.date, editable: editing || isNew, type: 'date', fieldType: 'date', helpText: 'Posting date for the journal entry.' },
     description: { key: 'description', label: 'Description', value: headerValues.description, editable: editing || isNew, type: 'text', fieldType: 'text', helpText: 'Header description for the journal entry.' },
     status: { key: 'status', label: 'Status', value: headerValues.status, editable: editing || isNew, type: 'select', options: statusOptions, fieldType: 'list', helpText: 'Current lifecycle stage of the journal.', sourceText: 'Journal status list' },
     subsidiaryId: { key: 'subsidiaryId', label: 'Subsidiary', value: headerValues.subsidiaryId, editable: editing || isNew, type: 'select', options: entities.map((entity) => ({ value: entity.id, label: `${entity.subsidiaryId} - ${entity.name}` })), fieldType: 'list', helpText: 'Default subsidiary context for the journal.', sourceText: 'Subsidiaries master data' },
     currencyId: { key: 'currencyId', label: 'Currency', value: headerValues.currencyId, editable: editing || isNew, type: 'select', options: currencies.map((currency) => ({ value: currency.id, label: `${currency.code ?? currency.currencyId} - ${currency.name}` })), fieldType: 'list', helpText: 'Currency used for the journal header total display.', sourceText: 'Currencies master data' },
-    accountingPeriodId: { key: 'accountingPeriodId', label: 'Accounting Period', value: headerValues.accountingPeriodId, editable: editing || isNew, type: 'select', options: accountingPeriods.map((period) => ({ value: period.id, label: period.name })), fieldType: 'list', helpText: 'Accounting period that owns the journal.', sourceText: 'Accounting periods' },
+    accountingPeriodId: { key: 'accountingPeriodId', label: 'Accounting Period', value: headerValues.accountingPeriodId, editable: editing || isNew, disabled: true, type: 'select', options: accountingPeriods.map((period) => ({ value: period.id, label: period.name })), fieldType: 'list', helpText: 'Auto-derived from the posting date and matching accounting period.', sourceText: 'Accounting periods' },
     journalType: { key: 'journalType', label: 'Journal Type', value: headerValues.journalType, editable: false, displayValue: headerValues.journalType === 'intercompany' ? 'Intercompany' : 'Standard', fieldType: 'text', helpText: 'Standard or intercompany journal classification.' },
-    computedTotal: { key: 'computedTotal', label: 'Total', value: visibleTotal, displayValue: visibleTotal, editable: false, fieldType: 'currency', helpText: 'Balanced total based on journal debits.' },
+    total: { key: 'total', label: 'Total', value: headerValues.total, displayValue: detailTotalDisplay, editable: false, fieldType: 'currency', helpText: 'Persisted journal total stored on the journal header.' },
     sourceType: { key: 'sourceType', label: 'Source Type', value: headerValues.sourceType, editable: editing || isNew, type: 'select', options: sourceTypeOptions, fieldType: 'list', helpText: 'Origin or purpose classification for the journal.', sourceText: 'Journal source type list' },
     sourceId: { key: 'sourceId', label: 'Source Id', value: headerValues.sourceId, editable: editing || isNew, type: 'text', fieldType: 'text', helpText: 'Identifier from the originating source record.' },
+    userId: { key: 'userId', label: 'Created By', value: headerValues.userId, displayValue: createdByUserLabel, editable: false, fieldType: 'list', helpText: 'User account that created the journal entry.', sourceText: 'Users' },
     postedByEmployeeId: { key: 'postedByEmployeeId', label: 'Prepared By', value: headerValues.postedByEmployeeId, editable: editing || isNew, type: 'select', options: employees.map((employee) => ({ value: employee.id, label: `${employee.employeeId ?? 'EMP'} - ${employee.firstName} ${employee.lastName}` })), fieldType: 'list', helpText: 'Employee that prepared the journal.', sourceText: 'Employees master data' },
     approvedByEmployeeId: { key: 'approvedByEmployeeId', label: 'Approved By', value: headerValues.approvedByEmployeeId, editable: editing || isNew, type: 'select', options: employees.map((employee) => ({ value: employee.id, label: `${employee.employeeId ?? 'EMP'} - ${employee.firstName} ${employee.lastName}` })), fieldType: 'list', helpText: 'Employee that approved the journal.', sourceText: 'Employees master data' },
     createdAt: { key: 'createdAt', label: 'Date Created', value: headerValues.createdAt, editable: false, fieldType: 'date', helpText: 'Timestamp when the journal was created.' },
     updatedAt: { key: 'updatedAt', label: 'Last Modified', value: headerValues.updatedAt, editable: false, fieldType: 'date', helpText: 'Timestamp of the most recent journal update.' },
   } as const
 
+  applyRequirementsToEditableFields(fieldDefinitions, req, isLocked)
+
   const sectionDescriptions = {
     'Journal Entry': 'Core journal header information and posting context.',
     'Source And Approval': 'Reference source and approval ownership for the journal entry.',
   }
 
-  const headerSections: PurchaseOrderHeaderSection[] = activeCustomization
+  const headerSections: TransactionHeaderSection[] = activeCustomization
     ? buildConfiguredTransactionSections({
         fields: JOURNAL_DETAIL_FIELDS,
         layout: activeCustomization,
@@ -312,7 +364,7 @@ export default function JournalEntryDetailClient({
           approvedByEmployeeId: employees.find((employee) => employee.id === headerValues.approvedByEmployeeId)
             ? `${employees.find((employee) => employee.id === headerValues.approvedByEmployeeId)?.employeeId ?? 'EMP'} - ${employees.find((employee) => employee.id === headerValues.approvedByEmployeeId)?.firstName} ${employees.find((employee) => employee.id === headerValues.approvedByEmployeeId)?.lastName}`
             : '',
-          computedTotal: visibleTotal,
+          total: detailTotalDisplay,
         },
       })
     : []
@@ -465,26 +517,7 @@ export default function JournalEntryDetailClient({
       actions={
         <div className="flex flex-col items-end gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            {editing || isNew ? (
-              <>
-                <Link
-                  href={isNew ? '/journals' : detailHref}
-                  className="rounded-md border px-3 py-1.5 text-xs font-medium"
-                  style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-                >
-                  Cancel
-                </Link>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                  style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-                >
-                  {saving ? 'Saving...' : 'Save'}
-                </button>
-              </>
-            ) : (
+            {!isNew ? (
               <>
                 <MasterDataDetailCreateMenu
                   newHref={isIntercompany ? '/journals/intercompany/new' : '/journals/new'}
@@ -504,6 +537,38 @@ export default function JournalEntryDetailClient({
                     Customize
                   </Link>
                 ) : null}
+              </>
+            ) : null}
+            {editing || isNew ? (
+              <>
+                <Link
+                  href={isNew ? detailHref : detailHref}
+                  className="rounded-md border px-3 py-1.5 text-xs font-medium"
+                  style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+                >
+                  Cancel
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                  style={{ backgroundColor: 'var(--accent-primary-strong)' }}
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+                {!isNew ? (
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    className="inline-flex items-center rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-red-700"
+                  >
+                    Delete
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <>
                 <Link
                   href={`${detailHref}?edit=1`}
                   className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
@@ -530,7 +595,7 @@ export default function JournalEntryDetailClient({
         <TransactionStatsRow
           record={journalStatsRecord}
           stats={journalPageConfig.stats}
-          visibleStatIds={visibleStatIds}
+          visibleStatCards={activeCustomization?.statCards}
         />
       </div>
 
@@ -540,9 +605,11 @@ export default function JournalEntryDetailClient({
           initialLayout={activeCustomization}
           fields={customizeFields}
           sectionDescriptions={sectionDescriptions}
+          lineColumnDefinitions={lineColumnDefinitions}
+          glImpactColumnDefinitions={glImpactColumnDefinitions}
         />
       ) : (
-        <PurchaseOrderHeaderSections
+        <TransactionHeaderSections
           purchaseOrderId={entryId}
           editing={editing || isNew}
           sections={headerSections}
@@ -550,7 +617,21 @@ export default function JournalEntryDetailClient({
           formId="journal-entry-detail-form"
           submitMode="controlled"
           onSubmit={handleSave}
-          onValuesChange={setHeaderValues}
+          onValuesChange={(nextValues) => {
+            if (!(editing || isNew)) {
+              setHeaderValues(nextValues)
+              return
+            }
+
+            setHeaderValues({
+              ...nextValues,
+              accountingPeriodId: findAccountingPeriodIdForDate(
+                accountingPeriods,
+                nextValues.date,
+                nextValues.subsidiaryId,
+              ),
+            })
+          }}
         />
       )}
 
@@ -575,116 +656,285 @@ export default function JournalEntryDetailClient({
         {lineItems.length === 0 ? (
           <RecordDetailEmptyState message="No journal lines yet." />
         ) : (
-          <table className="min-w-full">
+          <table className={`min-w-full ${lineFontSize === 'sm' ? 'text-sm' : 'text-xs'}`}>
             <thead>
               <tr>
-                <RecordDetailHeaderCell>Line</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>GL Account</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Description</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Debit</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Credit</RecordDetailHeaderCell>
-                {isIntercompany ? <RecordDetailHeaderCell>Subsidiary</RecordDetailHeaderCell> : null}
-                <RecordDetailHeaderCell>Department</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Location</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Project</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Customer</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Vendor</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Item</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Employee</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Memo</RecordDetailHeaderCell>
+                {visibleLineColumns.map((column) => (
+                  <RecordDetailHeaderCell
+                    key={column.id}
+                    className={column.id === 'debit' || column.id === 'credit' ? 'text-right' : undefined}
+                  >
+                    {column.label}
+                  </RecordDetailHeaderCell>
+                ))}
                 {editing || isNew ? <RecordDetailHeaderCell /> : null}
               </tr>
             </thead>
             <tbody>
                 {lineItems.map((line, index) => (
                   <tr key={line.key} style={index < lineItems.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : undefined}>
-                    <RecordDetailCell>{line.displayOrder + 1}</RecordDetailCell>
-                    <EditableCell editing={editing || isNew}>
-                    <select value={line.accountId} onChange={(event) => updateLine(line.key, 'accountId', event.target.value)} className={inputClass} style={inputStyle}>
-                      <option value="">Select account</option>
-                      {accounts.map((account) => (
-                        <option key={account.id} value={account.id}>{account.accountId} - {account.name}</option>
-                      ))}
-                    </select>
-                  </EditableCell>
-                  <EditableCell editing={editing || isNew} value={line.description || '-'}>
-                    <input value={line.description} onChange={(event) => updateLine(line.key, 'description', event.target.value)} className={inputClass} style={inputStyle} />
-                  </EditableCell>
-                  <EditableCell editing={editing || isNew} value={line.debit || '-'}>
-                    <input type="number" min="0" step="0.01" value={line.debit} onChange={(event) => updateLine(line.key, 'debit', event.target.value)} className={inputClass} style={inputStyle} />
-                  </EditableCell>
-                  <EditableCell editing={editing || isNew} value={line.credit || '-'}>
-                    <input type="number" min="0" step="0.01" value={line.credit} onChange={(event) => updateLine(line.key, 'credit', event.target.value)} className={inputClass} style={inputStyle} />
-                  </EditableCell>
-                  {isIntercompany ? (
-                    <EditableCell editing={editing || isNew} value={renderEntityLabel(entities, line.subsidiaryId, 'subsidiaryId')}>
-                      <select value={line.subsidiaryId} onChange={(event) => updateLine(line.key, 'subsidiaryId', event.target.value)} className={inputClass} style={inputStyle}>
-                        <option value="">Use header / none</option>
-                        {entities.map((entity) => (
-                          <option key={entity.id} value={entity.id}>{entity.subsidiaryId} - {entity.name}</option>
-                        ))}
-                      </select>
-                    </EditableCell>
-                  ) : null}
-                  <EditableCell editing={editing || isNew} value={renderEntityLabel(departments, line.departmentId, 'departmentId')}>
-                    <select value={line.departmentId} onChange={(event) => updateLine(line.key, 'departmentId', event.target.value)} className={inputClass} style={inputStyle}>
-                      <option value="">None</option>
-                      {departments.map((department) => (
-                        <option key={department.id} value={department.id}>{department.departmentId} - {department.name}</option>
-                      ))}
-                    </select>
-                  </EditableCell>
-                  <EditableCell editing={editing || isNew} value={renderEntityLabel(locations, line.locationId, 'locationId')}>
-                    <select value={line.locationId} onChange={(event) => updateLine(line.key, 'locationId', event.target.value)} className={inputClass} style={inputStyle}>
-                      <option value="">None</option>
-                      {locations.map((location) => (
-                        <option key={location.id} value={location.id}>{location.locationId} - {location.name}</option>
-                      ))}
-                    </select>
-                  </EditableCell>
-                  <EditableCell editing={editing || isNew} value={projects.find((project) => project.id === line.projectId)?.name ?? '-'}>
-                    <select value={line.projectId} onChange={(event) => updateLine(line.key, 'projectId', event.target.value)} className={inputClass} style={inputStyle}>
-                      <option value="">None</option>
-                      {projects.map((project) => (
-                        <option key={project.id} value={project.id}>{project.name}</option>
-                      ))}
-                    </select>
-                  </EditableCell>
-                  <EditableCell editing={editing || isNew} value={customers.find((customer) => customer.id === line.customerId)?.name ?? '-'}>
-                    <select value={line.customerId} onChange={(event) => updateLine(line.key, 'customerId', event.target.value)} className={inputClass} style={inputStyle}>
-                      <option value="">None</option>
-                      {customers.map((customer) => (
-                        <option key={customer.id} value={customer.id}>{customer.customerId ?? 'CUST'} - {customer.name}</option>
-                      ))}
-                    </select>
-                  </EditableCell>
-                  <EditableCell editing={editing || isNew} value={vendors.find((vendor) => vendor.id === line.vendorId)?.name ?? '-'}>
-                    <select value={line.vendorId} onChange={(event) => updateLine(line.key, 'vendorId', event.target.value)} className={inputClass} style={inputStyle}>
-                      <option value="">None</option>
-                      {vendors.map((vendor) => (
-                        <option key={vendor.id} value={vendor.id}>{vendor.vendorNumber ?? 'VEND'} - {vendor.name}</option>
-                      ))}
-                    </select>
-                  </EditableCell>
-                  <EditableCell editing={editing || isNew} value={items.find((item) => item.id === line.itemId)?.name ?? '-'}>
-                    <select value={line.itemId} onChange={(event) => updateLine(line.key, 'itemId', event.target.value)} className={inputClass} style={inputStyle}>
-                      <option value="">None</option>
-                      {items.map((item) => (
-                        <option key={item.id} value={item.id}>{item.itemId ?? 'ITEM'} - {item.name}</option>
-                      ))}
-                    </select>
-                  </EditableCell>
-                  <EditableCell editing={editing || isNew} value={employees.find((employee) => employee.id === line.employeeId) ? `${employees.find((employee) => employee.id === line.employeeId)?.firstName} ${employees.find((employee) => employee.id === line.employeeId)?.lastName}` : '-'}>
-                    <select value={line.employeeId} onChange={(event) => updateLine(line.key, 'employeeId', event.target.value)} className={inputClass} style={inputStyle}>
-                      <option value="">None</option>
-                      {employees.map((employee) => (
-                        <option key={employee.id} value={employee.id}>{employee.employeeId ?? 'EMP'} - {employee.firstName} {employee.lastName}</option>
-                      ))}
-                    </select>
-                  </EditableCell>
-                  <EditableCell editing={editing || isNew} value={line.memo || '-'}>
-                    <input value={line.memo} onChange={(event) => updateLine(line.key, 'memo', event.target.value)} className={inputClass} style={inputStyle} />
-                  </EditableCell>
+                    {visibleLineColumns.map((column) => {
+                      switch (column.id as JournalLineColumnKey) {
+                        case 'line':
+                          return <RecordDetailCell key={column.id}>{line.displayOrder + 1}</RecordDetailCell>
+                        case 'accountId':
+                          return (
+                            <EditableCell
+                              key={column.id}
+                              editing={editing || isNew}
+                              value={renderAccountValue(accounts, line.accountId, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'view'))}
+                              title={renderAccountLabel(accounts, line.accountId)}
+                              textClassName={lineReadOnlyTextClass}
+                              className={getJournalLineColumnClass(column.id, activeCustomization?.lineColumns?.[column.id])}
+                            >
+                              <AccountLookupInput
+                                selectedAccountId={line.accountId}
+                                accountOptions={accounts}
+                                displayMode={getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'edit')}
+                                dropdownDisplay={getLineColumnDropdownDisplayMode(activeCustomization?.lineColumns?.[column.id])}
+                                dropdownSort={getLineColumnDropdownSortMode(activeCustomization?.lineColumns?.[column.id])}
+                                textClassName={lineFontSize === 'sm' ? 'text-sm' : 'text-xs'}
+                                onSelect={(accountId) => updateLine(line.key, 'accountId', accountId)}
+                              />
+                            </EditableCell>
+                          )
+                        case 'description':
+                          return (
+                            <EditableCell key={column.id} editing={editing || isNew} value={line.description || '-'} textClassName={lineReadOnlyTextClass} className={getJournalLineColumnClass(column.id, activeCustomization?.lineColumns?.[column.id])}>
+                              <input value={line.description} onChange={(event) => updateLine(line.key, 'description', event.target.value)} className={lineInputClass} style={inputStyle} />
+                            </EditableCell>
+                          )
+                        case 'debit':
+                          return (
+                            <EditableCell key={column.id} editing={editing || isNew} value={formatLineAmount(line.debit, moneySettings)} textClassName={lineReadOnlyTextClass} className={getJournalLineColumnClass(column.id, activeCustomization?.lineColumns?.[column.id], 'text-right')}>
+                              <AmountInput
+                                value={line.debit}
+                                moneySettings={moneySettings}
+                                onChange={(value) => updateLine(line.key, 'debit', value)}
+                                className={`${lineInputClass} text-right`}
+                                style={inputStyle}
+                              />
+                            </EditableCell>
+                          )
+                        case 'credit':
+                          return (
+                            <EditableCell key={column.id} editing={editing || isNew} value={formatLineAmount(line.credit, moneySettings)} textClassName={lineReadOnlyTextClass} className={getJournalLineColumnClass(column.id, activeCustomization?.lineColumns?.[column.id], 'text-right')}>
+                              <AmountInput
+                                value={line.credit}
+                                moneySettings={moneySettings}
+                                onChange={(value) => updateLine(line.key, 'credit', value)}
+                                className={`${lineInputClass} text-right`}
+                                style={inputStyle}
+                              />
+                            </EditableCell>
+                          )
+                        case 'subsidiaryId':
+                          return isIntercompany ? (
+                            <EditableCell
+                              key={column.id}
+                              editing={editing || isNew}
+                              value={renderSubsidiaryValue(entities, line.subsidiaryId, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'view'))}
+                              title={renderEntityLabel(entities, line.subsidiaryId, 'subsidiaryId')}
+                              textClassName={lineReadOnlyTextClass}
+                              className={getJournalLineColumnClass(column.id, activeCustomization?.lineColumns?.[column.id])}
+                            >
+                              <SearchableSelectInput
+                                selectedValue={line.subsidiaryId}
+                                options={entities.map((entity) => ({
+                                  value: entity.id,
+                                  label: `${entity.subsidiaryId} - ${entity.name}`,
+                                  displayLabel: renderSubsidiaryValue(entities, entity.id, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'edit')),
+                                  menuLabel: renderSubsidiaryValue(entities, entity.id, getLineColumnDropdownDisplayMode(activeCustomization?.lineColumns?.[column.id])),
+                                  searchText: `${entity.subsidiaryId} ${entity.name}`,
+                                  sortIdText: entity.subsidiaryId,
+                                  sortLabelText: entity.name,
+                                }))}
+                                placeholder="Use header / none"
+                                searchPlaceholder="Search subsidiary"
+                                dropdownSort={getLineColumnDropdownSortMode(activeCustomization?.lineColumns?.[column.id])}
+                                textClassName={lineFontSize === 'sm' ? 'text-sm' : 'text-xs'}
+                                onSelect={(value) => updateLine(line.key, 'subsidiaryId', value)}
+                              />
+                            </EditableCell>
+                          ) : null
+                        case 'departmentId':
+                          return (
+                            <EditableCell
+                              key={column.id}
+                              editing={editing || isNew}
+                              value={renderDepartmentValue(departments, line.departmentId, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'view'))}
+                              title={renderDepartmentLabel(departments, line.departmentId)}
+                              textClassName={lineReadOnlyTextClass}
+                              className={getJournalLineColumnClass(column.id, activeCustomization?.lineColumns?.[column.id])}
+                            >
+                              <SearchableSelectInput
+                                selectedValue={line.departmentId}
+                                options={departments.map((department) => ({
+                                  value: department.id,
+                                  label: `${department.departmentNumber ?? department.departmentId} - ${department.name}`,
+                                  displayLabel: renderDepartmentValue(departments, department.id, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'edit')),
+                                  menuLabel: renderDepartmentValue(departments, department.id, getLineColumnDropdownDisplayMode(activeCustomization?.lineColumns?.[column.id])),
+                                  searchText: `${department.departmentNumber ?? department.departmentId ?? ''} ${department.name}`,
+                                  sortIdText: department.departmentNumber ?? department.departmentId ?? '',
+                                  sortLabelText: department.name,
+                                }))}
+                                placeholder="None"
+                                searchPlaceholder="Search department"
+                                dropdownSort={getLineColumnDropdownSortMode(activeCustomization?.lineColumns?.[column.id])}
+                                textClassName={lineFontSize === 'sm' ? 'text-sm' : 'text-xs'}
+                                onSelect={(value) => updateLine(line.key, 'departmentId', value)}
+                              />
+                            </EditableCell>
+                          )
+                        case 'locationId':
+                          return (
+                            <EditableCell
+                              key={column.id}
+                              editing={editing || isNew}
+                              value={renderLocationValue(locations, line.locationId, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'view'))}
+                              title={renderLocationLabel(locations, line.locationId)}
+                              textClassName={lineReadOnlyTextClass}
+                              className={getJournalLineColumnClass(column.id, activeCustomization?.lineColumns?.[column.id])}
+                            >
+                              <SearchableSelectInput
+                                selectedValue={line.locationId}
+                                options={locations.map((location) => ({
+                                  value: location.id,
+                                  label: `${location.code} - ${location.name}`,
+                                  displayLabel: renderLocationValue(locations, location.id, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'edit')),
+                                  menuLabel: renderLocationValue(locations, location.id, getLineColumnDropdownDisplayMode(activeCustomization?.lineColumns?.[column.id])),
+                                  searchText: `${location.code} ${location.name}`,
+                                  sortIdText: location.code,
+                                  sortLabelText: location.name,
+                                }))}
+                                placeholder="None"
+                                searchPlaceholder="Search location"
+                                dropdownSort={getLineColumnDropdownSortMode(activeCustomization?.lineColumns?.[column.id])}
+                                textClassName={lineFontSize === 'sm' ? 'text-sm' : 'text-xs'}
+                                onSelect={(value) => updateLine(line.key, 'locationId', value)}
+                              />
+                            </EditableCell>
+                          )
+                        case 'projectId':
+                          return (
+                            <EditableCell key={column.id} editing={editing || isNew} value={renderProjectValue(projects, line.projectId, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'view'))} title={renderProjectLabel(projects, line.projectId)} textClassName={lineReadOnlyTextClass} className={getJournalLineColumnClass(column.id, activeCustomization?.lineColumns?.[column.id])}>
+                              <SearchableSelectInput
+                                selectedValue={line.projectId}
+                                options={projects.map((project) => ({
+                                  value: project.id,
+                                  label: renderProjectLabel(projects, project.id),
+                                  displayLabel: renderProjectValue(projects, project.id, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'edit')),
+                                  menuLabel: renderProjectValue(projects, project.id, getLineColumnDropdownDisplayMode(activeCustomization?.lineColumns?.[column.id])),
+                                  searchText: renderProjectLabel(projects, project.id),
+                                  sortIdText: project.name,
+                                  sortLabelText: project.description?.trim() ? `${project.name} ${project.description}` : project.name,
+                                }))}
+                                placeholder="None"
+                                searchPlaceholder="Search project"
+                                dropdownSort={getLineColumnDropdownSortMode(activeCustomization?.lineColumns?.[column.id])}
+                                textClassName={lineFontSize === 'sm' ? 'text-sm' : 'text-xs'}
+                                onSelect={(value) => updateLine(line.key, 'projectId', value)}
+                              />
+                            </EditableCell>
+                          )
+                        case 'customerId':
+                          return (
+                            <EditableCell key={column.id} editing={editing || isNew} value={renderCustomerValue(customers, line.customerId, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'view'))} title={renderCustomerLabel(customers, line.customerId)} textClassName={lineReadOnlyTextClass} className={getJournalLineColumnClass(column.id, activeCustomization?.lineColumns?.[column.id])}>
+                              <SearchableSelectInput
+                                selectedValue={line.customerId}
+                                options={customers.map((customer) => ({
+                                  value: customer.id,
+                                  label: `${customer.customerId ?? 'CUST'} - ${customer.name}`,
+                                  displayLabel: renderCustomerValue(customers, customer.id, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'edit')),
+                                  menuLabel: renderCustomerValue(customers, customer.id, getLineColumnDropdownDisplayMode(activeCustomization?.lineColumns?.[column.id])),
+                                  searchText: `${customer.customerId ?? 'CUST'} ${customer.name}`,
+                                  sortIdText: customer.customerId ?? 'CUST',
+                                  sortLabelText: customer.name,
+                                }))}
+                                placeholder="None"
+                                searchPlaceholder="Search customer"
+                                dropdownSort={getLineColumnDropdownSortMode(activeCustomization?.lineColumns?.[column.id])}
+                                textClassName={lineFontSize === 'sm' ? 'text-sm' : 'text-xs'}
+                                onSelect={(value) => updateLine(line.key, 'customerId', value)}
+                              />
+                            </EditableCell>
+                          )
+                        case 'vendorId':
+                          return (
+                            <EditableCell key={column.id} editing={editing || isNew} value={renderVendorValue(vendors, line.vendorId, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'view'))} title={renderVendorLabel(vendors, line.vendorId)} textClassName={lineReadOnlyTextClass} className={getJournalLineColumnClass(column.id, activeCustomization?.lineColumns?.[column.id])}>
+                              <SearchableSelectInput
+                                selectedValue={line.vendorId}
+                                options={vendors.map((vendor) => ({
+                                  value: vendor.id,
+                                  label: `${vendor.vendorNumber ?? 'VEND'} - ${vendor.name}`,
+                                  displayLabel: renderVendorValue(vendors, vendor.id, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'edit')),
+                                  menuLabel: renderVendorValue(vendors, vendor.id, getLineColumnDropdownDisplayMode(activeCustomization?.lineColumns?.[column.id])),
+                                  searchText: `${vendor.vendorNumber ?? 'VEND'} ${vendor.name}`,
+                                  sortIdText: vendor.vendorNumber ?? 'VEND',
+                                  sortLabelText: vendor.name,
+                                }))}
+                                placeholder="None"
+                                searchPlaceholder="Search vendor"
+                                dropdownSort={getLineColumnDropdownSortMode(activeCustomization?.lineColumns?.[column.id])}
+                                textClassName={lineFontSize === 'sm' ? 'text-sm' : 'text-xs'}
+                                onSelect={(value) => updateLine(line.key, 'vendorId', value)}
+                              />
+                            </EditableCell>
+                          )
+                        case 'itemId':
+                          return (
+                            <EditableCell key={column.id} editing={editing || isNew} value={renderItemValue(items, line.itemId, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'view'))} title={renderItemLabel(items, line.itemId)} textClassName={lineReadOnlyTextClass} className={getJournalLineColumnClass(column.id, activeCustomization?.lineColumns?.[column.id])}>
+                              <SearchableSelectInput
+                                selectedValue={line.itemId}
+                                options={items.map((item) => ({
+                                  value: item.id,
+                                  label: `${item.sku ?? item.itemId ?? 'ITEM'} - ${item.name}`,
+                                  displayLabel: renderItemValue(items, item.id, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'edit')),
+                                  menuLabel: renderItemValue(items, item.id, getLineColumnDropdownDisplayMode(activeCustomization?.lineColumns?.[column.id])),
+                                  searchText: `${item.sku ?? item.itemId ?? 'ITEM'} ${item.name}`,
+                                  sortIdText: item.sku ?? item.itemId ?? 'ITEM',
+                                  sortLabelText: item.name,
+                                }))}
+                                placeholder="None"
+                                searchPlaceholder="Search item"
+                                dropdownSort={getLineColumnDropdownSortMode(activeCustomization?.lineColumns?.[column.id])}
+                                textClassName={lineFontSize === 'sm' ? 'text-sm' : 'text-xs'}
+                                onSelect={(value) => updateLine(line.key, 'itemId', value)}
+                              />
+                            </EditableCell>
+                          )
+                        case 'employeeId':
+                          return (
+                            <EditableCell key={column.id} editing={editing || isNew} value={renderEmployeeValue(employees, line.employeeId, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'view'))} title={renderEmployeeLabel(employees, line.employeeId)} textClassName={lineReadOnlyTextClass} className={getJournalLineColumnClass(column.id, activeCustomization?.lineColumns?.[column.id])}>
+                              <SearchableSelectInput
+                                selectedValue={line.employeeId}
+                                options={employees.map((employee) => ({
+                                  value: employee.id,
+                                  label: `${employee.eid ?? employee.employeeId ?? 'EMP'} - ${employee.firstName} ${employee.lastName}`,
+                                  displayLabel: renderEmployeeValue(employees, employee.id, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'edit')),
+                                  menuLabel: renderEmployeeValue(employees, employee.id, getLineColumnDropdownDisplayMode(activeCustomization?.lineColumns?.[column.id])),
+                                  searchText: `${employee.eid ?? employee.employeeId ?? 'EMP'} ${employee.firstName} ${employee.lastName}`,
+                                  sortIdText: employee.eid ?? employee.employeeId ?? 'EMP',
+                                  sortLabelText: `${employee.firstName} ${employee.lastName}`.trim(),
+                                }))}
+                                placeholder="None"
+                                searchPlaceholder="Search employee"
+                                dropdownSort={getLineColumnDropdownSortMode(activeCustomization?.lineColumns?.[column.id])}
+                                textClassName={lineFontSize === 'sm' ? 'text-sm' : 'text-xs'}
+                                onSelect={(value) => updateLine(line.key, 'employeeId', value)}
+                              />
+                            </EditableCell>
+                          )
+                        case 'memo':
+                          return (
+                            <EditableCell key={column.id} editing={editing || isNew} value={line.memo || '-'} textClassName={lineReadOnlyTextClass} className={getJournalLineColumnClass(column.id, activeCustomization?.lineColumns?.[column.id])}>
+                              <input value={line.memo} onChange={(event) => updateLine(line.key, 'memo', event.target.value)} className={lineInputClass} style={inputStyle} />
+                            </EditableCell>
+                          )
+                        default:
+                          return null
+                      }
+                    })}
                   {editing || isNew ? (
                     <RecordDetailCell className="text-right">
                       <button type="button" onClick={() => removeLine(line.key)} className="rounded-md px-2 py-1 text-xs font-medium" style={{ color: 'var(--danger)' }}>
@@ -710,40 +960,54 @@ export default function JournalEntryDetailClient({
         {glImpactRows.length === 0 ? (
           <RecordDetailEmptyState message="No journal lines yet, so there is no GL impact to preview." />
         ) : (
-          <table className="min-w-full">
+          <table className={`min-w-full ${glImpactFontSize === 'sm' ? 'text-sm' : 'text-xs'}`}>
             <thead>
               <tr>
-                <RecordDetailHeaderCell>Line</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Account</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Description</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Subsidiary</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Department</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Location</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Project</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Customer</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Vendor</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Item</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Employee</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell className="text-right">Debit</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell className="text-right">Credit</RecordDetailHeaderCell>
+                {visibleGlImpactColumns.map((column) => (
+                  <RecordDetailHeaderCell
+                    key={column.id}
+                    className={column.id === 'debit' || column.id === 'credit' ? 'text-right' : undefined}
+                  >
+                    {column.label}
+                  </RecordDetailHeaderCell>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {glImpactRows.map((row, index) => (
-                <tr key={row.key} style={index < glImpactRows.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : undefined}>
-                  <RecordDetailCell>{row.lineNumber}</RecordDetailCell>
-                  <RecordDetailCell>{row.account}</RecordDetailCell>
-                  <RecordDetailCell className="max-w-[260px] whitespace-pre-wrap break-words">{row.description}</RecordDetailCell>
-                  <RecordDetailCell>{row.subsidiary}</RecordDetailCell>
-                  <RecordDetailCell>{row.department}</RecordDetailCell>
-                  <RecordDetailCell>{row.location}</RecordDetailCell>
-                  <RecordDetailCell>{row.project}</RecordDetailCell>
-                  <RecordDetailCell>{row.customer}</RecordDetailCell>
-                  <RecordDetailCell>{row.vendor}</RecordDetailCell>
-                  <RecordDetailCell>{row.item}</RecordDetailCell>
-                  <RecordDetailCell>{row.employee}</RecordDetailCell>
-                  <RecordDetailCell className="text-right">{row.debit ? fmtCurrency(row.debit, effectiveCurrencyCode, moneySettings) : '-'}</RecordDetailCell>
-                  <RecordDetailCell className="text-right">{row.credit ? fmtCurrency(row.credit, effectiveCurrencyCode, moneySettings) : '-'}</RecordDetailCell>
+              {lineItems.map((line, index) => (
+                <tr key={line.key} style={index < lineItems.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : undefined}>
+                  {visibleGlImpactColumns.map((column) => {
+                    switch (column.id as JournalGlImpactColumnKey) {
+                      case 'line':
+                        return <RecordDetailCell key={column.id} className={glImpactTextClass}>{line.displayOrder + 1}</RecordDetailCell>
+                      case 'accountId':
+                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderAccountValue(accounts, line.accountId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
+                      case 'description':
+                        return <RecordDetailCell key={column.id} className={`max-w-[260px] whitespace-pre-wrap break-words ${glImpactTextClass}`}>{line.description || line.memo || '-'}</RecordDetailCell>
+                      case 'subsidiaryId':
+                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderSubsidiaryValue(entities, (isIntercompany ? line.subsidiaryId : '') || headerValues.subsidiaryId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
+                      case 'departmentId':
+                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderDepartmentValue(departments, line.departmentId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
+                      case 'locationId':
+                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderLocationValue(locations, line.locationId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
+                      case 'projectId':
+                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderProjectValue(projects, line.projectId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
+                      case 'customerId':
+                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderCustomerValue(customers, line.customerId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
+                      case 'vendorId':
+                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderVendorValue(vendors, line.vendorId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
+                      case 'itemId':
+                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderItemValue(items, line.itemId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
+                      case 'employeeId':
+                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderEmployeeValue(employees, line.employeeId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
+                      case 'debit':
+                        return <RecordDetailCell key={column.id} className={`text-right ${glImpactTextClass}`}>{line.debit ? fmtCurrency(Number(line.debit), effectiveCurrencyCode, moneySettings) : '-'}</RecordDetailCell>
+                      case 'credit':
+                        return <RecordDetailCell key={column.id} className={`text-right ${glImpactTextClass}`}>{line.credit ? fmtCurrency(Number(line.credit), effectiveCurrencyCode, moneySettings) : '-'}</RecordDetailCell>
+                      default:
+                        return null
+                    }
+                  })}
                 </tr>
               ))}
             </tbody>
@@ -773,17 +1037,108 @@ export default function JournalEntryDetailClient({
 function EditableCell({
   editing,
   value,
+  title,
+  className,
+  textClassName,
   children,
 }: {
   editing: boolean
   value?: string
+  title?: string
+  className?: string
+  textClassName?: string
   children: ReactNode
 }) {
   return (
-    <RecordDetailCell className="min-w-[140px]">
-      {editing ? children : value ?? '-'}
+    <RecordDetailCell className={className ?? 'min-w-[110px] max-w-[140px]'}>
+      {editing ? children : <span className={`block truncate whitespace-nowrap ${textClassName ?? 'text-xs leading-5'}`} title={title ?? value ?? '-'}>{value ?? '-'}</span>}
     </RecordDetailCell>
   )
+}
+
+function getLineColumnDisplayMode(
+  columnConfig: JournalLineColumnCustomization | undefined,
+  mode: 'edit' | 'view',
+): JournalLineDisplayMode {
+  if (mode === 'edit') return columnConfig?.editDisplay ?? 'label'
+  return columnConfig?.viewDisplay ?? 'label'
+}
+
+function getLineColumnDropdownDisplayMode(
+  columnConfig: JournalLineColumnCustomization | undefined,
+): JournalLineDisplayMode {
+  return columnConfig?.dropdownDisplay ?? 'label'
+}
+
+function getLineColumnDropdownSortMode(
+  columnConfig: JournalLineColumnCustomization | undefined,
+): JournalLineDropdownSortMode {
+  return columnConfig?.dropdownSort ?? 'id'
+}
+
+function getJournalLineColumnClass(
+  columnId: JournalLineColumnKey,
+  columnConfig?: JournalLineColumnCustomization,
+  extraClassName?: string,
+) {
+  const widthMode = columnConfig?.widthMode ?? 'normal'
+  const widthClassByMode = {
+    auto: 'min-w-max',
+    compact: 'min-w-[100px] max-w-[140px]',
+    normal: 'min-w-[120px] max-w-[180px]',
+    wide: 'min-w-[180px] max-w-[260px]',
+  } as const
+
+  const baseClass =
+    columnId === 'line'
+      ? 'min-w-[48px]'
+      : columnId === 'debit' || columnId === 'credit'
+        ? 'min-w-[110px]'
+        : widthClassByMode[widthMode]
+
+  return [baseClass, extraClassName].filter(Boolean).join(' ')
+}
+
+function getGlImpactColumnDisplayMode(
+  columnConfig: JournalGlImpactColumnCustomization | undefined,
+): JournalLineDisplayMode {
+  return columnConfig?.viewDisplay ?? 'label'
+}
+
+function getGlImpactColumnClass(
+  columnId: JournalGlImpactColumnKey,
+  columnConfig?: JournalGlImpactColumnCustomization,
+  extraClassName?: string,
+) {
+  const widthMode = columnConfig?.widthMode ?? 'normal'
+  const widthClassByMode = {
+    auto: 'min-w-max',
+    compact: 'min-w-[100px] max-w-[140px]',
+    normal: 'min-w-[120px] max-w-[180px]',
+    wide: 'min-w-[180px] max-w-[260px]',
+  } as const
+
+  const baseClass =
+    columnId === 'line'
+      ? 'min-w-[48px]'
+      : columnId === 'debit' || columnId === 'credit'
+        ? 'min-w-[110px]'
+        : widthClassByMode[widthMode]
+
+  return [baseClass, extraClassName].filter(Boolean).join(' ')
+}
+
+function renderCodeAndName(
+  code: string | null | undefined,
+  label: string | null | undefined,
+  mode: JournalLineDisplayMode,
+) {
+  const safeCode = code?.trim()
+  const safeLabel = label?.trim()
+  if (!safeCode && !safeLabel) return '-'
+  if (mode === 'id') return safeCode ?? safeLabel ?? '-'
+  if (mode === 'label') return safeLabel ?? safeCode ?? '-'
+  return safeCode && safeLabel ? `${safeCode} - ${safeLabel}` : safeCode ?? safeLabel ?? '-'
 }
 
 function renderEntityLabel<T extends { id: string }>(
@@ -798,8 +1153,615 @@ function renderEntityLabel<T extends { id: string }>(
   return `${String(code)}${name ? ` - ${String(name)}` : ''}`
 }
 
-const inputClass = 'w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white'
+function renderSubsidiaryValue(
+  values: EntityOption[],
+  selectedId: string,
+  mode: JournalLineDisplayMode,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return renderCodeAndName(value.subsidiaryId, value.name, mode)
+}
+
+function renderAccountLabel(
+  values: AccountOption[],
+  selectedId: string,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return `${value.accountNumber} - ${value.name}`
+}
+
+function renderAccountValue(
+  values: AccountOption[],
+  selectedId: string,
+  mode: JournalLineDisplayMode,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return renderCodeAndName(value.accountNumber, value.name, mode)
+}
+
+function formatLineAmount(value: string | undefined, moneySettings: MoneySettings) {
+  if (!value?.trim()) return '-'
+  const amount = Number(value)
+  if (Number.isNaN(amount)) return '-'
+  return (
+    fmtCurrency(amount, undefined, {
+      ...moneySettings,
+      showCurrencyOn: 'documentHeadersOnly',
+    }) || '-'
+  )
+}
+
+function AmountInput({
+  value,
+  moneySettings,
+  onChange,
+  className,
+  style,
+}: {
+  value: string
+  moneySettings: MoneySettings
+  onChange: (value: string) => void
+  className: string
+  style: CSSProperties
+}) {
+  const [focused, setFocused] = useState(false)
+  const [draft, setDraft] = useState(value)
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={focused ? draft : formatEditableAmount(value, moneySettings)}
+      onFocus={() => {
+        setFocused(true)
+        setDraft(value)
+      }}
+      onChange={(event) => {
+        const nextDraft = normalizeAmountDraft(event.target.value)
+        setDraft(nextDraft)
+        onChange(nextDraft)
+      }}
+      onBlur={() => {
+        const parsed = parseMoneyInput(draft, moneySettings.decimalPlaces)
+        const normalized = parsed == null ? '' : String(parsed)
+        onChange(normalized)
+        setDraft(normalized)
+        setFocused(false)
+      }}
+      className={className}
+      style={style}
+    />
+  )
+}
+
+function normalizeAmountDraft(value: string) {
+  return value.replace(/,/g, '').replace(/[^\d.-]/g, '')
+}
+
+function formatEditableAmount(value: string | undefined, moneySettings: MoneySettings) {
+  if (!value?.trim()) return ''
+  return formatLineAmount(value, {
+    ...moneySettings,
+    zeroFormat: 'zero',
+  })
+}
+
+function renderDepartmentLabel(
+  values: DepartmentOption[],
+  selectedId: string,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return `${value.departmentNumber ?? value.departmentId} - ${value.name}`
+}
+
+function renderDepartmentValue(
+  values: DepartmentOption[],
+  selectedId: string,
+  mode: JournalLineDisplayMode,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return renderCodeAndName(value.departmentNumber ?? value.departmentId, value.name, mode)
+}
+
+function renderLocationLabel(
+  values: LocationOption[],
+  selectedId: string,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return `${value.code} - ${value.name}`
+}
+
+function renderLocationValue(
+  values: LocationOption[],
+  selectedId: string,
+  mode: JournalLineDisplayMode,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return renderCodeAndName(value.code, value.name, mode)
+}
+
+function renderItemLabel(
+  values: ItemOption[],
+  selectedId: string,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return `${value.sku ?? value.itemId ?? 'ITEM'} - ${value.name}`
+}
+
+function renderItemValue(
+  values: ItemOption[],
+  selectedId: string,
+  mode: JournalLineDisplayMode,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return renderCodeAndName(value.sku ?? value.itemId ?? 'ITEM', value.name, mode)
+}
+
+function renderCustomerLabel(
+  values: CustomerOption[],
+  selectedId: string,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return `${value.customerId ?? 'CUST'} - ${value.name}`
+}
+
+function renderCustomerValue(
+  values: CustomerOption[],
+  selectedId: string,
+  mode: JournalLineDisplayMode,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return renderCodeAndName(value.customerId ?? 'CUST', value.name, mode)
+}
+
+function renderVendorLabel(
+  values: VendorOption[],
+  selectedId: string,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return `${value.vendorNumber ?? 'VEND'} - ${value.name}`
+}
+
+function renderVendorValue(
+  values: VendorOption[],
+  selectedId: string,
+  mode: JournalLineDisplayMode,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return renderCodeAndName(value.vendorNumber ?? 'VEND', value.name, mode)
+}
+
+function renderProjectLabel(
+  values: ProjectOption[],
+  selectedId: string,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return value.description?.trim() ? `${value.name} - ${value.description}` : value.name
+}
+
+function renderProjectValue(
+  values: ProjectOption[],
+  selectedId: string,
+  mode: JournalLineDisplayMode,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  const detailLabel = value.description?.trim() ? `${value.name} - ${value.description}` : value.name
+  if (mode === 'id') return value.name
+  if (mode === 'label') return value.name
+  return detailLabel
+}
+
+function renderEmployeeLabel(
+  values: EmployeeOption[],
+  selectedId: string,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return `${value.eid ?? value.employeeId ?? 'EMP'} - ${value.firstName} ${value.lastName}`
+}
+
+function renderEmployeeValue(
+  values: EmployeeOption[],
+  selectedId: string,
+  mode: JournalLineDisplayMode,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return renderCodeAndName(value.eid ?? value.employeeId ?? 'EMP', `${value.firstName} ${value.lastName}`.trim(), mode)
+}
+
 const inputStyle = { borderColor: 'var(--border-muted)' }
+
+function AccountLookupInput({
+  selectedAccountId,
+  accountOptions,
+  displayMode,
+  dropdownDisplay,
+  dropdownSort,
+  textClassName,
+  onSelect,
+}: {
+  selectedAccountId: string
+  accountOptions: AccountOption[]
+  displayMode: JournalLineDisplayMode
+  dropdownDisplay: JournalLineDisplayMode
+  dropdownSort: JournalLineDropdownSortMode
+  textClassName: string
+  onSelect: (accountId: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const dropdownRef = useRef<HTMLDivElement | null>(null)
+  const [dropdownStyle, setDropdownStyle] = useState<{ bottom: number; left: number; minWidth: number; maxWidth: number } | null>(null)
+  const selectedAccount = accountOptions.find((account) => account.id === selectedAccountId) ?? null
+  const selectedLabel = selectedAccount ? `${selectedAccount.accountNumber} - ${selectedAccount.name}` : ''
+  const selectedDisplayLabel = selectedAccount ? renderCodeAndName(selectedAccount.accountNumber, selectedAccount.name, displayMode) : ''
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target as Node
+      if (!containerRef.current?.contains(target) && !dropdownRef.current?.contains(target)) {
+        setOpen(false)
+        setQuery(selectedLabel)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [selectedLabel])
+
+  useEffect(() => {
+    if (!open || !inputRef.current) return
+
+    function updatePosition() {
+      if (!inputRef.current) return
+      const rect = inputRef.current.getBoundingClientRect()
+      const maxWidth = window.innerWidth - 32
+      setDropdownStyle({
+        bottom: Math.max(window.innerHeight - rect.top + 4, 8),
+        left: Math.max(16, rect.left),
+        minWidth: rect.width + 120,
+        maxWidth,
+      })
+    }
+
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [accountOptions, open, query])
+
+  const filteredAccounts = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase()
+    const sortedAccounts = [...accountOptions].sort((left, right) =>
+      (dropdownSort === 'label' ? left.name : `${left.accountNumber} ${left.name}`).localeCompare(
+        dropdownSort === 'label' ? right.name : `${right.accountNumber} ${right.name}`,
+        undefined,
+        {
+          sensitivity: 'base',
+          numeric: true,
+        },
+      ),
+    )
+    if (!normalizedQuery) return sortedAccounts
+    return sortedAccounts
+      .filter((account) => `${account.accountNumber} ${account.accountId} ${account.name}`.toLowerCase().includes(normalizedQuery))
+  }, [accountOptions, dropdownSort, query])
+
+  return (
+    <div ref={containerRef} className="relative z-50">
+      <div className="relative">
+        <input
+          ref={inputRef}
+          value={open ? query : selectedDisplayLabel}
+          onFocus={() => {
+            setOpen(true)
+            setQuery(selectedLabel)
+          }}
+          onChange={(event) => {
+            const nextQuery = event.target.value
+            setQuery(nextQuery)
+            setOpen(true)
+            if (selectedAccountId && nextQuery !== selectedLabel) {
+              onSelect('')
+            }
+          }}
+          placeholder="Select or search GL account"
+          title={selectedLabel || 'Select or search GL account'}
+          className={`w-full rounded-md border bg-transparent px-2.5 py-1.5 pr-8 text-white ${textClassName}`}
+          style={{
+            ...inputStyle,
+            backgroundColor: 'var(--card-elevated)',
+            colorScheme: 'dark',
+            WebkitTextFillColor: 'white',
+          }}
+        />
+        <button
+          type="button"
+          onMouseDown={(event) => {
+            event.preventDefault()
+            const nextOpen = !open
+              setOpen(nextOpen)
+              if (nextOpen) {
+                setQuery(selectedLabel)
+              inputRef.current?.focus()
+            }
+          }}
+          className="absolute inset-y-0 right-0 flex w-8 items-center justify-center rounded-r-md"
+          style={{ color: 'var(--text-muted)' }}
+          aria-label="Toggle GL account options"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m5 7 5 5 5-5" />
+          </svg>
+        </button>
+      </div>
+      {open && filteredAccounts.length > 0 && dropdownStyle
+        ? createPortal(
+            <div
+              ref={dropdownRef}
+              className="fixed z-[220] max-h-60 overflow-y-auto rounded-md border shadow-2xl"
+              style={{
+                bottom: dropdownStyle.bottom,
+                left: dropdownStyle.left,
+                minWidth: dropdownStyle.minWidth,
+                width: 'max-content',
+                maxWidth: dropdownStyle.maxWidth,
+                borderColor: 'var(--border-muted)',
+                backgroundColor: 'var(--card-elevated)',
+              }}
+            >
+              {filteredAccounts.map((account) => (
+                <button
+                  key={account.id}
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault()
+                    onSelect(account.id)
+                    setQuery(`${account.accountNumber} - ${account.name}`)
+                    setOpen(false)
+                  }}
+                  className={`block w-full whitespace-nowrap px-2.5 py-1.5 text-left hover:bg-white/5 ${textClassName}`}
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  {renderCodeAndName(account.accountNumber, account.name, dropdownDisplay)}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  )
+}
+
+type SearchableSelectOption = {
+  value: string
+  label: string
+  displayLabel?: string
+  menuLabel?: string
+  searchText?: string
+  sortIdText?: string
+  sortLabelText?: string
+}
+
+function SearchableSelectInput({
+  selectedValue,
+  options,
+  placeholder,
+  searchPlaceholder,
+  dropdownSort,
+  textClassName,
+  onSelect,
+}: {
+  selectedValue: string
+  options: SearchableSelectOption[]
+  placeholder: string
+  searchPlaceholder: string
+  dropdownSort: JournalLineDropdownSortMode
+  textClassName: string
+  onSelect: (value: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const dropdownRef = useRef<HTMLDivElement | null>(null)
+  const [dropdownStyle, setDropdownStyle] = useState<{ bottom: number; left: number; minWidth: number; maxWidth: number } | null>(null)
+  const selectedOption = options.find((option) => option.value === selectedValue) ?? null
+  const selectedLabel = selectedOption?.label ?? ''
+  const selectedDisplayLabel = selectedOption?.displayLabel ?? selectedLabel
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target as Node
+      if (!containerRef.current?.contains(target) && !dropdownRef.current?.contains(target)) {
+        setOpen(false)
+        setQuery(selectedLabel)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [selectedLabel])
+
+  useEffect(() => {
+    if (!open || !inputRef.current) return
+
+    function updatePosition() {
+      if (!inputRef.current) return
+      const rect = inputRef.current.getBoundingClientRect()
+      const maxWidth = window.innerWidth - 32
+      setDropdownStyle({
+        bottom: Math.max(window.innerHeight - rect.top + 4, 8),
+        left: Math.max(16, rect.left),
+        minWidth: rect.width + 96,
+        maxWidth,
+      })
+    }
+
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [open, options, placeholder, query])
+
+  const filteredOptions = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase()
+    const sortedOptions = [...options].sort((left, right) =>
+      (dropdownSort === 'label' ? left.sortLabelText ?? left.displayLabel ?? left.label : left.sortIdText ?? left.label).localeCompare(
+        dropdownSort === 'label' ? right.sortLabelText ?? right.displayLabel ?? right.label : right.sortIdText ?? right.label,
+        undefined,
+        {
+        sensitivity: 'base',
+        numeric: true,
+        },
+      ),
+    )
+    if (!normalizedQuery) return sortedOptions
+    return sortedOptions.filter((option) => (option.searchText ?? option.label).toLowerCase().includes(normalizedQuery))
+  }, [dropdownSort, options, query])
+
+  return (
+    <div ref={containerRef} className="relative z-50">
+      <div className="relative">
+        <input
+          ref={inputRef}
+          value={open ? query : selectedDisplayLabel}
+          onFocus={() => {
+            setOpen(true)
+            setQuery(selectedLabel)
+          }}
+          onChange={(event) => {
+            const nextQuery = event.target.value
+            setQuery(nextQuery)
+            setOpen(true)
+            if (selectedValue && nextQuery !== selectedLabel) {
+              onSelect('')
+            }
+          }}
+          placeholder={selectedDisplayLabel ? searchPlaceholder : placeholder}
+          title={selectedLabel || placeholder}
+          className={`w-full rounded-md border bg-transparent px-2.5 py-1.5 pr-8 text-white ${textClassName}`}
+          style={{
+            ...inputStyle,
+            backgroundColor: 'var(--card-elevated)',
+            colorScheme: 'dark',
+            WebkitTextFillColor: 'white',
+          }}
+        />
+        <button
+          type="button"
+          onMouseDown={(event) => {
+            event.preventDefault()
+            const nextOpen = !open
+            setOpen(nextOpen)
+            if (nextOpen) {
+              setQuery(selectedLabel)
+              inputRef.current?.focus()
+            }
+          }}
+          className="absolute inset-y-0 right-0 flex w-8 items-center justify-center rounded-r-md"
+          style={{ color: 'var(--text-muted)' }}
+          aria-label="Toggle options"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m5 7 5 5 5-5" />
+          </svg>
+        </button>
+      </div>
+      {open && dropdownStyle
+        ? createPortal(
+            <div
+              ref={dropdownRef}
+              className="fixed z-[210] max-h-60 overflow-y-auto rounded-md border shadow-2xl"
+              style={{
+                bottom: dropdownStyle.bottom,
+                left: dropdownStyle.left,
+                minWidth: dropdownStyle.minWidth,
+                width: 'max-content',
+                maxWidth: dropdownStyle.maxWidth,
+                borderColor: 'var(--border-muted)',
+                backgroundColor: 'var(--card-elevated)',
+              }}
+            >
+              <button
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault()
+                  onSelect('')
+                  setQuery('')
+                  setOpen(false)
+                }}
+                className={`block w-full whitespace-nowrap px-2.5 py-1.5 text-left hover:bg-white/5 ${textClassName}`}
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                {placeholder}
+              </button>
+              {filteredOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault()
+                    onSelect(option.value)
+                    setQuery(option.label)
+                    setOpen(false)
+                  }}
+                  className={`block w-full whitespace-nowrap px-2.5 py-1.5 text-left hover:bg-white/5 ${textClassName}`}
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  {option.menuLabel ?? option.label}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  )
+}
 
 function JournalRelatedDocumentsSection({
   count,

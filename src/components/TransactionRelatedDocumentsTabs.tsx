@@ -53,6 +53,34 @@ export default function TransactionRelatedDocumentsTabs({
   const [active, setActive] = useState(defaultActiveKey ?? firstKey)
   const [expanded, setExpanded] = useState(true)
   const activeTab = tabs.find((tab) => tab.key === active) ?? tabs[0]
+  const tonePalettes: Record<
+    TransactionRelatedDocumentsTabTone,
+    {
+      activeBorder: string
+      activeText: string
+      activeBadgeBg: string
+      inactiveBadgeBg: string
+      inactiveBadgeText: string
+      inactiveText: string
+    }
+  > = {
+    upstream: {
+      activeBorder: '#f59e0b',
+      activeText: '#fcd34d',
+      activeBadgeBg: 'rgba(245,158,11,0.16)',
+      inactiveBadgeBg: 'rgba(245,158,11,0.1)',
+      inactiveBadgeText: '#d1a24a',
+      inactiveText: '#d8b86a',
+    },
+    downstream: {
+      activeBorder: 'var(--accent-primary-strong)',
+      activeText: '#93c5fd',
+      activeBadgeBg: 'rgba(59,130,246,0.18)',
+      inactiveBadgeBg: 'rgba(59,130,246,0.1)',
+      inactiveBadgeText: '#7fb0f8',
+      inactiveText: '#8ab4f8',
+    },
+  }
 
   return (
     <div
@@ -78,24 +106,7 @@ export default function TransactionRelatedDocumentsTabs({
           <div className="flex overflow-x-auto overflow-y-hidden">
             {tabs.map((tab) => {
               const isActive = active === tab.key
-              const palette =
-                tab.tone === 'upstream'
-                  ? {
-                      activeBorder: '#f59e0b',
-                      activeText: '#fcd34d',
-                      activeBadgeBg: 'rgba(245,158,11,0.16)',
-                      inactiveBadgeBg: 'rgba(245,158,11,0.1)',
-                      inactiveBadgeText: '#d1a24a',
-                      inactiveText: '#d8b86a',
-                    }
-                  : {
-                      activeBorder: 'var(--accent-primary-strong)',
-                      activeText: '#93c5fd',
-                      activeBadgeBg: 'rgba(59,130,246,0.18)',
-                      inactiveBadgeBg: 'rgba(59,130,246,0.1)',
-                      inactiveBadgeText: '#7fb0f8',
-                      inactiveText: '#8ab4f8',
-                    }
+              const palette = tonePalettes[tab.tone]
 
               return (
                 <button

@@ -1,9 +1,10 @@
 import { fmtCurrency, fmtDocumentDate } from '@/lib/format'
-import type { TransactionPageConfig } from '@/lib/transaction-page-config'
+import type { TransactionPageConfig, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 export type InvoicePageConfigRecord = {
   total: number
   statusLabel: string
+  statusTone?: TransactionVisualTone
   dueDate: Date | null
   paidDate: Date | null
   salesOrderId: string | null
@@ -13,8 +14,12 @@ export type InvoicePageConfigRecord = {
 
 export const invoicePageConfig: TransactionPageConfig<InvoicePageConfigRecord> = {
   sectionDescriptions: {
-    Customer: 'Customer contact and default commercial context from the linked master data record.',
-    'Invoice Details': 'Core invoice fields, upstream sales context, and financial dates.',
+    'Document Identity': 'Primary invoice identifiers, customer ownership, and record origin.',
+    'Customer Snapshot': 'Customer contact and default commercial context from the linked master data record.',
+    'Source Context': 'Upstream sales documents that produced this invoice.',
+    'Financial Terms': 'Status, dates, and monetary context for this invoice.',
+    'Record Keys': 'Internal database identifiers for this invoice and its owner.',
+    'System Dates': 'System-managed timestamps for this invoice.',
   },
   stats: [
     {
@@ -27,20 +32,14 @@ export const invoicePageConfig: TransactionPageConfig<InvoicePageConfigRecord> =
       id: 'status',
       label: 'Status',
       getValue: (record) => record.statusLabel,
-      getValueTone: (record) =>
-        record.statusLabel === 'Paid'
-          ? 'green'
-          : record.statusLabel === 'Void'
-            ? 'red'
-            : record.statusLabel === 'Sent'
-              ? 'accent'
-              : 'default',
+      getValueTone: (record) => record.statusTone ?? 'default',
     },
     {
       id: 'salesOrder',
       label: 'Created From',
       getValue: (record) => record.salesOrderNumber ?? '-',
       getHref: (record) => (record.salesOrderId ? `/sales-orders/${record.salesOrderId}` : null),
+      getValueTone: (record) => (record.salesOrderId ? 'accent' : 'default'),
     },
     {
       id: 'dueDate',

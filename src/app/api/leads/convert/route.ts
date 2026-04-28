@@ -7,6 +7,12 @@ import { formatCustomerNumber } from '@/lib/customer-number'
 import { formatContactNumber } from '@/lib/contact-number'
 import { formatOpportunityNumber } from '@/lib/opportunity-number'
 import { calcLineTotal, parseMoneyValue, parseOptionalMoneyValue, parseQuantity, sumMoney } from '@/lib/money'
+import {
+  coerceWorkflowValueForStep,
+  getDefaultWorkflowStatus,
+  getWorkflowDocumentAction,
+  loadOtcWorkflowRuntime,
+} from '@/lib/otc-workflow-runtime'
 
 function leadDisplayName(lead: {
   leadNumber?: string | null
@@ -113,7 +119,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const preferences = await loadCompanyPreferencesSettings()
+    const [preferences, workflow] = await Promise.all([
+      loadCompanyPreferencesSettings(),
+      loadOtcWorkflowRuntime(),
+    ])
+    const leadToOpportunityAction = getWorkflowDocumentAction(workflow, 'lead', 'opportunity', lead.status)
+    if (!leadToOpportunityAction) {
+      return NextResponse.json({ error: 'Workflow does not currently allow opportunity creation from this lead status' }, { status: 409 })
+    }
+    const nextOpportunityStage = leadToOpportunityAction
+      ? coerceWorkflowValueForStep(workflow, 'opportunity', leadToOpportunityAction.resultStatus)
+      : getDefaultWorkflowStatus(workflow, 'opportunity')
+    const nextConvertedStatus = coerceWorkflowValueForStep(workflow, 'lead', 'Converted')
 
     const result = await prisma.$transaction(async (tx) => {
       let customerId = lead.customerId
@@ -222,7 +239,7 @@ export async function POST(request: NextRequest) {
           opportunityNumber: formatOpportunityNumber(opportunitySequence, opportunityConfig),
           name: (name || '').trim() || opportunityNameFromLead(lead),
           amount: finalAmount,
-          stage: stage || (lead.status === 'qualified' ? 'qualification' : 'prospecting'),
+          stage: stage || nextOpportunityStage,
           closeDate: closeDate ? new Date(closeDate) : null,
           subsidiaryId: lead.subsidiaryId || null,
           currencyId: lead.currencyId || null,
@@ -240,7 +257,7 @@ export async function POST(request: NextRequest) {
       const updatedLead = await tx.lead.update({
         where: { id: lead.id },
         data: {
-          status: 'converted',
+          status: nextConvertedStatus,
           convertedAt: new Date(),
           qualifiedAt: lead.qualifiedAt ?? new Date(),
           opportunityId: opportunity.id,

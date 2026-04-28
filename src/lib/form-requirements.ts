@@ -1,4 +1,30 @@
-export type FormKey = 'customerCreate' | 'contactCreate' | 'vendorCreate' | 'opportunityCreate' | 'itemCreate' | 'currencyCreate' | 'accountingPeriodCreate' | 'locationCreate' | 'chartOfAccountCreate' | 'departmentCreate' | 'employeeCreate' | 'subsidiaryCreate' | 'roleCreate' | 'userCreate'
+export type FormKey =
+  | 'customerCreate'
+  | 'contactCreate'
+  | 'vendorCreate'
+  | 'leadCreate'
+  | 'opportunityCreate'
+  | 'quoteCreate'
+  | 'salesOrderCreate'
+  | 'fulfillmentCreate'
+  | 'invoiceCreate'
+  | 'invoiceReceiptCreate'
+  | 'purchaseRequisitionCreate'
+  | 'purchaseOrderCreate'
+  | 'receiptCreate'
+  | 'billCreate'
+  | 'billPaymentCreate'
+  | 'journalCreate'
+  | 'itemCreate'
+  | 'currencyCreate'
+  | 'accountingPeriodCreate'
+  | 'locationCreate'
+  | 'chartOfAccountCreate'
+  | 'departmentCreate'
+  | 'employeeCreate'
+  | 'subsidiaryCreate'
+  | 'roleCreate'
+  | 'userCreate'
 
 export type FormRequirements = Record<string, boolean>
 export type FormRequirementsMap = Record<FormKey, FormRequirements>
@@ -50,12 +76,138 @@ export const FORM_REQUIREMENTS: FormRequirementsMap = {
     primaryCurrencyId: false,
     inactive: false,
   },
+  leadCreate: {
+    firstName: true,
+    lastName: true,
+    email: true,
+    phone: false,
+    company: true,
+    title: false,
+    website: false,
+    industry: false,
+    status: true,
+    source: false,
+    rating: false,
+    expectedValue: false,
+    subsidiaryId: false,
+    currencyId: false,
+    address: false,
+    notes: false,
+    lastContactedAt: false,
+    qualifiedAt: false,
+    convertedAt: false,
+  },
   opportunityCreate: {
     name: true,
     customerId: true,
     amount: false,
-    stage: false,
-    closeDate: false,
+    stage: true,
+    closeDate: true,
+  },
+  quoteCreate: {
+    opportunity: true,
+    customerId: false,
+    number: false,
+    status: true,
+    validUntil: true,
+    subsidiaryId: false,
+    currencyId: false,
+    notes: false,
+  },
+  salesOrderCreate: {
+    customerId: true,
+    userId: false,
+    quoteId: false,
+    number: false,
+    subsidiaryId: false,
+    currencyId: false,
+    status: true,
+    total: false,
+  },
+  fulfillmentCreate: {
+    salesOrderId: true,
+    status: true,
+    date: false,
+    notes: false,
+    subsidiaryId: false,
+    currencyId: false,
+  },
+  invoiceCreate: {
+    salesOrderId: false,
+    customerId: true,
+    status: true,
+    dueDate: true,
+    paidDate: false,
+    subsidiaryId: false,
+    currencyId: false,
+  },
+  invoiceReceiptCreate: {
+    invoiceId: true,
+    amount: true,
+    date: true,
+    method: true,
+    reference: false,
+  },
+  purchaseRequisitionCreate: {
+    number: false,
+    status: true,
+    priority: false,
+    title: true,
+    description: false,
+    neededByDate: true,
+    notes: false,
+    vendorId: true,
+    departmentId: true,
+    subsidiaryId: false,
+    currencyId: false,
+  },
+  purchaseOrderCreate: {
+    number: false,
+    vendorId: true,
+    subsidiaryId: false,
+    status: true,
+  },
+  receiptCreate: {
+    purchaseOrderId: true,
+    quantity: true,
+    date: true,
+    status: true,
+    notes: false,
+  },
+  billCreate: {
+    number: false,
+    vendorId: true,
+    purchaseOrderId: false,
+    subsidiaryId: false,
+    currencyId: false,
+    total: false,
+    date: true,
+    dueDate: false,
+    status: true,
+    notes: false,
+  },
+  billPaymentCreate: {
+    billId: true,
+    amount: true,
+    date: true,
+    method: true,
+    status: true,
+    reference: false,
+    notes: false,
+  },
+  journalCreate: {
+    number: false,
+    date: true,
+    description: false,
+    total: false,
+    status: true,
+    subsidiaryId: false,
+    currencyId: false,
+    accountingPeriodId: false,
+    sourceType: false,
+    sourceId: false,
+    postedByEmployeeId: false,
+    approvedByEmployeeId: false,
   },
   itemCreate: {
     name: true,
@@ -246,7 +398,19 @@ export const FORM_LABELS: Record<FormKey, string> = {
   customerCreate: 'Customer',
   contactCreate: 'Contact',
   vendorCreate: 'Vendor',
+  leadCreate: 'Lead',
   opportunityCreate: 'Opportunity',
+  quoteCreate: 'Quote',
+  salesOrderCreate: 'Sales Order',
+  fulfillmentCreate: 'Fulfillment',
+  invoiceCreate: 'Invoice',
+  invoiceReceiptCreate: 'Invoice Receipt',
+  purchaseRequisitionCreate: 'Purchase Requisition',
+  purchaseOrderCreate: 'Purchase Order',
+  receiptCreate: 'Receipt',
+  billCreate: 'Bill',
+  billPaymentCreate: 'Bill Payment',
+  journalCreate: 'Journal Entry',
   itemCreate: 'Item',
   currencyCreate: 'Currency',
   accountingPeriodCreate: 'Accounting Period',
@@ -302,12 +466,138 @@ export const FORM_FIELD_LABELS: Record<FormKey, Record<string, string>> = {
     primaryCurrencyId: 'Primary currency',
     inactive: 'Inactive',
   },
+  leadCreate: {
+    firstName: 'First name',
+    lastName: 'Last name',
+    email: 'Email',
+    phone: 'Phone',
+    company: 'Company',
+    title: 'Title',
+    website: 'Website',
+    industry: 'Industry',
+    status: 'Status',
+    source: 'Source',
+    rating: 'Rating',
+    expectedValue: 'Expected value',
+    subsidiaryId: 'Subsidiary',
+    currencyId: 'Currency',
+    address: 'Address',
+    notes: 'Notes',
+    lastContactedAt: 'Last contacted',
+    qualifiedAt: 'Qualified at',
+    convertedAt: 'Converted at',
+  },
   opportunityCreate: {
     name: 'Opportunity name',
     customerId: 'Customer',
     amount: 'Amount',
     stage: 'Stage',
     closeDate: 'Close date',
+  },
+  quoteCreate: {
+    opportunity: 'Opportunity',
+    customerId: 'Customer',
+    number: 'Quote ID',
+    status: 'Status',
+    validUntil: 'Valid until',
+    subsidiaryId: 'Subsidiary',
+    currencyId: 'Currency',
+    notes: 'Notes',
+  },
+  salesOrderCreate: {
+    customerId: 'Customer',
+    userId: 'Created by',
+    quoteId: 'Quote',
+    number: 'Sales Order ID',
+    subsidiaryId: 'Subsidiary',
+    currencyId: 'Currency',
+    status: 'Status',
+    total: 'Total',
+  },
+  fulfillmentCreate: {
+    salesOrderId: 'Sales order',
+    status: 'Status',
+    date: 'Fulfillment date',
+    notes: 'Notes',
+    subsidiaryId: 'Subsidiary',
+    currencyId: 'Currency',
+  },
+  invoiceCreate: {
+    salesOrderId: 'Sales order',
+    customerId: 'Customer',
+    status: 'Status',
+    dueDate: 'Due date',
+    paidDate: 'Paid date',
+    subsidiaryId: 'Subsidiary',
+    currencyId: 'Currency',
+  },
+  invoiceReceiptCreate: {
+    invoiceId: 'Invoice',
+    amount: 'Amount',
+    date: 'Receipt date',
+    method: 'Method',
+    reference: 'Reference',
+  },
+  purchaseRequisitionCreate: {
+    number: 'Purchase requisition ID',
+    status: 'Status',
+    priority: 'Priority',
+    title: 'Title',
+    description: 'Description',
+    neededByDate: 'Needed by date',
+    notes: 'Notes',
+    vendorId: 'Vendor',
+    departmentId: 'Department',
+    subsidiaryId: 'Subsidiary',
+    currencyId: 'Currency',
+  },
+  purchaseOrderCreate: {
+    number: 'Purchase order ID',
+    vendorId: 'Vendor',
+    subsidiaryId: 'Subsidiary',
+    status: 'Status',
+  },
+  receiptCreate: {
+    purchaseOrderId: 'Purchase order',
+    quantity: 'Quantity',
+    date: 'Date',
+    status: 'Status',
+    notes: 'Notes',
+  },
+  billCreate: {
+    number: 'Bill ID',
+    vendorId: 'Vendor',
+    purchaseOrderId: 'Purchase order',
+    subsidiaryId: 'Subsidiary',
+    currencyId: 'Currency',
+    total: 'Total',
+    date: 'Bill date',
+    dueDate: 'Due date',
+    status: 'Status',
+    notes: 'Notes',
+  },
+  billPaymentCreate: {
+    billId: 'Bill',
+    amount: 'Amount',
+    date: 'Date',
+    method: 'Method',
+    status: 'Status',
+    reference: 'Reference',
+    notes: 'Notes',
+  },
+  journalCreate: {
+    number: 'Journal number',
+    date: 'Date',
+    description: 'Description',
+    total: 'Total',
+    status: 'Status',
+    subsidiaryId: 'Header subsidiary',
+    currencyId: 'Currency',
+    accountingPeriodId: 'Accounting period',
+    sourceType: 'Source type',
+    sourceId: 'Source ID',
+    postedByEmployeeId: 'Prepared by',
+    approvedByEmployeeId: 'Approved by',
   },
   itemCreate: {
     name: 'Item name',
@@ -494,6 +784,52 @@ export const FORM_FIELD_LABELS: Record<FormKey, Record<string, string>> = {
   },
 }
 
+export const LOCKED_FORM_REQUIREMENTS: Partial<FormRequirementsMap> = {
+  opportunityCreate: {
+    name: true,
+    customerId: true,
+  },
+  quoteCreate: {
+    opportunity: true,
+  },
+  salesOrderCreate: {
+    customerId: true,
+  },
+  fulfillmentCreate: {
+    salesOrderId: true,
+  },
+  invoiceReceiptCreate: {
+    invoiceId: true,
+    amount: true,
+    date: true,
+    method: true,
+  },
+  purchaseOrderCreate: {
+    vendorId: true,
+  },
+  receiptCreate: {
+    purchaseOrderId: true,
+    quantity: true,
+  },
+  billCreate: {
+    vendorId: true,
+    date: true,
+  },
+  billPaymentCreate: {
+    billId: true,
+    amount: true,
+    date: true,
+    method: true,
+  },
+  journalCreate: {
+    date: true,
+  },
+}
+
 export function isFieldRequired(form: FormKey, field: string): boolean {
   return Boolean(FORM_REQUIREMENTS[form]?.[field])
+}
+
+export function isFieldRequirementLocked(form: FormKey, field: string): boolean {
+  return Boolean(LOCKED_FORM_REQUIREMENTS[form]?.[field])
 }

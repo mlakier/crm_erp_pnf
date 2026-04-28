@@ -4,12 +4,14 @@ import {
   defaultFulfillmentDetailCustomization,
   FULFILLMENT_DETAIL_FIELDS,
   FULFILLMENT_LINE_COLUMNS,
+  FULFILLMENT_REFERENCE_SOURCES,
   FULFILLMENT_STAT_CARDS,
   type FulfillmentDetailCustomizationConfig,
   type FulfillmentDetailFieldKey,
   type FulfillmentLineColumnKey,
   type FulfillmentStatCardSlot,
 } from '@/lib/fulfillment-detail-customization'
+import { mergeTransactionReferenceLayouts } from '@/lib/transaction-reference-layouts'
 
 const STORE_PATH = path.join(process.cwd(), 'config', 'fulfillment-detail-customization.json')
 
@@ -37,6 +39,15 @@ function mergeWithDefaults(
 ): FulfillmentDetailCustomizationConfig {
   const merged = cloneDefaults()
   merged.formColumns = normalizeColumnCount(overrides.formColumns, merged.formColumns)
+
+  if (overrides.lineSettings && typeof overrides.lineSettings === 'object') {
+    merged.lineSettings = {
+      ...merged.lineSettings,
+      ...(overrides.lineSettings.fontSize === 'xs' || overrides.lineSettings.fontSize === 'sm'
+        ? { fontSize: overrides.lineSettings.fontSize }
+        : {}),
+    }
+  }
 
   const inputSections = Array.isArray(overrides.sections)
     ? overrides.sections.map((section) => normalizeText(section)).filter((section): section is string => Boolean(section))
@@ -80,6 +91,7 @@ function mergeWithDefaults(
     merged.sectionRows[section] = normalizeRowCount(sectionRowsInput[section], merged.sectionRows[section] ?? 2)
     merged.fields[field.id].column = Math.min(merged.formColumns, Math.max(1, merged.fields[field.id].column))
   }
+  merged.referenceLayouts = mergeTransactionReferenceLayouts(overrides.referenceLayouts, merged.referenceLayouts, FULFILLMENT_REFERENCE_SOURCES)
 
   const lineColumnOverrides =
     overrides.lineColumns && typeof overrides.lineColumns === 'object'
@@ -95,6 +107,36 @@ function mergeWithDefaults(
         typeof override.order === 'number' && Number.isFinite(override.order)
           ? Math.max(0, Math.trunc(override.order))
           : merged.lineColumns[column.id].order,
+      widthMode:
+        override.widthMode === 'auto'
+        || override.widthMode === 'compact'
+        || override.widthMode === 'normal'
+        || override.widthMode === 'wide'
+          ? override.widthMode
+          : merged.lineColumns[column.id].widthMode,
+      editDisplay:
+        override.editDisplay === 'label'
+        || override.editDisplay === 'idAndLabel'
+        || override.editDisplay === 'id'
+          ? override.editDisplay
+          : merged.lineColumns[column.id].editDisplay,
+      viewDisplay:
+        override.viewDisplay === 'label'
+        || override.viewDisplay === 'idAndLabel'
+        || override.viewDisplay === 'id'
+          ? override.viewDisplay
+          : merged.lineColumns[column.id].viewDisplay,
+      dropdownDisplay:
+        override.dropdownDisplay === 'label'
+        || override.dropdownDisplay === 'idAndLabel'
+        || override.dropdownDisplay === 'id'
+          ? override.dropdownDisplay
+          : merged.lineColumns[column.id].dropdownDisplay,
+      dropdownSort:
+        override.dropdownSort === 'id'
+        || override.dropdownSort === 'label'
+          ? override.dropdownSort
+          : merged.lineColumns[column.id].dropdownSort,
     }
   }
 
@@ -111,6 +153,11 @@ function mergeWithDefaults(
         {
           visible: column.visible,
           order: index,
+          widthMode: merged.lineColumns[column.id].widthMode,
+          editDisplay: merged.lineColumns[column.id].editDisplay,
+          viewDisplay: merged.lineColumns[column.id].viewDisplay,
+          dropdownDisplay: merged.lineColumns[column.id].dropdownDisplay,
+          dropdownSort: merged.lineColumns[column.id].dropdownSort,
         },
       ]),
   ) as Record<FulfillmentLineColumnKey, FulfillmentDetailCustomizationConfig['lineColumns'][FulfillmentLineColumnKey]>
@@ -127,6 +174,9 @@ function mergeWithDefaults(
         typeof card.order === 'number' && Number.isFinite(card.order)
           ? Math.max(0, Math.trunc(card.order))
           : index,
+      size: card.size === 'sm' || card.size === 'lg' || card.size === 'md' ? card.size : 'md',
+      colorized: card.colorized !== false,
+      linked: card.linked !== false,
     }))
     .sort((left, right) => left.order - right.order)
     .map((card, index) => ({

@@ -1,4 +1,5 @@
 import JournalEntryDetailClient from '@/components/JournalEntryDetailClient'
+import { findAccountingPeriodIdForDate } from '@/lib/accounting-periods'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
 import { loadJournalEntryFormOptions } from '@/lib/journal-entry-form-options'
 import { loadJournalDetailCustomization } from '@/lib/journal-detail-customization-store'
@@ -19,6 +20,7 @@ export default async function NewIntercompanyJournalEntryPage({
   ])
 
   const today = new Date().toISOString().slice(0, 10)
+  const initialAccountingPeriodId = findAccountingPeriodIdForDate(formOptions.accountingPeriods, today)
 
   return (
     <JournalEntryDetailClient
@@ -37,14 +39,17 @@ export default async function NewIntercompanyJournalEntryPage({
         status: formOptions.statusOptions[0]?.value ?? 'draft',
         subsidiaryId: '',
         currencyId: '',
-        accountingPeriodId: '',
+        accountingPeriodId: initialAccountingPeriodId,
+        total: '0',
         sourceType: '',
         sourceId: '',
+        userId: '',
         postedByEmployeeId: '',
         approvedByEmployeeId: '',
         createdAt: '-',
         updatedAt: '-',
       }}
+      createdByUserLabel="-"
       initialLineItems={[]}
       moneySettings={moneySettings}
       {...formOptions}

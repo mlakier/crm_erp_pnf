@@ -209,6 +209,14 @@ function applyTableState(table: HTMLTableElement) {
 
 function enhanceTable(table: HTMLTableElement) {
   if (table.dataset.filterSortEnhanced === 'true') {
+    const activeElement = document.activeElement
+    if (
+      activeElement instanceof HTMLInputElement
+      && activeElement.closest('tr[data-filter-row]')
+      && table.contains(activeElement)
+    ) {
+      return
+    }
     enforcePinnedColumns(table)
     return
   }

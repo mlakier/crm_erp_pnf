@@ -5,13 +5,14 @@ export async function GET(request: NextRequest) {
   const resource = request.nextUrl.searchParams.get('resource') as MasterDataExportResource | null
   const query = (request.nextUrl.searchParams.get('q') ?? '').trim()
   const sort = request.nextUrl.searchParams.get('sort') ?? 'id'
+  const status = (request.nextUrl.searchParams.get('status') ?? '').trim()
 
   if (!resource) {
     return Response.json({ error: 'resource is required' }, { status: 400 })
   }
 
   try {
-    const payload = await buildMasterDataExportPayload(resource, query, sort)
+    const payload = await buildMasterDataExportPayload(resource, query, sort, { status })
     return Response.json(payload)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to export master data list'

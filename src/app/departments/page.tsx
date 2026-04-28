@@ -112,6 +112,7 @@ export default async function DepartmentsPage({
     'manager',
     'approver',
     'status',
+    'db-id',
     'created',
     'last-modified',
   ]
@@ -176,7 +177,7 @@ export default async function DepartmentsPage({
             <tr style={MASTER_DATA_TABLE_DIVIDER_STYLE}>
               {orderedColumns.map((columnId) => (
                 <MasterDataHeaderCell key={columnId} columnId={columnId}>
-                  {departmentColumnLabels[columnId] ?? columnId}
+                  {columnId === 'db-id' ? 'DB Id' : departmentColumnLabels[columnId] ?? columnId}
                 </MasterDataHeaderCell>
               ))}
             </tr>
@@ -236,6 +237,10 @@ export default async function DepartmentsPage({
 
                     if (columnId === 'status') {
                       return <MasterDataMutedCell key={`${department.id}-${columnId}`} columnId="status">{department.active ? 'No' : 'Yes'}</MasterDataMutedCell>
+                    }
+
+                    if (columnId === 'db-id') {
+                      return <MasterDataMutedCell key={`${department.id}-${columnId}`} columnId="db-id">{department.id}</MasterDataMutedCell>
                     }
 
                     if (columnId === 'created') {

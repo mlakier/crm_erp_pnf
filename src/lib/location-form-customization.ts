@@ -1,4 +1,5 @@
 import { getListSourceText, type FieldSourceType } from '@/lib/list-source'
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 export type LocationFormFieldKey =
   | 'locationId'
@@ -33,7 +34,19 @@ export type LocationFormCustomizationConfig = {
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<LocationFormFieldKey, LocationFormFieldCustomization>
+  statCards?: Array<TransactionStatCardSlot<LocationStatCardMetric>>
 }
+
+export type LocationStatCardMetric =
+  | 'childLocations'
+  | 'employees'
+  | 'items'
+
+export const LOCATION_STAT_CARDS: Array<{ id: LocationStatCardMetric; label: string }> = [
+  { id: 'childLocations', label: 'Child Locations' },
+  { id: 'employees', label: 'Employees' },
+  { id: 'items', label: 'Items' },
+]
 
 export const LOCATION_FORM_FIELDS: LocationFormFieldMeta[] = [
   { id: 'locationId', label: 'Location ID', fieldType: 'text', description: 'System-generated location master record identifier.' },
@@ -92,5 +105,14 @@ export function defaultLocationFormCustomization(): LocationFormCustomizationCon
         { visible: true, section: sectionMap[field.id], order: rowMap[field.id], column: columnMap[field.id] },
       ])
     ) as Record<LocationFormFieldKey, LocationFormFieldCustomization>,
+    statCards: LOCATION_STAT_CARDS.map((card, index) => ({
+      id: `location-stat-${card.id}`,
+      metric: card.id,
+      visible: true,
+      order: index,
+      size: 'md',
+      colorized: true,
+      linked: true,
+    })),
   }
 }

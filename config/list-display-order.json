@@ -4,5 +4,7 @@
   "EMP-LABOR-TYPE": "list",
   "ITEM-PRODUCT-LINE": "list",
   "ITEM-BUSINESS-LINE": "list",
-  "COA-FS-SECTION": "list"
+  "COA-FS-SECTION": "list",
+  "OPP-STAGE": "list",
+  "FULFILL-STATUS": "list"
 }

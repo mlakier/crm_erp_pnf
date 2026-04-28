@@ -2,8 +2,9 @@
 'use client'
 
 import type { InvoiceReceiptDetailCustomizationConfig, InvoiceReceiptDetailFieldKey } from '@/lib/invoice-receipt-detail-customization'
-import TransactionDetailCustomizeMode from '@/components/TransactionDetailCustomizeMode'
-import { INVOICE_RECEIPT_STAT_CARDS } from '@/lib/invoice-receipt-detail-customization'
+import TransactionRecordDetailCustomizeMode from '@/components/TransactionRecordDetailCustomizeMode'
+import { INVOICE_RECEIPT_REFERENCE_SOURCES, INVOICE_RECEIPT_STAT_CARDS } from '@/lib/invoice-receipt-detail-customization'
+import type { TransactionVisualTone } from '@/lib/transaction-page-config'
 
 type CustomizeField = {
   id: InvoiceReceiptDetailFieldKey
@@ -18,23 +19,48 @@ export default function InvoiceReceiptDetailCustomizeMode({
   detailHref,
   initialLayout,
   fields,
+  referenceSourceDefinitions,
   sectionDescriptions,
+  statPreviewCards,
 }: {
   detailHref: string
   initialLayout: InvoiceReceiptDetailCustomizationConfig
   fields: CustomizeField[]
+  referenceSourceDefinitions?: Array<{
+    id: string
+    label: string
+    linkedFieldLabel: string
+    description: string
+    defaultVisibleFieldIds: string[]
+    defaultColumns?: number
+    defaultRows?: number
+    fields: CustomizeField[]
+  }>
   sectionDescriptions?: Record<string, string>
+  statPreviewCards?: Array<{
+    id: string
+    label: string
+    value: string | number
+    href?: string | null
+    accent?: true | 'teal' | 'yellow'
+    valueTone?: TransactionVisualTone
+    cardTone?: TransactionVisualTone
+    supportsColorized?: boolean
+    supportsLink?: boolean
+  }>
 }) {
   return (
-    <TransactionDetailCustomizeMode
+    <TransactionRecordDetailCustomizeMode
       detailHref={detailHref}
       initialLayout={initialLayout}
       fields={fields}
+      formKey="invoiceReceiptCreate"
       saveEndpoint="/api/config/invoice-receipt-detail-customization"
+      recordLabel="invoice receipt"
       sectionDescriptions={sectionDescriptions}
+      referenceSourceDefinitions={referenceSourceDefinitions ?? INVOICE_RECEIPT_REFERENCE_SOURCES}
       statCardDefinitions={INVOICE_RECEIPT_STAT_CARDS}
-      statCardsTitle="Stat Cards"
-      statCardsIntro="Control which summary cards appear at the top of the invoice receipt detail page and their order."
+      statPreviewCards={statPreviewCards}
     />
   )
 }

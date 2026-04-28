@@ -17,7 +17,11 @@ const DEFAULT_SETTINGS: IntegrationSettings = {
     apiKey: '',
     enabled: true,
   },
-  integrations: {},
+  integrations: {
+    docusign: {
+      integrationKey: 'cc049669-d6d2-43b8-a241-bd7699194083',
+    },
+  },
 }
 
 function sanitize(input: unknown): IntegrationSettings {
@@ -51,7 +55,10 @@ function sanitize(input: unknown): IntegrationSettings {
       apiKey: typeof googleRoot.apiKey === 'string' ? googleRoot.apiKey : '',
       enabled: typeof googleRoot.enabled === 'boolean' ? googleRoot.enabled : true,
     },
-    integrations: integrationsMap,
+    integrations: {
+      ...DEFAULT_SETTINGS.integrations,
+      ...integrationsMap,
+    },
   }
 }
 

@@ -3,10 +3,12 @@ import path from 'path'
 import {
   defaultQuoteDetailCustomization,
   QUOTE_DETAIL_FIELDS,
+  QUOTE_REFERENCE_SOURCES,
   QUOTE_STAT_CARDS,
   type QuoteDetailCustomizationConfig,
   type QuoteStatCardSlot,
 } from '@/lib/quotes-detail-customization'
+import { mergeTransactionReferenceLayouts } from '@/lib/transaction-reference-layouts'
 
 const STORE_PATH = path.join(process.cwd(), 'config', 'quotes-detail-customization.json')
 
@@ -20,6 +22,15 @@ function mergeWithDefaults(overrides: Partial<QuoteDetailCustomizationConfig>): 
 
   if (typeof overrides.formColumns === 'number' && Number.isFinite(overrides.formColumns)) {
     merged.formColumns = Math.min(4, Math.max(1, Math.trunc(overrides.formColumns)))
+  }
+
+  if (overrides.lineSettings && typeof overrides.lineSettings === 'object') {
+    merged.lineSettings = {
+      ...merged.lineSettings,
+      ...(overrides.lineSettings.fontSize === 'xs' || overrides.lineSettings.fontSize === 'sm'
+        ? { fontSize: overrides.lineSettings.fontSize }
+        : {}),
+    }
   }
 
   if (Array.isArray(overrides.sections)) {
@@ -40,9 +51,14 @@ function mergeWithDefaults(overrides: Partial<QuoteDetailCustomizationConfig>): 
     for (const field of QUOTE_DETAIL_FIELDS) {
       const nextField = overrides.fields[field.id]
       if (!nextField || typeof nextField !== 'object') continue
+      const rawSection = String(nextField.section ?? merged.fields[field.id].section).trim() || merged.fields[field.id].section
+      const normalizedSection =
+        (field.id === 'createdAt' || field.id === 'updatedAt') && rawSection === 'System Dates'
+          ? 'Quote Details'
+          : rawSection
       merged.fields[field.id] = {
         visible: nextField.visible === undefined ? merged.fields[field.id].visible : nextField.visible === true,
-        section: String(nextField.section ?? merged.fields[field.id].section).trim() || merged.fields[field.id].section,
+        section: normalizedSection,
         order: typeof nextField.order === 'number' && Number.isFinite(nextField.order) ? nextField.order : merged.fields[field.id].order,
         column: typeof nextField.column === 'number' && Number.isFinite(nextField.column)
           ? Math.min(merged.formColumns, Math.max(1, Math.trunc(nextField.column)))
@@ -64,6 +80,36 @@ function mergeWithDefaults(overrides: Partial<QuoteDetailCustomizationConfig>): 
           typeof nextColumn.order === 'number' && Number.isFinite(nextColumn.order)
             ? nextColumn.order
             : merged.lineColumns[columnId as keyof typeof merged.lineColumns].order,
+        widthMode:
+          nextColumn.widthMode === 'auto'
+          || nextColumn.widthMode === 'compact'
+          || nextColumn.widthMode === 'normal'
+          || nextColumn.widthMode === 'wide'
+            ? nextColumn.widthMode
+            : merged.lineColumns[columnId as keyof typeof merged.lineColumns].widthMode,
+        editDisplay:
+          nextColumn.editDisplay === 'label'
+          || nextColumn.editDisplay === 'idAndLabel'
+          || nextColumn.editDisplay === 'id'
+            ? nextColumn.editDisplay
+            : merged.lineColumns[columnId as keyof typeof merged.lineColumns].editDisplay,
+        viewDisplay:
+          nextColumn.viewDisplay === 'label'
+          || nextColumn.viewDisplay === 'idAndLabel'
+          || nextColumn.viewDisplay === 'id'
+            ? nextColumn.viewDisplay
+            : merged.lineColumns[columnId as keyof typeof merged.lineColumns].viewDisplay,
+        dropdownDisplay:
+          nextColumn.dropdownDisplay === 'label'
+          || nextColumn.dropdownDisplay === 'idAndLabel'
+          || nextColumn.dropdownDisplay === 'id'
+            ? nextColumn.dropdownDisplay
+            : merged.lineColumns[columnId as keyof typeof merged.lineColumns].dropdownDisplay,
+        dropdownSort:
+          nextColumn.dropdownSort === 'id'
+          || nextColumn.dropdownSort === 'label'
+            ? nextColumn.dropdownSort
+            : merged.lineColumns[columnId as keyof typeof merged.lineColumns].dropdownSort,
       }
     }
   }
@@ -80,6 +126,9 @@ function mergeWithDefaults(overrides: Partial<QuoteDetailCustomizationConfig>): 
         typeof card.order === 'number' && Number.isFinite(card.order)
           ? Math.max(0, Math.trunc(card.order))
           : index,
+      size: card.size === 'sm' || card.size === 'lg' || card.size === 'md' ? card.size : 'md',
+      colorized: card.colorized !== false,
+      linked: card.linked !== false,
     }))
     .sort((left, right) => left.order - right.order)
     .map((card, index) => ({
@@ -90,7 +139,10 @@ function mergeWithDefaults(overrides: Partial<QuoteDetailCustomizationConfig>): 
   merged.statCards = normalizedStatCards.length > 0 ? normalizedStatCards : cloneDefaults().statCards
 
   const fieldSections = Array.from(new Set(Object.values(merged.fields).map((field) => field.section)))
-  merged.sections = Array.from(new Set([...merged.sections, ...fieldSections]))
+  merged.sections = Array.from(new Set([...merged.sections, ...fieldSections])).filter(
+    (section) => section !== 'System Dates' || fieldSections.includes('System Dates'),
+  )
+  merged.referenceLayouts = mergeTransactionReferenceLayouts(overrides.referenceLayouts, merged.referenceLayouts, QUOTE_REFERENCE_SOURCES)
   for (const section of merged.sections) {
     if (typeof merged.sectionRows[section] !== 'number' || !Number.isFinite(merged.sectionRows[section])) {
       merged.sectionRows[section] = 3

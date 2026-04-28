@@ -1,0 +1,181 @@
+{
+  "formColumns": 3,
+  "sections": [
+    "Core",
+    "Access",
+    "Subsidiary Access",
+    "Approval",
+    "Linkage",
+    "Security",
+    "Status"
+  ],
+  "sectionRows": {
+    "Core": 3,
+    "Access": 2,
+    "Subsidiary Access": 2,
+    "Approval": 3,
+    "Linkage": 2,
+    "Security": 3,
+    "Status": 2
+  },
+  "fields": {
+    "userId": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 1
+    },
+    "name": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 2
+    },
+    "email": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 3
+    },
+    "roleId": {
+      "visible": true,
+      "section": "Access",
+      "order": 0,
+      "column": 1
+    },
+    "departmentId": {
+      "visible": true,
+      "section": "Access",
+      "order": 0,
+      "column": 2
+    },
+    "defaultSubsidiaryId": {
+      "visible": true,
+      "section": "Subsidiary Access",
+      "order": 0,
+      "column": 3
+    },
+    "subsidiaryIds": {
+      "visible": true,
+      "section": "Subsidiary Access",
+      "order": 0,
+      "column": 1
+    },
+    "includeChildren": {
+      "visible": true,
+      "section": "Subsidiary Access",
+      "order": 0,
+      "column": 2
+    },
+    "approvalLimit": {
+      "visible": true,
+      "section": "Approval",
+      "order": 0,
+      "column": 1
+    },
+    "approvalCurrencyId": {
+      "visible": true,
+      "section": "Approval",
+      "order": 0,
+      "column": 2
+    },
+    "delegatedApproverUserId": {
+      "visible": true,
+      "section": "Approval",
+      "order": 0,
+      "column": 3
+    },
+    "delegationStartDate": {
+      "visible": true,
+      "section": "Approval",
+      "order": 1,
+      "column": 1
+    },
+    "delegationEndDate": {
+      "visible": true,
+      "section": "Approval",
+      "order": 1,
+      "column": 2
+    },
+    "employeeId": {
+      "visible": true,
+      "section": "Linkage",
+      "order": 0,
+      "column": 1
+    },
+    "locked": {
+      "visible": true,
+      "section": "Security",
+      "order": 0,
+      "column": 1
+    },
+    "mustChangePassword": {
+      "visible": true,
+      "section": "Security",
+      "order": 0,
+      "column": 2
+    },
+    "failedLoginAttempts": {
+      "visible": true,
+      "section": "Security",
+      "order": 1,
+      "column": 1
+    },
+    "lastLoginAt": {
+      "visible": true,
+      "section": "Security",
+      "order": 1,
+      "column": 2
+    },
+    "passwordChangedAt": {
+      "visible": true,
+      "section": "Security",
+      "order": 0,
+      "column": 3
+    },
+    "inactive": {
+      "visible": true,
+      "section": "Status",
+      "order": 0,
+      "column": 1
+    }
+  },
+  "statCards": [
+    {
+      "id": "user-stat-role",
+      "metric": "role",
+      "visible": true,
+      "order": 0,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "user-stat-department",
+      "metric": "department",
+      "visible": true,
+      "order": 1,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "user-stat-defaultSubsidiary",
+      "metric": "defaultSubsidiary",
+      "visible": true,
+      "order": 2,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "user-stat-status",
+      "metric": "status",
+      "visible": true,
+      "order": 3,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    }
+  ]
+}

@@ -1,0 +1,115 @@
+{
+  "formColumns": 2,
+  "sections": [
+    "Core",
+    "Contact",
+    "Relationship",
+    "Status"
+  ],
+  "sectionRows": {
+    "Core": 2,
+    "Contact": 2,
+    "Relationship": 2,
+    "Status": 1
+  },
+  "fields": {
+    "contactNumber": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 1
+    },
+    "firstName": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 2
+    },
+    "lastName": {
+      "visible": true,
+      "section": "Core",
+      "order": 1,
+      "column": 1
+    },
+    "email": {
+      "visible": true,
+      "section": "Contact",
+      "order": 0,
+      "column": 1
+    },
+    "phone": {
+      "visible": true,
+      "section": "Contact",
+      "order": 0,
+      "column": 2
+    },
+    "address": {
+      "visible": true,
+      "section": "Contact",
+      "order": 1,
+      "column": 1
+    },
+    "position": {
+      "visible": true,
+      "section": "Relationship",
+      "order": 0,
+      "column": 1
+    },
+    "customerId": {
+      "visible": true,
+      "section": "Relationship",
+      "order": 0,
+      "column": 2
+    },
+    "vendorId": {
+      "visible": true,
+      "section": "Relationship",
+      "order": 1,
+      "column": 1
+    },
+    "inactive": {
+      "visible": true,
+      "section": "Status",
+      "order": 0,
+      "column": 1
+    }
+  },
+  "statCards": [
+    {
+      "id": "contact-stat-accountType",
+      "metric": "accountType",
+      "visible": true,
+      "order": 0,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "contact-stat-account",
+      "metric": "account",
+      "visible": true,
+      "order": 1,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "contact-stat-owner",
+      "metric": "owner",
+      "visible": true,
+      "order": 2,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "contact-stat-activityCount",
+      "metric": "activityCount",
+      "visible": true,
+      "order": 3,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    }
+  ]
+}

@@ -20,6 +20,14 @@ import {
 } from '@/lib/master-data-list-definitions'
 
 export type MasterDataExportResource =
+  | 'leads'
+  | 'opportunities'
+  | 'quotes'
+  | 'purchase-requisitions'
+  | 'purchase-orders'
+  | 'receipts'
+  | 'bills'
+  | 'bill-payments'
   | 'users'
   | 'roles'
   | 'contacts'
@@ -78,8 +86,502 @@ export async function buildMasterDataExportPayload(
   resource: MasterDataExportResource,
   query: string,
   sort: string,
+  filters?: {
+    status?: string
+  },
 ): Promise<MasterDataExportPayload> {
   switch (resource) {
+    case 'purchase-requisitions': {
+      const statusFilter = filters?.status?.trim().toLowerCase() ?? ''
+      const requisitions = await prisma.requisition.findMany({
+        where: {
+          ...(query
+            ? {
+                OR: [
+                  { number: { contains: query, mode: INSENSITIVE } },
+                  { title: { contains: query, mode: INSENSITIVE } },
+                  { description: { contains: query, mode: INSENSITIVE } },
+                  { status: { contains: query, mode: INSENSITIVE } },
+                  { vendor: { is: { name: { contains: query, mode: INSENSITIVE } } } },
+                  { department: { is: { name: { contains: query, mode: INSENSITIVE } } } },
+                ],
+              }
+            : {}),
+          ...(statusFilter && statusFilter !== 'all' ? { status: statusFilter } : {}),
+        },
+        include: {
+          vendor: { select: { vendorNumber: true, name: true } },
+          department: { select: { departmentId: true, name: true } },
+        },
+        orderBy:
+          sort === 'oldest'
+            ? [{ createdAt: 'asc' }]
+            : sort === 'id'
+              ? [{ number: 'asc' }, { createdAt: 'desc' }]
+              : [{ createdAt: 'desc' }],
+      })
+
+      return {
+        headers: [
+          'Purchase Req Id',
+          'Title',
+          'Status',
+          'Priority',
+          'Department',
+          'Preferred Vendor',
+          'Total',
+          'Needed By',
+          'DB Id',
+          'Created',
+          'Last Modified',
+        ],
+        rows: requisitions.map((requisition) => [
+          text(requisition.number),
+          text(requisition.title),
+          text(requisition.status),
+          text(requisition.priority),
+          requisition.department
+            ? `${requisition.department.departmentId} - ${requisition.department.name}`
+            : '-',
+          requisition.vendor ? `${requisition.vendor.vendorNumber ?? ''}${requisition.vendor.vendorNumber ? ' - ' : ''}${requisition.vendor.name}` : '-',
+          text(toNumericValue(requisition.total).toFixed(2)),
+          formatMasterDataDate(requisition.neededByDate),
+          text(requisition.id),
+          formatMasterDataDate(requisition.createdAt),
+          formatMasterDataDate(requisition.updatedAt),
+        ]),
+      }
+    }
+    case 'purchase-orders': {
+      const statusFilter = filters?.status?.trim().toLowerCase() ?? ''
+      const purchaseOrders = await prisma.purchaseOrder.findMany({
+        where: {
+          ...(query
+            ? {
+                OR: [
+                  { number: { contains: query, mode: INSENSITIVE } },
+                  { status: { contains: query, mode: INSENSITIVE } },
+                  { vendor: { is: { name: { contains: query, mode: INSENSITIVE } } } },
+                  { vendor: { is: { vendorNumber: { contains: query, mode: INSENSITIVE } } } },
+                  { requisition: { is: { number: { contains: query, mode: INSENSITIVE } } } },
+                ],
+              }
+            : {}),
+          ...(statusFilter && statusFilter !== 'all' ? { status: statusFilter } : {}),
+        },
+        include: {
+          vendor: { select: { vendorNumber: true, name: true } },
+          subsidiary: { select: { subsidiaryId: true, name: true } },
+          currency: { select: { currencyId: true, code: true } },
+          requisition: { select: { number: true } },
+        },
+        orderBy:
+          sort === 'oldest'
+            ? [{ createdAt: 'asc' }]
+            : sort === 'id'
+              ? [{ number: 'asc' }, { createdAt: 'desc' }]
+              : [{ createdAt: 'desc' }],
+      })
+
+      return {
+        headers: [
+          'Purchase Order Id',
+          'Vendor',
+          'Status',
+          'Total',
+          'Subsidiary',
+          'Currency',
+          'Requisition',
+          'DB Id',
+          'Created',
+          'Last Modified',
+        ],
+        rows: purchaseOrders.map((purchaseOrder) => [
+          text(purchaseOrder.number),
+          purchaseOrder.vendor
+            ? `${purchaseOrder.vendor.vendorNumber ?? ''}${purchaseOrder.vendor.vendorNumber ? ' - ' : ''}${purchaseOrder.vendor.name}`
+            : '-',
+          text(purchaseOrder.status),
+          text(toNumericValue(purchaseOrder.total).toFixed(2)),
+          purchaseOrder.subsidiary
+            ? `${purchaseOrder.subsidiary.subsidiaryId} - ${purchaseOrder.subsidiary.name}`
+            : '-',
+          text(purchaseOrder.currency?.code ?? purchaseOrder.currency?.currencyId),
+          text(purchaseOrder.requisition?.number),
+          text(purchaseOrder.id),
+          formatMasterDataDate(purchaseOrder.createdAt),
+          formatMasterDataDate(purchaseOrder.updatedAt),
+        ]),
+      }
+    }
+    case 'receipts': {
+      const statusFilter = filters?.status?.trim().toLowerCase() ?? ''
+      const receipts = await prisma.receipt.findMany({
+        where: {
+          ...(query
+            ? {
+                OR: [
+                  { id: { contains: query, mode: INSENSITIVE } },
+                  { status: { contains: query, mode: INSENSITIVE } },
+                  { notes: { contains: query, mode: INSENSITIVE } },
+                  { purchaseOrder: { is: { number: { contains: query, mode: INSENSITIVE } } } },
+                ],
+              }
+            : {}),
+          ...(statusFilter && statusFilter !== 'all' ? { status: statusFilter } : {}),
+        },
+        include: {
+          purchaseOrder: { select: { number: true } },
+        },
+        orderBy:
+          sort === 'oldest'
+            ? [{ createdAt: 'asc' }]
+            : sort === 'id'
+              ? [{ id: 'asc' }, { createdAt: 'desc' }]
+              : [{ createdAt: 'desc' }],
+      })
+
+      return {
+        headers: [
+          'Receipt Id',
+          'Purchase Order',
+          'Quantity',
+          'Date',
+          'Status',
+          'Notes',
+          'DB Id',
+          'Created',
+          'Last Modified',
+        ],
+        rows: receipts.map((receipt) => [
+          text(receipt.id),
+          text(receipt.purchaseOrder?.number),
+          text(receipt.quantity),
+          formatMasterDataDate(receipt.date),
+          text(receipt.status),
+          text(receipt.notes),
+          text(receipt.id),
+          formatMasterDataDate(receipt.createdAt),
+          formatMasterDataDate(receipt.updatedAt),
+        ]),
+      }
+    }
+    case 'bills': {
+      const statusFilter = filters?.status?.trim().toLowerCase() ?? ''
+      const bills = await prisma.bill.findMany({
+        where: {
+          ...(query
+            ? {
+                OR: [
+                  { number: { contains: query, mode: INSENSITIVE } },
+                  { id: { contains: query, mode: INSENSITIVE } },
+                  { status: { contains: query, mode: INSENSITIVE } },
+                  { notes: { contains: query, mode: INSENSITIVE } },
+                  { vendor: { is: { name: { contains: query, mode: INSENSITIVE } } } },
+                  { vendor: { is: { vendorNumber: { contains: query, mode: INSENSITIVE } } } },
+                ],
+              }
+            : {}),
+          ...(statusFilter && statusFilter !== 'all' ? { status: statusFilter } : {}),
+        },
+        include: {
+          vendor: { select: { vendorNumber: true, name: true } },
+        },
+        orderBy:
+          sort === 'oldest'
+            ? [{ createdAt: 'asc' }]
+            : sort === 'id'
+              ? [{ number: 'asc' }, { createdAt: 'desc' }]
+              : [{ createdAt: 'desc' }],
+      })
+
+      return {
+        headers: [
+          'Bill Id',
+          'Vendor',
+          'Status',
+          'Total',
+          'Bill Date',
+          'Due Date',
+          'DB Id',
+          'Created',
+          'Last Modified',
+        ],
+        rows: bills.map((bill) => [
+          text(bill.number),
+          bill.vendor ? `${bill.vendor.vendorNumber ?? ''}${bill.vendor.vendorNumber ? ' - ' : ''}${bill.vendor.name}` : '-',
+          text(bill.status),
+          text(toNumericValue(bill.total).toFixed(2)),
+          formatMasterDataDate(bill.date),
+          formatMasterDataDate(bill.dueDate),
+          text(bill.id),
+          formatMasterDataDate(bill.createdAt),
+          formatMasterDataDate(bill.updatedAt),
+        ]),
+      }
+    }
+    case 'bill-payments': {
+      const statusFilter = filters?.status?.trim().toLowerCase() ?? ''
+      const billPayments = await prisma.billPayment.findMany({
+        where: {
+          ...(query
+            ? {
+                OR: [
+                  { number: { contains: query, mode: INSENSITIVE } },
+                  { id: { contains: query, mode: INSENSITIVE } },
+                  { status: { contains: query, mode: INSENSITIVE } },
+                  { reference: { contains: query, mode: INSENSITIVE } },
+                  { method: { contains: query, mode: INSENSITIVE } },
+                  { notes: { contains: query, mode: INSENSITIVE } },
+                  { bill: { is: { number: { contains: query, mode: INSENSITIVE } } } },
+                  { bill: { is: { vendor: { is: { name: { contains: query, mode: INSENSITIVE } } } } } },
+                ],
+              }
+            : {}),
+          ...(statusFilter && statusFilter !== 'all' ? { status: statusFilter } : {}),
+        },
+        include: {
+          bill: {
+            include: {
+              vendor: { select: { vendorNumber: true, name: true } },
+            },
+          },
+        },
+        orderBy:
+          sort === 'oldest'
+            ? [{ createdAt: 'asc' }]
+            : sort === 'id'
+              ? [{ number: 'asc' }, { createdAt: 'desc' }]
+              : [{ createdAt: 'desc' }],
+      })
+
+      return {
+        headers: [
+          'Bill Payment Id',
+          'Bill',
+          'Vendor',
+          'Amount',
+          'Date',
+          'Method',
+          'Reference',
+          'Status',
+          'Notes',
+          'DB Id',
+          'Created',
+          'Last Modified',
+        ],
+        rows: billPayments.map((billPayment) => [
+          text(billPayment.number),
+          text(billPayment.bill?.number),
+          billPayment.bill?.vendor
+            ? `${billPayment.bill.vendor.vendorNumber ?? ''}${billPayment.bill.vendor.vendorNumber ? ' - ' : ''}${billPayment.bill.vendor.name}`
+            : '-',
+          text(toNumericValue(billPayment.amount).toFixed(2)),
+          formatMasterDataDate(billPayment.date),
+          text(billPayment.method),
+          text(billPayment.reference),
+          text(billPayment.status),
+          text(billPayment.notes),
+          text(billPayment.id),
+          formatMasterDataDate(billPayment.createdAt),
+          formatMasterDataDate(billPayment.updatedAt),
+        ]),
+      }
+    }
+    case 'leads': {
+      const statusFilter = filters?.status?.trim().toLowerCase() ?? ''
+      const leads = await prisma.lead.findMany({
+        where: {
+          ...(query
+            ? {
+                OR: [
+                  { leadNumber: { contains: query, mode: INSENSITIVE } },
+                  { firstName: { contains: query, mode: INSENSITIVE } },
+                  { lastName: { contains: query, mode: INSENSITIVE } },
+                  { email: { contains: query, mode: INSENSITIVE } },
+                  { company: { contains: query, mode: INSENSITIVE } },
+                  { source: { contains: query, mode: INSENSITIVE } },
+                ],
+              }
+            : {}),
+          ...(statusFilter && statusFilter !== 'all' ? { status: statusFilter } : {}),
+        },
+        include: {
+          subsidiary: { select: { subsidiaryId: true, name: true } },
+          currency: { select: { code: true, currencyId: true } },
+        },
+        orderBy:
+          sort === 'oldest'
+            ? [{ createdAt: 'asc' }]
+            : sort === 'id'
+              ? [{ leadNumber: 'asc' }, { createdAt: 'desc' }]
+              : [{ createdAt: 'desc' }],
+      })
+
+      return {
+        headers: [
+          'Lead Id',
+          'Name',
+          'Company',
+          'Status',
+          'Source',
+          'Subsidiary',
+          'Currency',
+          'DB Id',
+          'Created',
+          'Last Modified',
+        ],
+        rows: leads.map((lead) => [
+          text(lead.leadNumber ?? 'Pending'),
+          text([lead.firstName, lead.lastName].filter(Boolean).join(' ').trim() || lead.email),
+          text(lead.company),
+          text(lead.status),
+          text(lead.source),
+          lead.subsidiary ? `${lead.subsidiary.subsidiaryId} - ${lead.subsidiary.name}` : '-',
+          text(lead.currency?.code ?? lead.currency?.currencyId),
+          text(lead.id),
+          formatMasterDataDate(lead.createdAt),
+          formatMasterDataDate(lead.updatedAt),
+        ]),
+      }
+    }
+    case 'opportunities': {
+      const stageFilter = filters?.status?.trim().toLowerCase() ?? ''
+      const opportunities = await prisma.opportunity.findMany({
+        where: {
+          ...(stageFilter
+            ? stageFilter === 'all'
+              ? {}
+              : stageFilter === 'qualification'
+                ? {
+                    OR: [{ stage: 'qualification' }, { stage: 'qualified' }],
+                  }
+                : { stage: stageFilter }
+            : {}),
+          ...(query
+            ? {
+                OR: [
+                  { opportunityNumber: { contains: query, mode: INSENSITIVE } },
+                  { name: { contains: query, mode: INSENSITIVE } },
+                  { stage: { contains: query, mode: INSENSITIVE } },
+                  { customer: { name: { contains: query, mode: INSENSITIVE } } },
+                ],
+              }
+            : {}),
+        },
+        include: {
+          customer: { select: { name: true } },
+          user: { select: { userId: true, name: true, email: true } },
+          subsidiary: { select: { subsidiaryId: true, name: true } },
+          currency: { select: { code: true, currencyId: true } },
+        },
+        orderBy:
+          sort === 'oldest'
+            ? [{ createdAt: 'asc' }]
+            : sort === 'id'
+              ? [{ opportunityNumber: 'asc' }, { createdAt: 'desc' }]
+              : [{ createdAt: 'desc' }],
+      })
+
+      return {
+        headers: [
+          'Opportunity Id',
+          'Name',
+          'Customer',
+          'User Id',
+          'Stage',
+          'Amount',
+          'Subsidiary',
+          'Currency',
+          'Close Date',
+          'DB Id',
+          'Created',
+          'Last Modified',
+        ],
+        rows: opportunities.map((opportunity) => [
+          text(opportunity.opportunityNumber ?? 'Pending'),
+          text(opportunity.name),
+          text(opportunity.customer.name),
+          text(opportunity.user?.userId ?? opportunity.user?.name ?? opportunity.user?.email),
+          text(opportunity.stage),
+          text(toNumericValue(opportunity.amount).toFixed(2)),
+          opportunity.subsidiary ? `${opportunity.subsidiary.subsidiaryId} - ${opportunity.subsidiary.name}` : '-',
+          text(opportunity.currency?.code ?? opportunity.currency?.currencyId),
+          formatMasterDataDate(opportunity.closeDate),
+          text(opportunity.id),
+          formatMasterDataDate(opportunity.createdAt),
+          formatMasterDataDate(opportunity.updatedAt),
+        ]),
+      }
+    }
+    case 'quotes': {
+      const statusFilter = filters?.status?.trim().toLowerCase() ?? ''
+      const quotes = await prisma.quote.findMany({
+        where: {
+          ...(query
+            ? {
+                OR: [
+                  { number: { contains: query, mode: INSENSITIVE } },
+                  { status: { contains: query, mode: INSENSITIVE } },
+                  { customer: { name: { contains: query, mode: INSENSITIVE } } },
+                  { opportunity: { is: { name: { contains: query, mode: INSENSITIVE } } } },
+                ],
+              }
+            : {}),
+          ...(statusFilter && statusFilter !== 'all' ? { status: statusFilter } : {}),
+        },
+        include: {
+          customer: { select: { name: true } },
+          opportunity: { select: { name: true } },
+          salesOrder: { select: { number: true } },
+          subsidiary: { select: { name: true } },
+          currency: { select: { code: true } },
+        },
+        orderBy:
+          sort === 'id'
+            ? [{ number: 'asc' }, { createdAt: 'desc' }]
+            : sort === 'oldest'
+              ? [{ createdAt: 'asc' }]
+              : sort === 'total-desc'
+                ? [{ total: 'desc' }]
+                : sort === 'total-asc'
+                  ? [{ total: 'asc' }]
+                  : [{ createdAt: 'desc' }],
+      })
+
+      return {
+        headers: [
+          'Quote Id',
+          'Customer',
+          'Opportunity',
+          'Sales Order',
+          'Status',
+          'Total',
+          'Valid Until',
+          'Subsidiary',
+          'Currency',
+          'Notes',
+          'DB Id',
+          'Created',
+          'Last Modified',
+        ],
+        rows: quotes.map((quote) => [
+          text(quote.number),
+          text(quote.customer.name),
+          text(quote.opportunity?.name),
+          text(quote.salesOrder?.number),
+          text(quote.status),
+          text(toNumericValue(quote.total).toFixed(2)),
+          formatMasterDataDate(quote.validUntil),
+          text(quote.subsidiary?.name),
+          text(quote.currency?.code),
+          text(quote.notes),
+          text(quote.id),
+          formatMasterDataDate(quote.createdAt),
+          formatMasterDataDate(quote.updatedAt),
+        ]),
+      }
+    }
     case 'users': {
       const users = await prisma.user.findMany({
         where: query

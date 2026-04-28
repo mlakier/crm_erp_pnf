@@ -9,6 +9,7 @@ import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
 import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSection'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import SystemNotesSection from '@/components/SystemNotesSection'
+import TransactionStatsRow from '@/components/TransactionStatsRow'
 import { RecordDetailCell, RecordDetailEmptyState, RecordDetailHeaderCell, RecordDetailSection, RecordDetailStatCard } from '@/components/RecordDetailPanels'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
@@ -97,6 +98,16 @@ export default async function LocationDetailPage({
     sectionDescriptions,
   })
   const customizeFields = buildCustomizePreviewFields(LOCATION_FORM_FIELDS, fieldDefinitions)
+  const statPreviewCards = [
+    { id: 'childLocations', label: 'Child Locations', value: locationRecord.childLocations.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+    { id: 'employees', label: 'Employees', value: locationRecord.employees.length, cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
+    { id: 'items', label: 'Items', value: locationRecord.items.length, cardTone: 'yellow', valueTone: 'yellow', supportsColorized: true, supportsLink: false },
+  ]
+  const statDefinitions = [
+    { id: 'childLocations', label: 'Child Locations', getValue: () => locationRecord.childLocations.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
+    { id: 'employees', label: 'Employees', getValue: () => locationRecord.employees.length, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
+    { id: 'items', label: 'Items', getValue: () => locationRecord.items.length, getCardTone: () => 'yellow' as const, getValueTone: () => 'yellow' as const },
+  ]
   const systemInfo = await loadMasterDataSystemInfo({
     entityType: 'location',
     entityId: location.id,
@@ -128,11 +139,15 @@ export default async function LocationDetailPage({
         </>
       }
     >
-      <div className="mb-8 grid gap-4 sm:grid-cols-3">
-        <RecordDetailStatCard label="Child Locations" value={locationRecord.childLocations.length} />
-        <RecordDetailStatCard label="Employees" value={locationRecord.employees.length} />
-        <RecordDetailStatCard label="Items" value={locationRecord.items.length} />
-      </div>
+      {!isCustomizing ? (
+        <div className="mb-8">
+          <TransactionStatsRow
+            record={locationRecord}
+            stats={statDefinitions}
+            visibleStatCards={layout.statCards as Array<{ id: string; metric: string; visible: boolean; order: number; size?: 'sm' | 'md' | 'lg'; colorized?: boolean; linked?: boolean }> | undefined}
+          />
+        </div>
+      ) : null}
 
       {isCustomizing ? (
         <LocationDetailCustomizeMode
@@ -141,6 +156,7 @@ export default async function LocationDetailPage({
           initialRequirements={{ ...formRequirements.locationCreate }}
           fields={customizeFields}
           sectionDescriptions={sectionDescriptions}
+          statPreviewCards={statPreviewCards}
         />
       ) : (
         <InlineRecordDetails
@@ -154,50 +170,54 @@ export default async function LocationDetailPage({
         />
       )}
 
-      {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} /> : null}
+      {!isCustomizing ? (
+        <>
+          <MasterDataSystemInfoSection info={systemInfo} internalId={location.id} />
 
-      <RecordDetailSection title="Child Locations" count={locationRecord.childLocations.length}>
-        {locationRecord.childLocations.length === 0 ? <RecordDetailEmptyState message="No child locations yet." /> : (
-          <table className="min-w-full"><tbody>{locationRecord.childLocations.map((child) => (
-            <tr key={child.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-              <RecordDetailCell><Link href={`/locations/${child.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>{child.locationId}</Link></RecordDetailCell>
-              <RecordDetailCell>{child.name}</RecordDetailCell>
-            </tr>
-          ))}</tbody></table>
-        )}
-      </RecordDetailSection>
+          <RecordDetailSection title="Child Locations" count={locationRecord.childLocations.length}>
+            {locationRecord.childLocations.length === 0 ? <RecordDetailEmptyState message="No child locations yet." /> : (
+              <table className="min-w-full"><tbody>{locationRecord.childLocations.map((child) => (
+                <tr key={child.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
+                  <RecordDetailCell><Link href={`/locations/${child.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>{child.locationId}</Link></RecordDetailCell>
+                  <RecordDetailCell>{child.name}</RecordDetailCell>
+                </tr>
+              ))}</tbody></table>
+            )}
+          </RecordDetailSection>
 
-      <RecordDetailSection title="Employees" count={locationRecord.employees.length}>
-        {locationRecord.employees.length === 0 ? <RecordDetailEmptyState message="No employees assigned to this location." /> : (
-          <table className="min-w-full"><thead><tr><RecordDetailHeaderCell>Employee Id</RecordDetailHeaderCell><RecordDetailHeaderCell>Name</RecordDetailHeaderCell></tr></thead><tbody>{locationRecord.employees.map((employee) => (
-            <tr key={employee.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-              <RecordDetailCell><Link href={`/employees/${employee.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>{employee.employeeId ?? 'Pending'}</Link></RecordDetailCell>
-              <RecordDetailCell>{employee.firstName} {employee.lastName}</RecordDetailCell>
-            </tr>
-          ))}</tbody></table>
-        )}
-      </RecordDetailSection>
+          <RecordDetailSection title="Employees" count={locationRecord.employees.length}>
+            {locationRecord.employees.length === 0 ? <RecordDetailEmptyState message="No employees assigned to this location." /> : (
+              <table className="min-w-full"><thead><tr><RecordDetailHeaderCell>Employee Id</RecordDetailHeaderCell><RecordDetailHeaderCell>Name</RecordDetailHeaderCell></tr></thead><tbody>{locationRecord.employees.map((employee) => (
+                <tr key={employee.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
+                  <RecordDetailCell><Link href={`/employees/${employee.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>{employee.employeeId ?? 'Pending'}</Link></RecordDetailCell>
+                  <RecordDetailCell>{employee.firstName} {employee.lastName}</RecordDetailCell>
+                </tr>
+              ))}</tbody></table>
+            )}
+          </RecordDetailSection>
 
-      <RecordDetailSection title="Items" count={locationRecord.items.length}>
-        {locationRecord.items.length === 0 ? <RecordDetailEmptyState message="No items assigned to this location." /> : (
-          <table className="min-w-full"><thead><tr><RecordDetailHeaderCell>Item Id</RecordDetailHeaderCell><RecordDetailHeaderCell>Name</RecordDetailHeaderCell></tr></thead><tbody>{locationRecord.items.map((item) => (
-            <tr key={item.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-              <RecordDetailCell><Link href={`/items/${item.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>{item.itemId ?? 'Pending'}</Link></RecordDetailCell>
-              <RecordDetailCell>{item.name}</RecordDetailCell>
-            </tr>
-          ))}</tbody></table>
-        )}
-      </RecordDetailSection>
+          <RecordDetailSection title="Items" count={locationRecord.items.length}>
+            {locationRecord.items.length === 0 ? <RecordDetailEmptyState message="No items assigned to this location." /> : (
+              <table className="min-w-full"><thead><tr><RecordDetailHeaderCell>Item Id</RecordDetailHeaderCell><RecordDetailHeaderCell>Name</RecordDetailHeaderCell></tr></thead><tbody>{locationRecord.items.map((item) => (
+                <tr key={item.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
+                  <RecordDetailCell><Link href={`/items/${item.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>{item.itemId ?? 'Pending'}</Link></RecordDetailCell>
+                  <RecordDetailCell>{item.name}</RecordDetailCell>
+                </tr>
+              ))}</tbody></table>
+            )}
+          </RecordDetailSection>
 
-      <RecordDetailSection title="Transaction Lines" count={locationRecord.invoiceLineItems.length + locationRecord.billLineItems.length + locationRecord.journalEntryLineItems.length}>
-        <div className="grid gap-3 md:grid-cols-3">
-          <RecordDetailStatCard label="Invoice Lines" value={locationRecord.invoiceLineItems.length} />
-          <RecordDetailStatCard label="Bill Lines" value={locationRecord.billLineItems.length} />
-          <RecordDetailStatCard label="Journal Lines" value={locationRecord.journalEntryLineItems.length} />
-        </div>
-      </RecordDetailSection>
+          <RecordDetailSection title="Transaction Lines" count={locationRecord.invoiceLineItems.length + locationRecord.billLineItems.length + locationRecord.journalEntryLineItems.length}>
+            <div className="grid gap-3 md:grid-cols-3">
+              <RecordDetailStatCard label="Invoice Lines" value={locationRecord.invoiceLineItems.length} />
+              <RecordDetailStatCard label="Bill Lines" value={locationRecord.billLineItems.length} />
+              <RecordDetailStatCard label="Journal Lines" value={locationRecord.journalEntryLineItems.length} />
+            </div>
+          </RecordDetailSection>
 
-      <SystemNotesSection notes={systemNotes} />
+          <SystemNotesSection notes={systemNotes} />
+        </>
+      ) : null}
     </RecordDetailPageShell>
   )
 }

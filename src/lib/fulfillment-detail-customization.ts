@@ -1,3 +1,15 @@
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
+import {
+  buildDefaultTransactionReferenceLayout,
+  type TransactionReferenceLayout,
+} from '@/lib/transaction-reference-layouts'
+import {
+  type LinkedRecordReferenceSource,
+  CURRENCY_FULL_REFERENCE_FIELDS,
+  SALES_ORDER_FULL_REFERENCE_FIELDS,
+  SUBSIDIARY_FULL_REFERENCE_FIELDS,
+} from '@/lib/linked-record-reference-catalogs'
+
 export type FulfillmentDetailFieldKey =
   | 'customerName'
   | 'customerNumber'
@@ -23,6 +35,14 @@ export type FulfillmentLineColumnKey =
   | 'open-qty'
   | 'notes'
 
+export type FulfillmentLineFontSize = 'xs' | 'sm'
+
+export type FulfillmentLineWidthMode = 'auto' | 'compact' | 'normal' | 'wide'
+
+export type FulfillmentLineDisplayMode = 'label' | 'idAndLabel' | 'id'
+
+export type FulfillmentLineDropdownSortMode = 'id' | 'label'
+
 export type FulfillmentStatCardKey =
   | 'status'
   | 'salesOrder'
@@ -44,12 +64,7 @@ export type FulfillmentLineColumnMeta = {
   description?: string
 }
 
-export type FulfillmentStatCardSlot = {
-  id: string
-  metric: FulfillmentStatCardKey
-  visible: boolean
-  order: number
-}
+export type FulfillmentStatCardSlot = TransactionStatCardSlot<FulfillmentStatCardKey>
 
 export type FulfillmentDetailFieldCustomization = {
   visible: boolean
@@ -58,12 +73,28 @@ export type FulfillmentDetailFieldCustomization = {
   column: number
 }
 
+export type FulfillmentLineColumnCustomization = {
+  visible: boolean
+  order: number
+  widthMode: FulfillmentLineWidthMode
+  editDisplay: FulfillmentLineDisplayMode
+  viewDisplay: FulfillmentLineDisplayMode
+  dropdownDisplay: FulfillmentLineDisplayMode
+  dropdownSort: FulfillmentLineDropdownSortMode
+}
+
+export type FulfillmentLineSettings = {
+  fontSize: FulfillmentLineFontSize
+}
+
 export type FulfillmentDetailCustomizationConfig = {
   formColumns: number
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<FulfillmentDetailFieldKey, FulfillmentDetailFieldCustomization>
-  lineColumns: Record<FulfillmentLineColumnKey, { visible: boolean; order: number }>
+  referenceLayouts: TransactionReferenceLayout[]
+  lineSettings: FulfillmentLineSettings
+  lineColumns: Record<FulfillmentLineColumnKey, FulfillmentLineColumnCustomization>
   statCards: FulfillmentStatCardSlot[]
 }
 
@@ -92,6 +123,39 @@ export const FULFILLMENT_DETAIL_FIELDS: FulfillmentDetailFieldMeta[] = [
   { id: 'updatedAt', label: 'Last Modified', fieldType: 'date', description: 'Date/time the fulfillment record was last modified.' },
 ]
 
+export const FULFILLMENT_REFERENCE_SOURCES: LinkedRecordReferenceSource[] = [
+  {
+    id: 'salesOrder',
+    label: 'Sales Order',
+    linkedFieldLabel: 'Sales Order Id',
+    description: 'Expand the linked sales order context for this fulfillment.',
+    fields: SALES_ORDER_FULL_REFERENCE_FIELDS,
+    defaultVisibleFieldIds: ['salesOrderNumber', 'salesOrderStatus', 'salesOrderTotal'],
+    defaultColumns: 2,
+    defaultRows: 3,
+  },
+  {
+    id: 'subsidiary',
+    label: 'Subsidiary',
+    linkedFieldLabel: 'Subsidiary',
+    description: 'Expand the linked subsidiary record for this fulfillment.',
+    fields: SUBSIDIARY_FULL_REFERENCE_FIELDS,
+    defaultVisibleFieldIds: ['subsidiaryNumber', 'subsidiaryName'],
+    defaultColumns: 1,
+    defaultRows: 1,
+  },
+  {
+    id: 'currency',
+    label: 'Currency',
+    linkedFieldLabel: 'Currency',
+    description: 'Expand the linked currency record for this fulfillment.',
+    fields: CURRENCY_FULL_REFERENCE_FIELDS,
+    defaultVisibleFieldIds: ['currencyCode', 'currencyName'],
+    defaultColumns: 1,
+    defaultRows: 1,
+  },
+]
+
 export const FULFILLMENT_LINE_COLUMNS: FulfillmentLineColumnMeta[] = [
   { id: 'line', label: 'Line', description: 'Sales order line sequence number.' },
   { id: 'item-id', label: 'Item Id', description: 'Linked item identifier from the sales order line.' },
@@ -102,32 +166,96 @@ export const FULFILLMENT_LINE_COLUMNS: FulfillmentLineColumnMeta[] = [
   { id: 'notes', label: 'Notes', description: 'Line-specific fulfillment note or warehouse reference.' },
 ]
 
+const DEFAULT_FULFILLMENT_LINE_WIDTHS: Record<FulfillmentLineColumnKey, FulfillmentLineWidthMode> = {
+  line: 'compact',
+  'item-id': 'wide',
+  description: 'wide',
+  'ordered-qty': 'compact',
+  'fulfilled-qty': 'compact',
+  'open-qty': 'compact',
+  notes: 'wide',
+}
+
+const DEFAULT_FULFILLMENT_LINE_EDIT_DISPLAY: Record<FulfillmentLineColumnKey, FulfillmentLineDisplayMode> = {
+  line: 'label',
+  'item-id': 'idAndLabel',
+  description: 'label',
+  'ordered-qty': 'label',
+  'fulfilled-qty': 'label',
+  'open-qty': 'label',
+  notes: 'label',
+}
+
+const DEFAULT_FULFILLMENT_LINE_VIEW_DISPLAY: Record<FulfillmentLineColumnKey, FulfillmentLineDisplayMode> = {
+  ...DEFAULT_FULFILLMENT_LINE_EDIT_DISPLAY,
+}
+
+const DEFAULT_FULFILLMENT_LINE_DROPDOWN_DISPLAY: Record<FulfillmentLineColumnKey, FulfillmentLineDisplayMode> = {
+  ...DEFAULT_FULFILLMENT_LINE_EDIT_DISPLAY,
+}
+
+const DEFAULT_FULFILLMENT_LINE_DROPDOWN_SORT: Record<FulfillmentLineColumnKey, FulfillmentLineDropdownSortMode> = {
+  line: 'id',
+  'item-id': 'id',
+  description: 'label',
+  'ordered-qty': 'id',
+  'fulfilled-qty': 'id',
+  'open-qty': 'id',
+  notes: 'label',
+}
+
 export function defaultFulfillmentDetailCustomization(): FulfillmentDetailCustomizationConfig {
   return {
     formColumns: 3,
-    sections: ['Customer', 'Fulfillment Details'],
+    sections: [
+      'Document Identity',
+      'Source Context',
+      'Fulfillment Terms',
+      'Commercial Context',
+      'Record Keys',
+      'System Dates',
+    ],
     sectionRows: {
-      Customer: 1,
-      'Fulfillment Details': 4,
+      'Document Identity': 1,
+      'Source Context': 1,
+      'Fulfillment Terms': 1,
+      'Commercial Context': 1,
+      'Record Keys': 1,
+      'System Dates': 1,
     },
     fields: {
-      customerName: { visible: true, section: 'Customer', order: 0, column: 1 },
-      customerNumber: { visible: true, section: 'Customer', order: 0, column: 2 },
-      id: { visible: true, section: 'Fulfillment Details', order: 0, column: 1 },
-      number: { visible: true, section: 'Fulfillment Details', order: 0, column: 2 },
-      salesOrderId: { visible: true, section: 'Fulfillment Details', order: 0, column: 3 },
-      quoteId: { visible: true, section: 'Fulfillment Details', order: 1, column: 1 },
-      opportunityId: { visible: true, section: 'Fulfillment Details', order: 1, column: 2 },
-      status: { visible: true, section: 'Fulfillment Details', order: 1, column: 3 },
-      subsidiaryId: { visible: true, section: 'Fulfillment Details', order: 2, column: 1 },
-      currencyId: { visible: true, section: 'Fulfillment Details', order: 2, column: 2 },
-      date: { visible: true, section: 'Fulfillment Details', order: 2, column: 3 },
-      notes: { visible: true, section: 'Fulfillment Details', order: 3, column: 1 },
-      createdAt: { visible: true, section: 'Fulfillment Details', order: 3, column: 2 },
-      updatedAt: { visible: true, section: 'Fulfillment Details', order: 3, column: 3 },
+      number: { visible: true, section: 'Document Identity', order: 0, column: 1 },
+      customerNumber: { visible: true, section: 'Document Identity', order: 0, column: 2 },
+      customerName: { visible: true, section: 'Document Identity', order: 0, column: 3 },
+      salesOrderId: { visible: true, section: 'Source Context', order: 0, column: 1 },
+      quoteId: { visible: true, section: 'Source Context', order: 0, column: 2 },
+      opportunityId: { visible: true, section: 'Source Context', order: 0, column: 3 },
+      status: { visible: true, section: 'Fulfillment Terms', order: 0, column: 1 },
+      date: { visible: true, section: 'Fulfillment Terms', order: 0, column: 2 },
+      notes: { visible: true, section: 'Fulfillment Terms', order: 0, column: 3 },
+      subsidiaryId: { visible: true, section: 'Commercial Context', order: 0, column: 1 },
+      currencyId: { visible: true, section: 'Commercial Context', order: 0, column: 2 },
+      id: { visible: true, section: 'Record Keys', order: 0, column: 1 },
+      createdAt: { visible: true, section: 'System Dates', order: 0, column: 1 },
+      updatedAt: { visible: true, section: 'System Dates', order: 0, column: 2 },
+    },
+    referenceLayouts: [buildDefaultTransactionReferenceLayout(FULFILLMENT_REFERENCE_SOURCES, 'salesOrder')],
+    lineSettings: {
+      fontSize: 'sm',
     },
     lineColumns: Object.fromEntries(
-      FULFILLMENT_LINE_COLUMNS.map((column, index) => [column.id, { visible: true, order: index }]),
+      FULFILLMENT_LINE_COLUMNS.map((column, index) => [
+        column.id,
+        {
+          visible: true,
+          order: index,
+          widthMode: DEFAULT_FULFILLMENT_LINE_WIDTHS[column.id],
+          editDisplay: DEFAULT_FULFILLMENT_LINE_EDIT_DISPLAY[column.id],
+          viewDisplay: DEFAULT_FULFILLMENT_LINE_VIEW_DISPLAY[column.id],
+          dropdownDisplay: DEFAULT_FULFILLMENT_LINE_DROPDOWN_DISPLAY[column.id],
+          dropdownSort: DEFAULT_FULFILLMENT_LINE_DROPDOWN_SORT[column.id],
+        },
+      ]),
     ) as FulfillmentDetailCustomizationConfig['lineColumns'],
     statCards: [
       { id: 'fulfillment-status', metric: 'status', visible: true, order: 0 },

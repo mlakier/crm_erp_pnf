@@ -10,12 +10,15 @@ import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
 import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSection'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import SystemNotesSection from '@/components/SystemNotesSection'
-import { RecordDetailStatCard } from '@/components/RecordDetailPanels'
+import TransactionStatsRow from '@/components/TransactionStatsRow'
 import { fmtCurrency, normalizePhone, toNumericValue } from '@/lib/format'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
 import CustomerDetailCustomizeMode from '@/components/CustomerDetailCustomizeMode'
 import { loadCustomerFormCustomization } from '@/lib/customer-form-customization-store'
-import { CUSTOMER_FORM_FIELDS, type CustomerFormFieldKey } from '@/lib/customer-form-customization'
+import {
+  CUSTOMER_FORM_FIELDS,
+  type CustomerFormFieldKey,
+} from '@/lib/customer-form-customization'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
 import { loadFormRequirements } from '@/lib/form-requirements-store'
 import { loadListOptionsForSource } from '@/lib/list-source'
@@ -149,6 +152,18 @@ export default async function CustomerDetailPage({
   }
 
   const customizeFields = buildCustomizePreviewFields(CUSTOMER_FORM_FIELDS, fieldDefinitions)
+  const statPreviewCards = [
+    { id: 'contacts', label: 'Contacts', value: customer.contacts.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+    { id: 'opportunities', label: 'Opportunities', value: customer.opportunities.length, accent: 'teal', cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
+    { id: 'pipelineValue', label: 'Pipeline Value', value: fmtCurrency(pipelineValue, undefined, moneySettings), accent: 'green', cardTone: 'green', valueTone: 'green', supportsColorized: true, supportsLink: false },
+    { id: 'status', label: 'Status', value: customer.inactive ? 'Inactive' : 'Active', cardTone: customer.inactive ? 'red' : 'green', valueTone: customer.inactive ? 'red' : 'green', supportsColorized: true, supportsLink: false },
+  ]
+  const statDefinitions = [
+    { id: 'contacts', label: 'Contacts', getValue: () => customer.contacts.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
+    { id: 'opportunities', label: 'Opportunities', getValue: () => customer.opportunities.length, accent: 'teal' as const, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
+    { id: 'pipelineValue', label: 'Pipeline Value', getValue: () => fmtCurrency(pipelineValue, undefined, moneySettings), accent: 'green' as const, getCardTone: () => 'green' as const, getValueTone: () => 'green' as const },
+    { id: 'status', label: 'Status', getValue: () => (customer.inactive ? 'Inactive' : 'Active'), getCardTone: () => (customer.inactive ? 'red' : 'green') as const, getValueTone: () => (customer.inactive ? 'red' : 'green') as const },
+  ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: CUSTOMER_FORM_FIELDS,
     layout: formCustomization,
@@ -214,6 +229,16 @@ export default async function CustomerDetailPage({
         </>
       }
     >
+        {!isCustomizing ? (
+          <div className="mb-8">
+            <TransactionStatsRow
+              record={customer}
+              stats={statDefinitions}
+              visibleStatCards={formCustomization.statCards as Array<{ id: string; metric: string; visible: boolean; order: number; size?: 'sm' | 'md' | 'lg'; colorized?: boolean; linked?: boolean }> | undefined}
+            />
+          </div>
+        ) : null}
+
         {isCustomizing ? (
           <CustomerDetailCustomizeMode
             detailHref={detailHref}
@@ -221,6 +246,7 @@ export default async function CustomerDetailPage({
             initialRequirements={{ ...formRequirements.customerCreate }}
             fields={customizeFields}
             sectionDescriptions={sectionDescriptions}
+            statPreviewCards={statPreviewCards}
           />
         ) : (
           <InlineRecordDetails
@@ -234,87 +260,85 @@ export default async function CustomerDetailPage({
           />
         )}
 
-        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} /> : null}
+        {!isCustomizing ? (
+          <>
+            <MasterDataSystemInfoSection info={systemInfo} internalId={customer.id} />
 
-        <div className="mb-8 grid gap-4 sm:grid-cols-3">
-          <RecordDetailStatCard label="Contacts" value={customer.contacts.length} />
-          <RecordDetailStatCard label="Opportunities" value={customer.opportunities.length} />
-          <RecordDetailStatCard label="Pipeline value" value={fmtCurrency(pipelineValue, undefined, moneySettings)} accent />
-        </div>
+            <CustomerContactsSection
+              customerId={customer.id}
+              userId={customer.userId}
+              contacts={customer.contacts.map((contact) => ({
+                id: contact.id,
+                contactNumber: contact.contactNumber,
+                firstName: contact.firstName,
+                lastName: contact.lastName,
+                email: contact.email,
+                phone: contact.phone,
+                position: contact.position,
+                isPrimaryForCustomer: contact.isPrimaryForCustomer,
+                receivesQuotesSalesOrders: contact.receivesQuotesSalesOrders,
+                receivesInvoices: contact.receivesInvoices,
+                receivesInvoiceCc: contact.receivesInvoiceCc,
+              }))}
+            />
 
-        <CustomerContactsSection
-          customerId={customer.id}
-          userId={customer.userId}
-          contacts={customer.contacts.map((contact) => ({
-            id: contact.id,
-            contactNumber: contact.contactNumber,
-            firstName: contact.firstName,
-            lastName: contact.lastName,
-            email: contact.email,
-            phone: contact.phone,
-            position: contact.position,
-            isPrimaryForCustomer: contact.isPrimaryForCustomer,
-            receivesQuotesSalesOrders: contact.receivesQuotesSalesOrders,
-            receivesInvoices: contact.receivesInvoices,
-            receivesInvoiceCc: contact.receivesInvoiceCc,
-          }))}
-        />
-
-        <CustomerRelatedDocs
-          opportunities={customer.opportunities.map((opportunity) => ({
-            id: opportunity.id,
-            name: opportunity.name,
-            stage: opportunity.stage,
-            amount: toNumericValue(opportunity.amount, 0),
-            closeDate: opportunity.closeDate ? opportunity.closeDate.toISOString() : null,
-          }))}
-          quotes={customer.quotes.map((quote) => ({
-            id: quote.id,
-            number: quote.number,
-            status: quote.status,
-            total: toNumericValue(quote.total, 0),
-            validUntil: quote.validUntil ? quote.validUntil.toISOString() : null,
-            createdAt: quote.createdAt.toISOString(),
-          }))}
-          salesOrders={customer.salesOrders.map((salesOrder) => ({
-            id: salesOrder.id,
-            number: salesOrder.number,
-            status: salesOrder.status,
-            total: toNumericValue(salesOrder.total, 0),
-            createdAt: salesOrder.createdAt.toISOString(),
-          }))}
-          fulfillments={customer.salesOrders.flatMap((salesOrder) =>
-            salesOrder.fulfillments.map((fulfillment) => ({
-              id: fulfillment.id,
-              number: fulfillment.number,
-              status: fulfillment.status,
-              date: fulfillment.date.toISOString(),
-              notes: fulfillment.notes,
-              salesOrderNumber: salesOrder.number,
-            }))
-          )}
-          invoices={customer.invoices.map((invoice) => ({
-            id: invoice.id,
-            number: invoice.number,
-            status: invoice.status,
-            total: toNumericValue(invoice.total, 0),
-            dueDate: invoice.dueDate ? invoice.dueDate.toISOString() : null,
-            paidDate: invoice.paidDate ? invoice.paidDate.toISOString() : null,
-            createdAt: invoice.createdAt.toISOString(),
-          }))}
-          invoiceReceipts={customer.invoices.flatMap((invoice) =>
-            invoice.cashReceipts.map((receipt) => ({
-              id: receipt.id,
-              number: receipt.number,
-              amount: toNumericValue(receipt.amount, 0),
-              date: receipt.date.toISOString(),
-              method: receipt.method,
-              reference: receipt.reference,
-              invoiceNumber: invoice.number,
-            }))
-          )}
-        />
-        <SystemNotesSection notes={systemNotes} />
+            <CustomerRelatedDocs
+              opportunities={customer.opportunities.map((opportunity) => ({
+                id: opportunity.id,
+                name: opportunity.name,
+                stage: opportunity.stage,
+                amount: toNumericValue(opportunity.amount, 0),
+                closeDate: opportunity.closeDate ? opportunity.closeDate.toISOString() : null,
+              }))}
+              quotes={customer.quotes.map((quote) => ({
+                id: quote.id,
+                number: quote.number,
+                status: quote.status,
+                total: toNumericValue(quote.total, 0),
+                validUntil: quote.validUntil ? quote.validUntil.toISOString() : null,
+                createdAt: quote.createdAt.toISOString(),
+              }))}
+              salesOrders={customer.salesOrders.map((salesOrder) => ({
+                id: salesOrder.id,
+                number: salesOrder.number,
+                status: salesOrder.status,
+                total: toNumericValue(salesOrder.total, 0),
+                createdAt: salesOrder.createdAt.toISOString(),
+              }))}
+              fulfillments={customer.salesOrders.flatMap((salesOrder) =>
+                salesOrder.fulfillments.map((fulfillment) => ({
+                  id: fulfillment.id,
+                  number: fulfillment.number,
+                  status: fulfillment.status,
+                  date: fulfillment.date.toISOString(),
+                  notes: fulfillment.notes,
+                  salesOrderNumber: salesOrder.number,
+                }))
+              )}
+              invoices={customer.invoices.map((invoice) => ({
+                id: invoice.id,
+                number: invoice.number,
+                status: invoice.status,
+                total: toNumericValue(invoice.total, 0),
+                dueDate: invoice.dueDate ? invoice.dueDate.toISOString() : null,
+                paidDate: invoice.paidDate ? invoice.paidDate.toISOString() : null,
+                createdAt: invoice.createdAt.toISOString(),
+              }))}
+              invoiceReceipts={customer.invoices.flatMap((invoice) =>
+                invoice.cashReceipts.map((receipt) => ({
+                  id: receipt.id,
+                  number: receipt.number,
+                  amount: toNumericValue(receipt.amount, 0),
+                  date: receipt.date.toISOString(),
+                  method: receipt.method,
+                  reference: receipt.reference,
+                  invoiceNumber: invoice.number,
+                }))
+              )}
+            />
+            <SystemNotesSection notes={systemNotes} />
+          </>
+        ) : null}
     </RecordDetailPageShell>
   )
 }

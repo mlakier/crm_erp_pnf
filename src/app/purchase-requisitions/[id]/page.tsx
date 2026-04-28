@@ -1,31 +1,29 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { fmtCurrency, fmtDocumentDate, fmtPhone, toNumericValue } from '@/lib/format'
+import { fmtCurrency, fmtDocumentDate, toNumericValue } from '@/lib/format'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
-import PurchaseOrderHeaderSections, {
-  type PurchaseOrderHeaderField,
-} from '@/components/PurchaseOrderHeaderSections'
+import TransactionHeaderSections, {
+  type TransactionHeaderField,
+} from '@/components/TransactionHeaderSections'
 import PurchaseRequisitionDetailCustomizeMode from '@/components/PurchaseRequisitionDetailCustomizeMode'
+import PurchaseRequisitionLineItemsSection from '@/components/PurchaseRequisitionLineItemsSection'
 import PurchaseRequisitionRelatedDocuments from '@/components/PurchaseRequisitionRelatedDocuments'
+import CommunicationsSection from '@/components/CommunicationsSection'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
-import {
-  RecordDetailCell,
-  RecordDetailEmptyState,
-  RecordDetailHeaderCell,
-  RecordDetailSection,
-} from '@/components/RecordDetailPanels'
-import RequisitionLineItemForm from '@/components/RequisitionLineItemForm'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
+import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import DeleteButton from '@/components/DeleteButton'
 import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
 import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
 import TransactionActionStack from '@/components/TransactionActionStack'
-import { parseFieldChangeSummary } from '@/lib/activity'
+import { parseCommunicationSummary, parseFieldChangeSummary } from '@/lib/activity'
 import {
   PURCHASE_REQUISITION_DETAIL_FIELDS,
+  PURCHASE_REQUISITION_LINE_COLUMNS,
+  PURCHASE_REQUISITION_REFERENCE_SOURCES,
   type PurchaseRequisitionDetailFieldKey,
 } from '@/lib/purchase-requisitions-detail-customization'
 import { loadPurchaseRequisitionDetailCustomization } from '@/lib/purchase-requisitions-detail-customization-store'
@@ -34,9 +32,16 @@ import {
   buildConfiguredTransactionSections,
   buildTransactionCustomizePreviewFields,
   buildTransactionExportHeaderFields,
+  getOrderedVisibleTransactionLineColumns,
 } from '@/lib/transaction-detail-helpers'
+import {
+  buildLinkedReferenceFieldDefinitions,
+  buildLinkedReferencePreviewSources,
+} from '@/lib/linked-record-reference-catalogs'
+import { buildReceiptDisplayNumberMap } from '@/lib/receipt-display-number'
+import { buildTransactionCommunicationComposePayload } from '@/lib/transaction-communications'
 
-type PurchaseRequisitionHeaderField = PurchaseOrderHeaderField & { key: PurchaseRequisitionDetailFieldKey }
+type PurchaseRequisitionHeaderField = TransactionHeaderField & { key: PurchaseRequisitionDetailFieldKey }
 
 const REQUISITION_STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
@@ -107,12 +112,16 @@ export default async function PurchaseRequisitionDetailPage({
             },
           },
           purchaseOrder: {
-            select: {
-              id: true,
-              number: true,
-              status: true,
-              total: true,
-              createdAt: true,
+            include: {
+              receipts: { orderBy: { date: 'desc' } },
+              bills: {
+                orderBy: { date: 'desc' },
+                include: {
+                  billPayments: {
+                    orderBy: { date: 'desc' },
+                  },
+                },
+              },
             },
           },
         },
@@ -158,6 +167,12 @@ export default async function PurchaseRequisitionDetailPage({
   if (!req) notFound()
 
   const detailHref = `/purchase-requisitions/${req.id}`
+  const receiptNumberMap = buildReceiptDisplayNumberMap(
+    await prisma.receipt.findMany({
+      select: { id: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    }),
+  )
   const activityUserIds = Array.from(
     new Set(activities.map((activity) => activity.userId).filter(Boolean))
   ) as string[]
@@ -201,6 +216,23 @@ export default async function PurchaseRequisitionDetailPage({
       }
     })
     .filter((note): note is Exclude<typeof note, null> => Boolean(note))
+  const communications = activities
+    .map((activity) => {
+      const parsed = parseCommunicationSummary(activity.summary)
+      if (!parsed) return null
+
+      return {
+        id: activity.id,
+        date: fmtDocumentDate(activity.createdAt, moneySettings),
+        direction: parsed.direction || '-',
+        channel: parsed.channel || '-',
+        subject: parsed.subject || '-',
+        from: parsed.from || '-',
+        to: parsed.to || '-',
+        status: parsed.status || '-',
+      }
+    })
+    .filter((communication): communication is Exclude<typeof communication, null> => Boolean(communication))
 
   const vendorOptions = vendors.map((vendor) => ({
     value: vendor.id,
@@ -231,99 +263,15 @@ export default async function PurchaseRequisitionDetailPage({
     notes: line.notes ?? null,
   }))
 
+  const orderedVisibleLineColumns = getOrderedVisibleTransactionLineColumns(
+    PURCHASE_REQUISITION_LINE_COLUMNS,
+    customization
+  )
+
   const headerFieldDefinitions: Record<
     PurchaseRequisitionDetailFieldKey,
     PurchaseRequisitionHeaderField
   > = {
-    vendorName: {
-      key: 'vendorName',
-      label: 'Vendor Name',
-      value: req.vendor?.name ?? '',
-      displayValue: req.vendor?.name ?? '-',
-      helpText: 'Display name from the linked vendor record.',
-      fieldType: 'text',
-      sourceText: 'Vendors master data',
-    },
-    vendorNumber: {
-      key: 'vendorNumber',
-      label: 'Vendor #',
-      value: req.vendor?.vendorNumber ?? '',
-      displayValue: req.vendor?.vendorNumber ?? '-',
-      helpText: 'Internal vendor identifier from the linked vendor record.',
-      fieldType: 'text',
-      sourceText: 'Vendors master data',
-    },
-    vendorEmail: {
-      key: 'vendorEmail',
-      label: 'Email',
-      value: req.vendor?.email ?? '',
-      displayValue: req.vendor?.email ?? '-',
-      helpText: 'Primary vendor email address.',
-      fieldType: 'email',
-      sourceText: 'Vendors master data',
-    },
-    vendorPhone: {
-      key: 'vendorPhone',
-      label: 'Phone',
-      value: req.vendor?.phone ?? '',
-      displayValue: req.vendor?.phone ? fmtPhone(req.vendor.phone) : '-',
-      helpText: 'Primary vendor phone number.',
-      fieldType: 'text',
-      sourceText: 'Vendors master data',
-    },
-    vendorTaxId: {
-      key: 'vendorTaxId',
-      label: 'Tax ID',
-      value: req.vendor?.taxId ?? '',
-      displayValue: req.vendor?.taxId ?? '-',
-      helpText: 'Vendor tax registration or identification number.',
-      fieldType: 'text',
-      sourceText: 'Vendors master data',
-    },
-    vendorAddress: {
-      key: 'vendorAddress',
-      label: 'Address',
-      value: req.vendor?.address ?? '',
-      displayValue: req.vendor?.address ?? '-',
-      helpText: 'Mailing or remittance address from the linked vendor record.',
-      fieldType: 'text',
-      sourceText: 'Vendors master data',
-    },
-    vendorPrimarySubsidiary: {
-      key: 'vendorPrimarySubsidiary',
-      label: 'Primary Subsidiary',
-      value: req.vendor?.subsidiary
-        ? `${req.vendor.subsidiary.subsidiaryId} - ${req.vendor.subsidiary.name}`
-        : '',
-      displayValue: req.vendor?.subsidiary
-        ? `${req.vendor.subsidiary.subsidiaryId} - ${req.vendor.subsidiary.name}`
-        : '-',
-      helpText: 'Default subsidiary context from the linked vendor record.',
-      fieldType: 'list',
-      sourceText: 'Vendors master data',
-    },
-    vendorPrimaryCurrency: {
-      key: 'vendorPrimaryCurrency',
-      label: 'Primary Currency',
-      value: req.vendor?.currency
-        ? `${req.vendor.currency.code ?? req.vendor.currency.currencyId} - ${req.vendor.currency.name}`
-        : '',
-      displayValue: req.vendor?.currency
-        ? `${req.vendor.currency.code ?? req.vendor.currency.currencyId} - ${req.vendor.currency.name}`
-        : '-',
-      helpText: 'Default transaction currency from the linked vendor record.',
-      fieldType: 'list',
-      sourceText: 'Vendors master data',
-    },
-    vendorInactive: {
-      key: 'vendorInactive',
-      label: 'Inactive',
-      value: req.vendor ? (req.vendor.inactive ? 'Yes' : 'No') : '',
-      displayValue: req.vendor ? (req.vendor.inactive ? 'Yes' : 'No') : '-',
-      helpText: 'Indicates whether the linked vendor is inactive for new activity.',
-      fieldType: 'checkbox',
-      sourceText: 'Vendors master data',
-    },
     id: {
       key: 'id',
       label: 'DB Id',
@@ -424,8 +372,8 @@ export default async function PurchaseRequisitionDetailPage({
       helpText: 'User who approved the requisition based on the approval activity trail.',
       fieldType: 'text',
       sourceText: 'System Notes / activity history',
-      subsectionTitle: 'Document Identity',
-      subsectionDescription: 'Document numbering, source context, and ownership for this requisition.',
+      subsectionTitle: 'Workflow & Timing',
+      subsectionDescription: 'Current workflow status, urgency, approval context, and required-by timing.',
     },
     title: {
       key: 'title',
@@ -436,8 +384,8 @@ export default async function PurchaseRequisitionDetailPage({
       type: 'text',
       helpText: 'Brief internal title for the requisition.',
       fieldType: 'text',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Request Details',
+      subsectionDescription: 'Business purpose, summary, and internal notes for the requisition request.',
     },
     description: {
       key: 'description',
@@ -448,8 +396,8 @@ export default async function PurchaseRequisitionDetailPage({
       type: 'text',
       helpText: 'Header description for the requisition.',
       fieldType: 'text',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Request Details',
+      subsectionDescription: 'Business purpose, summary, and internal notes for the requisition request.',
     },
     status: {
       key: 'status',
@@ -461,8 +409,8 @@ export default async function PurchaseRequisitionDetailPage({
       helpText: 'Current workflow state of the requisition.',
       fieldType: 'list',
       sourceText: 'System purchase requisition statuses',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Workflow & Timing',
+      subsectionDescription: 'Current workflow status, urgency, approval context, and required-by timing.',
     },
     priority: {
       key: 'priority',
@@ -474,8 +422,8 @@ export default async function PurchaseRequisitionDetailPage({
       helpText: 'Urgency level for the requested spend.',
       fieldType: 'list',
       sourceText: 'System purchase requisition priorities',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Workflow & Timing',
+      subsectionDescription: 'Current workflow status, urgency, approval context, and required-by timing.',
     },
     neededByDate: {
       key: 'neededByDate',
@@ -486,8 +434,8 @@ export default async function PurchaseRequisitionDetailPage({
       type: 'text',
       helpText: 'Date the requested goods or services are needed.',
       fieldType: 'date',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Workflow & Timing',
+      subsectionDescription: 'Current workflow status, urgency, approval context, and required-by timing.',
     },
     departmentId: {
       key: 'departmentId',
@@ -500,8 +448,8 @@ export default async function PurchaseRequisitionDetailPage({
       helpText: 'Department requesting or funding the spend.',
       fieldType: 'list',
       sourceText: 'Departments master data',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Sourcing & Financials',
+      subsectionDescription: 'Department, vendor, subsidiary, currency, and financial context for the request.',
     },
     vendorId: {
       key: 'vendorId',
@@ -514,8 +462,8 @@ export default async function PurchaseRequisitionDetailPage({
       helpText: 'Preferred vendor linked to this requisition.',
       fieldType: 'list',
       sourceText: 'Vendors master data',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Sourcing & Financials',
+      subsectionDescription: 'Department, vendor, subsidiary, currency, and financial context for the request.',
     },
     subsidiaryId: {
       key: 'subsidiaryId',
@@ -528,8 +476,8 @@ export default async function PurchaseRequisitionDetailPage({
       helpText: 'Subsidiary that owns the requisition.',
       fieldType: 'list',
       sourceText: 'Subsidiaries master data',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Sourcing & Financials',
+      subsectionDescription: 'Department, vendor, subsidiary, currency, and financial context for the request.',
     },
     currencyId: {
       key: 'currencyId',
@@ -544,8 +492,8 @@ export default async function PurchaseRequisitionDetailPage({
       helpText: 'Transaction currency for the requisition.',
       fieldType: 'list',
       sourceText: 'Currencies master data',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Sourcing & Financials',
+      subsectionDescription: 'Department, vendor, subsidiary, currency, and financial context for the request.',
     },
     total: {
       key: 'total',
@@ -554,8 +502,8 @@ export default async function PurchaseRequisitionDetailPage({
       displayValue: fmtCurrency(req.total, undefined, moneySettings),
       helpText: 'Current document total based on all requisition line amounts.',
       fieldType: 'currency',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Sourcing & Financials',
+      subsectionDescription: 'Department, vendor, subsidiary, currency, and financial context for the request.',
     },
     notes: {
       key: 'notes',
@@ -566,8 +514,8 @@ export default async function PurchaseRequisitionDetailPage({
       type: 'text',
       helpText: 'Internal notes or comments for the requisition.',
       fieldType: 'text',
-      subsectionTitle: 'Commercial Terms',
-      subsectionDescription: 'Procurement controls, routing context, and monetary settings for the requisition.',
+      subsectionTitle: 'Request Details',
+      subsectionDescription: 'Business purpose, summary, and internal notes for the requisition request.',
     },
     createdAt: {
       key: 'createdAt',
@@ -613,13 +561,6 @@ export default async function PurchaseRequisitionDetailPage({
       approvedBy: approvedByLabel,
       neededByDate: req.neededByDate ? fmtDocumentDate(req.neededByDate, moneySettings) : '-',
       total: fmtCurrency(req.total, undefined, moneySettings),
-      vendorPrimarySubsidiary: req.vendor?.subsidiary
-        ? `${req.vendor.subsidiary.subsidiaryId} - ${req.vendor.subsidiary.name}`
-        : '',
-      vendorPrimaryCurrency: req.vendor?.currency
-        ? `${req.vendor.currency.code ?? req.vendor.currency.currencyId} - ${req.vendor.currency.name}`
-        : '',
-      vendorInactive: req.vendor ? (req.vendor.inactive ? 'Yes' : 'No') : '',
       vendorId: req.vendor ? `${req.vendor.vendorNumber ?? 'VENDOR'} - ${req.vendor.name}` : '',
       departmentId: req.department ? `${req.department.departmentId} - ${req.department.name}` : '',
       subsidiaryId: req.subsidiary ? `${req.subsidiary.subsidiaryId} - ${req.subsidiary.name}` : '',
@@ -630,6 +571,88 @@ export default async function PurchaseRequisitionDetailPage({
       updatedAt: fmtDocumentDate(req.updatedAt, moneySettings),
     },
   })
+
+  const statsRecord = {
+    total: toNumericValue(req.total, 0),
+    neededByDate: req.neededByDate,
+    lineCount: req.lineItems.length,
+    statusLabel: formatStatus(req.status),
+    moneySettings,
+  } as const
+  const statPreviewCards = purchaseRequisitionPageConfig.stats.map((stat) => ({
+    id: stat.id,
+    label: stat.label,
+    value: stat.getValue(statsRecord),
+    href: stat.getHref?.(statsRecord) ?? null,
+    accent: stat.accent,
+    valueTone: stat.getValueTone?.(statsRecord),
+    cardTone: stat.getCardTone?.(statsRecord),
+    supportsColorized: Boolean(stat.accent || stat.getValueTone || stat.getCardTone),
+    supportsLink: Boolean(stat.getHref),
+  }))
+
+  const referenceFieldDefinitions = buildLinkedReferenceFieldDefinitions(
+    PURCHASE_REQUISITION_REFERENCE_SOURCES,
+    {
+      vendor: req.vendor,
+      department: req.department,
+      owner: req.user,
+      subsidiary: req.subsidiary,
+      currency: req.currency,
+    },
+    {
+      vendor: req.vendor ? `/vendors/${req.vendor.id}` : null,
+      department: req.department ? `/departments/${req.department.id}` : null,
+      owner: req.user ? `/users/${req.user.id}` : null,
+      subsidiary: req.subsidiary ? `/subsidiaries/${req.subsidiary.id}` : null,
+      currency: req.currency ? `/currencies/${req.currency.id}` : null,
+    },
+  )
+  const allFieldDefinitions = {
+    ...headerFieldDefinitions,
+    ...referenceFieldDefinitions,
+  }
+  const referenceSourceDefinitions = buildLinkedReferencePreviewSources(
+    PURCHASE_REQUISITION_REFERENCE_SOURCES,
+    {
+      vendor: req.vendor,
+      department: req.department,
+      owner: req.user,
+      subsidiary: req.subsidiary,
+      currency: req.currency,
+    },
+  )
+  const referenceSections = (customization.referenceLayouts ?? [])
+    .map((referenceLayout) => {
+      const source = PURCHASE_REQUISITION_REFERENCE_SOURCES.find((entry) => entry.id === referenceLayout.referenceId)
+      if (!source) return null
+      const fields = source.fields
+        .filter((field) => referenceLayout.fields[field.id]?.visible)
+        .sort((left, right) => {
+          const leftConfig = referenceLayout.fields[left.id]
+          const rightConfig = referenceLayout.fields[right.id]
+          if (!leftConfig || !rightConfig) return 0
+          if (leftConfig.column !== rightConfig.column) return leftConfig.column - rightConfig.column
+          return leftConfig.order - rightConfig.order
+        })
+        .map((field) => ({
+          ...allFieldDefinitions[field.id],
+          column: referenceLayout.fields[field.id]?.column ?? 1,
+          order: referenceLayout.fields[field.id]?.order ?? 0,
+        }))
+
+      if (fields.length === 0) return null
+
+      return {
+        title: source.label,
+        description: source.description,
+        columns: referenceLayout.formColumns,
+        rows: Math.max(1, ...fields.map((field) => Math.max(1, (field.order ?? 0) + 1))),
+        fields,
+      }
+    })
+    .filter((section): section is { title: string; description: string; columns: number; rows: number; fields: TransactionHeaderField[] } => Boolean(section))
+  const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
 
   const exportHeaderFields = buildTransactionExportHeaderFields<
     PurchaseRequisitionDetailFieldKey,
@@ -669,9 +692,20 @@ export default async function PurchaseRequisitionDetailPage({
             formId={`inline-record-form-${req.id}`}
             recordId={req.id}
             primaryActions={
-              !isEditing ? (
+              isEditing ? (
+                <Link
+                  href={`${detailHref}?customize=1`}
+                  className="rounded-md border px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+                >
+                  Customize
+                </Link>
+              ) : (
                 <>
-                  <MasterDataDetailCreateMenu newHref="/purchase-requisitions/new" />
+                  <MasterDataDetailCreateMenu
+                    newHref="/purchase-requisitions/new"
+                    duplicateHref={`/purchase-requisitions/new?duplicateFrom=${encodeURIComponent(req.id)}`}
+                  />
                   <MasterDataDetailExportMenu
                     title={req.number}
                     fileName={`purchase-requisition-${req.number}`}
@@ -703,24 +737,22 @@ export default async function PurchaseRequisitionDetailPage({
                   </Link>
                   <DeleteButton resource="purchase-requisitions" id={req.id} />
                 </>
-              ) : null
+              )
             }
           />
         )
       }
     >
       <TransactionDetailFrame
+        showFooterSections={!isCustomizing}
         stats={
-          <TransactionStatsRow
-            record={{
-              total: toNumericValue(req.total, 0),
-              neededByDate: req.neededByDate,
-              lineCount: req.lineItems.length,
-              statusLabel: formatStatus(req.status),
-              moneySettings,
-            }}
-            stats={purchaseRequisitionPageConfig.stats}
-          />
+          isCustomizing ? null : (
+            <TransactionStatsRow
+              record={statsRecord}
+              stats={purchaseRequisitionPageConfig.stats}
+              visibleStatCards={customization.statCards}
+            />
+          )
         }
         header={
           isCustomizing ? (
@@ -729,74 +761,97 @@ export default async function PurchaseRequisitionDetailPage({
                 detailHref={detailHref}
                 initialLayout={customization}
                 fields={customizeFields}
+                referenceSourceDefinitions={referenceSourceDefinitions}
                 sectionDescriptions={purchaseRequisitionPageConfig.sectionDescriptions}
+                statPreviewCards={statPreviewCards}
               />
             </div>
           ) : (
-            <PurchaseOrderHeaderSections
-              purchaseOrderId={req.id}
-              editing={isEditing}
-              sections={headerSections}
-              columns={customization.formColumns}
-              updateUrl={`/api/purchase-requisitions?id=${encodeURIComponent(req.id)}`}
-            />
+            <div className="space-y-6">
+              {referenceSections.length > 0 ? (
+                <TransactionHeaderSections
+                  editing={false}
+                  sections={referenceSections.map((section) => ({
+                    title: section.title,
+                    description: section.description,
+                    rows: section.rows,
+                    fields: section.fields,
+                  }))}
+                  columns={referenceColumns}
+                  containerTitle="Reference Details"
+                  containerDescription="Expanded context from linked records on this purchase requisition."
+                  showSubsections={false}
+                />
+              ) : null}
+              <TransactionHeaderSections
+                purchaseOrderId={req.id}
+                editing={isEditing}
+                sections={headerSections}
+                columns={customization.formColumns}
+                containerTitle="Purchase Requisition Details"
+                containerDescription="Core purchase requisition fields organized into configurable sections."
+                showSubsections={false}
+                updateUrl={`/api/purchase-requisitions?id=${encodeURIComponent(req.id)}`}
+              />
+            </div>
           )
         }
         lineItems={
-          <>
-            <div className="mb-6">
-              <RequisitionLineItemForm
-                requisitionId={req.id}
-                items={items.map((item) => ({
-                  ...item,
-                  listPrice: toNumericValue(item.listPrice, 0),
-                }))}
-              />
-            </div>
-            <RecordDetailSection title="Purchase Requisition Line Items" count={req.lineItems.length}>
-              {req.lineItems.length === 0 ? (
-                <RecordDetailEmptyState message="No requisition lines yet." />
-              ) : (
-                <table className="min-w-full">
-                  <thead>
-                    <tr>
-                      <RecordDetailHeaderCell>Line</RecordDetailHeaderCell>
-                      <RecordDetailHeaderCell>Item Id</RecordDetailHeaderCell>
-                      <RecordDetailHeaderCell>Description</RecordDetailHeaderCell>
-                      <RecordDetailHeaderCell>Qty</RecordDetailHeaderCell>
-                      <RecordDetailHeaderCell>Unit Price</RecordDetailHeaderCell>
-                      <RecordDetailHeaderCell>Line Total</RecordDetailHeaderCell>
-                      <RecordDetailHeaderCell>Notes</RecordDetailHeaderCell>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lineRows.map((line, index) => (
-                      <tr
-                        key={line.id}
-                        id={`req-line-item-${line.id}`}
-                        tabIndex={-1}
-                        style={
-                          index < lineRows.length - 1
-                            ? { borderBottom: '1px solid var(--border-muted)' }
-                            : undefined
-                        }
-                      >
-                        <RecordDetailCell>{line.lineNumber}</RecordDetailCell>
-                        <RecordDetailCell>{line.itemId ?? '-'}</RecordDetailCell>
-                        <RecordDetailCell>{line.description}</RecordDetailCell>
-                        <RecordDetailCell>{line.quantity}</RecordDetailCell>
-                        <RecordDetailCell>{fmtCurrency(line.unitPrice, undefined, moneySettings)}</RecordDetailCell>
-                        <RecordDetailCell>{fmtCurrency(line.lineTotal, undefined, moneySettings)}</RecordDetailCell>
-                        <RecordDetailCell>{line.notes ?? '-'}</RecordDetailCell>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </RecordDetailSection>
-          </>
+          isCustomizing ? null : isEditing ? (
+            <TransactionLineItemsSection
+              editing
+              rows={req.lineItems.map((line, index) => ({
+                id: line.id,
+                displayOrder: index,
+                itemRecordId: line.item?.id ?? null,
+                itemId: line.item?.itemId ?? null,
+                itemName: line.item?.name ?? null,
+                description: line.description,
+                quantity: line.quantity,
+                receivedQuantity: 0,
+                billedQuantity: 0,
+                openQuantity: line.quantity,
+                unitPrice: toNumericValue(line.unitPrice, 0),
+                lineTotal: toNumericValue(line.lineTotal, 0),
+                notes: line.notes ?? '',
+              }))}
+              purchaseOrderId={req.id}
+              userId={req.userId}
+              itemOptions={items.map((item) => ({
+                id: item.id,
+                itemId: item.itemId ?? 'Pending',
+                name: item.name,
+                unitPrice: toNumericValue(item.listPrice, 0),
+                itemDrivenValues: {
+                  description: item.name,
+                  unitPrice: String(toNumericValue(item.listPrice, 0)),
+                },
+              }))}
+              lineColumns={orderedVisibleLineColumns}
+              lineSettings={customization.lineSettings}
+              lineColumnCustomization={customization.lineColumns}
+              lineItemApiBasePath="/api/purchase-requisitions/line-items"
+              deleteResource="purchase-requisitions/line-items"
+              parentIdFieldName="requisitionId"
+              sectionTitle="Purchase Requisition Line Items"
+              tableId="purchase-requisition-line-items"
+              allowAddLines
+            />
+          ) : (
+            <PurchaseRequisitionLineItemsSection
+              requisitionId={req.id}
+              items={items.map((item) => ({
+                ...item,
+                listPrice: toNumericValue(item.listPrice, 0),
+              }))}
+              lineRows={lineRows}
+              moneySettings={moneySettings}
+              lineSettings={customization.lineSettings}
+              lineColumns={customization.lineColumns}
+            />
+          )
         }
-        relatedDocuments={
+        relatedDocuments={isCustomizing ? null : (
           <PurchaseRequisitionRelatedDocuments
             purchaseOrders={
               req.purchaseOrder
@@ -811,10 +866,73 @@ export default async function PurchaseRequisitionDetailPage({
                   ]
                 : []
             }
+            receipts={
+              req.purchaseOrder?.receipts.map((receipt) => ({
+                id: receipt.id,
+                number: receiptNumberMap.get(receipt.id) ?? receipt.id,
+                date: receipt.date,
+                status: receipt.status,
+                quantity: receipt.quantity,
+                notes: receipt.notes ?? null,
+              })) ?? []
+            }
+            bills={
+              req.purchaseOrder?.bills.map((bill) => ({
+                id: bill.id,
+                number: bill.number,
+                date: bill.date,
+                dueDate: bill.dueDate,
+                status: bill.status,
+                total: toNumericValue(bill.total, 0),
+                notes: bill.notes ?? null,
+              })) ?? []
+            }
+            billPayments={
+              req.purchaseOrder?.bills.flatMap((bill) =>
+                bill.billPayments.map((payment) => ({
+                  id: payment.id,
+                  number: payment.number,
+                  date: payment.date,
+                  status: payment.status,
+                  amount: toNumericValue(payment.amount, 0),
+                  reference: payment.reference ?? null,
+                  billNumber: bill.number,
+                })),
+              ) ?? []
+            }
             moneySettings={moneySettings}
           />
-        }
-        systemNotes={<SystemNotesSection notes={systemNotes} />}
+        )}
+        communications={isCustomizing ? null : (
+          <CommunicationsSection
+            rows={communications}
+            compose={buildTransactionCommunicationComposePayload({
+              recordId: req.id,
+              userId: req.userId,
+              number: req.number,
+              counterpartyName: req.vendor?.name ?? 'Vendor',
+              counterpartyEmail: req.vendor?.email ?? null,
+              fromEmail: req.user?.email ?? null,
+              status: formatStatus(req.status),
+              total: fmtCurrency(req.total, undefined, moneySettings),
+              lineItems: req.lineItems.map((line, index) => ({
+                line: index + 1,
+                itemId: line.item?.itemId ?? '-',
+                description: line.description,
+                quantity: line.quantity,
+                receivedQuantity: 0,
+                openQuantity: line.quantity,
+                billedQuantity: 0,
+                unitPrice: toNumericValue(line.unitPrice, 0),
+                lineTotal: toNumericValue(line.lineTotal, 0),
+              })),
+              sendEmailEndpoint: '/api/purchase-requisitions?action=send-email',
+              recordIdFieldName: 'requisitionId',
+              documentLabel: 'Purchase Requisition',
+            })}
+          />
+        )}
+        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
       />
     </RecordDetailPageShell>
   )

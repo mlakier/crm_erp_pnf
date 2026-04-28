@@ -9,12 +9,18 @@ export default function RecordStatusButton({
   status,
   label,
   tone = 'indigo',
+  fieldName = 'status',
+  workflowStep,
+  workflowActionId,
 }: {
   resource: string
   id: string
   status: string
   label: string
   tone?: 'indigo' | 'emerald' | 'blue' | 'amber' | 'red' | 'gray'
+  fieldName?: 'status' | 'stage'
+  workflowStep?: string
+  workflowActionId?: string
 }) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
@@ -37,7 +43,11 @@ export default function RecordStatusButton({
       const response = await fetch(`/api/${resource}?id=${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({
+          [fieldName]: status,
+          workflowStep,
+          workflowActionId,
+        }),
       })
 
       const body = await response.json()

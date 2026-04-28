@@ -1,4 +1,5 @@
 import { getListSourceText, type FieldSourceType } from '@/lib/list-source'
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 export type VendorFormFieldKey =
   | 'vendorNumber'
@@ -33,7 +34,21 @@ export type VendorFormCustomizationConfig = {
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<VendorFormFieldKey, VendorFormFieldCustomization>
+  statCards?: Array<TransactionStatCardSlot<VendorStatCardMetric>>
 }
+
+export type VendorStatCardMetric =
+  | 'contacts'
+  | 'purchaseOrders'
+  | 'totalSpend'
+  | 'openInvoices'
+
+export const VENDOR_STAT_CARDS: Array<{ id: VendorStatCardMetric; label: string }> = [
+  { id: 'contacts', label: 'Contacts' },
+  { id: 'purchaseOrders', label: 'Purchase Orders' },
+  { id: 'totalSpend', label: 'Total Spend' },
+  { id: 'openInvoices', label: 'Open AP Invoices' },
+]
 
 export const VENDOR_FORM_FIELDS: VendorFormFieldMeta[] = [
   { id: 'vendorNumber', label: 'Vendor ID', fieldType: 'text', description: 'System-generated vendor identifier.' },
@@ -111,5 +126,14 @@ export function defaultVendorFormCustomization(): VendorFormCustomizationConfig 
         },
       ])
     ) as Record<VendorFormFieldKey, VendorFormFieldCustomization>,
+    statCards: VENDOR_STAT_CARDS.map((card, index) => ({
+      id: `vendor-stat-${card.id}`,
+      metric: card.id,
+      visible: true,
+      order: index,
+      size: 'md',
+      colorized: true,
+      linked: true,
+    })),
   }
 }

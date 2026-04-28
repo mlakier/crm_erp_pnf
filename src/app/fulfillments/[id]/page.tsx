@@ -1,12 +1,13 @@
 import Link from 'next/link'
+import { connection } from 'next/server'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { fmtDocumentDate } from '@/lib/format'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
-import { loadListValues } from '@/lib/load-list-values'
+import { loadManagedListDetail } from '@/lib/manage-lists'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
-import PurchaseOrderHeaderSections, { type PurchaseOrderHeaderField } from '@/components/PurchaseOrderHeaderSections'
+import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import CommunicationsSection from '@/components/CommunicationsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
@@ -20,6 +21,10 @@ import FulfillmentLineItemsSection from '@/components/FulfillmentLineItemsSectio
 import FulfillmentRelatedDocuments from '@/components/FulfillmentRelatedDocuments'
 import FulfillmentGlImpactSection from '@/components/FulfillmentGlImpactSection'
 import { parseCommunicationSummary, parseFieldChangeSummary } from '@/lib/activity'
+import {
+  buildLinkedReferenceFieldDefinitions,
+  buildLinkedReferencePreviewSources,
+} from '@/lib/linked-record-reference-catalogs'
 import { buildTransactionCommunicationComposePayload } from '@/lib/transaction-communications'
 import {
   buildConfiguredTransactionSections,
@@ -30,29 +35,71 @@ import {
 import {
   FULFILLMENT_DETAIL_FIELDS,
   FULFILLMENT_LINE_COLUMNS,
+  FULFILLMENT_REFERENCE_SOURCES,
   type FulfillmentDetailFieldKey,
   type FulfillmentLineColumnKey,
 } from '@/lib/fulfillment-detail-customization'
 import { loadFulfillmentDetailCustomization } from '@/lib/fulfillment-detail-customization-store'
 import { fulfillmentPageConfig } from '@/lib/transaction-page-configs/fulfillment'
+import {
+  getAvailableWorkflowStatusActions,
+  loadOtcWorkflowRuntime,
+} from '@/lib/otc-workflow-runtime'
+import type { TransactionStatusColorTone } from '@/lib/company-preferences-definitions'
+import type { TransactionVisualTone } from '@/lib/transaction-page-config'
 
 type FulfillmentHeaderField = {
   key: FulfillmentDetailFieldKey
-} & PurchaseOrderHeaderField
+} & TransactionHeaderField
 
 function formatFulfillmentStatus(status: string | null) {
   if (!status) return 'Unknown'
   return status.charAt(0).toUpperCase() + status.slice(1)
 }
 
-function getStatusTone(status: string | null) {
-  const styles: Record<string, { bg: string; color: string }> = {
-    pending: { bg: 'rgba(255,255,255,0.07)', color: 'var(--text-muted)' },
-    packed: { bg: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' },
-    shipped: { bg: 'rgba(34,197,94,0.16)', color: '#86efac' },
-    cancelled: { bg: 'rgba(239,68,68,0.18)', color: '#fca5a5' },
+function getToneStyle(tone: TransactionStatusColorTone) {
+  if (tone === 'gray') {
+    return { bg: 'rgba(148,163,184,0.10)', color: 'var(--text-muted)' }
   }
-  return styles[(status ?? '').toLowerCase()] ?? styles.pending
+  if (tone === 'accent') {
+    return { bg: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }
+  }
+  if (tone === 'teal') {
+    return { bg: 'rgba(20,184,166,0.18)', color: '#5eead4' }
+  }
+  if (tone === 'yellow') {
+    return { bg: 'rgba(245,158,11,0.18)', color: '#fcd34d' }
+  }
+  if (tone === 'orange') {
+    return { bg: 'rgba(249,115,22,0.18)', color: '#fdba74' }
+  }
+  if (tone === 'green') {
+    return { bg: 'rgba(34,197,94,0.16)', color: '#86efac' }
+  }
+  if (tone === 'red') {
+    return { bg: 'rgba(239,68,68,0.18)', color: '#fca5a5' }
+  }
+  if (tone === 'purple') {
+    return { bg: 'rgba(168,85,247,0.18)', color: '#d8b4fe' }
+  }
+  if (tone === 'pink') {
+    return { bg: 'rgba(236,72,153,0.18)', color: '#f9a8d4' }
+  }
+  return { bg: 'rgba(255,255,255,0.07)', color: 'var(--text-muted)' }
+}
+
+function getFulfillmentStatusTone(
+  status: string | null,
+  configuredTones: Record<string, TransactionStatusColorTone>,
+) {
+  return getToneStyle(configuredTones[(status ?? '').toLowerCase()] ?? 'default')
+}
+
+function getFulfillmentStatusToneKey(
+  status: string | null,
+  configuredTones: Record<string, TransactionStatusColorTone>,
+): TransactionVisualTone {
+  return configuredTones[(status ?? '').toLowerCase()] ?? 'default'
 }
 
 export default async function FulfillmentDetailPage({
@@ -62,6 +109,7 @@ export default async function FulfillmentDetailPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ edit?: string; customize?: string }>
 }) {
+  await connection()
   const { id } = await params
   const { edit, customize } = await searchParams
   const isEditing = edit === '1'
@@ -100,8 +148,8 @@ export default async function FulfillmentDetailPage({
           },
         },
       },
-      subsidiary: { select: { id: true, subsidiaryId: true, name: true } },
-      currency: { select: { id: true, currencyId: true, code: true, name: true } },
+      subsidiary: true,
+      currency: true,
       lines: {
         orderBy: { id: 'asc' },
         include: {
@@ -118,7 +166,7 @@ export default async function FulfillmentDetailPage({
 
   if (!fulfillment) notFound()
 
-  const [customization, activities, statusValues, subsidiaries, currencies] = await Promise.all([
+  const [customization, activities, statusListDetail, subsidiaries, currencies, workflow] = await Promise.all([
     loadFulfillmentDetailCustomization(),
     prisma.activity.findMany({
       where: {
@@ -127,7 +175,7 @@ export default async function FulfillmentDetailPage({
       },
       orderBy: { createdAt: 'desc' },
     }),
-    loadListValues('FULFILL-STATUS'),
+    loadManagedListDetail('FULFILL-STATUS'),
     prisma.subsidiary.findMany({
       orderBy: { subsidiaryId: 'asc' },
       select: { id: true, subsidiaryId: true, name: true },
@@ -136,11 +184,15 @@ export default async function FulfillmentDetailPage({
       orderBy: { code: 'asc' },
       select: { id: true, currencyId: true, code: true, name: true },
     }),
+    loadOtcWorkflowRuntime(),
   ])
 
   const detailHref = `/fulfillments/${fulfillment.id}`
-  const statusTone = getStatusTone(fulfillment.status)
-  const statusOptions = statusValues.map((value) => ({ value: value.toLowerCase(), label: value }))
+  const fulfillmentStatusColors = Object.fromEntries(
+    (statusListDetail?.rows ?? []).map((row) => [row.value.toLowerCase(), row.colorTone ?? 'default']),
+  ) as Record<string, TransactionStatusColorTone>
+  const statusTone = getFulfillmentStatusTone(fulfillment.status, fulfillmentStatusColors)
+  const statusOptions = (statusListDetail?.rows ?? []).map((row) => ({ value: row.value.toLowerCase(), label: row.value }))
   const subsidiaryOptions = subsidiaries.map((subsidiary) => ({
     value: subsidiary.id,
     label: `${subsidiary.subsidiaryId} - ${subsidiary.name}`,
@@ -414,6 +466,35 @@ export default async function FulfillmentDetailPage({
       subsectionDescription: 'System-managed timestamps for this fulfillment.',
     },
   }
+  const customerHref = fulfillment.salesOrder?.customer ? `/customers/${fulfillment.salesOrder.customer.id}` : null
+  const salesOrderHref = fulfillment.salesOrder ? `/sales-orders/${fulfillment.salesOrder.id}` : null
+  const quoteHref = fulfillment.salesOrder?.quote ? `/quotes/${fulfillment.salesOrder.quote.id}` : null
+  const opportunityHref = fulfillment.salesOrder?.quote?.opportunity
+    ? `/opportunities/${fulfillment.salesOrder.quote.opportunity.id}`
+    : null
+  const subsidiaryHref = fulfillment.subsidiary ? `/subsidiaries/${fulfillment.subsidiary.id}` : null
+  const currencyHref = fulfillment.currency ? `/currencies/${fulfillment.currency.id}` : null
+
+  headerFieldDefinitions.customerNumber.href = customerHref
+  headerFieldDefinitions.salesOrderId.href = salesOrderHref
+  headerFieldDefinitions.quoteId.href = quoteHref
+  headerFieldDefinitions.opportunityId.href = opportunityHref
+  headerFieldDefinitions.subsidiaryId.href = subsidiaryHref
+  headerFieldDefinitions.currencyId.href = currencyHref
+
+  const referenceFieldDefinitions = buildLinkedReferenceFieldDefinitions(FULFILLMENT_REFERENCE_SOURCES, {
+    salesOrder: fulfillment.salesOrder,
+    subsidiary: fulfillment.subsidiary,
+    currency: fulfillment.currency,
+  }, {
+    salesOrder: salesOrderHref,
+    subsidiary: subsidiaryHref,
+    currency: currencyHref,
+  })
+  const allFieldDefinitions = {
+    ...headerFieldDefinitions,
+    ...referenceFieldDefinitions,
+  }
 
   const headerSections = buildConfiguredTransactionSections({
     fields: FULFILLMENT_DETAIL_FIELDS,
@@ -424,7 +505,7 @@ export default async function FulfillmentDetailPage({
 
   const customizeFields = buildTransactionCustomizePreviewFields({
     fields: FULFILLMENT_DETAIL_FIELDS,
-    fieldDefinitions: headerFieldDefinitions,
+    fieldDefinitions: allFieldDefinitions,
     previewOverrides: {
       quoteId: fulfillment.salesOrder?.quote?.number ?? '',
       opportunityId: fulfillment.salesOrder?.quote?.opportunity?.opportunityNumber ?? '',
@@ -440,11 +521,62 @@ export default async function FulfillmentDetailPage({
   const visibleLineColumnIds = getOrderedVisibleTransactionLineColumns(FULFILLMENT_LINE_COLUMNS, customization).map(
     (column) => column.id,
   ) as FulfillmentLineColumnKey[]
-  const visibleStatIds = customization.statCards
-    .filter((card) => card.visible)
-    .sort((left, right) => left.order - right.order)
-    .map((card) => card.metric)
-
+  const statsRecord = {
+    statusLabel: formatFulfillmentStatus(fulfillment.status),
+    statusTone: getFulfillmentStatusToneKey(fulfillment.status, fulfillmentStatusColors),
+    salesOrderId: fulfillment.salesOrder?.id ?? null,
+    salesOrderNumber: fulfillment.salesOrder?.number ?? null,
+    lineCount: lineRows.length,
+    totalQuantity,
+    date: fulfillment.date,
+    moneySettings,
+  } as const
+  const statPreviewCards = fulfillmentPageConfig.stats.map((stat) => ({
+    id: stat.id,
+    label: stat.label,
+    value: stat.getValue(statsRecord),
+    href: stat.getHref?.(statsRecord) ?? null,
+    accent: stat.accent,
+    valueTone: stat.getValueTone?.(statsRecord),
+    cardTone: stat.getCardTone?.(statsRecord),
+    supportsColorized: Boolean(stat.accent || stat.getValueTone || stat.getCardTone),
+    supportsLink: Boolean(stat.getHref),
+  }))
+  const referenceSourceDefinitions = buildLinkedReferencePreviewSources(FULFILLMENT_REFERENCE_SOURCES, {
+    salesOrder: fulfillment.salesOrder,
+    subsidiary: fulfillment.subsidiary,
+    currency: fulfillment.currency,
+  })
+  const referenceSections = (customization.referenceLayouts ?? [])
+    .map((referenceLayout) => {
+      const source = FULFILLMENT_REFERENCE_SOURCES.find((entry) => entry.id === referenceLayout.referenceId)
+      if (!source) return null
+      const fields = source.fields
+        .filter((field) => referenceLayout.fields[field.id]?.visible)
+        .sort((left, right) => {
+          const leftConfig = referenceLayout.fields[left.id]
+          const rightConfig = referenceLayout.fields[right.id]
+          if (!leftConfig || !rightConfig) return 0
+          if (leftConfig.column !== rightConfig.column) return leftConfig.column - rightConfig.column
+          return leftConfig.order - rightConfig.order
+        })
+        .map((field) => ({
+          ...allFieldDefinitions[field.id],
+          column: referenceLayout.fields[field.id]?.column ?? 1,
+          order: referenceLayout.fields[field.id]?.order ?? 0,
+        }))
+      if (fields.length === 0) return null
+      return {
+        title: source.label,
+        description: source.description,
+        columns: referenceLayout.formColumns,
+        rows: Math.max(1, ...fields.map((field) => Math.max(1, (field.order ?? 0) + 1))),
+        fields,
+      }
+    })
+    .filter((section): section is { title: string; description: string; columns: number; rows: number; fields: TransactionHeaderField[] } => Boolean(section))
+  const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
+  const fulfillmentStatusActions = getAvailableWorkflowStatusActions(workflow, 'fulfillment', fulfillment.status)
   return (
     <RecordDetailPageShell
       backHref={isCustomizing ? detailHref : '/fulfillments'}
@@ -470,11 +602,21 @@ export default async function FulfillmentDetailPage({
       widthClassName="w-full max-w-none"
       headerCenter={
         !isCustomizing && !isEditing ? (
-          <>
-            {fulfillment.status !== 'packed' ? <RecordStatusButton resource="fulfillments" id={fulfillment.id} status="packed" label="Mark Packed" tone="blue" /> : null}
-            {fulfillment.status !== 'shipped' ? <RecordStatusButton resource="fulfillments" id={fulfillment.id} status="shipped" label="Mark Shipped" tone="emerald" /> : null}
-            {fulfillment.status !== 'pending' ? <RecordStatusButton resource="fulfillments" id={fulfillment.id} status="pending" label="Reset Pending" tone="gray" /> : null}
-          </>
+          <div className="flex flex-wrap items-start gap-2">
+            {fulfillmentStatusActions.map((action) => (
+              <RecordStatusButton
+                key={action.id}
+                resource="fulfillments"
+                id={fulfillment.id}
+                status={action.nextValue}
+                label={action.label}
+                tone={action.tone}
+                fieldName={action.fieldName}
+                workflowStep={action.step}
+                workflowActionId={action.id}
+              />
+            ))}
+          </div>
         ) : null
       }
       actions={
@@ -485,7 +627,15 @@ export default async function FulfillmentDetailPage({
             formId={`inline-record-form-${fulfillment.id}`}
             recordId={fulfillment.id}
             primaryActions={
-              !isEditing ? (
+              isEditing ? (
+                <Link
+                  href={`${detailHref}?customize=1`}
+                  className="rounded-md border px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+                >
+                  Customize
+                </Link>
+              ) : (
                 <>
                   <MasterDataDetailCreateMenu
                     newHref="/fulfillments/new"
@@ -512,30 +662,25 @@ export default async function FulfillmentDetailPage({
                     style={{ backgroundColor: 'var(--accent-primary-strong)' }}
                   >
                     Edit
-                  </Link>
+                </Link>
                   <DeleteButton resource="fulfillments" id={fulfillment.id} />
                 </>
-              ) : null
+              )
             }
           />
         )
       }
     >
       <TransactionDetailFrame
+        showFooterSections={!isCustomizing}
         stats={
-          <TransactionStatsRow
-            record={{
-              statusLabel: formatFulfillmentStatus(fulfillment.status),
-              salesOrderId: fulfillment.salesOrder?.id ?? null,
-              salesOrderNumber: fulfillment.salesOrder?.number ?? null,
-              lineCount: lineRows.length,
-              totalQuantity,
-              date: fulfillment.date,
-              moneySettings,
-            }}
-            stats={fulfillmentPageConfig.stats}
-            visibleStatIds={visibleStatIds}
-          />
+          isCustomizing ? null : (
+            <TransactionStatsRow
+              record={statsRecord}
+              stats={fulfillmentPageConfig.stats}
+              visibleStatCards={customization.statCards}
+            />
+          )
         }
         header={
           isCustomizing ? (
@@ -544,38 +689,77 @@ export default async function FulfillmentDetailPage({
                 detailHref={detailHref}
                 initialLayout={customization}
                 fields={customizeFields}
+                referenceSourceDefinitions={referenceSourceDefinitions}
                 sectionDescriptions={fulfillmentPageConfig.sectionDescriptions}
+                statPreviewCards={statPreviewCards}
               />
             </div>
           ) : (
-            <PurchaseOrderHeaderSections
-              purchaseOrderId={fulfillment.id}
-              editing={isEditing}
-              sections={headerSections}
-              columns={customization.formColumns}
-              updateUrl={`/api/fulfillments?id=${encodeURIComponent(fulfillment.id)}`}
-            />
+            <div className="space-y-6">
+              {referenceSections.length > 0 ? (
+                <TransactionHeaderSections
+                  editing={false}
+                  sections={referenceSections.map((section) => ({
+                    title: section.title,
+                    description: section.description,
+                    rows: section.rows,
+                    fields: section.fields,
+                  }))}
+                  columns={referenceColumns}
+                  containerTitle="Reference Details"
+                  containerDescription="Expanded context from linked records on this fulfillment."
+                  showSubsections={false}
+                />
+              ) : null}
+              <TransactionHeaderSections
+                purchaseOrderId={fulfillment.id}
+                editing={isEditing}
+                sections={headerSections}
+                columns={customization.formColumns}
+                containerTitle="Fulfillment Details"
+                containerDescription="Core fulfillment fields organized into configurable sections."
+                showSubsections={false}
+                updateUrl={`/api/fulfillments?id=${encodeURIComponent(fulfillment.id)}`}
+              />
+            </div>
           )
         }
         lineItems={
-          <FulfillmentLineItemsSection
-            rows={lineRows}
-            editing={isEditing}
-            lineOptions={lineOptions}
-            visibleColumnIds={visibleLineColumnIds}
-            allowAddLines
-            remoteConfig={
-              isEditing
-                ? {
-                    fulfillmentId: fulfillment.id,
-                    userId: fulfillment.salesOrder?.userId ?? null,
-                  }
-                : undefined
-            }
-          />
+          isCustomizing ? null : (
+            <FulfillmentLineItemsSection
+              rows={lineRows}
+              editing={isEditing}
+              lineOptions={lineOptions}
+              visibleColumnIds={visibleLineColumnIds}
+              allowAddLines
+              remoteConfig={
+                isEditing
+                  ? {
+                      fulfillmentId: fulfillment.id,
+                      userId: fulfillment.salesOrder?.userId ?? null,
+                    }
+                  : undefined
+              }
+            />
+          )
         }
-        relatedDocuments={
+        relatedDocuments={isCustomizing ? null : (
           <FulfillmentRelatedDocuments
+            opportunities={
+              fulfillment.salesOrder?.quote?.opportunity
+                ? [
+                    {
+                      id: fulfillment.salesOrder.quote.opportunity.id,
+                      number:
+                        fulfillment.salesOrder.quote.opportunity.opportunityNumber ??
+                        fulfillment.salesOrder.quote.opportunity.id,
+                      name: fulfillment.salesOrder.quote.opportunity.name,
+                      status: fulfillment.salesOrder.quote.opportunity.stage,
+                      total: Number(fulfillment.salesOrder.quote.opportunity.amount ?? 0),
+                    },
+                  ]
+                : []
+            }
             quotes={
               fulfillment.salesOrder?.quote
                 ? [
@@ -618,9 +802,9 @@ export default async function FulfillmentDetailPage({
               })),
             )}
           />
-        }
-        supplementarySections={<FulfillmentGlImpactSection rows={[]} />}
-        communications={
+        )}
+        supplementarySections={isCustomizing ? null : <FulfillmentGlImpactSection rows={[]} />}
+        communications={isCustomizing ? null : (
           <CommunicationsSection
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
@@ -648,8 +832,8 @@ export default async function FulfillmentDetailPage({
               documentLabel: 'Fulfillment',
             })}
           />
-        }
-        systemNotes={<SystemNotesSection notes={systemNotes} />}
+        )}
+        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
       />
     </RecordDetailPageShell>
   )

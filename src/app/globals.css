@@ -61,9 +61,14 @@ select {
   color: var(--foreground);
 }
 
-/* Make number-input spinner arrows use dark theme so they blend with dark backgrounds. */
-input[type="number"] {
+/* Ask native browser controls to use the app's dark chrome where supported. */
+input[type="number"],
+input[type="date"] {
   color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.92);
 }
 
 select option,

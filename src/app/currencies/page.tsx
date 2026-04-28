@@ -95,7 +95,9 @@ export default async function CurrenciesPage({
               <MasterDataHeaderCell columnId="name">Name</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="symbol">Symbol</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="decimals">Decimals</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="base">Base</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="inactive">Inactive</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="db-id">DB Id</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="last-modified">Last Modified</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
@@ -103,7 +105,7 @@ export default async function CurrenciesPage({
           </thead>
           <tbody>
             {currencies.length === 0 ? (
-              <MasterDataEmptyStateRow colSpan={9}>No currencies found</MasterDataEmptyStateRow>
+              <MasterDataEmptyStateRow colSpan={11}>No currencies found</MasterDataEmptyStateRow>
             ) : (
               currencies.map((currency, index) => (
                 <tr key={currency.id} style={getMasterDataRowStyle(index, currencies.length)}>
@@ -116,7 +118,9 @@ export default async function CurrenciesPage({
                   <MasterDataMutedCell columnId="name">{currency.name}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="symbol">{currency.symbol ?? '-'}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="decimals">{currency.decimals}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="base">{currency.isBase ? 'Yes' : 'No'}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="inactive">{currency.active ? 'No' : 'Yes'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="db-id">{currency.id}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="created">{formatMasterDataDate(currency.createdAt)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(currency.updatedAt)}</MasterDataMutedCell>
                   <MasterDataBodyCell columnId="actions">

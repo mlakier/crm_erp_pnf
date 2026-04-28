@@ -299,5 +299,43 @@
       "order": 0,
       "column": 1
     }
-  }
+  },
+  "statCards": [
+    {
+      "id": "item-stat-purchaseOrderLines",
+      "metric": "purchaseOrderLines",
+      "visible": true,
+      "order": 0,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "item-stat-subsidiaries",
+      "metric": "subsidiaries",
+      "visible": true,
+      "order": 1,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "item-stat-preferredVendor",
+      "metric": "preferredVendor",
+      "visible": true,
+      "order": 2,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    },
+    {
+      "id": "item-stat-status",
+      "metric": "status",
+      "visible": true,
+      "order": 3,
+      "size": "sm",
+      "colorized": true,
+      "linked": true
+    }
+  ]
 }

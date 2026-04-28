@@ -3,8 +3,8 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
-import PurchaseOrderHeaderSections, { type PurchaseOrderHeaderSection } from '@/components/PurchaseOrderHeaderSections'
-import PurchaseOrderLineItemsSection from '@/components/PurchaseOrderLineItemsSection'
+import TransactionHeaderSections, { type TransactionHeaderSection } from '@/components/TransactionHeaderSections'
+import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import { fmtCurrency, fmtPhone } from '@/lib/format'
 import { calcLineTotal, sumMoney } from '@/lib/money'
 import {
@@ -17,6 +17,8 @@ import {
   buildConfiguredTransactionSections,
   getOrderedVisibleTransactionLineColumns,
 } from '@/lib/transaction-detail-helpers'
+import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/lib/form-requirements-client'
+import { purchaseOrderPageConfig } from '@/lib/transaction-page-configs/purchase-order'
 
 type VendorOption = {
   id: string
@@ -61,11 +63,6 @@ const PURCHASE_ORDER_STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Cancelled' },
 ]
 
-const sectionDescriptions: Record<string, string> = {
-  Vendor: 'Supplier master data linked to this purchase order.',
-  'Purchase Order Details': 'Core purchase order fields and procurement lifecycle status.',
-}
-
 export default function PurchaseOrderCreatePageClient({
   nextNumber,
   userId,
@@ -74,6 +71,8 @@ export default function PurchaseOrderCreatePageClient({
   subsidiaries,
   items,
   customization,
+  initialHeaderValues,
+  initialDraftRows,
 }: {
   nextNumber: string
   userId: string
@@ -82,15 +81,18 @@ export default function PurchaseOrderCreatePageClient({
   subsidiaries: SubsidiaryOption[]
   items: ItemOption[]
   customization: PurchaseOrderDetailCustomizationConfig
+  initialHeaderValues?: Partial<Record<string, string>>
+  initialDraftRows?: DraftLinePayload[]
 }) {
   const router = useRouter()
+  const { req, isLocked } = useFormRequirementsState('purchaseOrderCreate')
   const [headerValues, setHeaderValues] = useState<Record<string, string>>({
-    number: nextNumber,
-    vendorId: '',
-    subsidiaryId: '',
-    status: 'draft',
+    number: initialHeaderValues?.number ?? nextNumber,
+    vendorId: initialHeaderValues?.vendorId ?? '',
+    subsidiaryId: initialHeaderValues?.subsidiaryId ?? '',
+    status: initialHeaderValues?.status ?? 'draft',
   })
-  const [draftRows, setDraftRows] = useState<DraftLinePayload[]>([])
+  const [draftRows, setDraftRows] = useState<DraftLinePayload[]>(initialDraftRows ?? [])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -127,7 +129,7 @@ export default function PurchaseOrderCreatePageClient({
     [subsidiaries]
   )
 
-  const headerFieldDefinitions: Record<PurchaseOrderDetailFieldKey, PurchaseOrderHeaderSection['fields'][number]> = useMemo(
+  const headerFieldDefinitions: Record<PurchaseOrderDetailFieldKey, TransactionHeaderSection['fields'][number]> = useMemo(
     () => ({
       vendorName: {
         key: 'vendorName',
@@ -210,6 +212,14 @@ export default function PurchaseOrderCreatePageClient({
         fieldType: 'checkbox',
         sourceText: 'Vendors master data',
       },
+      id: {
+        key: 'id',
+        label: 'DB Id',
+        value: '',
+        displayValue: '-',
+        helpText: 'Internal database identifier for the purchase order record.',
+        fieldType: 'text',
+      },
       number: {
         key: 'number',
         label: 'Purchase Order #',
@@ -218,6 +228,53 @@ export default function PurchaseOrderCreatePageClient({
         type: 'text',
         helpText: 'Unique purchase order number used across procurement workflows.',
         fieldType: 'text',
+      },
+      userId: {
+        key: 'userId',
+        label: 'User Id',
+        value: userId,
+        displayValue: userId || '-',
+        helpText: 'Internal user identifier for the purchase order creator.',
+        fieldType: 'text',
+        sourceText: 'Users master data',
+      },
+      vendorRecordId: {
+        key: 'vendorRecordId',
+        label: 'Vendor Id',
+        value: selectedVendor?.vendorNumber ?? '',
+        displayValue: selectedVendor?.vendorNumber ?? '-',
+        helpText: 'Internal vendor identifier linked to this purchase order.',
+        fieldType: 'text',
+        sourceText: 'Vendors master data',
+      },
+      subsidiaryRecordId: {
+        key: 'subsidiaryRecordId',
+        label: 'Subsidiary Id',
+        value:
+          subsidiaries.find((subsidiary) => subsidiary.id === (headerValues.subsidiaryId ?? ''))?.subsidiaryId ?? '',
+        displayValue:
+          subsidiaries.find((subsidiary) => subsidiary.id === (headerValues.subsidiaryId ?? ''))?.subsidiaryId ?? '-',
+        helpText: 'Internal subsidiary identifier linked to this purchase order.',
+        fieldType: 'text',
+        sourceText: 'Subsidiaries master data',
+      },
+      currencyRecordId: {
+        key: 'currencyRecordId',
+        label: 'Currency Id',
+        value: selectedVendor?.currency?.currencyId ?? selectedVendor?.currency?.code ?? '',
+        displayValue: selectedVendor?.currency?.currencyId ?? selectedVendor?.currency?.code ?? '-',
+        helpText: 'Internal currency identifier linked to this purchase order.',
+        fieldType: 'text',
+        sourceText: 'Currencies master data',
+      },
+      requisitionRecordId: {
+        key: 'requisitionRecordId',
+        label: 'Requisition Id',
+        value: '',
+        displayValue: '-',
+        helpText: 'Internal requisition identifier linked as the source document.',
+        fieldType: 'text',
+        sourceText: 'Purchase requisition transaction',
       },
       createdBy: {
         key: 'createdBy',
@@ -245,6 +302,8 @@ export default function PurchaseOrderCreatePageClient({
         helpText: 'User who approved the purchase order based on the approval activity trail.',
         fieldType: 'text',
         sourceText: 'System Notes / activity history',
+        subsectionTitle: 'Workflow & Approval',
+        subsectionDescription: 'Current workflow status and approval ownership for the purchase order.',
       },
       subsidiaryId: {
         key: 'subsidiaryId',
@@ -256,6 +315,8 @@ export default function PurchaseOrderCreatePageClient({
         helpText: 'Subsidiary that owns the purchase order.',
         fieldType: 'list',
         sourceText: 'Subsidiaries master data',
+        subsectionTitle: 'Sourcing & Financials',
+        subsectionDescription: 'Vendor, subsidiary, currency, and total purchasing context for the order.',
       },
       vendorId: {
         key: 'vendorId',
@@ -267,6 +328,21 @@ export default function PurchaseOrderCreatePageClient({
         helpText: 'Vendor record linked to this purchase order.',
         fieldType: 'list',
         sourceText: 'Vendors master data',
+        subsectionTitle: 'Sourcing & Financials',
+        subsectionDescription: 'Vendor, subsidiary, currency, and total purchasing context for the order.',
+      },
+      currencyId: {
+        key: 'currencyId',
+        label: 'Currency',
+        value: selectedVendor?.currency?.id ?? '',
+        displayValue: selectedVendor?.currency
+          ? `${selectedVendor.currency.code ?? selectedVendor.currency.currencyId} - ${selectedVendor.currency.name}`
+          : '-',
+        helpText: 'Transaction currency for this purchase order.',
+        fieldType: 'list',
+        sourceText: 'Currencies master data',
+        subsectionTitle: 'Sourcing & Financials',
+        subsectionDescription: 'Vendor, subsidiary, currency, and total purchasing context for the order.',
       },
       status: {
         key: 'status',
@@ -278,6 +354,8 @@ export default function PurchaseOrderCreatePageClient({
         helpText: 'Current lifecycle stage of the purchase order.',
         fieldType: 'list',
         sourceText: 'System purchase order statuses',
+        subsectionTitle: 'Workflow & Approval',
+        subsectionDescription: 'Current workflow status and approval ownership for the purchase order.',
       },
       total: {
         key: 'total',
@@ -286,18 +364,38 @@ export default function PurchaseOrderCreatePageClient({
         displayValue: fmtCurrency(computedTotal),
         helpText: 'Current document total based on all purchase order line amounts.',
         fieldType: 'currency',
+        subsectionTitle: 'Sourcing & Financials',
+        subsectionDescription: 'Vendor, subsidiary, currency, and total purchasing context for the order.',
+      },
+      createdAt: {
+        key: 'createdAt',
+        label: 'Created',
+        value: '',
+        displayValue: '-',
+        helpText: 'Date/time the purchase order record was created.',
+        fieldType: 'date',
+      },
+      updatedAt: {
+        key: 'updatedAt',
+        label: 'Last Modified',
+        value: '',
+        displayValue: '-',
+        helpText: 'Date/time the purchase order record was last modified.',
+        fieldType: 'date',
       },
     }),
-    [computedTotal, headerValues.subsidiaryId, headerValues.number, headerValues.status, headerValues.vendorId, nextNumber, selectedVendor, subsidiaryOptions, userLabel, vendorOptions]
+    [computedTotal, headerValues.subsidiaryId, headerValues.number, headerValues.status, headerValues.vendorId, nextNumber, selectedVendor, subsidiaries, subsidiaryOptions, userId, userLabel, vendorOptions]
   )
+  applyRequirementsToEditableFields(headerFieldDefinitions, req, isLocked)
 
-  const headerSections: PurchaseOrderHeaderSection[] = useMemo(
+
+  const headerSections: TransactionHeaderSection[] = useMemo(
     () =>
       buildConfiguredTransactionSections({
         fields: PURCHASE_ORDER_DETAIL_FIELDS,
         layout: customization,
         fieldDefinitions: headerFieldDefinitions,
-        sectionDescriptions,
+        sectionDescriptions: purchaseOrderPageConfig.sectionDescriptions,
       }),
     [customization, headerFieldDefinitions]
   )
@@ -366,7 +464,7 @@ export default function PurchaseOrderCreatePageClient({
       backHref="/purchase-orders"
       backLabel="<- Back to Purchase Orders"
       meta={headerValues.number ?? nextNumber}
-      title={selectedVendor?.name ?? 'New Purchase Order'}
+      title={selectedVendor?.name ?? (initialHeaderValues ? 'Duplicate Purchase Order' : 'New Purchase Order')}
       badge={
         <div className="flex flex-wrap gap-2">
           <span
@@ -406,10 +504,13 @@ export default function PurchaseOrderCreatePageClient({
         </>
       }
     >
-      <PurchaseOrderHeaderSections
+      <TransactionHeaderSections
         editing
         sections={headerSections}
         columns={customization.formColumns}
+        containerTitle="Purchase Order Details"
+        containerDescription="Core purchase order fields organized into configurable sections."
+        showSubsections={false}
         formId="new-purchase-order-form"
         submitMode="controlled"
         onSubmit={handleCreate}
@@ -433,7 +534,7 @@ export default function PurchaseOrderCreatePageClient({
         }}
       />
 
-      <PurchaseOrderLineItemsSection
+      <TransactionLineItemsSection
         rows={[]}
         editing
         purchaseOrderId="draft-purchase-order"
@@ -461,3 +562,4 @@ export default function PurchaseOrderCreatePageClient({
     </RecordDetailPageShell>
   )
 }
+

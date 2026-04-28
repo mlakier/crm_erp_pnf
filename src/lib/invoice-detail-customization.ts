@@ -1,3 +1,17 @@
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
+import {
+  buildDefaultTransactionReferenceLayout,
+  type TransactionReferenceLayout,
+} from '@/lib/transaction-reference-layouts'
+import {
+  type LinkedRecordReferenceSource,
+  CUSTOMER_FULL_REFERENCE_FIELDS,
+  CURRENCY_FULL_REFERENCE_FIELDS,
+  SALES_ORDER_FULL_REFERENCE_FIELDS,
+  SUBSIDIARY_FULL_REFERENCE_FIELDS,
+  USER_FULL_REFERENCE_FIELDS,
+} from '@/lib/linked-record-reference-catalogs'
+
 export type InvoiceDetailFieldKey =
   | 'customerName'
   | 'customerNumber'
@@ -43,6 +57,14 @@ export type InvoiceLineColumnKey =
   | 'ssp'
   | 'allocated-amount'
 
+export type InvoiceLineFontSize = 'xs' | 'sm'
+
+export type InvoiceLineWidthMode = 'auto' | 'compact' | 'normal' | 'wide'
+
+export type InvoiceLineDisplayMode = 'label' | 'idAndLabel' | 'id'
+
+export type InvoiceLineDropdownSortMode = 'id' | 'label'
+
 export type InvoiceDetailFieldMeta = {
   id: InvoiceDetailFieldKey
   label: string
@@ -61,6 +83,15 @@ export type InvoiceDetailFieldCustomization = {
 export type InvoiceLineColumnCustomization = {
   visible: boolean
   order: number
+  widthMode: InvoiceLineWidthMode
+  editDisplay: InvoiceLineDisplayMode
+  viewDisplay: InvoiceLineDisplayMode
+  dropdownDisplay: InvoiceLineDisplayMode
+  dropdownSort: InvoiceLineDropdownSortMode
+}
+
+export type InvoiceLineSettings = {
+  fontSize: InvoiceLineFontSize
 }
 
 export type InvoiceStatCardKey =
@@ -79,18 +110,15 @@ export type InvoiceStatCardKey =
   | 'updatedAt'
   | 'dbId'
 
-export type InvoiceStatCardSlot = {
-  id: string
-  metric: InvoiceStatCardKey
-  visible: boolean
-  order: number
-}
+export type InvoiceStatCardSlot = TransactionStatCardSlot<InvoiceStatCardKey>
 
 export type InvoiceDetailCustomizationConfig = {
   formColumns: number
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<InvoiceDetailFieldKey, InvoiceDetailFieldCustomization>
+  referenceLayouts: TransactionReferenceLayout[]
+  lineSettings: InvoiceLineSettings
   lineColumns: Record<InvoiceLineColumnKey, InvoiceLineColumnCustomization>
   statCards: InvoiceStatCardSlot[]
 }
@@ -142,7 +170,14 @@ export const INVOICE_LINE_COLUMNS: Array<{ id: InvoiceLineColumnKey; label: stri
   { id: 'allocated-amount', label: 'Allocated Amount', description: 'Allocated revenue amount on the invoice line.' },
 ]
 
-export const DEFAULT_INVOICE_DETAIL_SECTIONS = ['Customer', 'Invoice Details'] as const
+export const DEFAULT_INVOICE_DETAIL_SECTIONS = [
+  'Document Identity',
+  'Customer Snapshot',
+  'Source Context',
+  'Financial Terms',
+  'Record Keys',
+  'System Dates',
+] as const
 
 export const INVOICE_STAT_CARDS: Array<{ id: InvoiceStatCardKey; label: string }> = [
   { id: 'total', label: 'Invoice Total' },
@@ -161,6 +196,59 @@ export const INVOICE_STAT_CARDS: Array<{ id: InvoiceStatCardKey; label: string }
   { id: 'dbId', label: 'DB Id' },
 ]
 
+export const INVOICE_REFERENCE_SOURCES: LinkedRecordReferenceSource[] = [
+  {
+    id: 'customer',
+    label: 'Customer',
+    linkedFieldLabel: 'Customer Id',
+    description: 'Expand the linked customer record for this invoice.',
+    fields: CUSTOMER_FULL_REFERENCE_FIELDS,
+    defaultVisibleFieldIds: ['customerNumber', 'customerName', 'customerEmail', 'customerPhone'],
+    defaultColumns: 2,
+    defaultRows: 2,
+  },
+  {
+    id: 'salesOrder',
+    label: 'Sales Order',
+    linkedFieldLabel: 'Sales Order Id',
+    description: 'Expand the linked sales order record for this invoice.',
+    fields: SALES_ORDER_FULL_REFERENCE_FIELDS,
+    defaultVisibleFieldIds: ['salesOrderNumber', 'salesOrderStatus', 'salesOrderTotal'],
+    defaultColumns: 2,
+    defaultRows: 2,
+  },
+  {
+    id: 'owner',
+    label: 'Created By',
+    linkedFieldLabel: 'Created By',
+    description: 'Expand the linked owner user record for this invoice.',
+    fields: USER_FULL_REFERENCE_FIELDS,
+    defaultVisibleFieldIds: ['ownerUserId', 'ownerName', 'ownerEmail'],
+    defaultColumns: 2,
+    defaultRows: 1,
+  },
+  {
+    id: 'subsidiary',
+    label: 'Subsidiary',
+    linkedFieldLabel: 'Subsidiary',
+    description: 'Expand the linked subsidiary record for this invoice.',
+    fields: SUBSIDIARY_FULL_REFERENCE_FIELDS,
+    defaultVisibleFieldIds: ['subsidiaryNumber', 'subsidiaryName'],
+    defaultColumns: 1,
+    defaultRows: 1,
+  },
+  {
+    id: 'currency',
+    label: 'Currency',
+    linkedFieldLabel: 'Currency',
+    description: 'Expand the linked currency record for this invoice.',
+    fields: CURRENCY_FULL_REFERENCE_FIELDS,
+    defaultVisibleFieldIds: ['currencyCode', 'currencyName'],
+    defaultColumns: 1,
+    defaultRows: 1,
+  },
+]
+
 export const DEFAULT_INVOICE_STAT_CARD_METRICS: InvoiceStatCardKey[] = [
   'total',
   'status',
@@ -168,97 +256,169 @@ export const DEFAULT_INVOICE_STAT_CARD_METRICS: InvoiceStatCardKey[] = [
   'paidDate',
 ]
 
+const DEFAULT_INVOICE_LINE_WIDTHS: Record<InvoiceLineColumnKey, InvoiceLineWidthMode> = {
+  line: 'compact',
+  'item-id': 'wide',
+  description: 'wide',
+  quantity: 'compact',
+  'unit-price': 'normal',
+  'line-total': 'normal',
+  notes: 'wide',
+  department: 'wide',
+  location: 'wide',
+  project: 'wide',
+  'service-start': 'normal',
+  'service-end': 'normal',
+  'rev-rec-template': 'wide',
+  'performance-obligation-code': 'wide',
+  ssp: 'normal',
+  'allocated-amount': 'normal',
+}
+
+const DEFAULT_INVOICE_LINE_EDIT_DISPLAY: Record<InvoiceLineColumnKey, InvoiceLineDisplayMode> = {
+  line: 'label',
+  'item-id': 'idAndLabel',
+  description: 'label',
+  quantity: 'label',
+  'unit-price': 'label',
+  'line-total': 'label',
+  notes: 'label',
+  department: 'idAndLabel',
+  location: 'idAndLabel',
+  project: 'label',
+  'service-start': 'label',
+  'service-end': 'label',
+  'rev-rec-template': 'idAndLabel',
+  'performance-obligation-code': 'label',
+  ssp: 'label',
+  'allocated-amount': 'label',
+}
+
+const DEFAULT_INVOICE_LINE_VIEW_DISPLAY: Record<InvoiceLineColumnKey, InvoiceLineDisplayMode> = {
+  ...DEFAULT_INVOICE_LINE_EDIT_DISPLAY,
+}
+
+const DEFAULT_INVOICE_LINE_DROPDOWN_DISPLAY: Record<InvoiceLineColumnKey, InvoiceLineDisplayMode> = {
+  ...DEFAULT_INVOICE_LINE_EDIT_DISPLAY,
+}
+
+const DEFAULT_INVOICE_LINE_DROPDOWN_SORT: Record<InvoiceLineColumnKey, InvoiceLineDropdownSortMode> = {
+  line: 'id',
+  'item-id': 'id',
+  description: 'label',
+  quantity: 'id',
+  'unit-price': 'id',
+  'line-total': 'id',
+  notes: 'label',
+  department: 'label',
+  location: 'label',
+  project: 'label',
+  'service-start': 'id',
+  'service-end': 'id',
+  'rev-rec-template': 'label',
+  'performance-obligation-code': 'label',
+  ssp: 'id',
+  'allocated-amount': 'id',
+}
+
 export function defaultInvoiceDetailCustomization(): InvoiceDetailCustomizationConfig {
   const sectionMap: Record<InvoiceDetailFieldKey, string> = {
-    customerName: 'Customer',
-    customerNumber: 'Customer',
-    customerEmail: 'Customer',
-    customerPhone: 'Customer',
-    customerAddress: 'Customer',
-    customerPrimarySubsidiary: 'Customer',
-    customerPrimaryCurrency: 'Customer',
-    customerInactive: 'Customer',
-    id: 'Invoice Details',
-    customerId: 'Invoice Details',
-    salesOrderId: 'Invoice Details',
-    userId: 'Invoice Details',
-    number: 'Invoice Details',
-    createdBy: 'Invoice Details',
-    createdFrom: 'Invoice Details',
-    quoteId: 'Invoice Details',
-    opportunityId: 'Invoice Details',
-    subsidiaryId: 'Invoice Details',
-    currencyId: 'Invoice Details',
-    status: 'Invoice Details',
-    total: 'Invoice Details',
-    dueDate: 'Invoice Details',
-    paidDate: 'Invoice Details',
-    createdAt: 'Invoice Details',
-    updatedAt: 'Invoice Details',
+    number: 'Document Identity',
+    createdBy: 'Document Identity',
+    customerId: 'Document Identity',
+    customerNumber: 'Customer Snapshot',
+    customerName: 'Customer Snapshot',
+    customerEmail: 'Customer Snapshot',
+    customerPhone: 'Customer Snapshot',
+    customerAddress: 'Customer Snapshot',
+    customerPrimarySubsidiary: 'Customer Snapshot',
+    customerPrimaryCurrency: 'Customer Snapshot',
+    customerInactive: 'Customer Snapshot',
+    createdFrom: 'Source Context',
+    salesOrderId: 'Source Context',
+    quoteId: 'Source Context',
+    opportunityId: 'Source Context',
+    status: 'Financial Terms',
+    subsidiaryId: 'Financial Terms',
+    currencyId: 'Financial Terms',
+    total: 'Financial Terms',
+    dueDate: 'Financial Terms',
+    paidDate: 'Financial Terms',
+    id: 'Record Keys',
+    userId: 'Record Keys',
+    createdAt: 'System Dates',
+    updatedAt: 'System Dates',
   }
 
   const columnMap: Record<InvoiceDetailFieldKey, number> = {
-    customerName: 1,
+    number: 1,
+    createdBy: 2,
+    customerId: 3,
     customerNumber: 1,
-    customerEmail: 2,
-    customerPhone: 2,
-    customerAddress: 3,
+    customerName: 2,
+    customerEmail: 3,
+    customerPhone: 1,
+    customerAddress: 2,
     customerPrimarySubsidiary: 1,
     customerPrimaryCurrency: 2,
     customerInactive: 3,
-    id: 1,
-    customerId: 2,
-    salesOrderId: 3,
-    userId: 1,
-    number: 1,
-    createdBy: 3,
-    createdFrom: 2,
-    quoteId: 2,
-    opportunityId: 3,
-    subsidiaryId: 1,
-    currencyId: 2,
-    status: 3,
+    createdFrom: 1,
+    salesOrderId: 2,
+    quoteId: 3,
+    opportunityId: 1,
+    status: 1,
+    subsidiaryId: 2,
+    currencyId: 3,
     total: 1,
     dueDate: 2,
     paidDate: 3,
+    id: 1,
+    userId: 2,
     createdAt: 1,
     updatedAt: 2,
   }
 
   const rowMap: Record<InvoiceDetailFieldKey, number> = {
+    number: 0,
+    createdBy: 0,
+    customerId: 0,
+    customerNumber: 0,
     customerName: 0,
-    customerNumber: 1,
     customerEmail: 0,
     customerPhone: 1,
-    customerAddress: 0,
+    customerAddress: 1,
     customerPrimarySubsidiary: 2,
     customerPrimaryCurrency: 2,
     customerInactive: 2,
-    id: 0,
-    customerId: 0,
+    createdFrom: 0,
     salesOrderId: 0,
-    userId: 1,
-    number: 1,
-    createdBy: 1,
-    createdFrom: 2,
-    quoteId: 2,
-    opportunityId: 2,
-    subsidiaryId: 3,
-    currencyId: 3,
-    status: 3,
-    total: 4,
-    dueDate: 4,
-    paidDate: 4,
-    createdAt: 5,
-    updatedAt: 5,
+    quoteId: 0,
+    opportunityId: 1,
+    status: 0,
+    subsidiaryId: 0,
+    currencyId: 0,
+    total: 1,
+    dueDate: 1,
+    paidDate: 1,
+    id: 0,
+    userId: 0,
+    createdAt: 0,
+    updatedAt: 0,
   }
 
   return {
     formColumns: 3,
     sections: [...DEFAULT_INVOICE_DETAIL_SECTIONS],
     sectionRows: {
-      Customer: 3,
-      'Invoice Details': 6,
+      'Document Identity': 1,
+      'Customer Snapshot': 3,
+      'Source Context': 2,
+      'Financial Terms': 2,
+      'Record Keys': 1,
+      'System Dates': 1,
+    },
+    lineSettings: {
+      fontSize: 'sm',
     },
     fields: Object.fromEntries(
       INVOICE_DETAIL_FIELDS.map((field) => [
@@ -271,6 +431,7 @@ export function defaultInvoiceDetailCustomization(): InvoiceDetailCustomizationC
         },
       ]),
     ) as Record<InvoiceDetailFieldKey, InvoiceDetailFieldCustomization>,
+    referenceLayouts: [buildDefaultTransactionReferenceLayout(INVOICE_REFERENCE_SOURCES, 'customer')],
     lineColumns: Object.fromEntries(
       INVOICE_LINE_COLUMNS.map((column, index) => [
         column.id,
@@ -279,6 +440,11 @@ export function defaultInvoiceDetailCustomization(): InvoiceDetailCustomizationC
             ? false
             : true,
           order: index,
+          widthMode: DEFAULT_INVOICE_LINE_WIDTHS[column.id],
+          editDisplay: DEFAULT_INVOICE_LINE_EDIT_DISPLAY[column.id],
+          viewDisplay: DEFAULT_INVOICE_LINE_VIEW_DISPLAY[column.id],
+          dropdownDisplay: DEFAULT_INVOICE_LINE_DROPDOWN_DISPLAY[column.id],
+          dropdownSort: DEFAULT_INVOICE_LINE_DROPDOWN_SORT[column.id],
         },
       ]),
     ) as Record<InvoiceLineColumnKey, InvoiceLineColumnCustomization>,

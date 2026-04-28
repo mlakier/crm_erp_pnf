@@ -132,6 +132,7 @@ export default async function UsersPage({
               <MasterDataHeaderCell columnId="locked">Locked</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="employee">Linked Employee</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="inactive">Inactive</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="db-id">DB Id</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="last-modified">Last Modified</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
@@ -139,7 +140,7 @@ export default async function UsersPage({
           </thead>
           <tbody>
             {users.length === 0 ? (
-              <MasterDataEmptyStateRow colSpan={16}>No users found</MasterDataEmptyStateRow>
+              <MasterDataEmptyStateRow colSpan={17}>No users found</MasterDataEmptyStateRow>
             ) : (
               users.map((user, index) => {
                 const linkedEmployee = employeeByUserId.get(user.id)
@@ -166,6 +167,7 @@ export default async function UsersPage({
                     <MasterDataMutedCell columnId="locked">{user.locked ? 'Yes' : 'No'}</MasterDataMutedCell>
                     <MasterDataMutedCell columnId="employee">{linkedEmployee ? `${linkedEmployee.firstName} ${linkedEmployee.lastName}${linkedEmployee.employeeId ? ` (${linkedEmployee.employeeId})` : ''}` : '-'}</MasterDataMutedCell>
                     <MasterDataMutedCell columnId="inactive">{user.inactive ? 'Yes' : 'No'}</MasterDataMutedCell>
+                    <MasterDataMutedCell columnId="db-id">{user.id}</MasterDataMutedCell>
                     <MasterDataMutedCell columnId="created">{formatMasterDataDate(user.createdAt)}</MasterDataMutedCell>
                     <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(user.updatedAt)}</MasterDataMutedCell>
                     <MasterDataBodyCell columnId="actions">

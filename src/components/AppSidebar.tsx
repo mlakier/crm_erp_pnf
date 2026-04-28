@@ -75,12 +75,12 @@ const NAV: NavGroup[] = [
   {
     section: 'WORKFLOWS',
     items: [
-      { label: 'OTC Workflow', href: '/otc-workflow' },
+      { label: 'LTC Workflow', href: '/otc-workflow' },
       { label: 'PTP Workflow', href: '/ptp-workflow' },
     ],
   },
   {
-    section: 'ORDER TO CASH',
+    section: 'LEAD TO CASH',
     items: [
       { label: 'Leads', href: '/leads' },
       { label: 'Opportunities', href: '/opportunities' },

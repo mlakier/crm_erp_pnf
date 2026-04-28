@@ -1,21 +1,19 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { fmtDocumentDate } from '@/lib/format'
-import CreateModalButton from '@/components/CreateModalButton'
 import DeleteButton from '@/components/DeleteButton'
-import LeadEditButton from '@/components/LeadEditButton'
 import ConvertLeadButton from '@/components/ConvertLeadButton'
 import ColumnSelector from '@/components/ColumnSelector'
 import ExportButton from '@/components/ExportButton'
 import PaginationFooter from '@/components/PaginationFooter'
-import LeadCreateForm from '@/components/LeadCreateForm'
 import { getPagination } from '@/lib/pagination'
 import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
 import { loadListOptionsForSource } from '@/lib/list-source'
-import { DEFAULT_RECORD_LIST_SORT, prependIdSortOption } from '@/lib/record-list-sort'
+import { buildMasterDataExportUrl } from '@/lib/master-data-export-url'
 import { RecordListHeaderLabel } from '@/components/RecordListHeaderLabel'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
+import { createRecordLabelMapFromOptions, formatRecordLabel } from '@/lib/record-status-label'
 
 const LEAD_COLUMNS = [
   { id: 'lead-number', label: 'Lead Id' },
@@ -25,6 +23,7 @@ const LEAD_COLUMNS = [
   { id: 'source', label: 'Source' },
   { id: 'subsidiary', label: 'Subsidiary' },
   { id: 'currency', label: 'Currency' },
+  { id: 'db-id', label: 'DB Id' },
   { id: 'created', label: 'Created' },
   { id: 'last-modified', label: 'Last Modified' },
   { id: 'actions', label: 'Actions', locked: true },
@@ -38,19 +37,12 @@ function leadName(lead: { firstName: string | null; lastName: string | null; ema
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; sort?: string; page?: string }>
+  searchParams: Promise<{ q?: string; status?: string; page?: string }>
 }) {
   const params = await searchParams
   const { moneySettings } = await loadCompanyDisplaySettings()
   const query = (params.q ?? '').trim()
   const statusFilter = params.status ?? 'all'
-  const sort = params.sort ?? DEFAULT_RECORD_LIST_SORT
-  const sortOptions = prependIdSortOption([
-    { value: 'newest', label: 'Newest' },
-    { value: 'oldest', label: 'Oldest' },
-    { value: 'name', label: 'Name A-Z' },
-    { value: 'company', label: 'Company A-Z' },
-  ])
 
   const where = {
     ...(query
@@ -68,28 +60,19 @@ export default async function LeadsPage({
     ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
   }
 
-  const orderBy =
-    sort === 'id'
-      ? [{ leadNumber: 'asc' as const }, { createdAt: 'desc' as const }]
-      : sort === 'oldest'
-      ? [{ createdAt: 'asc' as const }]
-      : sort === 'name'
-        ? [{ firstName: 'asc' as const }, { lastName: 'asc' as const }, { createdAt: 'desc' as const }]
-        : sort === 'company'
-          ? [{ company: 'asc' as const }, { createdAt: 'desc' as const }]
-          : [{ createdAt: 'desc' as const }]
+  const orderBy = [{ createdAt: 'desc' as const }]
 
-  const [totalLeads, adminUser, entities, currencies, companySettings, cabinetFiles, leadSourceOptions, leadRatingOptions, leadStatusOptions] = await Promise.all([
+  const [totalLeads, companySettings, cabinetFiles, leadStatusOptions] = await Promise.all([
     prisma.lead.count({ where }),
-    prisma.user.findUnique({ where: { email: 'admin@example.com' } }),
-    prisma.subsidiary.findMany({ orderBy: { subsidiaryId: 'asc' }, select: { id: true, subsidiaryId: true, name: true } }),
-    prisma.currency.findMany({ orderBy: { code: 'asc' }, select: { id: true, currencyId: true, code: true, name: true } }),
     loadCompanyInformationSettings(),
     loadCompanyCabinetFiles(),
-    loadListOptionsForSource({ sourceType: 'managed-list', sourceKey: 'LIST-LEAD-SRC' }),
-    loadListOptionsForSource({ sourceType: 'managed-list', sourceKey: 'LIST-LEAD-RAT' }),
     loadListOptionsForSource({ sourceType: 'managed-list', sourceKey: 'LIST-LEAD-STATUS' }),
   ])
+  const statusOptions = [
+    { value: 'all', label: 'All' },
+    ...leadStatusOptions.map((option) => ({ value: option.value, label: option.label })),
+  ]
+  const statusLabelMap = createRecordLabelMapFromOptions(statusOptions)
 
   const pagination = getPagination(totalLeads, params.page)
 
@@ -105,7 +88,6 @@ export default async function LeadsPage({
     const search = new URLSearchParams()
     if (params.q) search.set('q', params.q)
     if (statusFilter !== 'all') search.set('status', statusFilter)
-    if (sort) search.set('sort', sort)
     search.set('page', String(nextPage))
     return `/leads?${search.toString()}`
   }
@@ -132,21 +114,44 @@ export default async function LeadsPage({
           <h1 className="text-xl font-semibold text-white">Leads</h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{totalLeads} total</p>
         </div>
-                  <CreateModalButton buttonLabel="New Lead" title="New Lead">
-          <LeadCreateForm
-            userId={adminUser?.id ?? ''}
-            entities={entities}
-            currencies={currencies}
-            leadSourceOptions={leadSourceOptions}
-            leadRatingOptions={leadRatingOptions}
-            leadStatusOptions={leadStatusOptions}
-          />
-          </CreateModalButton>
+        <Link
+          href="/leads/new"
+          className="inline-flex items-center rounded-md px-3 py-2 text-sm font-medium text-white"
+          style={{ backgroundColor: 'var(--accent-primary-strong)' }}
+        >
+          New Lead
+        </Link>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {statusOptions.map((option) => {
+          const active = statusFilter === option.value
+          const href = `/leads?${new URLSearchParams({
+            ...(params.q ? { q: params.q } : {}),
+            ...(option.value !== 'all' ? { status: option.value } : {}),
+            page: '1',
+          }).toString()}`
+          return (
+            <Link
+              key={option.value}
+              href={href}
+              className="rounded-full px-3 py-1 text-xs font-medium transition-colors"
+              style={
+                active
+                  ? { backgroundColor: 'var(--accent-primary-strong)', color: '#fff' }
+                  : { backgroundColor: 'var(--card)', color: 'var(--text-secondary)', border: '1px solid var(--border-muted)' }
+              }
+            >
+              {option.label}
+            </Link>
+          )
+        })}
       </div>
 
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
           <input type="hidden" name="page" value="1" />
+          <input type="hidden" name="status" value={statusFilter} />
           <div className="flex gap-3 items-center flex-nowrap">
             <input
               type="text"
@@ -156,18 +161,13 @@ export default async function LeadsPage({
               className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
               style={{ borderColor: 'var(--border-muted)' }}
             />
-            <select name="status" defaultValue={statusFilter} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-              <option value="all">All statuses</option>
-              {leadStatusOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-              {sortOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-            <ExportButton tableId="leads-list" fileName="leads" />
+            <ExportButton
+              tableId="leads-list"
+              fileName="leads"
+              exportAllUrl={buildMasterDataExportUrl('leads', params.q, 'newest', {
+                status: statusFilter !== 'all' ? statusFilter : undefined,
+              })}
+            />
             <ColumnSelector tableId="leads-list" columns={LEAD_COLUMNS} />
           </div>
         </form>
@@ -186,7 +186,7 @@ export default async function LeadsPage({
             <tbody>
               {leads.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No leads found</td>
+                  <td colSpan={11} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No leads found</td>
                 </tr>
               ) : (
                 leads.map((lead, index) => (
@@ -198,10 +198,35 @@ export default async function LeadsPage({
                     </td>
                     <td data-column="name" className="px-4 py-2 text-sm font-medium text-white">{leadName(lead)}</td>
                     <td data-column="company" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{lead.company ?? '—'}</td>
-                    <td data-column="status" className="px-4 py-2 text-sm capitalize" style={{ color: 'var(--text-secondary)' }}>{lead.status}</td>
+                    <td data-column="status" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{formatRecordLabel(lead.status, statusLabelMap)}</td>
                     <td data-column="source" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{lead.source ?? '—'}</td>
-                    <td data-column="subsidiary" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{lead.subsidiary?.subsidiaryId ?? '—'}</td>
-                    <td data-column="currency" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{lead.currency?.code ?? '—'}</td>
+                    <td data-column="subsidiary" className="px-4 py-2 text-sm">
+                      {lead.subsidiary ? (
+                        <Link
+                          href={`/subsidiaries/${lead.subsidiary.id}`}
+                          className="hover:underline"
+                          style={{ color: 'var(--accent-primary-strong)' }}
+                        >
+                          {lead.subsidiary.subsidiaryId}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>{'—'}</span>
+                      )}
+                    </td>
+                    <td data-column="currency" className="px-4 py-2 text-sm">
+                      {lead.currency ? (
+                        <Link
+                          href={`/currencies/${lead.currency.id}`}
+                          className="hover:underline"
+                          style={{ color: 'var(--accent-primary-strong)' }}
+                        >
+                          {lead.currency.code}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>{'—'}</span>
+                      )}
+                    </td>
+                    <td data-column="db-id" className="px-4 py-2 font-mono text-sm" style={{ color: 'var(--text-secondary)' }}>{lead.id}</td>
                     <td data-column="created" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtDocumentDate(lead.createdAt, moneySettings)}</td>
                     <td data-column="last-modified" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtDocumentDate(lead.updatedAt, moneySettings)}</td>
                     <td data-column="actions" className="px-4 py-2 text-sm">
@@ -211,35 +236,20 @@ export default async function LeadsPage({
                           canConvert={lead.status === 'qualified'}
                           opportunityId={lead.opportunity?.id ?? null}
                         />
-                        <LeadEditButton
-                          leadId={lead.id}
-                          entities={entities}
-                          currencies={currencies}
-                          leadSourceOptions={leadSourceOptions}
-                          leadRatingOptions={leadRatingOptions}
-                          leadStatusOptions={leadStatusOptions}
-                          values={{
-                            firstName: lead.firstName ?? '',
-                            lastName: lead.lastName ?? '',
-                            company: lead.company ?? '',
-                            email: lead.email ?? '',
-                            phone: lead.phone ?? '',
-                            title: lead.title ?? '',
-                            website: lead.website ?? '',
-                            industry: lead.industry ?? '',
-                            status: lead.status ?? 'new',
-                            source: lead.source ?? '',
-                            rating: lead.rating ?? '',
-                            expectedValue: lead.expectedValue?.toString() ?? '',
-                            entityId: lead.subsidiaryId ?? '',
-                            currencyId: lead.currencyId ?? '',
-                            lastContactedAt: lead.lastContactedAt ? new Date(lead.lastContactedAt).toISOString().split('T')[0] : '',
-                            qualifiedAt: lead.qualifiedAt ? new Date(lead.qualifiedAt).toISOString().split('T')[0] : '',
-                            convertedAt: lead.convertedAt ? new Date(lead.convertedAt).toISOString().split('T')[0] : '',
-                            notes: lead.notes ?? '',
-                            address: lead.address ?? '',
-                          }}
-                        />
+                        <Link
+                          href={`/leads/${lead.id}?edit=1`}
+                          className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
+                          style={{ backgroundColor: 'var(--accent-primary-strong)' }}
+                        >
+                          Edit
+                        </Link>
+                        <Link
+                          href={`/leads/${lead.id}?customize=1`}
+                          className="rounded-md border px-2.5 py-1 text-xs font-semibold"
+                          style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+                        >
+                          Customize
+                        </Link>
                         <DeleteButton resource="leads" id={lead.id} />
                       </div>
                     </td>

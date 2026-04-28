@@ -142,13 +142,16 @@ export default async function EmployeesPage({
               <MasterDataHeaderCell columnId="eid">EID</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="name">Name</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="email">Email</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="phone">Phone</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="title">Title</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="status">Status</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="labor-type">Labor Type</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="department">Department</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="subsidiaries">Subsidiaries</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="include-children">Include Children</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="linked-user">Linked User</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="inactive">Inactive</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="db-id">DB Id</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="last-modified">Last Modified</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
@@ -156,7 +159,7 @@ export default async function EmployeesPage({
           </thead>
           <tbody>
             {employees.length === 0 ? (
-              <MasterDataEmptyStateRow colSpan={14}>No employees found</MasterDataEmptyStateRow>
+              <MasterDataEmptyStateRow colSpan={17}>No employees found</MasterDataEmptyStateRow>
             ) : (
               employees.map((employee, index) => (
                 <tr key={employee.id} style={getMasterDataRowStyle(index, employees.length)}>
@@ -168,13 +171,16 @@ export default async function EmployeesPage({
                   <MasterDataMutedCell columnId="eid">{employee.eid ?? '-'}</MasterDataMutedCell>
                   <MasterDataBodyCell columnId="name" className="px-4 py-2 text-sm font-medium text-white">{employee.firstName} {employee.lastName}</MasterDataBodyCell>
                   <MasterDataMutedCell columnId="email">{employee.email ?? '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="phone">{employee.phone ?? '-'}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="title">{employee.title ?? '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="status">{employee.status}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="labor-type">{employee.laborType ?? '-'}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="department">{employee.departmentRef?.departmentId ?? '-'}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="subsidiaries">{formatSubsidiaryIds(employee.employeeSubsidiaries)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="include-children">{employee.includeChildren ? 'Yes' : 'No'}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="linked-user">{employee.user ? `${employee.user.name ?? employee.user.email}${employee.user.userId ? ` (${employee.user.userId})` : ''}` : '-'}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="inactive">{employee.active ? 'No' : 'Yes'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="db-id">{employee.id}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="created">{formatMasterDataDate(employee.createdAt)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(employee.updatedAt)}</MasterDataMutedCell>
                   <MasterDataBodyCell columnId="actions">

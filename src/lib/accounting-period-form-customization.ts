@@ -1,4 +1,5 @@
 import { getListSourceText, type FieldSourceType } from '@/lib/list-source'
+import type { TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 export type AccountingPeriodFormFieldKey =
   | 'name'
@@ -33,7 +34,19 @@ export type AccountingPeriodFormCustomizationConfig = {
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<AccountingPeriodFormFieldKey, AccountingPeriodFormFieldCustomization>
+  statCards?: Array<TransactionStatCardSlot<AccountingPeriodStatCardMetric>>
 }
+
+export type AccountingPeriodStatCardMetric =
+  | 'journalEntries'
+  | 'closed'
+  | 'lockedAreas'
+
+export const ACCOUNTING_PERIOD_STAT_CARDS: Array<{ id: AccountingPeriodStatCardMetric; label: string }> = [
+  { id: 'journalEntries', label: 'Journal Entries' },
+  { id: 'closed', label: 'Closed' },
+  { id: 'lockedAreas', label: 'Locked Areas' },
+]
 
 export const ACCOUNTING_PERIOD_FORM_FIELDS: AccountingPeriodFormFieldMeta[] = [
   { id: 'name', label: 'Name', fieldType: 'text', description: 'Display name for the accounting period.' },
@@ -123,5 +136,14 @@ export function defaultAccountingPeriodFormCustomization(): AccountingPeriodForm
         },
       ])
     ) as Record<AccountingPeriodFormFieldKey, AccountingPeriodFormFieldCustomization>,
+    statCards: ACCOUNTING_PERIOD_STAT_CARDS.map((card, index) => ({
+      id: `accounting-period-stat-${card.id}`,
+      metric: card.id,
+      visible: true,
+      order: index,
+      size: 'md',
+      colorized: true,
+      linked: true,
+    })),
   }
 }

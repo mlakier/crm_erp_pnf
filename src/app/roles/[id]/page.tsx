@@ -15,6 +15,7 @@ import {
   RecordDetailHeaderCell,
   RecordDetailSection,
 } from '@/components/RecordDetailPanels'
+import TransactionStatsRow from '@/components/TransactionStatsRow'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
 import { loadRoleFormCustomization } from '@/lib/role-form-customization-store'
@@ -93,6 +94,18 @@ export default async function RoleDetailPage({
   }
 
   const customizeFields = buildCustomizePreviewFields(ROLE_FORM_FIELDS, fieldDefinitions)
+  const statPreviewCards = [
+    { id: 'users', label: 'Users', value: role.users.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+    { id: 'activeUsers', label: 'Active Users', value: activeUsers.length, accent: 'teal', cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
+    { id: 'inactiveUsers', label: 'Inactive Users', value: inactiveUsers.length, accent: 'yellow', cardTone: 'yellow', valueTone: 'yellow', supportsColorized: true, supportsLink: false },
+    { id: 'status', label: 'Status', value: role.active ? 'Active' : 'Inactive', cardTone: role.active ? 'green' : 'red', valueTone: role.active ? 'green' : 'red', supportsColorized: true, supportsLink: false },
+  ]
+  const statDefinitions = [
+    { id: 'users', label: 'Users', getValue: () => role.users.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
+    { id: 'activeUsers', label: 'Active Users', getValue: () => activeUsers.length, accent: 'teal' as const, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
+    { id: 'inactiveUsers', label: 'Inactive Users', getValue: () => inactiveUsers.length, accent: 'yellow' as const, getCardTone: () => 'yellow' as const, getValueTone: () => 'yellow' as const },
+    { id: 'status', label: 'Status', getValue: () => (role.active ? 'Active' : 'Inactive'), getCardTone: () => (role.active ? 'green' : 'red') as const, getValueTone: () => (role.active ? 'green' : 'red') as const },
+  ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: ROLE_FORM_FIELDS,
     layout: formCustomization,
@@ -157,6 +170,16 @@ export default async function RoleDetailPage({
         </>
       }
     >
+        {!isCustomizing ? (
+          <div className="mb-8">
+            <TransactionStatsRow
+              record={role}
+              stats={statDefinitions}
+              visibleStatCards={formCustomization.statCards as Array<{ id: string; metric: string; visible: boolean; order: number; size?: 'sm' | 'md' | 'lg'; colorized?: boolean; linked?: boolean }> | undefined}
+            />
+          </div>
+        ) : null}
+
         {isCustomizing ? (
           <RoleDetailCustomizeMode
             detailHref={detailHref}
@@ -164,6 +187,7 @@ export default async function RoleDetailPage({
             initialRequirements={{ ...formRequirements.roleCreate }}
             fields={customizeFields}
             sectionDescriptions={sectionDescriptions}
+            statPreviewCards={statPreviewCards}
           />
         ) : (
           <InlineRecordDetails
@@ -177,7 +201,9 @@ export default async function RoleDetailPage({
           />
         )}
 
-        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} /> : null}
+        {!isCustomizing ? (
+          <>
+        <MasterDataSystemInfoSection info={systemInfo} internalId={role.id} />
 
         <RecordDetailSection title="Users" count={role.users.length}>
           <div className="px-6 pt-6">
@@ -217,6 +243,8 @@ export default async function RoleDetailPage({
           )}
         </RecordDetailSection>
         <SystemNotesSection notes={systemNotes} />
+          </>
+        ) : null}
     </RecordDetailPageShell>
   )
 }

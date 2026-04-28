@@ -13,6 +13,7 @@ import SystemNotesSection from '@/components/SystemNotesSection'
 import {
   RecordDetailEmptyState,
   RecordDetailField,
+  RecordDetailStatCard,
   RecordDetailSection,
 } from '@/components/RecordDetailPanels'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
@@ -22,6 +23,7 @@ import { loadFormRequirements } from '@/lib/form-requirements-store'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { loadMasterDataSystemInfo } from '@/lib/master-data-system-info'
 import { loadMasterDataSystemNotes } from '@/lib/master-data-system-notes'
+import { fmtCurrency } from '@/lib/format'
 
 function formatDateInput(value?: Date | null) {
   return value ? value.toISOString().slice(0, 10) : ''
@@ -251,6 +253,70 @@ export default async function UserDetailPage({
     fieldDefinitions,
     sectionDescriptions,
   })
+  const statPreviewCards = [
+    {
+      id: 'role',
+      label: 'Role',
+      value: user.role?.name ?? '-',
+      href: user.roleId ? `/roles/${user.roleId}` : null,
+      accent: 'blue' as const,
+      cardTone: 'blue',
+      valueTone: 'blue',
+      supportsColorized: true,
+      supportsLink: true,
+    },
+    {
+      id: 'department',
+      label: 'Department',
+      value: user.department ? `${user.department.departmentId} - ${user.department.name}` : '-',
+      href: user.departmentId ? `/departments/${user.departmentId}` : null,
+      accent: 'teal' as const,
+      cardTone: 'teal',
+      valueTone: 'teal',
+      supportsColorized: true,
+      supportsLink: true,
+    },
+    {
+      id: 'status',
+      label: 'Status',
+      value: user.inactive ? 'Inactive' : user.locked ? 'Locked' : 'Active',
+      cardTone: user.inactive ? 'red' : user.locked ? 'yellow' : 'green',
+      valueTone: user.inactive ? 'red' : user.locked ? 'yellow' : 'green',
+      supportsColorized: true,
+      supportsLink: false,
+    },
+    {
+      id: 'defaultSubsidiary',
+      label: 'Default Subsidiary',
+      value: user.defaultSubsidiary ? `${user.defaultSubsidiary.subsidiaryId} - ${user.defaultSubsidiary.name}` : '-',
+      href: user.defaultSubsidiaryId ? `/subsidiaries/${user.defaultSubsidiaryId}` : null,
+      accent: 'yellow' as const,
+      cardTone: 'yellow',
+      valueTone: 'yellow',
+      supportsColorized: true,
+      supportsLink: true,
+    },
+    {
+      id: 'approvalLimit',
+      label: 'Approval Limit',
+      value:
+        user.approvalLimit == null
+          ? '-'
+          : fmtCurrency(
+              Number(user.approvalLimit),
+              user.approvalCurrency?.code ?? user.approvalCurrency?.currencyId ?? undefined,
+            ),
+      supportsColorized: false,
+      supportsLink: false,
+    },
+    {
+      id: 'lastLogin',
+      label: 'Last Login',
+      value: user.lastLoginAt ? formatDateInput(user.lastLoginAt) : 'Never',
+      supportsColorized: false,
+      supportsLink: false,
+    },
+  ]
   const systemInfo = await loadMasterDataSystemInfo({
     entityType: 'user',
     entityId: user.id,
@@ -312,51 +378,79 @@ export default async function UserDetailPage({
             initialRequirements={{ ...formRequirements.userCreate }}
             fields={customizeFields}
             sectionDescriptions={sectionDescriptions}
+            statPreviewCards={statPreviewCards}
           />
         ) : (
-          <InlineRecordDetails
-            resource="users"
-            id={user.id}
-            title="User details"
-            sections={detailSections}
-            editing={isEditing}
-            columns={formCustomization.formColumns}
-            showInternalActions={false}
-          />
+          <div className="space-y-6">
+            {formCustomization.statCards && formCustomization.statCards.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-4">
+                {formCustomization.statCards
+                  .filter((card) => card.visible)
+                  .sort((left, right) => left.order - right.order)
+                  .map((card) => {
+                    const preview = statPreviewCards.find((entry) => entry.id === card.metric)
+                    if (!preview) return null
+                    return (
+                      <RecordDetailStatCard
+                        key={card.id}
+                        label={preview.label}
+                        value={preview.value}
+                        href={card.linked === false ? null : preview.href}
+                        accent={card.colorized === false ? undefined : preview.accent}
+                        valueTone={card.colorized === false ? 'default' : preview.valueTone}
+                        cardTone={card.colorized === false ? 'default' : preview.cardTone}
+                        size={card.size ?? 'md'}
+                      />
+                    )
+                  })}
+              </div>
+            ) : null}
+            <InlineRecordDetails
+              resource="users"
+              id={user.id}
+              title="User details"
+              sections={detailSections}
+              editing={isEditing}
+              columns={formCustomization.formColumns}
+              showInternalActions={false}
+            />
+          </div>
         )}
 
-        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} /> : null}
-
         {!isCustomizing ? (
-          <RecordDetailSection title="Security" count={1}>
-            <div className="grid gap-4 px-6 py-4 sm:grid-cols-2">
-              <RecordDetailField label="Password">
-                <div className="space-y-2">
-                  <p style={{ color: 'var(--text-muted)' }}>Not displayed</p>
-                  <UserSecurityActions locked={user.locked} />
-                </div>
-              </RecordDetailField>
-            </div>
-          </RecordDetailSection>
-        ) : null}
+          <>
+            <MasterDataSystemInfoSection info={systemInfo} internalId={user.id} />
 
-        <RecordDetailSection title="Linked Employee" count={linkedEmployee ? 1 : 0}>
-          {linkedEmployee ? (
-            <div className="grid gap-x-10 gap-y-4 px-6 py-4 sm:grid-cols-2">
-              <RecordDetailField label="Employee">
-                <Link href={`/employees/${linkedEmployee.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                  {linkedEmployee.firstName} {linkedEmployee.lastName}
-                </Link>
-              </RecordDetailField>
-              <RecordDetailField label="Employee ID">{linkedEmployee.employeeId ?? '-'}</RecordDetailField>
-              <RecordDetailField label="Department">{linkedEmployee.departmentRef ? `${linkedEmployee.departmentRef.departmentId} - ${linkedEmployee.departmentRef.name}` : '-'}</RecordDetailField>
-              <RecordDetailField label="Subsidiary">{linkedEmployee.subsidiary ? `${linkedEmployee.subsidiary.subsidiaryId} - ${linkedEmployee.subsidiary.name}` : '-'}</RecordDetailField>
-            </div>
-          ) : (
-            <RecordDetailEmptyState message="No employee linked to this user." />
-          )}
-        </RecordDetailSection>
-        <SystemNotesSection notes={systemNotes} />
+            <RecordDetailSection title="Security" count={1}>
+              <div className="grid gap-4 px-6 py-4 sm:grid-cols-2">
+                <RecordDetailField label="Password">
+                  <div className="space-y-2">
+                    <p style={{ color: 'var(--text-muted)' }}>Not displayed</p>
+                    <UserSecurityActions locked={user.locked} />
+                  </div>
+                </RecordDetailField>
+              </div>
+            </RecordDetailSection>
+
+            <RecordDetailSection title="Linked Employee" count={linkedEmployee ? 1 : 0}>
+              {linkedEmployee ? (
+                <div className="grid gap-x-10 gap-y-4 px-6 py-4 sm:grid-cols-2">
+                  <RecordDetailField label="Employee">
+                    <Link href={`/employees/${linkedEmployee.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                      {linkedEmployee.firstName} {linkedEmployee.lastName}
+                    </Link>
+                  </RecordDetailField>
+                  <RecordDetailField label="Employee ID">{linkedEmployee.employeeId ?? '-'}</RecordDetailField>
+                  <RecordDetailField label="Department">{linkedEmployee.departmentRef ? `${linkedEmployee.departmentRef.departmentId} - ${linkedEmployee.departmentRef.name}` : '-'}</RecordDetailField>
+                  <RecordDetailField label="Subsidiary">{linkedEmployee.subsidiary ? `${linkedEmployee.subsidiary.subsidiaryId} - ${linkedEmployee.subsidiary.name}` : '-'}</RecordDetailField>
+                </div>
+              ) : (
+                <RecordDetailEmptyState message="No employee linked to this user." />
+              )}
+            </RecordDetailSection>
+            <SystemNotesSection notes={systemNotes} />
+          </>
+        ) : null}
     </RecordDetailPageShell>
   )
 }
