@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import SearchableSelect from '@/components/SearchableSelect'
 
 type QuoteOption = {
   id: string
@@ -74,20 +75,17 @@ export default function SalesOrderCreateFromQuoteForm({
             This sales order will be created by duplicating the source sales order.
           </div>
         ) : (
-          <select
-            value={quoteId}
-            onChange={(event) => setQuoteId(event.target.value)}
-            required
-            className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            {quotes.length === 0 ? <option value="">No eligible quotes</option> : null}
-            {quotes.map((quote) => (
-              <option key={quote.id} value={quote.id}>
-                {quote.label}
-              </option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <SearchableSelect
+              selectedValue={quoteId}
+              options={quotes.map((quote) => ({
+                value: quote.id,
+                label: quote.label,
+              }))}
+              placeholder={quotes.length === 0 ? 'No eligible quotes' : 'Select quote'}
+              onSelect={setQuoteId}
+            />
+          </div>
         )}
       </div>
 

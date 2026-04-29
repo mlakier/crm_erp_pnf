@@ -8,11 +8,70 @@ import {
   type InvoiceReceiptDetailCustomizationConfig,
 } from '@/lib/invoice-receipt-detail-customization'
 import { mergeTransactionReferenceLayouts } from '@/lib/transaction-reference-layouts'
+import {
+  defaultTransactionGlImpactSettings,
+  TRANSACTION_GL_IMPACT_COLUMNS,
+  type TransactionGlImpactColumnKey,
+} from '@/lib/transaction-gl-impact'
 
 const STORE_PATH = path.join(process.cwd(), 'config', 'invoice-receipt-detail-customization.json')
 
 function cloneDefaults(): InvoiceReceiptDetailCustomizationConfig {
   return JSON.parse(JSON.stringify(defaultInvoiceReceiptDetailCustomization())) as InvoiceReceiptDetailCustomizationConfig
+}
+
+function normalizeGlImpactColumns(
+  input: unknown,
+  fallback: InvoiceReceiptDetailCustomizationConfig['glImpactColumns'],
+): InvoiceReceiptDetailCustomizationConfig['glImpactColumns'] {
+  const overrides =
+    input && typeof input === 'object'
+      ? (input as Partial<
+          Record<
+            TransactionGlImpactColumnKey,
+            Partial<InvoiceReceiptDetailCustomizationConfig['glImpactColumns'][TransactionGlImpactColumnKey]>
+          >
+        >)
+      : {}
+
+  const merged = { ...fallback }
+
+  for (const column of TRANSACTION_GL_IMPACT_COLUMNS) {
+    const override = overrides[column.id]
+    if (!override || typeof override !== 'object') continue
+    merged[column.id] = {
+      visible: override.visible === undefined ? merged[column.id].visible : override.visible === true,
+      order:
+        typeof override.order === 'number' && Number.isFinite(override.order)
+          ? Math.max(0, Math.trunc(override.order))
+          : merged[column.id].order,
+      widthMode:
+        override.widthMode === 'auto'
+        || override.widthMode === 'compact'
+        || override.widthMode === 'normal'
+        || override.widthMode === 'wide'
+          ? override.widthMode
+          : merged[column.id].widthMode,
+    }
+  }
+
+  return Object.fromEntries(
+    [...TRANSACTION_GL_IMPACT_COLUMNS]
+      .map((column) => ({
+        id: column.id,
+        visible: merged[column.id].visible !== false,
+        order: merged[column.id].order,
+      }))
+      .sort((left, right) => left.order - right.order)
+      .map((column, index) => [
+        column.id,
+        {
+          visible: column.visible,
+          order: index,
+          widthMode: merged[column.id].widthMode,
+        },
+      ]),
+  ) as InvoiceReceiptDetailCustomizationConfig['glImpactColumns']
 }
 
 export async function loadInvoiceReceiptDetailCustomization(): Promise<InvoiceReceiptDetailCustomizationConfig> {
@@ -23,7 +82,25 @@ export async function loadInvoiceReceiptDetailCustomization(): Promise<InvoiceRe
     return {
       ...defaults,
       ...parsed,
+      fields: {
+        ...defaults.fields,
+        ...(parsed.fields ?? {}),
+      },
+      sectionRows: {
+        ...defaults.sectionRows,
+        ...(parsed.sectionRows ?? {}),
+      },
       referenceLayouts: mergeTransactionReferenceLayouts(parsed.referenceLayouts, defaults.referenceLayouts, INVOICE_RECEIPT_REFERENCE_SOURCES),
+      glImpactSettings:
+        parsed.glImpactSettings && typeof parsed.glImpactSettings === 'object'
+          ? {
+              ...defaults.glImpactSettings,
+              ...(parsed.glImpactSettings.fontSize === 'xs' || parsed.glImpactSettings.fontSize === 'sm'
+                ? { fontSize: parsed.glImpactSettings.fontSize }
+                : {}),
+            }
+          : defaultTransactionGlImpactSettings(),
+      glImpactColumns: normalizeGlImpactColumns(parsed.glImpactColumns, defaults.glImpactColumns),
     }
   } catch {
     return cloneDefaults()
@@ -36,6 +113,16 @@ export async function saveInvoiceReceiptDetailCustomization(nextConfig: InvoiceR
     ...defaults,
     ...nextConfig,
     referenceLayouts: mergeTransactionReferenceLayouts(nextConfig.referenceLayouts, defaults.referenceLayouts, INVOICE_RECEIPT_REFERENCE_SOURCES),
+    glImpactSettings:
+      nextConfig.glImpactSettings && typeof nextConfig.glImpactSettings === 'object'
+        ? {
+            ...defaults.glImpactSettings,
+            ...(nextConfig.glImpactSettings.fontSize === 'xs' || nextConfig.glImpactSettings.fontSize === 'sm'
+              ? { fontSize: nextConfig.glImpactSettings.fontSize }
+              : {}),
+          }
+        : defaultTransactionGlImpactSettings(),
+    glImpactColumns: normalizeGlImpactColumns(nextConfig.glImpactColumns, defaults.glImpactColumns),
   }
   await fs.mkdir(path.dirname(STORE_PATH), { recursive: true })
   await fs.writeFile(STORE_PATH, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8')

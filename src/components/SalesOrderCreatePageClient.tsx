@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionActionStack from '@/components/TransactionActionStack'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderSection } from '@/components/RecordHeaderDetails'
 import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
 import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/lib/form-requirements-client'
@@ -12,7 +12,6 @@ import {
   SALES_ORDER_DETAIL_FIELDS,
   SALES_ORDER_LINE_COLUMNS,
   type SalesOrderDetailCustomizationConfig,
-  type SalesOrderDetailFieldKey,
 } from '@/lib/sales-order-detail-customization'
 import { fmtCurrency } from '@/lib/format'
 import { sumMoney } from '@/lib/money'
@@ -56,10 +55,6 @@ type DraftLine = {
   lineTotal: number
   displayOrder: number
 }
-
-type SalesOrderHeaderField = {
-  key: SalesOrderDetailFieldKey
-} & TransactionHeaderField
 
 const sectionDescriptions: Record<string, string> = {
   Customer: 'Customer contact and default commercial context from the linked master data record.',
@@ -148,7 +143,7 @@ export default function SalesOrderCreatePageClient({
   }))
 
   const computedTotal = useMemo(() => sumMoney(draftLines.map((line) => line.lineTotal)), [draftLines])
-  const headerFieldDefinitions: Record<SalesOrderDetailFieldKey, SalesOrderHeaderField> = {
+  const headerFieldDefinitions: Record<string, RecordHeaderSection['fields'][number]> = {
     customerName: {
       key: 'customerName',
       label: 'Customer Name',
@@ -470,10 +465,13 @@ export default function SalesOrderCreatePageClient({
       widthClassName="w-full max-w-none"
       actions={<TransactionActionStack mode="create" cancelHref="/sales-orders" formId="create-sales-order-form" />}
     >
-      <TransactionHeaderSections
+      <RecordHeaderDetails
         editing
         sections={headerSections}
         columns={customization.formColumns}
+        containerTitle="Sales Order Details"
+        containerDescription="Core sales order fields organized into configurable sections."
+        showSubsections={false}
         formId="create-sales-order-form"
         submitMode="controlled"
         onValuesChange={setHeaderValues}

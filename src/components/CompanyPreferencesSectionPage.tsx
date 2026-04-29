@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
+import SearchableSelect from '@/components/SearchableSelect'
 import {
   type CompanyPreferencesSettings,
   type IdSetting,
@@ -331,18 +332,13 @@ export default function CompanyPreferencesSectionPage({
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-2 text-sm">
             <span style={{ color: 'var(--text-muted)' }}>Locale</span>
-            <select
-              value={draftSettings.moneySettings.locale}
-              onChange={(event) => updateMoneySetting('locale', event.target.value)}
-              className="rounded-md border bg-transparent px-3 py-1.5 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              {COMPANY_MONEY_LOCALE_OPTIONS.map((locale) => (
-                <option key={locale.value} value={locale.value} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                  {locale.label}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              selectedValue={draftSettings.moneySettings.locale}
+              options={COMPANY_MONEY_LOCALE_OPTIONS}
+              placeholder="Select locale"
+              searchPlaceholder="Search locale"
+              onSelect={(value) => updateMoneySetting('locale', value)}
+            />
           </label>
 
           <label className="grid gap-2 text-sm">
@@ -358,28 +354,30 @@ export default function CompanyPreferencesSectionPage({
 
           <label className="grid gap-2 text-sm">
             <span style={{ color: 'var(--text-muted)' }}>Currency Display</span>
-            <select
-              value={draftSettings.moneySettings.currencyDisplay}
-              onChange={(event) => updateMoneySetting('currencyDisplay', event.target.value as MoneyDisplay)}
-              className="rounded-md border bg-transparent px-3 py-1.5 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              <option value="code" style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>Code</option>
-              <option value="symbol" style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>Symbol</option>
-            </select>
+            <SearchableSelect
+              selectedValue={draftSettings.moneySettings.currencyDisplay}
+              options={[
+                { value: 'code', label: 'Code' },
+                { value: 'symbol', label: 'Symbol' },
+              ]}
+              placeholder="Select display"
+              searchPlaceholder="Search currency display"
+              onSelect={(value) => updateMoneySetting('currencyDisplay', value as MoneyDisplay)}
+            />
           </label>
 
           <label className="grid gap-2 text-sm">
             <span style={{ color: 'var(--text-muted)' }}>Negative Format</span>
-            <select
-              value={draftSettings.moneySettings.negativeNumberFormat}
-              onChange={(event) => updateMoneySetting('negativeNumberFormat', event.target.value as NegativeNumberFormat)}
-              className="rounded-md border bg-transparent px-3 py-1.5 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              <option value="parentheses" style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>Parentheses</option>
-              <option value="minus" style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>Minus</option>
-            </select>
+            <SearchableSelect
+              selectedValue={draftSettings.moneySettings.negativeNumberFormat}
+              options={[
+                { value: 'parentheses', label: 'Parentheses' },
+                { value: 'minus', label: 'Minus' },
+              ]}
+              placeholder="Select format"
+              searchPlaceholder="Search negative format"
+              onSelect={(value) => updateMoneySetting('negativeNumberFormat', value as NegativeNumberFormat)}
+            />
           </label>
 
           <label className="grid gap-2 text-sm">
@@ -397,66 +395,46 @@ export default function CompanyPreferencesSectionPage({
 
           <label className="grid gap-2 text-sm">
             <span style={{ color: 'var(--text-muted)' }}>Zero Format</span>
-            <select
-              value={draftSettings.moneySettings.zeroFormat}
-              onChange={(event) => updateMoneySetting('zeroFormat', event.target.value as ZeroFormat)}
-              className="rounded-md border bg-transparent px-3 py-1.5 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              {COMPANY_ZERO_FORMAT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              selectedValue={draftSettings.moneySettings.zeroFormat}
+              options={COMPANY_ZERO_FORMAT_OPTIONS}
+              placeholder="Select zero format"
+              searchPlaceholder="Search zero format"
+              onSelect={(value) => updateMoneySetting('zeroFormat', value as ZeroFormat)}
+            />
           </label>
 
           <label className="grid gap-2 text-sm">
             <span style={{ color: 'var(--text-muted)' }}>Show Currency On</span>
-            <select
-              value={draftSettings.moneySettings.showCurrencyOn}
-              onChange={(event) => updateMoneySetting('showCurrencyOn', event.target.value as ShowCurrencyOn)}
-              className="rounded-md border bg-transparent px-3 py-1.5 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              {COMPANY_SHOW_CURRENCY_ON_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              selectedValue={draftSettings.moneySettings.showCurrencyOn}
+              options={COMPANY_SHOW_CURRENCY_ON_OPTIONS}
+              placeholder="Select display scope"
+              searchPlaceholder="Search show currency on"
+              onSelect={(value) => updateMoneySetting('showCurrencyOn', value as ShowCurrencyOn)}
+            />
           </label>
 
           <label className="grid gap-2 text-sm">
             <span style={{ color: 'var(--text-muted)' }}>Negative Color</span>
-            <select
-              value={draftSettings.moneySettings.negativeColor}
-              onChange={(event) => updateMoneySetting('negativeColor', event.target.value as NegativeColor)}
-              className="rounded-md border bg-transparent px-3 py-1.5 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              {COMPANY_NEGATIVE_COLOR_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              selectedValue={draftSettings.moneySettings.negativeColor}
+              options={COMPANY_NEGATIVE_COLOR_OPTIONS}
+              placeholder="Select negative color"
+              searchPlaceholder="Search negative color"
+              onSelect={(value) => updateMoneySetting('negativeColor', value as NegativeColor)}
+            />
           </label>
 
           <label className="grid gap-2 text-sm md:col-span-2 xl:col-span-4">
             <span style={{ color: 'var(--text-muted)' }}>Document Date Format</span>
-            <select
-              value={draftSettings.moneySettings.documentDateFormat}
-              onChange={(event) => updateMoneySetting('documentDateFormat', event.target.value as DocumentDateFormat)}
-              className="rounded-md border bg-transparent px-3 py-1.5 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              {COMPANY_DOCUMENT_DATE_FORMAT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              selectedValue={draftSettings.moneySettings.documentDateFormat}
+              options={COMPANY_DOCUMENT_DATE_FORMAT_OPTIONS}
+              placeholder="Select date format"
+              searchPlaceholder="Search date format"
+              onSelect={(value) => updateMoneySetting('documentDateFormat', value as DocumentDateFormat)}
+            />
           </label>
         </div>
 

@@ -2,21 +2,16 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import TransactionHeaderSections, {
-  type TransactionHeaderField,
-  type TransactionHeaderSection,
-} from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, {
+  type RecordHeaderSection,
+} from '@/components/RecordHeaderDetails'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
-import {
-  RecordDetailStatCard,
-} from '@/components/RecordDetailPanels'
 import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
 import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/lib/form-requirements-client'
 import {
   QUOTE_DETAIL_FIELDS,
   type QuoteDetailCustomizationConfig,
-  type QuoteDetailFieldKey,
 } from '@/lib/quotes-detail-customization'
 import { fmtCurrency, fmtDocumentDate } from '@/lib/format'
 
@@ -141,7 +136,7 @@ export default function QuoteCreatePageClient({
     label: `${currency.code ?? currency.currencyId} - ${currency.name}`,
   }))
 
-  const headerFieldDefinitions: Record<QuoteDetailFieldKey, TransactionHeaderField & { key: QuoteDetailFieldKey }> = {
+  const headerFieldDefinitions: Record<string, RecordHeaderSection['fields'][number]> = {
     customerId: {
       key: 'customerId',
       label: 'Customer',
@@ -328,7 +323,7 @@ export default function QuoteCreatePageClient({
   applyRequirementsToEditableFields(headerFieldDefinitions, req, isLocked)
 
 
-  const headerSections: TransactionHeaderSection[] = buildConfiguredTransactionSections({
+  const headerSections: RecordHeaderSection[] = buildConfiguredTransactionSections({
     fields: QUOTE_DETAIL_FIELDS,
     layout: customization,
     fieldDefinitions: headerFieldDefinitions,
@@ -419,17 +414,13 @@ export default function QuoteCreatePageClient({
         </>
       }
     >
-      <div className="mb-8 grid gap-4 sm:grid-cols-4">
-        <RecordDetailStatCard label="Quote Total" value={fmtCurrency(quoteTotal)} accent />
-        <RecordDetailStatCard label="Valid Until" value={headerValues.validUntil ? fmtDocumentDate(headerValues.validUntil) : '-'} />
-        <RecordDetailStatCard label="Quote Lines" value={selectedOpportunity?.lineItems.length ?? 0} />
-        <RecordDetailStatCard label="Status" value={headerValues.status ? headerValues.status.charAt(0).toUpperCase() + headerValues.status.slice(1) : 'Draft'} />
-      </div>
-
-      <TransactionHeaderSections
+      <RecordHeaderDetails
         editing
         sections={headerSections}
         columns={customization.formColumns}
+        containerTitle="Quote Details"
+        containerDescription="Core quote fields organized into configurable sections."
+        showSubsections={false}
         formId="new-quote-form"
         submitMode="controlled"
         onSubmit={handleCreate}

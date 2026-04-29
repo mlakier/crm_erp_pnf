@@ -1,88 +1,83 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { DetailTableDisplayControl, DetailTablePaginationFooter } from '@/components/DetailTablePaging'
-import { RecordDetailCell, RecordDetailEmptyState, RecordDetailHeaderCell, RecordDetailSection } from '@/components/RecordDetailPanels'
+import RecordGlImpactSection from '@/components/RecordGlImpactSection'
 import { fmtCurrency } from '@/lib/format'
+import {
+  getOrderedVisibleTransactionGlImpactColumns,
+  TRANSACTION_GL_IMPACT_COLUMNS,
+  type TransactionGlImpactColumnCustomization,
+  type TransactionGlImpactRow,
+  type TransactionGlImpactSettings,
+} from '@/lib/transaction-gl-impact'
 
-export type PurchaseOrderGlImpactRow = {
-  id: string
-  journalNumber: string
-  date: string
-  sourceType: string
-  sourceNumber: string
-  account: string
-  description: string
-  debit: number
-  credit: number
+export type PurchaseOrderGlImpactRow = TransactionGlImpactRow
+
+function getColumnClassName(
+  columnId: keyof TransactionGlImpactRow | keyof TransactionGlImpactColumnCustomization,
+  columnCustomization?: Record<string, { widthMode?: string }>,
+) {
+  const widthMode = columnCustomization?.[columnId as string]?.widthMode ?? 'auto'
+  const widthClass =
+    widthMode === 'compact'
+      ? 'w-24'
+      : widthMode === 'normal'
+        ? 'w-36'
+        : widthMode === 'wide'
+          ? 'w-56'
+          : ''
+  const alignment = columnId === 'debit' || columnId === 'credit' ? 'text-right' : ''
+  const wrapping = columnId === 'description' ? 'max-w-[260px] whitespace-pre-wrap break-words' : ''
+  return [widthClass, alignment, wrapping].filter(Boolean).join(' ')
 }
 
-export default function PurchaseOrderGlImpactSection({ rows }: { rows: PurchaseOrderGlImpactRow[] }) {
-  const [pageSize, setPageSize] = useState(10)
-  const [page, setPage] = useState(1)
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
-  const currentPage = Math.min(page, totalPages)
-  const pagedRows = useMemo(
-    () => rows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
-    [currentPage, pageSize, rows]
+export default function PurchaseOrderGlImpactSection({
+  rows,
+  settings,
+  columnCustomization,
+  emptyMessage,
+}: {
+  rows: PurchaseOrderGlImpactRow[]
+  settings?: TransactionGlImpactSettings
+  columnCustomization?: Record<string, TransactionGlImpactColumnCustomization>
+  emptyMessage?: string
+}) {
+  const visibleColumns = getOrderedVisibleTransactionGlImpactColumns(
+    TRANSACTION_GL_IMPACT_COLUMNS,
+    columnCustomization,
   )
 
   return (
-    <RecordDetailSection
-      title="GL Impact"
-      count={rows.length}
+    <RecordGlImpactSection
+      rows={rows}
+      columns={visibleColumns}
+      fontSize={settings?.fontSize === 'sm' ? 'sm' : 'xs'}
       summary={rows.length ? `${rows.length} lines` : undefined}
-      collapsible
-      actions={
-        <DetailTableDisplayControl
-          value={pageSize}
-          onChange={(value) => {
-            setPageSize(value)
-            setPage(1)
-          }}
-        />
-      }
-    >
-      {rows.length === 0 ? (
-        <RecordDetailEmptyState message="No posted accounting impact is linked to this purchase order yet." />
-      ) : (
-        <>
-          <table className="min-w-full">
-            <thead>
-              <tr>
-                <RecordDetailHeaderCell>Date</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Journal #</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Source</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Source Txn</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Account</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Description</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell className="text-right">Debit</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell className="text-right">Credit</RecordDetailHeaderCell>
-              </tr>
-            </thead>
-            <tbody>
-              {pagedRows.map((row, index) => (
-                <tr
-                  key={row.id}
-                  style={index < pagedRows.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : undefined}
-                >
-                  <RecordDetailCell>{row.date}</RecordDetailCell>
-                  <RecordDetailCell>{row.journalNumber}</RecordDetailCell>
-                  <RecordDetailCell>{row.sourceType}</RecordDetailCell>
-                  <RecordDetailCell>{row.sourceNumber}</RecordDetailCell>
-                  <RecordDetailCell>{row.account}</RecordDetailCell>
-                  <RecordDetailCell className="max-w-[260px] whitespace-pre-wrap break-words">
-                    {row.description}
-                  </RecordDetailCell>
-                  <RecordDetailCell className="text-right">{row.debit ? fmtCurrency(row.debit) : '-'}</RecordDetailCell>
-                  <RecordDetailCell className="text-right">{row.credit ? fmtCurrency(row.credit) : '-'}</RecordDetailCell>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <DetailTablePaginationFooter total={rows.length} page={currentPage} pageSize={pageSize} onPageChange={setPage} />
-        </>
-      )}
-    </RecordDetailSection>
+      emptyMessage={emptyMessage ?? 'No posted accounting impact is linked to this purchase order yet.'}
+      getRowKey={(row) => row.id}
+      getHeaderClassName={(columnId) => getColumnClassName(columnId, columnCustomization)}
+      getCellClassName={(columnId) => getColumnClassName(columnId, columnCustomization)}
+      renderCell={(row, columnId) => {
+        switch (columnId) {
+          case 'date':
+            return row.date
+          case 'journalNumber':
+            return row.journalNumber
+          case 'sourceType':
+            return row.sourceType
+          case 'sourceNumber':
+            return row.sourceNumber
+          case 'account':
+            return row.account
+          case 'description':
+            return row.description
+          case 'debit':
+            return row.debit ? fmtCurrency(row.debit) : '-'
+          case 'credit':
+            return row.credit ? fmtCurrency(row.credit) : '-'
+          default:
+            return '-'
+        }
+      }}
+    />
   )
 }

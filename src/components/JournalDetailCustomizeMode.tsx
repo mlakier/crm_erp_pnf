@@ -11,7 +11,7 @@ import {
   type JournalLineColumnKey,
 } from '@/lib/journal-detail-customization'
 import type { JournalPageConfigRecord } from '@/lib/transaction-page-configs/journal'
-import type { TransactionStatDefinition } from '@/lib/transaction-page-config'
+import type { TransactionStatDefinition, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 const DISPLAY_MODE_COLUMNS = new Set<JournalLineColumnKey>([
   'accountId',
@@ -91,6 +91,30 @@ export default function JournalDetailCustomizeMode({
     secondarySettings: initialLayout.glImpactSettings,
     secondaryColumns: initialLayout.glImpactColumns,
   }
+  const statPreviewCards: Array<{
+    id: string
+    label: string
+    value: string | number
+    href?: string | null
+    accent?: true | 'teal' | 'yellow'
+    valueTone?: TransactionVisualTone
+    cardTone?: TransactionVisualTone
+    supportsColorized?: boolean
+    supportsLink?: boolean
+  }> | undefined =
+    statPreviewRecord && statPreviewDefinitions
+      ? statPreviewDefinitions.map((stat) => ({
+          id: stat.id,
+          label: stat.label,
+          value: stat.getValue(statPreviewRecord),
+          href: stat.getHref?.(statPreviewRecord) ?? null,
+          accent: stat.accent,
+          valueTone: stat.getValueTone?.(statPreviewRecord),
+          cardTone: stat.getCardTone?.(statPreviewRecord),
+          supportsColorized: Boolean(stat.accent || stat.getValueTone || stat.getCardTone),
+          supportsLink: Boolean(stat.getHref),
+        }))
+      : undefined
 
   return (
     <TransactionRecordDetailCustomizeMode
@@ -104,8 +128,7 @@ export default function JournalDetailCustomizeMode({
       secondaryColumnsLabel="GL Impact"
       sectionDescriptions={sectionDescriptions}
       statCardDefinitions={JOURNAL_STAT_CARDS}
-      statPreviewRecord={statPreviewRecord}
-      statPreviewDefinitions={statPreviewDefinitions as Array<TransactionStatDefinition<unknown>> | undefined}
+      statPreviewCards={statPreviewCards}
       lineColumnDefinitions={lineColumnDefinitions ?? [...JOURNAL_LINE_COLUMNS]}
       lineColumnSettingAvailability={JOURNAL_LINE_SETTING_AVAILABILITY}
       secondaryColumnDefinitions={glImpactColumnDefinitions ?? [...JOURNAL_GL_IMPACT_COLUMNS]}

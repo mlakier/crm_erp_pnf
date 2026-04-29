@@ -1,21 +1,20 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import DeleteButton from '@/components/DeleteButton'
-import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
-import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
-import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
-import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSection'
+import type { InlineRecordSection } from '@/components/InlineRecordDetails'
+import MasterDataHeaderDetails from '@/components/MasterDataHeaderDetails'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
+import RecordDetailActionBar from '@/components/RecordDetailActionBar'
+import { buildMasterDataSystemInformationItems } from '@/components/RecordSystemInformationSection'
 import ItemDetailCustomizeMode from '@/components/ItemDetailCustomizeMode'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import CommunicationsSection from '@/components/CommunicationsSection'
+import RelatedRecordsSection from '@/components/RelatedRecordsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
-import {
-  RecordDetailCell,
-  RecordDetailEmptyState,
-  RecordDetailHeaderCell,
-  RecordDetailSection,
-} from '@/components/RecordDetailPanels'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
+import TransactionRelatedDocumentsTabs, {
+  RelatedDocumentsStatusBadge,
+} from '@/components/TransactionRelatedDocumentsTabs'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
 import { fmtCurrency, fmtDocumentDate } from '@/lib/format'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
@@ -25,6 +24,7 @@ import { loadFormRequirements } from '@/lib/form-requirements-store'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { loadMasterDataSystemInfo } from '@/lib/master-data-system-info'
 import { loadMasterDataSystemNotes } from '@/lib/master-data-system-notes'
+import type { TransactionStatDefinition, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 export default async function ItemDetailPage({
   params,
@@ -275,17 +275,27 @@ export default async function ItemDetailPage({
     directRevenuePosting: { name: 'directRevenuePosting', label: 'Direct Revenue Posting', value: String(item.directRevenuePosting), type: 'checkbox', placeholder: 'Direct Revenue Posting', helpText: 'If enabled, revenue can post directly at billing or fulfillment instead of first routing through deferred revenue logic.' },
   }
   const customizeFields = buildCustomizePreviewFields(ITEM_FORM_FIELDS, itemFieldDefinitions)
-  const statPreviewCards = [
-    { id: 'purchaseOrderLines', label: 'Purchase Order Lines', value: item.purchaseOrderLineItems.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+  const statPreviewCards: Array<{
+    id: string
+    label: string
+    value: string | number
+    href?: string | null
+    accent?: true | 'teal' | 'yellow'
+    cardTone?: TransactionVisualTone
+    valueTone?: TransactionVisualTone
+    supportsColorized: boolean
+    supportsLink: boolean
+  }> = [
+    { id: 'purchaseOrderLines', label: 'Purchase Order Lines', value: item.purchaseOrderLineItems.length, cardTone: 'accent', valueTone: 'accent', supportsColorized: true, supportsLink: false },
     { id: 'subsidiaries', label: 'Subsidiaries', value: item.itemSubsidiaries.length, accent: 'teal', cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
     { id: 'preferredVendor', label: 'Preferred Vendor', value: item.preferredVendor ? item.preferredVendor.name : 'Not Set', href: item.preferredVendor ? `/vendors/${item.preferredVendor.id}` : null, accent: 'yellow', cardTone: item.preferredVendor ? 'yellow' : 'default', valueTone: item.preferredVendor ? 'yellow' : 'default', supportsColorized: true, supportsLink: true },
     { id: 'status', label: 'Status', value: itemStatus, cardTone: item.active ? 'green' : 'red', valueTone: item.active ? 'green' : 'red', supportsColorized: true, supportsLink: false },
   ]
-  const statDefinitions = [
-    { id: 'purchaseOrderLines', label: 'Purchase Order Lines', getValue: () => item.purchaseOrderLineItems.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
-    { id: 'subsidiaries', label: 'Subsidiaries', getValue: () => item.itemSubsidiaries.length, accent: 'teal' as const, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
-    { id: 'preferredVendor', label: 'Preferred Vendor', getValue: () => (item.preferredVendor ? item.preferredVendor.name : 'Not Set'), getHref: () => (item.preferredVendor ? `/vendors/${item.preferredVendor.id}` : null), accent: 'yellow' as const, getCardTone: () => (item.preferredVendor ? 'yellow' : 'default') as const, getValueTone: () => (item.preferredVendor ? 'yellow' : 'default') as const },
-    { id: 'status', label: 'Status', getValue: () => itemStatus, getCardTone: () => (item.active ? 'green' : 'red') as const, getValueTone: () => (item.active ? 'green' : 'red') as const },
+  const statDefinitions: Array<TransactionStatDefinition<typeof item>> = [
+    { id: 'purchaseOrderLines', label: 'Purchase Order Lines', getValue: () => item.purchaseOrderLineItems.length, getCardTone: () => 'accent', getValueTone: () => 'accent' },
+    { id: 'subsidiaries', label: 'Subsidiaries', getValue: () => item.itemSubsidiaries.length, accent: 'teal', getCardTone: () => 'teal', getValueTone: () => 'teal' },
+    { id: 'preferredVendor', label: 'Preferred Vendor', getValue: () => (item.preferredVendor ? item.preferredVendor.name : 'Not Set'), getHref: () => (item.preferredVendor ? `/vendors/${item.preferredVendor.id}` : null), accent: 'yellow', getCardTone: () => (item.preferredVendor ? 'yellow' : 'default'), getValueTone: () => (item.preferredVendor ? 'yellow' : 'default') },
+    { id: 'status', label: 'Status', getValue: () => itemStatus, getCardTone: () => (item.active ? 'green' : 'red'), getValueTone: () => (item.active ? 'green' : 'red') },
   ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: ITEM_FORM_FIELDS,
@@ -300,6 +310,103 @@ export default async function ItemDetailPage({
     updatedAt: item.updatedAt,
   })
   const systemNotes = await loadMasterDataSystemNotes({ entityType: 'item', entityId: item.id })
+  const relatedRecordsTabs = [
+    {
+      key: 'subsidiaries',
+      label: 'Subsidiaries',
+      count: item.itemSubsidiaries.length,
+      emptyMessage: 'No subsidiaries are linked to this item yet.',
+      rows: item.itemSubsidiaries.map((assignment) => ({
+        id: assignment.subsidiary.id,
+        type: 'Subsidiary',
+        reference: assignment.subsidiary.subsidiaryId,
+        name: assignment.subsidiary.name,
+        details: 'Item Availability',
+        href: `/subsidiaries/${assignment.subsidiary.id}`,
+      })),
+    },
+    {
+      key: 'core-links',
+      label: 'Core Links',
+      count: [item.preferredVendor, item.department, item.location, item.currency].filter(Boolean).length,
+      emptyMessage: 'No core linked records are set for this item yet.',
+      rows: [
+        ...(item.preferredVendor
+          ? [{
+              id: item.preferredVendor.id,
+              type: 'Vendor',
+              reference: item.preferredVendor.vendorNumber ?? 'Pending',
+              name: item.preferredVendor.name,
+              details: 'Preferred Vendor',
+              href: `/vendors/${item.preferredVendor.id}`,
+            }]
+          : []),
+        ...(item.department
+          ? [{
+              id: item.department.id,
+              type: 'Department',
+              reference: item.department.departmentId,
+              name: item.department.name,
+              details: 'Department',
+              href: `/departments/${item.department.id}`,
+            }]
+          : []),
+        ...(item.location
+          ? [{
+              id: item.location.id,
+              type: 'Location',
+              reference: item.location.locationId,
+              name: item.location.name,
+              details: 'Default Location',
+              href: `/locations/${item.location.id}`,
+            }]
+          : []),
+        ...(item.currency
+          ? [{
+              id: item.currency.id,
+              type: 'Currency',
+              reference: item.currency.currencyId,
+              name: item.currency.name,
+              details: 'Pricing Currency',
+              href: `/currencies/${item.currency.id}`,
+            }]
+          : []),
+      ],
+    },
+  ]
+  const relatedDocumentsTabs = [
+    {
+      key: 'purchase-order-lines',
+      label: 'Purchase Order Lines',
+      count: item.purchaseOrderLineItems.length,
+      tone: 'downstream' as const,
+      emptyMessage: 'No purchase order lines are linked to this item yet.',
+      headers: ['Txn ID', 'PO Line', 'Status', 'Qty', 'Unit Price', 'Date'],
+      rows: item.purchaseOrderLineItems.map((line) => ({
+        id: line.id,
+        cells: [
+          <Link key="link" href={`/purchase-orders/${line.purchaseOrder.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+            {line.purchaseOrder.number}
+          </Link>,
+          String(line.displayOrder + 1),
+          <RelatedDocumentsStatusBadge key="status" status={line.purchaseOrder.status} />,
+          line.quantity,
+          fmtCurrency(line.unitPrice, undefined, moneySettings),
+          fmtDocumentDate(line.purchaseOrder.createdAt),
+        ],
+        filterValues: [
+          line.purchaseOrder.number,
+          String(line.displayOrder + 1),
+          line.purchaseOrder.status,
+          String(line.quantity),
+          fmtCurrency(line.unitPrice, undefined, moneySettings),
+          fmtDocumentDate(line.purchaseOrder.createdAt),
+        ],
+      })),
+    },
+  ]
+  const communicationsToolbarTargetId = 'item-communications-toolbar'
+  const systemNotesToolbarTargetId = 'item-system-notes-toolbar'
 
   return (
     <RecordDetailPageShell
@@ -318,44 +425,22 @@ export default async function ItemDetailPage({
         ) : null
       }
       actions={
-        <>
-          {isEditing && !isCustomizing ? (
-            <>
-              <Link href={detailHref} className="rounded-md border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-                Cancel
-              </Link>
-              <button
-                type="submit"
-                form={`inline-record-form-${item.id}`}
-                className="rounded-md px-3 py-1.5 text-xs font-semibold text-white"
-                style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-              >
-                Save
-              </button>
-            </>
-          ) : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailCreateMenu newHref="/items/new" duplicateHref={`/items/new?duplicateFrom=${item.id}`} /> : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailExportMenu title={item.name} fileName={`item-${item.itemId ?? item.id}`} sections={detailSections} /> : null}
-          {!isEditing && !isCustomizing ? (
-            <Link
-              href={`${detailHref}?customize=1`}
-              className="rounded-md border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-            >
-              Customize
-            </Link>
-          ) : null}
-          {!isEditing && !isCustomizing ? (
-            <Link
-              href={`${detailHref}?edit=1`}
-              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
-              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-            >
-              Edit
-            </Link>
-          ) : null}
-          {!isCustomizing ? <DeleteButton resource="items" id={item.id} /> : null}
-        </>
+        isCustomizing ? null : (
+          <RecordDetailActionBar
+            mode={isEditing ? 'edit' : 'detail'}
+            detailHref={detailHref}
+            formId={`inline-record-form-${item.id}`}
+            newHref="/items/new"
+            duplicateHref={`/items/new?duplicateFrom=${item.id}`}
+            exportTitle={item.name}
+            exportFileName={`item-${item.itemId ?? item.id}`}
+            exportSections={detailSections}
+            customizeHref={`${detailHref}?customize=1`}
+            editHref={`${detailHref}?edit=1`}
+            deleteResource="items"
+            deleteId={item.id}
+          />
+        )
       }
     >
         {!isCustomizing ? (
@@ -378,56 +463,72 @@ export default async function ItemDetailPage({
             statPreviewCards={statPreviewCards}
           />
         ) : (
-          <InlineRecordDetails
+          <MasterDataHeaderDetails
             resource="items"
             id={item.id}
-            title="Item details"
+            title="Item Details"
             sections={detailSections}
             editing={isEditing}
             columns={itemFormCustomization.formColumns}
-            showInternalActions={false}
+            systemInformationItems={buildMasterDataSystemInformationItems(systemInfo, item.id)}
           />
         )}
 
-        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} internalId={item.id} /> : null}
-
         {!isCustomizing ? (
-        <RecordDetailSection title="Purchase Order Lines" count={item.purchaseOrderLineItems.length}>
-          {item.purchaseOrderLineItems.length === 0 ? (
-            <RecordDetailEmptyState message="No purchase order lines for this item" />
-          ) : (
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <RecordDetailHeaderCell>PO #</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>PO Line</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Status</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Qty</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Unit Price</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Date</RecordDetailHeaderCell>
-                </tr>
-              </thead>
-              <tbody>
-                {item.purchaseOrderLineItems.map((line) => (
-                  <tr key={line.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <RecordDetailCell>
-                      <Link href={`/purchase-orders/${line.purchaseOrder.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {line.purchaseOrder.number}
-                      </Link>
-                    </RecordDetailCell>
-                    <RecordDetailCell>{line.displayOrder + 1}</RecordDetailCell>
-                    <RecordDetailCell>{line.purchaseOrder.status}</RecordDetailCell>
-                    <RecordDetailCell>{line.quantity}</RecordDetailCell>
-                    <RecordDetailCell>{fmtCurrency(line.unitPrice, undefined, moneySettings)}</RecordDetailCell>
-                    <RecordDetailCell>{fmtDocumentDate(line.purchaseOrder.createdAt)}</RecordDetailCell>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </RecordDetailSection>
+          <RecordBottomTabsSection
+            defaultActiveKey="related-records"
+            tabs={[
+              {
+                key: 'related-records',
+                label: 'Related Records',
+                count: relatedRecordsTabs.reduce((sum, tab) => sum + tab.count, 0),
+                content: <RelatedRecordsSection embedded tabs={relatedRecordsTabs} showDisplayControl={false} />,
+              },
+              {
+                key: 'related-documents',
+                label: 'Related Documents',
+                count: item.purchaseOrderLineItems.length,
+                content: (
+                  <TransactionRelatedDocumentsTabs
+                    embedded
+                    tabs={relatedDocumentsTabs}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+              {
+                key: 'communications',
+                label: 'Communications',
+                count: 0,
+                toolbarTargetId: communicationsToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <CommunicationsSection
+                    embedded
+                    toolbarTargetId={communicationsToolbarTargetId}
+                    rows={[]}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+              {
+                key: 'system-notes',
+                label: 'System Notes',
+                count: systemNotes.length,
+                toolbarTargetId: systemNotesToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <SystemNotesSection
+                    embedded
+                    toolbarTargetId={systemNotesToolbarTargetId}
+                    notes={systemNotes}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+            ]}
+          />
         ) : null}
-        {!isCustomizing ? <SystemNotesSection notes={systemNotes} /> : null}
     </RecordDetailPageShell>
   )
 }

@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { parseMoneyValue } from '@/lib/money'
+import SearchableSelect from '@/components/SearchableSelect'
 
 export default function PurchaseOrderCreateForm({
   userId,
@@ -72,18 +73,17 @@ export default function PurchaseOrderCreateForm({
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div>
           <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Vendor</label>
-          <select
-            value={vendorId}
-            onChange={(e) => setVendorId(e.target.value)}
-            className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm text-white"
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            {vendors.map((vendor) => (
-              <option key={vendor.id} value={vendor.id}>
-                {vendor.name}
-              </option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <SearchableSelect
+              selectedValue={vendorId}
+              options={vendors.map((vendor) => ({
+                value: vendor.id,
+                label: vendor.name,
+              }))}
+              placeholder="Select vendor"
+              onSelect={setVendorId}
+            />
+          </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -98,18 +98,20 @@ export default function PurchaseOrderCreateForm({
           </div>
           <div>
             <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Status</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              <option value="draft">Draft</option>
-              <option value="pending approval">Pending approval</option>
-              <option value="approved">Approved</option>
-              <option value="sent">Sent</option>
-              <option value="received">Received</option>
-            </select>
+            <div className="mt-1">
+              <SearchableSelect
+                selectedValue={status}
+                options={[
+                  { value: 'draft', label: 'Draft' },
+                  { value: 'pending approval', label: 'Pending approval' },
+                  { value: 'approved', label: 'Approved' },
+                  { value: 'sent', label: 'Sent' },
+                  { value: 'received', label: 'Received' },
+                ]}
+                placeholder="Select status"
+                onSelect={(value) => setStatus(value || 'draft')}
+              />
+            </div>
           </div>
         </div>
         {error && <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}

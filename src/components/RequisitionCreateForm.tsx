@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import SearchableSelect from '@/components/SearchableSelect'
 
 type Vendor = { id: string; name: string }
 type Department = { id: string; name: string; departmentId: string }
@@ -132,25 +133,19 @@ export default function RequisitionCreateForm({
           <label className={labelClassName} style={{ color: 'var(--text-secondary)' }}>
             Priority
           </label>
-          <select
-            value={priority}
-            onChange={(event) => setPriority(event.target.value)}
-            className={inputClassName}
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            <option value="low" style={{ backgroundColor: 'var(--card-elevated)' }}>
-              Low
-            </option>
-            <option value="medium" style={{ backgroundColor: 'var(--card-elevated)' }}>
-              Medium
-            </option>
-            <option value="high" style={{ backgroundColor: 'var(--card-elevated)' }}>
-              High
-            </option>
-            <option value="urgent" style={{ backgroundColor: 'var(--card-elevated)' }}>
-              Urgent
-            </option>
-          </select>
+          <div className="mt-1">
+            <SearchableSelect
+              selectedValue={priority}
+              options={[
+                { value: 'low', label: 'Low' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'high', label: 'High' },
+                { value: 'urgent', label: 'Urgent' },
+              ]}
+              placeholder="Select priority"
+              onSelect={(value) => setPriority(value || 'medium')}
+            />
+          </div>
         </div>
         <div>
           <label className={labelClassName} style={{ color: 'var(--text-secondary)' }}>
@@ -171,45 +166,33 @@ export default function RequisitionCreateForm({
           <label className={labelClassName} style={{ color: 'var(--text-secondary)' }}>
             Department
           </label>
-          <select
-            value={departmentId}
-            onChange={(event) => setDepartmentId(event.target.value)}
-            className={inputClassName}
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>
-              - Select department -
-            </option>
-            {departments.map((department) => (
-              <option
-                key={department.id}
-                value={department.id}
-                style={{ backgroundColor: 'var(--card-elevated)' }}
-              >
-                {department.departmentId} - {department.name}
-              </option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <SearchableSelect
+              selectedValue={departmentId}
+              options={departments.map((department) => ({
+                value: department.id,
+                label: `${department.departmentId} - ${department.name}`,
+              }))}
+              placeholder="- Select department -"
+              onSelect={setDepartmentId}
+            />
+          </div>
         </div>
         <div>
           <label className={labelClassName} style={{ color: 'var(--text-secondary)' }}>
             Preferred vendor
           </label>
-          <select
-            value={vendorId}
-            onChange={(event) => setVendorId(event.target.value)}
-            className={inputClassName}
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>
-              - Select vendor -
-            </option>
-            {vendors.map((vendor) => (
-              <option key={vendor.id} value={vendor.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                {vendor.name}
-              </option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <SearchableSelect
+              selectedValue={vendorId}
+              options={vendors.map((vendor) => ({
+                value: vendor.id,
+                label: vendor.name,
+              }))}
+              placeholder="- Select vendor -"
+              onSelect={setVendorId}
+            />
+          </div>
         </div>
       </div>
 
@@ -218,41 +201,33 @@ export default function RequisitionCreateForm({
           <label className={labelClassName} style={{ color: 'var(--text-secondary)' }}>
             Subsidiary
           </label>
-          <select
-            value={subsidiaryId}
-            onChange={(event) => setSubsidiaryId(event.target.value)}
-            className={inputClassName}
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>
-              - Select subsidiary -
-            </option>
-            {entities.map((entity) => (
-              <option key={entity.id} value={entity.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                {entity.subsidiaryId} - {entity.name}
-              </option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <SearchableSelect
+              selectedValue={subsidiaryId}
+              options={entities.map((entity) => ({
+                value: entity.id,
+                label: `${entity.subsidiaryId} - ${entity.name}`,
+              }))}
+              placeholder="- Select subsidiary -"
+              onSelect={setSubsidiaryId}
+            />
+          </div>
         </div>
         <div>
           <label className={labelClassName} style={{ color: 'var(--text-secondary)' }}>
             Currency
           </label>
-          <select
-            value={currencyId}
-            onChange={(event) => setCurrencyId(event.target.value)}
-            className={inputClassName}
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>
-              - Select currency -
-            </option>
-            {currencies.map((currency) => (
-              <option key={currency.id} value={currency.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                {currency.code ?? currency.currencyId} - {currency.name}
-              </option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <SearchableSelect
+              selectedValue={currencyId}
+              options={currencies.map((currency) => ({
+                value: currency.id,
+                label: `${currency.code ?? currency.currencyId} - ${currency.name}`,
+              }))}
+              placeholder="- Select currency -"
+              onSelect={setCurrencyId}
+            />
+          </div>
         </div>
       </div>
 

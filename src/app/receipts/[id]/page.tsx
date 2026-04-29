@@ -9,18 +9,21 @@ import { buildReceiptDisplayNumberMap } from '@/lib/receipt-display-number'
 import { createRecordLabelMapFromValues, formatRecordLabel } from '@/lib/record-status-label'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import ReceiptDetailCustomizeMode from '@/components/ReceiptDetailCustomizeMode'
+import ReceiptLineItemsSection from '@/components/ReceiptLineItemsSection'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import RecordStatusButton from '@/components/RecordStatusButton'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import CommunicationsSection from '@/components/CommunicationsSection'
+import ReceiptGlImpactSection from '@/components/ReceiptGlImpactSection'
 import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
 import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
 import TransactionActionStack from '@/components/TransactionActionStack'
 import DeleteButton from '@/components/DeleteButton'
 import ReceiptRelatedDocuments from '@/components/ReceiptRelatedDocuments'
 import { parseCommunicationSummary, parseFieldChangeSummary } from '@/lib/activity'
+import { canReceivePurchaseOrderLine } from '@/lib/item-business-rules'
 import {
   buildLinkedReferenceFieldDefinitions,
   buildLinkedReferencePreviewSources,
@@ -28,6 +31,7 @@ import {
 import { buildTransactionCommunicationComposePayload } from '@/lib/transaction-communications'
 import {
   buildConfiguredTransactionSections,
+  buildTransactionGlImpactRows,
   buildTransactionCustomizePreviewFields,
   buildTransactionExportHeaderFields,
 } from '@/lib/transaction-detail-helpers'
@@ -42,7 +46,7 @@ import type { TransactionStatDefinition } from '@/lib/transaction-page-config'
 
 type ReceiptHeaderField = {
   key: ReceiptDetailFieldKey
-} & TransactionHeaderField
+} & RecordHeaderField
 
 function getReceiptStatusActions(currentStatus: string) {
   const normalized = currentStatus.toLowerCase()
@@ -94,6 +98,21 @@ export default async function ReceiptDetailPage({
             vendor: true,
             user: true,
             requisition: true,
+            lineItems: {
+              orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+              include: {
+                item: {
+                  select: {
+                    id: true,
+                    itemId: true,
+                    name: true,
+                    dropShipItem: true,
+                    specialOrderItem: true,
+                  },
+                },
+                receiptLines: { select: { id: true, quantity: true, receiptId: true } },
+              },
+            },
             bills: {
               include: {
                 billPayments: true,
@@ -101,6 +120,25 @@ export default async function ReceiptDetailPage({
             },
             subsidiary: true,
             currency: true,
+          },
+        },
+        lines: {
+          orderBy: { id: 'asc' },
+          include: {
+            purchaseOrderLineItem: {
+              include: {
+                item: {
+                  select: {
+                    id: true,
+                    itemId: true,
+                    name: true,
+                    dropShipItem: true,
+                    specialOrderItem: true,
+                  },
+                },
+                receiptLines: { select: { id: true, quantity: true, receiptId: true } },
+              },
+            },
           },
         },
       },
@@ -115,12 +153,79 @@ export default async function ReceiptDetailPage({
 
   if (!receipt) notFound()
 
+  const glImpactEntries = await prisma.journalEntry.findMany({
+    where: { sourceId: receipt.id },
+    include: {
+      lineItems: {
+        include: {
+          account: {
+            select: { accountId: true, name: true },
+          },
+        },
+      },
+    },
+    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+  })
   const detailHref = `/receipts/${receipt.id}`
   const receiptNumberMap = buildReceiptDisplayNumberMap(allReceiptIds)
   const receiptLabel = receiptNumberMap.get(receipt.id) ?? receipt.id
+  const glSourceNumberByKey = new Map<string, string>()
+  for (const entry of glImpactEntries) {
+    glSourceNumberByKey.set(`${entry.sourceType ?? ''}:${entry.sourceId ?? ''}`, receiptLabel)
+  }
+  const glImpactRows = buildTransactionGlImpactRows({
+    entries: glImpactEntries,
+    sourceNumberByKey: glSourceNumberByKey,
+    formatDate: (date) => fmtDocumentDate(date, moneySettings),
+    toNumericValue: (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback,
+  })
   const statusLabelMap = createRecordLabelMapFromValues(statusValues)
   const formattedStatus = formatRecordLabel(receipt.status, statusLabelMap)
   const statusOptions = statusValues.map((value) => ({ value: value.toLowerCase(), label: value }))
+  const lineRows = receipt.lines.map((line) => {
+    const purchaseOrderLine = line.purchaseOrderLineItem
+    const alreadyReceivedByOthers = (purchaseOrderLine?.receiptLines ?? []).reduce(
+      (sum, receiptLine) => sum + (receiptLine.receiptId === receipt.id ? 0 : receiptLine.quantity),
+      0,
+    )
+    const openQuantity = Math.max(0, (purchaseOrderLine?.quantity ?? 0) - alreadyReceivedByOthers)
+    return {
+      id: line.id,
+      purchaseOrderLineItemId: purchaseOrderLine?.id ?? null,
+      lineNumber: Math.max(
+        1,
+        (receipt.purchaseOrder.lineItems.findIndex((candidate) => candidate.id === purchaseOrderLine?.id) ?? 0) + 1,
+      ),
+      itemId: purchaseOrderLine?.item?.itemId ?? null,
+      itemName: purchaseOrderLine?.item?.name ?? null,
+      description: purchaseOrderLine?.description ?? '',
+      orderedQuantity: purchaseOrderLine?.quantity ?? 0,
+      alreadyReceivedQuantity: alreadyReceivedByOthers,
+      openQuantity,
+      receiptQuantity: line.quantity,
+      notes: line.notes ?? '',
+    }
+  })
+  const lineOptions = receipt.purchaseOrder.lineItems
+    .filter((line) => canReceivePurchaseOrderLine(line.item))
+    .map((line, index) => {
+      const alreadyReceivedByOthers = line.receiptLines.reduce(
+        (sum, receiptLine) => sum + (receiptLine.receiptId === receipt.id ? 0 : receiptLine.quantity),
+        0,
+      )
+      return {
+        id: line.id,
+        lineNumber: index + 1,
+        itemId: line.item?.itemId ?? null,
+        itemName: line.item?.name ?? null,
+        description: line.description,
+        orderedQuantity: line.quantity,
+        alreadyProcessedQuantity: alreadyReceivedByOthers,
+        openQuantity: Math.max(0, line.quantity - alreadyReceivedByOthers),
+      }
+    })
+    .filter((line) => line.openQuantity > 0 || lineRows.some((row) => row.purchaseOrderLineItemId === line.id))
+  const quantityIsDerivedFromLines = lineRows.length > 0
 
   const sectionDescriptions: Record<string, string> = {
     'Document Identity': 'Receipt numbering and source purchase-order context for this receipt.',
@@ -241,9 +346,11 @@ export default async function ReceiptDetailPage({
       label: 'Quantity',
       value: String(receipt.quantity),
       displayValue: String(receipt.quantity),
-      editable: true,
+      editable: !quantityIsDerivedFromLines,
       type: 'number',
-      helpText: 'Total quantity received on this receipt.',
+      helpText: quantityIsDerivedFromLines
+        ? 'Derived from the receipt line quantities below.'
+        : 'Total quantity received on this receipt.',
       fieldType: 'number',
       subsectionTitle: 'Receipt Terms',
       subsectionDescription: 'Core receipt quantity, date, status, and operational notes.',
@@ -321,14 +428,14 @@ export default async function ReceiptDetailPage({
     { purchaseOrder: `/purchase-orders/${receipt.purchaseOrder.id}` },
   )
 
-  const allFieldDefinitions = {
+  const allFieldDefinitions: Record<string, RecordHeaderField> = {
     ...headerFieldDefinitions,
     ...referenceFieldDefinitions,
   }
 
   const customizeFields = buildTransactionCustomizePreviewFields({
     fields: RECEIPT_DETAIL_FIELDS,
-    fieldDefinitions: allFieldDefinitions,
+    fieldDefinitions: headerFieldDefinitions,
     previewOverrides: {
       quantity: String(receipt.quantity),
       date: fmtDocumentDate(receipt.date, moneySettings),
@@ -401,7 +508,7 @@ export default async function ReceiptDetailPage({
         fields,
       }
     })
-    .filter((section): section is { title: string; description: string; columns: number; rows: number; fields: TransactionHeaderField[] } => Boolean(section))
+    .filter((section): section is NonNullable<typeof section> => Boolean(section))
 
   const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
   const receiptStatusActions = getReceiptStatusActions(receipt.status)
@@ -506,7 +613,7 @@ export default async function ReceiptDetailPage({
           ) : (
             <div className="space-y-6">
               {referenceSections.length > 0 ? (
-                <TransactionHeaderSections
+                <RecordHeaderDetails
                   editing={false}
                 sections={referenceSections.map((section) => ({
                     title: section.title,
@@ -520,7 +627,7 @@ export default async function ReceiptDetailPage({
                   showSubsections={false}
                 />
               ) : null}
-              <TransactionHeaderSections
+              <RecordHeaderDetails
                 purchaseOrderId={receipt.id}
                 editing={isEditing}
                 sections={headerSections}
@@ -533,9 +640,28 @@ export default async function ReceiptDetailPage({
             </div>
           )
         }
-        lineItems={null}
+        lineItems={
+          isCustomizing ? null : (
+            <ReceiptLineItemsSection
+              rows={lineRows}
+              editing={isEditing}
+              lineOptions={lineOptions}
+              allowAddLines
+              remoteConfig={
+                isEditing
+                  ? {
+                      receiptId: receipt.id,
+                      userId: receipt.purchaseOrder.userId ?? null,
+                    }
+                  : undefined
+              }
+            />
+          )
+        }
         relatedDocuments={isCustomizing ? null : (
           <ReceiptRelatedDocuments
+            embedded
+            showDisplayControl={false}
             purchaseRequisitions={
               receipt.purchaseOrder.requisition
                 ? [
@@ -581,9 +707,25 @@ export default async function ReceiptDetailPage({
             moneySettings={moneySettings}
           />
         )}
-        supplementarySections={null}
+        relatedDocumentsCount={
+          (receipt.purchaseOrder.requisition ? 1 : 0) +
+          1 +
+          receipt.purchaseOrder.bills.length +
+          receipt.purchaseOrder.bills.reduce((sum, bill) => sum + bill.billPayments.length, 0)
+        }
+        supplementarySections={
+          isCustomizing ? null : (
+            <ReceiptGlImpactSection
+              rows={glImpactRows}
+              settings={customization.glImpactSettings}
+              columnCustomization={customization.glImpactColumns}
+            />
+          )
+        }
         communications={isCustomizing ? null : (
           <CommunicationsSection
+            embedded
+            showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
               recordId: receipt.id,
@@ -601,7 +743,9 @@ export default async function ReceiptDetailPage({
             })}
           />
         )}
-        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
+        communicationsCount={communications.length}
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        systemNotesCount={systemNotes.length}
       />
     </RecordDetailPageShell>
   )

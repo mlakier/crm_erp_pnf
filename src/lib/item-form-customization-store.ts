@@ -183,12 +183,13 @@ function mergeWithDefaults(overrides: Partial<ItemFormCustomizationConfig>): Ite
       const metric = String(root.metric ?? '').trim() as ItemStatCardMetric
       if (!allowedMetrics.has(metric)) return null
 
+      const size: 'sm' | 'md' | 'lg' = root.size === 'sm' || root.size === 'lg' ? root.size : 'md'
       return {
         id: String(root.id ?? `item-stat-${metric}`),
         metric,
         visible: root.visible === undefined ? true : root.visible === true,
         order: typeof root.order === 'number' && Number.isFinite(root.order) ? root.order : index,
-        size: root.size === 'sm' || root.size === 'lg' ? root.size : 'md',
+        size,
         colorized: root.colorized === undefined ? true : root.colorized === true,
         linked: root.linked === undefined ? true : root.linked === true,
       }

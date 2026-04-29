@@ -6,11 +6,10 @@ import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
 import { sumMoney } from '@/lib/money'
 import PurchaseOrderDetailCustomizeMode from '@/components/PurchaseOrderDetailCustomizeMode'
 import PurchaseOrderDetailExportButton from '@/components/PurchaseOrderDetailExportButton'
-import PurchaseOrderGlImpactSection from '@/components/PurchaseOrderGlImpactSection'
 import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
-import TransactionHeaderSections, {
-  type TransactionHeaderField,
-} from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, {
+  type RecordHeaderField,
+} from '@/components/RecordHeaderDetails'
 import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import PurchaseOrderPageActions from '@/components/PurchaseOrderPageActions'
 import PurchaseOrderRelatedDocuments from '@/components/PurchaseOrderRelatedDocuments'
@@ -50,7 +49,7 @@ const PURCHASE_ORDER_STATUS_OPTIONS = [
 ]
 
 const SYSTEM_NOTE_CURRENCY_FIELDS = new Set(['Total', 'Unit Price', 'Line Total'])
-type PurchaseOrderDetailHeaderField = TransactionHeaderField & { key: PurchaseOrderDetailFieldKey }
+type PurchaseOrderDetailHeaderField = RecordHeaderField & { key: PurchaseOrderDetailFieldKey }
 
 export default async function PurchaseOrderDetailPage({
   params,
@@ -250,63 +249,6 @@ export default async function PurchaseOrderDetailPage({
     return acc
   }, [])
   const computedTotal = sumMoney(derivedLineRows.map((row) => row.lineTotal))
-  const glSourceRefs = [
-    { sourceType: 'purchase-order', sourceId: po.id, sourceNumber: po.number },
-    ...po.receipts.map((receipt) => ({
-      sourceType: 'receipt',
-      sourceId: receipt.id,
-      sourceNumber: receiptNumberMap.get(receipt.id) ?? receipt.id,
-    })),
-    ...po.bills.map((bill) => ({
-      sourceType: 'bill',
-      sourceId: bill.id,
-      sourceNumber: bill.number,
-    })),
-    ...po.bills.flatMap((bill) =>
-      bill.billPayments.map((payment) => ({
-        sourceType: 'bill-payment',
-        sourceId: payment.id,
-        sourceNumber: payment.number,
-      }))
-    ),
-  ]
-  const glImpactEntries = glSourceRefs.length
-    ? await prisma.journalEntry.findMany({
-        where: {
-          OR: glSourceRefs.map((ref) => ({
-            sourceType: ref.sourceType,
-            sourceId: ref.sourceId,
-          })),
-        },
-        include: {
-          lineItems: {
-            include: {
-              account: {
-                select: { accountId: true, name: true },
-              },
-            },
-          },
-        },
-        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-      })
-    : []
-  const glSourceNumberByKey = new Map(
-    glSourceRefs.map((ref) => [`${ref.sourceType}:${ref.sourceId}`, ref.sourceNumber])
-  )
-  const glImpactRows = glImpactEntries.flatMap((entry) =>
-    entry.lineItems.map((line) => ({
-      id: line.id,
-      journalNumber: entry.number,
-      date: fmtDocumentDate(entry.date, moneySettings),
-      sourceType: formatSourceType(entry.sourceType),
-      sourceNumber: glSourceNumberByKey.get(`${entry.sourceType}:${entry.sourceId}`) ?? entry.sourceId ?? '-',
-      account: `${line.account.accountId} - ${line.account.name}`,
-      description: line.description ?? line.memo ?? entry.description ?? '-',
-      debit: toNumericValue(line.debit, 0),
-      credit: toNumericValue(line.credit, 0),
-    }))
-  )
-
   const vendorOptions = vendors.map((vendor) => ({
     value: vendor.id,
     label: `${vendor.vendorNumber} - ${vendor.name}`,
@@ -588,7 +530,7 @@ export default async function PurchaseOrderDetailPage({
       currency: po.currency ? `/currencies/${po.currency.id}` : null,
     },
   )
-  const allFieldDefinitions = {
+  const allFieldDefinitions: Record<string, RecordHeaderField> = {
     ...headerFieldDefinitions,
     ...referenceFieldDefinitions,
   }
@@ -633,15 +575,7 @@ export default async function PurchaseOrderDetailPage({
         fields,
       }
     })
-    .filter(
-      (section): section is {
-        title: string
-        description: string
-        columns: number
-        rows: number
-        fields: TransactionHeaderField[]
-      } => Boolean(section),
-    )
+    .filter((section): section is NonNullable<typeof section> => Boolean(section))
   const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
 
   const exportHeaderFields = buildTransactionExportHeaderFields<
@@ -757,7 +691,7 @@ export default async function PurchaseOrderDetailPage({
           ) : (
             <div className="space-y-6">
               {referenceSections.length > 0 ? (
-                <TransactionHeaderSections
+                <RecordHeaderDetails
                   editing={false}
                   sections={referenceSections.map((section) => ({
                     title: section.title,
@@ -771,7 +705,7 @@ export default async function PurchaseOrderDetailPage({
                   showSubsections={false}
                 />
               ) : null}
-              <TransactionHeaderSections
+              <RecordHeaderDetails
                 purchaseOrderId={po.id}
                 editing={isEditing}
                 sections={headerSections}
@@ -808,6 +742,8 @@ export default async function PurchaseOrderDetailPage({
         }
         relatedDocuments={isCustomizing ? null : (
           <PurchaseOrderRelatedDocuments
+            embedded
+            showDisplayControl={false}
             requisitions={
               po.requisition
                 ? [
@@ -855,9 +791,17 @@ export default async function PurchaseOrderDetailPage({
             )}
           />
         )}
-        supplementarySections={isCustomizing ? null : <PurchaseOrderGlImpactSection rows={glImpactRows} />}
+        relatedDocumentsCount={
+          (po.requisition ? 1 : 0) +
+          po.receipts.length +
+          po.bills.length +
+          po.bills.reduce((sum, bill) => sum + bill.billPayments.length, 0)
+        }
+        supplementarySections={null}
         communications={isCustomizing ? null : (
           <CommunicationsSection
+            embedded
+            showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
               recordId: po.id,
@@ -882,7 +826,9 @@ export default async function PurchaseOrderDetailPage({
             })}
           />
         )}
-        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
+        communicationsCount={communications.length}
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        systemNotesCount={systemNotes.length}
       />
     </RecordDetailPageShell>
   )
@@ -906,15 +852,6 @@ function StatusBadge({ status }: { status: string | null }) {
       {label}
     </span>
   )
-}
-
-function formatSourceType(value: string | null | undefined) {
-  if (!value) return 'Unknown'
-  return value
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
 }
 
 function formatSystemNoteValue(

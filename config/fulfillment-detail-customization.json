@@ -9,19 +9,19 @@
     "System Dates"
   ],
   "sectionRows": {
-    "Document Identity": 1,
-    "Source Context": 1,
-    "Fulfillment Terms": 1,
-    "Commercial Context": 1,
-    "Record Keys": 1,
-    "System Dates": 1
+    "Document Identity": 2,
+    "Source Context": 2,
+    "Fulfillment Terms": 2,
+    "Commercial Context": 2,
+    "Record Keys": 2,
+    "System Dates": 2
   },
   "fields": {
-    "customerName": {
+    "number": {
       "visible": true,
       "section": "Document Identity",
       "order": 0,
-      "column": 3
+      "column": 1
     },
     "customerNumber": {
       "visible": true,
@@ -29,23 +29,17 @@
       "order": 0,
       "column": 2
     },
-    "id": {
-      "visible": true,
-      "section": "Record Keys",
-      "order": 0,
-      "column": 1
-    },
-    "number": {
+    "customerName": {
       "visible": true,
       "section": "Document Identity",
       "order": 0,
-      "column": 1
+      "column": 3
     },
     "salesOrderId": {
       "visible": true,
       "section": "Source Context",
       "order": 0,
-      "column": 1
+      "column": 3
     },
     "quoteId": {
       "visible": true,
@@ -57,13 +51,25 @@
       "visible": true,
       "section": "Source Context",
       "order": 0,
-      "column": 3
+      "column": 1
     },
     "status": {
       "visible": true,
       "section": "Fulfillment Terms",
       "order": 0,
       "column": 1
+    },
+    "date": {
+      "visible": true,
+      "section": "Fulfillment Terms",
+      "order": 0,
+      "column": 2
+    },
+    "notes": {
+      "visible": true,
+      "section": "Fulfillment Terms",
+      "order": 0,
+      "column": 3
     },
     "subsidiaryId": {
       "visible": true,
@@ -77,17 +83,11 @@
       "order": 0,
       "column": 2
     },
-    "date": {
+    "id": {
       "visible": true,
-      "section": "Fulfillment Terms",
+      "section": "Record Keys",
       "order": 0,
-      "column": 2
-    },
-    "notes": {
-      "visible": true,
-      "section": "Fulfillment Terms",
-      "order": 0,
-      "column": 3
+      "column": 1
     },
     "createdAt": {
       "visible": true,
@@ -233,6 +233,51 @@
       "viewDisplay": "label",
       "dropdownDisplay": "label",
       "dropdownSort": "label"
+    }
+  },
+  "glImpactSettings": {
+    "fontSize": "xs"
+  },
+  "glImpactColumns": {
+    "date": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "normal"
+    },
+    "journalNumber": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "normal"
+    },
+    "sourceType": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "normal"
+    },
+    "sourceNumber": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "normal"
+    },
+    "account": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "wide"
+    },
+    "description": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "wide"
+    },
+    "debit": {
+      "visible": true,
+      "order": 6,
+      "widthMode": "normal"
+    },
+    "credit": {
+      "visible": true,
+      "order": 7,
+      "widthMode": "normal"
     }
   },
   "statCards": [

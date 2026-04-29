@@ -6,11 +6,10 @@ import {
   LEAD_REFERENCE_SOURCES,
   LEAD_STAT_CARDS,
   type LeadDetailCustomizationConfig,
-  type LeadDetailFieldKey,
 } from '@/lib/lead-detail-customization'
 
 type CustomizeField = {
-  id: LeadDetailFieldKey
+  id: string
   label: string
   fieldType: string
   source?: string

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionActionStack from '@/components/TransactionActionStack'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import {
   buildConfiguredTransactionSections,
@@ -66,7 +66,7 @@ type DraftLinePayload = {
 
 type BillHeaderField = {
   key: BillDetailFieldKey
-} & TransactionHeaderField
+} & RecordHeaderField
 
 const BILL_STATUS_OPTIONS = [
   { value: 'received', label: 'Received' },
@@ -394,7 +394,7 @@ export default function BillCreatePageClient({
       widthClassName="w-full max-w-none"
       actions={<TransactionActionStack mode="create" cancelHref="/bills" formId="create-bill-form" />}
     >
-      <TransactionHeaderSections
+      <RecordHeaderDetails
         editing
         sections={headerSections}
         columns={customization.formColumns}

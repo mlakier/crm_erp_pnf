@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import SearchableSelect from '@/components/SearchableSelect'
 import { moneyEquals, sumMoney } from '@/lib/money'
 
 type EntityOption = { id: string; subsidiaryId: string; name: string }
@@ -17,6 +18,7 @@ type CurrencyOption = { id: string; currencyId: string; code?: string; name: str
 type PeriodOption = { id: string; name: string }
 type EmployeeOption = { id: string; employeeId: string | null; firstName: string; lastName: string }
 type SelectOption = { value: string; label: string }
+type SearchOption = { value: string; label: string; searchText?: string; sortIdText?: string; sortLabelText?: string }
 type JournalLineDraft = {
   key: string
   accountId: string
@@ -93,6 +95,112 @@ export default function JournalEntryCreateForm({
   const totalDebits = useMemo(() => sumMoney(lineItems.map((line) => line.debit)), [lineItems])
   const totalCredits = useMemo(() => sumMoney(lineItems.map((line) => line.credit)), [lineItems])
   const derivedTotal = useMemo(() => sumMoney(lineItems.map((line) => line.debit)), [lineItems])
+  const toSearchOptions = (options: SelectOption[]): SearchOption[] =>
+    options.map((option) => ({
+      value: option.value,
+      label: option.label,
+      searchText: `${option.value} ${option.label}`,
+      sortIdText: option.value,
+      sortLabelText: option.label,
+    }))
+  const accountOptions = useMemo(
+    () =>
+      accounts.map((account) => ({
+        value: account.id,
+        label: `${account.accountId} - ${account.name}`,
+        searchText: `${account.accountId} ${account.name}`,
+        sortIdText: account.accountId,
+        sortLabelText: account.name,
+      })),
+    [accounts],
+  )
+  const entityOptions = useMemo(
+    () =>
+      entities.map((entity) => ({
+        value: entity.id,
+        label: `${entity.subsidiaryId} - ${entity.name}`,
+        searchText: `${entity.subsidiaryId} ${entity.name}`,
+        sortIdText: entity.subsidiaryId,
+        sortLabelText: entity.name,
+      })),
+    [entities],
+  )
+  const departmentOptions = useMemo(
+    () =>
+      departments.map((department) => ({
+        value: department.id,
+        label: `${department.departmentId} - ${department.name}`,
+        searchText: `${department.departmentId} ${department.name}`,
+        sortIdText: department.departmentId,
+        sortLabelText: department.name,
+      })),
+    [departments],
+  )
+  const locationOptions = useMemo(
+    () =>
+      locations.map((location) => ({
+        value: location.id,
+        label: `${location.locationId} - ${location.name}`,
+        searchText: `${location.locationId} ${location.name}`,
+        sortIdText: location.locationId,
+        sortLabelText: location.name,
+      })),
+    [locations],
+  )
+  const projectOptions = useMemo(
+    () =>
+      projects.map((project) => ({
+        value: project.id,
+        label: project.name,
+        searchText: project.name,
+        sortLabelText: project.name,
+      })),
+    [projects],
+  )
+  const customerOptions = useMemo(
+    () =>
+      customers.map((customer) => ({
+        value: customer.id,
+        label: `${customer.customerId ?? 'CUST'} - ${customer.name}`,
+        searchText: `${customer.customerId ?? 'CUST'} ${customer.name}`,
+        sortIdText: customer.customerId ?? 'CUST',
+        sortLabelText: customer.name,
+      })),
+    [customers],
+  )
+  const vendorOptions = useMemo(
+    () =>
+      vendors.map((vendor) => ({
+        value: vendor.id,
+        label: `${vendor.vendorNumber ?? 'VEND'} - ${vendor.name}`,
+        searchText: `${vendor.vendorNumber ?? 'VEND'} ${vendor.name}`,
+        sortIdText: vendor.vendorNumber ?? 'VEND',
+        sortLabelText: vendor.name,
+      })),
+    [vendors],
+  )
+  const itemOptions = useMemo(
+    () =>
+      items.map((item) => ({
+        value: item.id,
+        label: `${item.itemId ?? 'ITEM'} - ${item.name}`,
+        searchText: `${item.itemId ?? 'ITEM'} ${item.name}`,
+        sortIdText: item.itemId ?? 'ITEM',
+        sortLabelText: item.name,
+      })),
+    [items],
+  )
+  const employeeOptions = useMemo(
+    () =>
+      employees.map((employee) => ({
+        value: employee.id,
+        label: `${employee.employeeId ?? 'EMP'} - ${employee.firstName} ${employee.lastName}`,
+        searchText: `${employee.employeeId ?? 'EMP'} ${employee.firstName} ${employee.lastName}`,
+        sortIdText: employee.employeeId ?? 'EMP',
+        sortLabelText: `${employee.firstName} ${employee.lastName}`,
+      })),
+    [employees],
+  )
 
   const addLine = () => {
     setLineItems((current) => [
@@ -194,14 +302,14 @@ export default function JournalEntryCreateForm({
       <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Date</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} style={inputStyle} required /></div>
       <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Description</label><textarea value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} style={inputStyle} rows={2} /></div>
       <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Total</label><input type="number" step="0.01" value={lineItems.length > 0 ? derivedTotal.toFixed(2) : total} onChange={(e) => setTotal(e.target.value)} className={inputClass} style={inputStyle} disabled={lineItems.length > 0} /></div>
-      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Status</label><select value={status} onChange={(e) => setStatus(e.target.value)} className={inputClass} style={inputStyle}>{statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
-      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Header Subsidiary</label><select value={subsidiaryId} onChange={(e) => setSubsidiaryId(e.target.value)} className={inputClass} style={inputStyle}><option value="">None</option>{entities.map((entity) => <option key={entity.id} value={entity.id}>{entity.subsidiaryId} - {entity.name}</option>)}</select></div>
-      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Currency</label><select value={currencyId} onChange={(e) => setCurrencyId(e.target.value)} className={inputClass} style={inputStyle}><option value="">None</option>{currencies.map((currency) => <option key={currency.id} value={currency.id}>{currency.code ?? currency.currencyId} - {currency.name}</option>)}</select></div>
-      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Accounting Period</label><select value={accountingPeriodId} onChange={(e) => setAccountingPeriodId(e.target.value)} className={inputClass} style={inputStyle}><option value="">None</option>{accountingPeriods.map((period) => <option key={period.id} value={period.id}>{period.name}</option>)}</select></div>
-      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Source Type</label><select value={sourceType} onChange={(e) => setSourceType(e.target.value)} className={inputClass} style={inputStyle}><option value="">None</option>{sourceTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Status</label><SearchableSelect selectedValue={status} onSelect={setStatus} options={toSearchOptions(statusOptions)} placeholder="Select status" searchPlaceholder="Search status" /></div>
+      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Header Subsidiary</label><SearchableSelect selectedValue={subsidiaryId} onSelect={setSubsidiaryId} options={entityOptions} placeholder="None" searchPlaceholder="Search subsidiary" /></div>
+      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Currency</label><SearchableSelect selectedValue={currencyId} onSelect={setCurrencyId} options={currencies.map((currency) => ({ value: currency.id, label: `${currency.code ?? currency.currencyId} - ${currency.name}`, searchText: `${currency.code ?? currency.currencyId} ${currency.name}`, sortIdText: currency.code ?? currency.currencyId, sortLabelText: currency.name }))} placeholder="None" searchPlaceholder="Search currency" /></div>
+      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Accounting Period</label><SearchableSelect selectedValue={accountingPeriodId} onSelect={setAccountingPeriodId} options={accountingPeriods.map((period) => ({ value: period.id, label: period.name, searchText: period.name, sortLabelText: period.name }))} placeholder="None" searchPlaceholder="Search accounting period" /></div>
+      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Source Type</label><SearchableSelect selectedValue={sourceType} onSelect={setSourceType} options={toSearchOptions(sourceTypeOptions)} placeholder="None" searchPlaceholder="Search source type" /></div>
       <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Source Id</label><input type="text" value={sourceId} onChange={(e) => setSourceId(e.target.value)} className={inputClass} style={inputStyle} /></div>
-      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Prepared By</label><select value={postedByEmployeeId} onChange={(e) => setPostedByEmployeeId(e.target.value)} className={inputClass} style={inputStyle}><option value="">None</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.employeeId ?? 'EMP'} - {employee.firstName} {employee.lastName}</option>)}</select></div>
-      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Approved By</label><select value={approvedByEmployeeId} onChange={(e) => setApprovedByEmployeeId(e.target.value)} className={inputClass} style={inputStyle}><option value="">None</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.employeeId ?? 'EMP'} - {employee.firstName} {employee.lastName}</option>)}</select></div>
+      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Prepared By</label><SearchableSelect selectedValue={postedByEmployeeId} onSelect={setPostedByEmployeeId} options={employeeOptions} placeholder="None" searchPlaceholder="Search employee" /></div>
+      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Approved By</label><SearchableSelect selectedValue={approvedByEmployeeId} onSelect={setApprovedByEmployeeId} options={employeeOptions} placeholder="None" searchPlaceholder="Search employee" /></div>
 
       <div className="rounded-lg border p-4" style={{ borderColor: 'var(--border-muted)', backgroundColor: 'var(--card)' }}>
         <div className="mb-3 flex items-center justify-between">
@@ -238,14 +346,7 @@ export default function JournalEntryCreateForm({
                   {lineItems.map((line) => (
                     <tr key={line.key} style={{ borderBottom: '1px solid var(--border-muted)' }}>
                       <td className="px-2 py-1.5">
-                        <select value={line.accountId} onChange={(e) => updateLine(line.key, 'accountId', e.target.value)} className="w-full min-w-[180px] rounded-md border bg-transparent px-2 py-1.5 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-                          <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>Select account</option>
-                          {accounts.map((account) => (
-                            <option key={account.id} value={account.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                              {account.accountId} - {account.name}
-                            </option>
-                          ))}
-                        </select>
+                        <SearchableSelect selectedValue={line.accountId} onSelect={(value) => updateLine(line.key, 'accountId', value)} options={accountOptions} placeholder="Select account" searchPlaceholder="Search account" />
                       </td>
                       <td className="px-2 py-1.5">
                         <input value={line.description} onChange={(e) => updateLine(line.key, 'description', e.target.value)} className="w-full min-w-[140px] rounded-md border bg-transparent px-2 py-1.5 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
@@ -257,84 +358,28 @@ export default function JournalEntryCreateForm({
                         <input type="number" min="0" step="0.01" value={line.credit} onChange={(e) => updateLine(line.key, 'credit', e.target.value)} className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
                       </td>
                       <td className="px-2 py-1.5">
-                        <select value={line.subsidiaryId} onChange={(e) => updateLine(line.key, 'subsidiaryId', e.target.value)} className="w-full min-w-[180px] rounded-md border bg-transparent px-2 py-1.5 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-                          <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>Use header / none</option>
-                          {entities.map((entity) => (
-                            <option key={entity.id} value={entity.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                              {entity.subsidiaryId} - {entity.name}
-                            </option>
-                          ))}
-                        </select>
+                        <SearchableSelect selectedValue={line.subsidiaryId} onSelect={(value) => updateLine(line.key, 'subsidiaryId', value)} options={entityOptions} placeholder="Use header / none" searchPlaceholder="Search subsidiary" />
                       </td>
                       <td className="px-2 py-1.5">
-                        <select value={line.departmentId} onChange={(e) => updateLine(line.key, 'departmentId', e.target.value)} className="w-full min-w-[180px] rounded-md border bg-transparent px-2 py-1.5 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-                          <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>None</option>
-                          {departments.map((department) => (
-                            <option key={department.id} value={department.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                              {department.departmentId} - {department.name}
-                            </option>
-                          ))}
-                        </select>
+                        <SearchableSelect selectedValue={line.departmentId} onSelect={(value) => updateLine(line.key, 'departmentId', value)} options={departmentOptions} placeholder="None" searchPlaceholder="Search department" />
                       </td>
                       <td className="px-2 py-1.5">
-                        <select value={line.locationId} onChange={(e) => updateLine(line.key, 'locationId', e.target.value)} className="w-full min-w-[180px] rounded-md border bg-transparent px-2 py-1.5 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-                          <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>None</option>
-                          {locations.map((location) => (
-                            <option key={location.id} value={location.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                              {location.locationId} - {location.name}
-                            </option>
-                          ))}
-                        </select>
+                        <SearchableSelect selectedValue={line.locationId} onSelect={(value) => updateLine(line.key, 'locationId', value)} options={locationOptions} placeholder="None" searchPlaceholder="Search location" />
                       </td>
                       <td className="px-2 py-1.5">
-                        <select value={line.projectId} onChange={(e) => updateLine(line.key, 'projectId', e.target.value)} className="w-full min-w-[180px] rounded-md border bg-transparent px-2 py-1.5 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-                          <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>None</option>
-                          {projects.map((project) => (
-                            <option key={project.id} value={project.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                              {project.name}
-                            </option>
-                          ))}
-                        </select>
+                        <SearchableSelect selectedValue={line.projectId} onSelect={(value) => updateLine(line.key, 'projectId', value)} options={projectOptions} placeholder="None" searchPlaceholder="Search project" />
                       </td>
                       <td className="px-2 py-1.5">
-                        <select value={line.customerId} onChange={(e) => updateLine(line.key, 'customerId', e.target.value)} className="w-full min-w-[180px] rounded-md border bg-transparent px-2 py-1.5 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-                          <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>None</option>
-                          {customers.map((customer) => (
-                            <option key={customer.id} value={customer.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                              {customer.customerId ?? 'CUST'} - {customer.name}
-                            </option>
-                          ))}
-                        </select>
+                        <SearchableSelect selectedValue={line.customerId} onSelect={(value) => updateLine(line.key, 'customerId', value)} options={customerOptions} placeholder="None" searchPlaceholder="Search customer" />
                       </td>
                       <td className="px-2 py-1.5">
-                        <select value={line.vendorId} onChange={(e) => updateLine(line.key, 'vendorId', e.target.value)} className="w-full min-w-[180px] rounded-md border bg-transparent px-2 py-1.5 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-                          <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>None</option>
-                          {vendors.map((vendor) => (
-                            <option key={vendor.id} value={vendor.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                              {vendor.vendorNumber ?? 'VEND'} - {vendor.name}
-                            </option>
-                          ))}
-                        </select>
+                        <SearchableSelect selectedValue={line.vendorId} onSelect={(value) => updateLine(line.key, 'vendorId', value)} options={vendorOptions} placeholder="None" searchPlaceholder="Search vendor" />
                       </td>
                       <td className="px-2 py-1.5">
-                        <select value={line.itemId} onChange={(e) => updateLine(line.key, 'itemId', e.target.value)} className="w-full min-w-[180px] rounded-md border bg-transparent px-2 py-1.5 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-                          <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>None</option>
-                          {items.map((item) => (
-                            <option key={item.id} value={item.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                              {item.itemId ?? 'ITEM'} - {item.name}
-                            </option>
-                          ))}
-                        </select>
+                        <SearchableSelect selectedValue={line.itemId} onSelect={(value) => updateLine(line.key, 'itemId', value)} options={itemOptions} placeholder="None" searchPlaceholder="Search item" />
                       </td>
                       <td className="px-2 py-1.5">
-                        <select value={line.employeeId} onChange={(e) => updateLine(line.key, 'employeeId', e.target.value)} className="w-full min-w-[180px] rounded-md border bg-transparent px-2 py-1.5 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
-                          <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>None</option>
-                          {employees.map((employee) => (
-                            <option key={employee.id} value={employee.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                              {employee.employeeId ?? 'EMP'} - {employee.firstName} {employee.lastName}
-                            </option>
-                          ))}
-                        </select>
+                        <SearchableSelect selectedValue={line.employeeId} onSelect={(value) => updateLine(line.key, 'employeeId', value)} options={employeeOptions} placeholder="None" searchPlaceholder="Search employee" />
                       </td>
                       <td className="px-2 py-1.5">
                         <input value={line.memo} onChange={(e) => updateLine(line.key, 'memo', e.target.value)} className="w-full min-w-[120px] rounded-md border bg-transparent px-2 py-1.5 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />

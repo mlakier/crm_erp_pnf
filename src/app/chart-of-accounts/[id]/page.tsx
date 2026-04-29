@@ -1,22 +1,18 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import DeleteButton from '@/components/DeleteButton'
-import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
-import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
-import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
-import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSection'
+import type { InlineRecordSection } from '@/components/InlineRecordDetails'
+import MasterDataHeaderDetails from '@/components/MasterDataHeaderDetails'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
+import RecordDetailActionBar from '@/components/RecordDetailActionBar'
+import { buildMasterDataSystemInformationItems } from '@/components/RecordSystemInformationSection'
 import ChartOfAccountsDetailCustomizeMode from '@/components/ChartOfAccountsDetailCustomizeMode'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import CommunicationsSection from '@/components/CommunicationsSection'
+import RelatedRecordsSection from '@/components/RelatedRecordsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
-import {
-  RecordDetailCell,
-  RecordDetailEmptyState,
-  RecordDetailHeaderCell,
-  RecordDetailSection,
-} from '@/components/RecordDetailPanels'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
+import type { TransactionStatDefinition, TransactionVisualTone } from '@/lib/transaction-page-config'
 import { loadChartOfAccountsFormCustomization } from '@/lib/chart-of-accounts-form-customization-store'
 import {
   CHART_OF_ACCOUNTS_FORM_FIELDS,
@@ -226,17 +222,26 @@ export default async function ChartOfAccountDetailPage({
   const customizeFields = buildCustomizePreviewFields(CHART_OF_ACCOUNTS_FORM_FIELDS, fieldDefinitions)
   const postingStatus = account.isPosting ? 'Posting' : 'Non-Posting'
   const summaryStatus = account.summary ? 'Summary' : 'Detail'
-  const statPreviewCards = [
-    { id: 'subsidiaries', label: 'Subsidiaries', value: subsidiaries.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+  const statPreviewCards: Array<{
+    id: string
+    label: string
+    value: string | number
+    accent?: true | 'teal' | 'yellow'
+    cardTone?: TransactionVisualTone
+    valueTone?: TransactionVisualTone
+    supportsColorized: boolean
+    supportsLink: boolean
+  }> = [
+    { id: 'subsidiaries', label: 'Subsidiaries', value: subsidiaries.length, cardTone: 'accent', valueTone: 'accent', supportsColorized: true, supportsLink: false },
     { id: 'childAccounts', label: 'Child Accounts', value: childAccountCount, accent: 'teal', cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
     { id: 'posting', label: 'Posting', value: postingStatus, accent: 'yellow', cardTone: account.isPosting ? 'yellow' : 'default', valueTone: account.isPosting ? 'yellow' : 'default', supportsColorized: true, supportsLink: false },
     { id: 'summary', label: 'Summary', value: summaryStatus, cardTone: account.summary ? 'green' : 'default', valueTone: account.summary ? 'green' : 'default', supportsColorized: true, supportsLink: false },
   ]
-  const statDefinitions = [
-    { id: 'subsidiaries', label: 'Subsidiaries', getValue: () => subsidiaries.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
-    { id: 'childAccounts', label: 'Child Accounts', getValue: () => childAccountCount, accent: 'teal' as const, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
-    { id: 'posting', label: 'Posting', getValue: () => postingStatus, accent: 'yellow' as const, getCardTone: () => (account.isPosting ? 'yellow' : 'default') as const, getValueTone: () => (account.isPosting ? 'yellow' : 'default') as const },
-    { id: 'summary', label: 'Summary', getValue: () => summaryStatus, getCardTone: () => (account.summary ? 'green' : 'default') as const, getValueTone: () => (account.summary ? 'green' : 'default') as const },
+  const statDefinitions: Array<TransactionStatDefinition<typeof account>> = [
+    { id: 'subsidiaries', label: 'Subsidiaries', getValue: () => subsidiaries.length, getCardTone: () => 'accent', getValueTone: () => 'accent' },
+    { id: 'childAccounts', label: 'Child Accounts', getValue: () => childAccountCount, accent: 'teal', getCardTone: () => 'teal', getValueTone: () => 'teal' },
+    { id: 'posting', label: 'Posting', getValue: () => postingStatus, accent: 'yellow', getCardTone: () => (account.isPosting ? 'yellow' : 'default'), getValueTone: () => (account.isPosting ? 'yellow' : 'default') },
+    { id: 'summary', label: 'Summary', getValue: () => summaryStatus, getCardTone: () => (account.summary ? 'green' : 'default'), getValueTone: () => (account.summary ? 'green' : 'default') },
   ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: CHART_OF_ACCOUNTS_FORM_FIELDS,
@@ -251,6 +256,62 @@ export default async function ChartOfAccountDetailPage({
     updatedAt: account.updatedAt,
   })
   const systemNotes = await loadMasterDataSystemNotes({ entityType: 'chart-of-account', entityId: account.id })
+  const relatedRecordsTabs = [
+    {
+      key: 'subsidiaries',
+      label: 'Subsidiaries',
+      count: subsidiaries.length,
+      emptyMessage: 'No subsidiaries are in scope for this account.',
+      rows: subsidiaries.map((subsidiary) => ({
+        id: subsidiary.id,
+        type: 'Subsidiary',
+        reference: subsidiary.subsidiaryId,
+        name: subsidiary.name,
+        details: 'Account Scope',
+        href: `/subsidiaries/${subsidiary.id}`,
+      })),
+    },
+    {
+      key: 'account-links',
+      label: 'Account Links',
+      count: [account.parentAccount, account.closeToAccount, account.parentSubsidiary].filter(Boolean).length,
+      emptyMessage: 'No linked account records are set for this account.',
+      rows: [
+        ...(account.parentAccount
+          ? [{
+              id: account.parentAccount.id,
+              type: 'GL Account',
+              reference: account.parentAccount.accountId,
+              name: account.parentAccount.name,
+              details: 'Parent Account',
+              href: `/chart-of-accounts/${account.parentAccount.id}`,
+            }]
+          : []),
+        ...(account.closeToAccount
+          ? [{
+              id: account.closeToAccount.id,
+              type: 'GL Account',
+              reference: account.closeToAccount.accountId,
+              name: account.closeToAccount.name,
+              details: 'Close To Account',
+              href: `/chart-of-accounts/${account.closeToAccount.id}`,
+            }]
+          : []),
+        ...(account.parentSubsidiary
+          ? [{
+              id: account.parentSubsidiary.id,
+              type: 'Subsidiary',
+              reference: account.parentSubsidiary.subsidiaryId,
+              name: account.parentSubsidiary.name,
+              details: 'Parent Subsidiary',
+              href: `/subsidiaries/${account.parentSubsidiary.id}`,
+            }]
+          : []),
+      ],
+    },
+  ]
+  const communicationsToolbarTargetId = 'chart-of-accounts-communications-toolbar'
+  const systemNotesToolbarTargetId = 'chart-of-accounts-system-notes-toolbar'
 
   return (
     <RecordDetailPageShell
@@ -264,48 +325,22 @@ export default async function ChartOfAccountDetailPage({
         </span>
       }
       actions={
-        <>
-          {isEditing && !isCustomizing ? (
-            <>
-              <Link
-                href={detailHref}
-                className="rounded-md border px-3 py-1.5 text-xs font-medium"
-                style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-              >
-                Cancel
-              </Link>
-              <button
-                type="submit"
-                form={`inline-record-form-${account.id}`}
-                className="rounded-md px-3 py-1.5 text-xs font-semibold text-white"
-                style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-              >
-                Save
-              </button>
-            </>
-          ) : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailCreateMenu newHref="/chart-of-accounts/new" duplicateHref={`/chart-of-accounts/new?duplicateFrom=${account.id}`} /> : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailExportMenu title={account.name} fileName={`gl-account-${account.accountId}`} sections={detailSections} /> : null}
-          {!isEditing && !isCustomizing ? (
-            <Link
-              href={`${detailHref}?customize=1`}
-              className="rounded-md border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-            >
-              Customize
-            </Link>
-          ) : null}
-          {!isEditing && !isCustomizing ? (
-            <Link
-              href={`${detailHref}?edit=1`}
-              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
-              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-            >
-              Edit
-            </Link>
-          ) : null}
-          {!isCustomizing ? <DeleteButton resource="chart-of-accounts" id={account.id} /> : null}
-        </>
+        isCustomizing ? null : (
+          <RecordDetailActionBar
+            mode={isEditing ? 'edit' : 'detail'}
+            detailHref={detailHref}
+            formId={`inline-record-form-${account.id}`}
+            newHref="/chart-of-accounts/new"
+            duplicateHref={`/chart-of-accounts/new?duplicateFrom=${account.id}`}
+            exportTitle={account.name}
+            exportFileName={`gl-account-${account.accountId}`}
+            exportSections={detailSections}
+            customizeHref={`${detailHref}?customize=1`}
+            editHref={`${detailHref}?edit=1`}
+            deleteResource="chart-of-accounts"
+            deleteId={account.id}
+          />
+        )
       }
     >
         {!isCustomizing ? (
@@ -328,44 +363,60 @@ export default async function ChartOfAccountDetailPage({
             statPreviewCards={statPreviewCards}
           />
         ) : (
-          <InlineRecordDetails
+          <MasterDataHeaderDetails
             resource="chart-of-accounts"
             id={account.id}
-            title="Account details"
+            title="Chart Of Accounts Details"
             sections={detailSections}
             editing={isEditing}
             columns={chartFormCustomization.formColumns}
-            showInternalActions={false}
+            systemInformationItems={buildMasterDataSystemInformationItems(systemInfo, account.id)}
           />
         )}
 
-        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} internalId={account.id} /> : null}
-
         {!isCustomizing ? (
-        <RecordDetailSection title="Subsidiaries in Scope" count={subsidiaries.length}>
-          {subsidiaries.length === 0 ? (
-            <RecordDetailEmptyState message="No subsidiaries assigned." />
-          ) : (
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <RecordDetailHeaderCell>Subsidiary Id</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
-                </tr>
-              </thead>
-              <tbody>
-                {subsidiaries.map((subsidiary, index) => (
-                  <tr key={subsidiary.id} style={index < subsidiaries.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                    <RecordDetailCell>{subsidiary.subsidiaryId}</RecordDetailCell>
-                    <RecordDetailCell>{subsidiary.name}</RecordDetailCell>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </RecordDetailSection>
+          <RecordBottomTabsSection
+            defaultActiveKey="related-records"
+            tabs={[
+              {
+                key: 'related-records',
+                label: 'Related Records',
+                count: relatedRecordsTabs.reduce((sum, tab) => sum + tab.count, 0),
+                content: <RelatedRecordsSection embedded tabs={relatedRecordsTabs} showDisplayControl={false} />,
+              },
+              {
+                key: 'communications',
+                label: 'Communications',
+                count: 0,
+                toolbarTargetId: communicationsToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <CommunicationsSection
+                    embedded
+                    toolbarTargetId={communicationsToolbarTargetId}
+                    rows={[]}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+              {
+                key: 'system-notes',
+                label: 'System Notes',
+                count: systemNotes.length,
+                toolbarTargetId: systemNotesToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <SystemNotesSection
+                    embedded
+                    toolbarTargetId={systemNotesToolbarTargetId}
+                    notes={systemNotes}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+            ]}
+          />
         ) : null}
-        {!isCustomizing ? <SystemNotesSection notes={systemNotes} /> : null}
     </RecordDetailPageShell>
   )
 }

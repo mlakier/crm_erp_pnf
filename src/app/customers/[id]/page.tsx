@@ -1,14 +1,15 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import DeleteButton from '@/components/DeleteButton'
-import CustomerRelatedDocs from '@/components/CustomerRelatedDocs'
-import CustomerContactsSection from '@/components/CustomerContactsSection'
-import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
-import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
-import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
-import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSection'
+import type { InlineRecordSection } from '@/components/InlineRecordDetails'
+import MasterDataHeaderDetails from '@/components/MasterDataHeaderDetails'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
+import RecordDetailActionBar from '@/components/RecordDetailActionBar'
+import { buildMasterDataSystemInformationItems } from '@/components/RecordSystemInformationSection'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import CommunicationsSection from '@/components/CommunicationsSection'
+import RelatedRecordsSection from '@/components/RelatedRecordsSection'
+import CustomerRelatedDocumentsSection from '@/components/CustomerRelatedDocumentsSection'
+import CustomerContactsSection from '@/components/CustomerContactsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import { fmtCurrency, normalizePhone, toNumericValue } from '@/lib/format'
@@ -25,6 +26,7 @@ import { loadListOptionsForSource } from '@/lib/list-source'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { loadMasterDataSystemInfo } from '@/lib/master-data-system-info'
 import { loadMasterDataSystemNotes } from '@/lib/master-data-system-notes'
+import type { TransactionStatDefinition, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 export default async function CustomerDetailPage({
   params,
@@ -44,6 +46,14 @@ export default async function CustomerDetailPage({
     prisma.customer.findUnique({
       where: { id },
       include: {
+        user: {
+          select: {
+            id: true,
+            userId: true,
+            name: true,
+            email: true,
+          },
+        },
         subsidiary: true,
         currency: true,
         contacts: { orderBy: { createdAt: 'desc' } },
@@ -152,17 +162,26 @@ export default async function CustomerDetailPage({
   }
 
   const customizeFields = buildCustomizePreviewFields(CUSTOMER_FORM_FIELDS, fieldDefinitions)
-  const statPreviewCards = [
-    { id: 'contacts', label: 'Contacts', value: customer.contacts.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+  const statPreviewCards: Array<{
+    id: string
+    label: string
+    value: string | number
+    accent?: true | 'teal' | 'yellow'
+    cardTone?: TransactionVisualTone
+    valueTone?: TransactionVisualTone
+    supportsColorized: boolean
+    supportsLink: boolean
+  }> = [
+    { id: 'contacts', label: 'Contacts', value: customer.contacts.length, cardTone: 'accent', valueTone: 'accent', supportsColorized: true, supportsLink: false },
     { id: 'opportunities', label: 'Opportunities', value: customer.opportunities.length, accent: 'teal', cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
-    { id: 'pipelineValue', label: 'Pipeline Value', value: fmtCurrency(pipelineValue, undefined, moneySettings), accent: 'green', cardTone: 'green', valueTone: 'green', supportsColorized: true, supportsLink: false },
+    { id: 'pipelineValue', label: 'Pipeline Value', value: fmtCurrency(pipelineValue, undefined, moneySettings), cardTone: 'green', valueTone: 'green', supportsColorized: true, supportsLink: false },
     { id: 'status', label: 'Status', value: customer.inactive ? 'Inactive' : 'Active', cardTone: customer.inactive ? 'red' : 'green', valueTone: customer.inactive ? 'red' : 'green', supportsColorized: true, supportsLink: false },
   ]
-  const statDefinitions = [
-    { id: 'contacts', label: 'Contacts', getValue: () => customer.contacts.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
-    { id: 'opportunities', label: 'Opportunities', getValue: () => customer.opportunities.length, accent: 'teal' as const, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
-    { id: 'pipelineValue', label: 'Pipeline Value', getValue: () => fmtCurrency(pipelineValue, undefined, moneySettings), accent: 'green' as const, getCardTone: () => 'green' as const, getValueTone: () => 'green' as const },
-    { id: 'status', label: 'Status', getValue: () => (customer.inactive ? 'Inactive' : 'Active'), getCardTone: () => (customer.inactive ? 'red' : 'green') as const, getValueTone: () => (customer.inactive ? 'red' : 'green') as const },
+  const statDefinitions: Array<TransactionStatDefinition<typeof customer>> = [
+    { id: 'contacts', label: 'Contacts', getValue: () => customer.contacts.length, getCardTone: () => 'accent', getValueTone: () => 'accent' },
+    { id: 'opportunities', label: 'Opportunities', getValue: () => customer.opportunities.length, accent: 'teal', getCardTone: () => 'teal', getValueTone: () => 'teal' },
+    { id: 'pipelineValue', label: 'Pipeline Value', getValue: () => fmtCurrency(pipelineValue, undefined, moneySettings), getCardTone: () => 'green', getValueTone: () => 'green' },
+    { id: 'status', label: 'Status', getValue: () => (customer.inactive ? 'Inactive' : 'Active'), getCardTone: () => (customer.inactive ? 'red' : 'green'), getValueTone: () => (customer.inactive ? 'red' : 'green') },
   ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: CUSTOMER_FORM_FIELDS,
@@ -178,6 +197,82 @@ export default async function CustomerDetailPage({
     fallbackCreatedByUserId: customer.userId,
   })
   const systemNotes = await loadMasterDataSystemNotes({ entityType: 'customer', entityId: customer.id })
+  const relatedRecordsTabs = [
+    {
+      key: 'contacts',
+      label: 'Contacts',
+      count: customer.contacts.length,
+      emptyMessage: 'No contacts are linked to this customer yet.',
+      rows: customer.contacts.map((contact) => ({
+        id: contact.id,
+        type: contact.isPrimaryForCustomer ? 'Primary Contact' : 'Contact',
+        reference: contact.contactNumber ?? contact.id,
+        name: `${contact.firstName} ${contact.lastName}`.trim(),
+        details:
+          [
+            contact.position,
+            contact.email,
+            normalizePhone(contact.phone) ?? null,
+            contact.receivesQuotesSalesOrders ? 'Receives Quote/SO' : null,
+            contact.receivesInvoices ? 'Receives Invoices' : null,
+            contact.receivesInvoiceCc ? 'Invoice CC' : null,
+          ]
+            .filter(Boolean)
+            .join(' | ') || '-',
+        href: `/contacts/${contact.id}`,
+      })),
+    },
+    {
+      key: 'core-links',
+      label: 'Core Links',
+      count:
+        (customer.user ? 1 : 0) +
+        (customer.subsidiary ? 1 : 0) +
+        (customer.currency ? 1 : 0),
+      emptyMessage: 'No core linked records are available for this customer.',
+      rows: [
+        customer.user
+          ? {
+              id: `owner-${customer.user.id}`,
+              type: 'Owner',
+              reference: customer.user.userId ?? customer.user.id,
+              name: customer.user.name ?? customer.user.email ?? '-',
+              details: customer.user.email ?? '-',
+              href: `/users/${customer.user.id}`,
+            }
+          : null,
+        customer.subsidiary
+          ? {
+              id: `subsidiary-${customer.subsidiary.id}`,
+              type: 'Primary Subsidiary',
+              reference: customer.subsidiary.subsidiaryId,
+              name: customer.subsidiary.name,
+              details: customer.subsidiary.country ?? customer.subsidiary.entityType ?? '-',
+              href: `/subsidiaries/${customer.subsidiary.id}`,
+            }
+          : null,
+        customer.currency
+          ? {
+              id: `currency-${customer.currency.id}`,
+              type: 'Primary Currency',
+              reference: customer.currency.currencyId ?? customer.currency.code ?? customer.currency.id,
+              name: customer.currency.name,
+              details: customer.currency.symbol ?? customer.currency.code ?? '-',
+              href: `/currencies/${customer.currency.id}`,
+            }
+          : null,
+      ].filter((row): row is { id: string; type: string; reference: string; name: string; details: string; href: string } => Boolean(row)),
+    },
+  ]
+  const relatedDocumentsCount =
+    customer.opportunities.length +
+    customer.quotes.length +
+    customer.salesOrders.length +
+    customer.salesOrders.reduce((sum, salesOrder) => sum + salesOrder.fulfillments.length, 0) +
+    customer.invoices.length +
+    customer.invoices.reduce((sum, invoice) => sum + invoice.cashReceipts.length, 0)
+  const communicationsToolbarTargetId = 'customer-communications-toolbar'
+  const systemNotesToolbarTargetId = 'customer-system-notes-toolbar'
 
   return (
     <RecordDetailPageShell
@@ -193,40 +288,22 @@ export default async function CustomerDetailPage({
         ) : null
       }
       actions={
-        <>
-          {isEditing && !isCustomizing ? (
-            <>
-              <Link href={detailHref} className="rounded-md border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-                Cancel
-              </Link>
-              <button
-                type="submit"
-                form={`inline-record-form-${customer.id}`}
-                className="rounded-md px-3 py-1.5 text-xs font-semibold text-white"
-                style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-              >
-                Save
-              </button>
-            </>
-          ) : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailCreateMenu newHref="/customers/new" duplicateHref={`/customers/new?duplicateFrom=${customer.id}`} /> : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailExportMenu title={customer.name} fileName={`customer-${customer.customerId ?? customer.id}`} sections={detailSections} /> : null}
-          {!isEditing && !isCustomizing ? (
-            <Link href={`${detailHref}?customize=1`} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-              Customize
-            </Link>
-          ) : null}
-          {!isEditing && !isCustomizing ? (
-            <Link
-              href={`${detailHref}?edit=1`}
-              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
-              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-            >
-              Edit
-            </Link>
-          ) : null}
-          {!isCustomizing ? <DeleteButton resource="customers" id={customer.id} /> : null}
-        </>
+        isCustomizing ? null : (
+          <RecordDetailActionBar
+            mode={isEditing ? 'edit' : 'detail'}
+            detailHref={detailHref}
+            formId={`inline-record-form-${customer.id}`}
+            newHref="/customers/new"
+            duplicateHref={`/customers/new?duplicateFrom=${customer.id}`}
+            exportTitle={customer.name}
+            exportFileName={`customer-${customer.customerId ?? customer.id}`}
+            exportSections={detailSections}
+            customizeHref={`${detailHref}?customize=1`}
+            editHref={`${detailHref}?edit=1`}
+            deleteResource="customers"
+            deleteId={customer.id}
+          />
+        )
       }
     >
         {!isCustomizing ? (
@@ -249,21 +326,19 @@ export default async function CustomerDetailPage({
             statPreviewCards={statPreviewCards}
           />
         ) : (
-          <InlineRecordDetails
+          <MasterDataHeaderDetails
             resource="customers"
             id={customer.id}
-            title="Customer details"
+            title="Customer Details"
             sections={detailSections}
             editing={isEditing}
             columns={formCustomization.formColumns}
-            showInternalActions={false}
+            systemInformationItems={buildMasterDataSystemInformationItems(systemInfo, customer.id)}
           />
         )}
 
         {!isCustomizing ? (
           <>
-            <MasterDataSystemInfoSection info={systemInfo} internalId={customer.id} />
-
             <CustomerContactsSection
               customerId={customer.id}
               userId={customer.userId}
@@ -281,62 +356,110 @@ export default async function CustomerDetailPage({
                 receivesInvoiceCc: contact.receivesInvoiceCc,
               }))}
             />
-
-            <CustomerRelatedDocs
-              opportunities={customer.opportunities.map((opportunity) => ({
-                id: opportunity.id,
-                name: opportunity.name,
-                stage: opportunity.stage,
-                amount: toNumericValue(opportunity.amount, 0),
-                closeDate: opportunity.closeDate ? opportunity.closeDate.toISOString() : null,
-              }))}
-              quotes={customer.quotes.map((quote) => ({
-                id: quote.id,
-                number: quote.number,
-                status: quote.status,
-                total: toNumericValue(quote.total, 0),
-                validUntil: quote.validUntil ? quote.validUntil.toISOString() : null,
-                createdAt: quote.createdAt.toISOString(),
-              }))}
-              salesOrders={customer.salesOrders.map((salesOrder) => ({
-                id: salesOrder.id,
-                number: salesOrder.number,
-                status: salesOrder.status,
-                total: toNumericValue(salesOrder.total, 0),
-                createdAt: salesOrder.createdAt.toISOString(),
-              }))}
-              fulfillments={customer.salesOrders.flatMap((salesOrder) =>
-                salesOrder.fulfillments.map((fulfillment) => ({
-                  id: fulfillment.id,
-                  number: fulfillment.number,
-                  status: fulfillment.status,
-                  date: fulfillment.date.toISOString(),
-                  notes: fulfillment.notes,
-                  salesOrderNumber: salesOrder.number,
-                }))
-              )}
-              invoices={customer.invoices.map((invoice) => ({
-                id: invoice.id,
-                number: invoice.number,
-                status: invoice.status,
-                total: toNumericValue(invoice.total, 0),
-                dueDate: invoice.dueDate ? invoice.dueDate.toISOString() : null,
-                paidDate: invoice.paidDate ? invoice.paidDate.toISOString() : null,
-                createdAt: invoice.createdAt.toISOString(),
-              }))}
-              invoiceReceipts={customer.invoices.flatMap((invoice) =>
-                invoice.cashReceipts.map((receipt) => ({
-                  id: receipt.id,
-                  number: receipt.number,
-                  amount: toNumericValue(receipt.amount, 0),
-                  date: receipt.date.toISOString(),
-                  method: receipt.method,
-                  reference: receipt.reference,
-                  invoiceNumber: invoice.number,
-                }))
-              )}
+            <RecordBottomTabsSection
+              defaultActiveKey="related-records"
+              tabs={[
+                {
+                  key: 'related-records',
+                  label: 'Related Records',
+                  count: relatedRecordsTabs.reduce((sum, tab) => sum + tab.count, 0),
+                  content: <RelatedRecordsSection embedded tabs={relatedRecordsTabs} showDisplayControl={false} />,
+                },
+                {
+                  key: 'related-documents',
+                  label: 'Related Documents',
+                  count: relatedDocumentsCount,
+                  content: (
+                    <CustomerRelatedDocumentsSection
+                      embedded
+                      showDisplayControl={false}
+                      opportunities={customer.opportunities.map((opportunity) => ({
+                        id: opportunity.id,
+                        number: opportunity.opportunityNumber ?? opportunity.name,
+                        name: opportunity.name,
+                        status: opportunity.stage,
+                        total: toNumericValue(opportunity.amount, 0),
+                        closeDate: opportunity.closeDate ? opportunity.closeDate.toISOString() : null,
+                      }))}
+                      quotes={customer.quotes.map((quote) => ({
+                        id: quote.id,
+                        number: quote.number,
+                        status: quote.status,
+                        total: toNumericValue(quote.total, 0),
+                        validUntil: quote.validUntil ? quote.validUntil.toISOString() : null,
+                        createdAt: quote.createdAt.toISOString(),
+                      }))}
+                      salesOrders={customer.salesOrders.map((salesOrder) => ({
+                        id: salesOrder.id,
+                        number: salesOrder.number,
+                        status: salesOrder.status,
+                        total: toNumericValue(salesOrder.total, 0),
+                        createdAt: salesOrder.createdAt.toISOString(),
+                      }))}
+                      fulfillments={customer.salesOrders.flatMap((salesOrder) =>
+                        salesOrder.fulfillments.map((fulfillment) => ({
+                          id: fulfillment.id,
+                          number: fulfillment.number,
+                          status: fulfillment.status,
+                          date: fulfillment.date.toISOString(),
+                          notes: fulfillment.notes,
+                          salesOrderNumber: salesOrder.number,
+                        })),
+                      )}
+                      invoices={customer.invoices.map((invoice) => ({
+                        id: invoice.id,
+                        number: invoice.number,
+                        status: invoice.status,
+                        total: toNumericValue(invoice.total, 0),
+                        dueDate: invoice.dueDate ? invoice.dueDate.toISOString() : null,
+                        paidDate: invoice.paidDate ? invoice.paidDate.toISOString() : null,
+                      }))}
+                      invoiceReceipts={customer.invoices.flatMap((invoice) =>
+                        invoice.cashReceipts.map((receipt) => ({
+                          id: receipt.id,
+                          number: receipt.number,
+                          amount: toNumericValue(receipt.amount, 0),
+                          date: receipt.date.toISOString(),
+                          method: receipt.method,
+                          reference: receipt.reference,
+                          invoiceNumber: invoice.number,
+                        })),
+                      )}
+                    />
+                  ),
+                },
+                {
+                  key: 'communications',
+                  label: 'Communications',
+                  count: 0,
+                  toolbarTargetId: communicationsToolbarTargetId,
+                  toolbarPlacement: 'tab-bar',
+                  content: (
+                    <CommunicationsSection
+                      embedded
+                      toolbarTargetId={communicationsToolbarTargetId}
+                      rows={[]}
+                      showDisplayControl={false}
+                    />
+                  ),
+                },
+                {
+                  key: 'system-notes',
+                  label: 'System Notes',
+                  count: systemNotes.length,
+                  toolbarTargetId: systemNotesToolbarTargetId,
+                  toolbarPlacement: 'tab-bar',
+                  content: (
+                    <SystemNotesSection
+                      embedded
+                      toolbarTargetId={systemNotesToolbarTargetId}
+                      notes={systemNotes}
+                      showDisplayControl={false}
+                    />
+                  ),
+                },
+              ]}
             />
-            <SystemNotesSection notes={systemNotes} />
           </>
         ) : null}
     </RecordDetailPageShell>

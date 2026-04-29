@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import SearchableSelect from '@/components/SearchableSelect'
 import { parseMoneyValue } from '@/lib/money'
 
 export default function BillCreateForm({
@@ -105,18 +106,15 @@ export default function BillCreateForm({
           <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
             Vendor
           </label>
-          <select
-            value={vendorId}
-            onChange={(e) => setVendorId(e.target.value)}
-            className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm text-white"
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            {vendors.map((vendor) => (
-              <option key={vendor.id} value={vendor.id}>
-                {vendor.name}
-              </option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <SearchableSelect
+              selectedValue={vendorId}
+              options={vendors.map((vendor) => ({ value: vendor.id, label: vendor.name }))}
+              placeholder="Select vendor"
+              searchPlaceholder="Search vendor"
+              onSelect={setVendorId}
+            />
+          </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -136,18 +134,21 @@ export default function BillCreateForm({
             <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
               Status
             </label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              <option value="received">Received</option>
-              <option value="pending approval">Pending Approval</option>
-              <option value="approved">Approved</option>
-              <option value="paid">Paid</option>
-              <option value="void">Void</option>
-            </select>
+            <div className="mt-1">
+              <SearchableSelect
+                selectedValue={status}
+                options={[
+                  { value: 'received', label: 'Received' },
+                  { value: 'pending approval', label: 'Pending Approval' },
+                  { value: 'approved', label: 'Approved' },
+                  { value: 'paid', label: 'Paid' },
+                  { value: 'void', label: 'Void' },
+                ]}
+                placeholder="Select status"
+                searchPlaceholder="Search status"
+                onSelect={setStatus}
+              />
+            </div>
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">

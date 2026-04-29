@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { isValidEmail } from '@/lib/validation'
 import type { SelectOption } from '@/lib/list-source'
 import AddressModal, { parseAddress } from '@/components/AddressModal'
+import SearchableSelect from '@/components/SearchableSelect'
 
 type LeadEditValues = {
   firstName: string
@@ -219,47 +220,42 @@ export default function LeadEditButton({
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
                   <span>Status</span>
-                  <select
-                    value={formValues.status}
-                    onChange={(e) => setFormValues((prev) => ({ ...prev, status: e.target.value }))}
-                    className="w-full rounded-md border px-3 py-2 text-white bg-transparent"
-                    style={{ borderColor: 'var(--border-muted)' }}
-                  >
-                    {leadStatusOptions.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    selectedValue={formValues.status}
+                    options={leadStatusOptions.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                    }))}
+                    placeholder="Select status"
+                    onSelect={(value) => setFormValues((prev) => ({ ...prev, status: value }))}
+                  />
                 </label>
                 <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
                   <span>Source</span>
-                  <select
-                    value={formValues.source}
-                    onChange={(e) => setFormValues((prev) => ({ ...prev, source: e.target.value }))}
-                    className="w-full rounded-md border px-3 py-2 text-white bg-transparent"
-                    style={{ borderColor: 'var(--border-muted)' }}
-                  >
-                    <option value="">None</option>
-                    {leadSourceOptions.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    selectedValue={formValues.source}
+                    options={leadSourceOptions.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                    }))}
+                    placeholder="None"
+                    onSelect={(value) => setFormValues((prev) => ({ ...prev, source: value }))}
+                  />
                 </label>
               </div>
 
               <div className="grid gap-4 md:grid-cols-3">
                 <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
                   <span>Rating</span>
-                  <select
-                    value={formValues.rating}
-                    onChange={(e) => setFormValues((prev) => ({ ...prev, rating: e.target.value }))}
-                    className="w-full rounded-md border px-3 py-2 text-white bg-transparent"
-                    style={{ borderColor: 'var(--border-muted)' }}
-                  >
-                    <option value="">None</option>
-                    {leadRatingOptions.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    selectedValue={formValues.rating}
+                    options={leadRatingOptions.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                    }))}
+                    placeholder="None"
+                    onSelect={(value) => setFormValues((prev) => ({ ...prev, rating: value }))}
+                  />
                 </label>
                 <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
                   <span>Expected Value</span>
@@ -298,27 +294,27 @@ export default function LeadEditButton({
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
                   <span>Subsidiary</span>
-                  <select
-                    value={formValues.entityId}
-                    onChange={(e) => setFormValues((prev) => ({ ...prev, entityId: e.target.value }))}
-                    className="w-full rounded-md border px-3 py-2 text-white bg-transparent"
-                    style={{ borderColor: 'var(--border-muted)' }}
-                  >
-                    <option value="">None</option>
-                    {entities.map((entity) => <option key={entity.id} value={entity.id}>{entity.subsidiaryId} - {entity.name}</option>)}
-                  </select>
+                  <SearchableSelect
+                    selectedValue={formValues.entityId}
+                    options={entities.map((entity) => ({
+                      value: entity.id,
+                      label: `${entity.subsidiaryId} - ${entity.name}`,
+                    }))}
+                    placeholder="None"
+                    onSelect={(value) => setFormValues((prev) => ({ ...prev, entityId: value }))}
+                  />
                 </label>
                 <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
                   <span>Currency</span>
-                  <select
-                    value={formValues.currencyId}
-                    onChange={(e) => setFormValues((prev) => ({ ...prev, currencyId: e.target.value }))}
-                    className="w-full rounded-md border px-3 py-2 text-white bg-transparent"
-                    style={{ borderColor: 'var(--border-muted)' }}
-                  >
-                    <option value="">None</option>
-                    {currencies.map((currency) => <option key={currency.id} value={currency.id}>{currency.code ?? currency.currencyId} - {currency.name}</option>)}
-                  </select>
+                  <SearchableSelect
+                    selectedValue={formValues.currencyId}
+                    options={currencies.map((currency) => ({
+                      value: currency.id,
+                      label: `${currency.code ?? currency.currencyId} - ${currency.name}`,
+                    }))}
+                    placeholder="None"
+                    onSelect={(value) => setFormValues((prev) => ({ ...prev, currencyId: value }))}
+                  />
                 </label>
               </div>
 

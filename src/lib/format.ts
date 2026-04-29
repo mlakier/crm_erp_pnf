@@ -4,6 +4,18 @@ type RuntimeGlobal = typeof globalThis & {
   __COMPANY_MONEY_SETTINGS__?: Partial<MoneySettings>
 }
 
+function readDomMoneySettings(): Partial<MoneySettings> {
+  if (typeof document === 'undefined') return {}
+  const encoded = document.documentElement.dataset.companyMoneySettings
+  if (!encoded) return {}
+
+  try {
+    return JSON.parse(decodeURIComponent(encoded)) as Partial<MoneySettings>
+  } catch {
+    return {}
+  }
+}
+
 type NumericLike =
   | number
   | string
@@ -16,7 +28,7 @@ type NumericLike =
 
 function resolveMoneySettings(overrides?: Partial<MoneySettings>): MoneySettings {
   const runtime = globalThis as RuntimeGlobal
-  const runtimeSettings = runtime.__COMPANY_MONEY_SETTINGS__ ?? {}
+  const runtimeSettings = runtime.__COMPANY_MONEY_SETTINGS__ ?? readDomMoneySettings()
 
   return {
     locale: overrides?.locale ?? runtimeSettings.locale ?? DEFAULT_MONEY_SETTINGS.locale,

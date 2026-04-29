@@ -1,10 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionActionStack from '@/components/TransactionActionStack'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
+import BillPaymentApplicationsSection from '@/components/BillPaymentApplicationsSection'
 import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
 import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/lib/form-requirements-client'
 import {
@@ -12,18 +13,17 @@ import {
   type BillPaymentDetailCustomizationConfig,
   type BillPaymentDetailFieldKey,
 } from '@/lib/bill-payment-detail-customization'
-
-type BillOption = {
-  id: string
-  number: string
-  vendorName: string
-}
+import {
+  roundMoney,
+  type BillApplicationCandidate,
+  type BillPaymentApplicationInput,
+} from '@/lib/bill-payment-applications'
 
 type Option = { value: string; label: string }
 
 type BillPaymentHeaderField = {
   key: BillPaymentDetailFieldKey
-} & TransactionHeaderField
+} & RecordHeaderField
 
 const sectionDescriptions: Record<string, string> = {
   'Document Identity': 'Core bill payment identifiers and source-bill context.',
@@ -33,24 +33,32 @@ const sectionDescriptions: Record<string, string> = {
 }
 
 export default function BillPaymentCreatePageClient({
+  vendors,
   bills,
   methodOptions,
   statusOptions,
+  bankAccountOptions,
   customization,
   initialHeaderValues,
+  initialApplications = [],
 }: {
-  bills: BillOption[]
+  vendors: Option[]
+  bills: BillApplicationCandidate[]
   methodOptions: Option[]
   statusOptions: Option[]
+  bankAccountOptions: Option[]
   customization: BillPaymentDetailCustomizationConfig
   initialHeaderValues?: Partial<Record<string, string>>
+  initialApplications?: BillPaymentApplicationInput[]
 }) {
   const router = useRouter()
   const { req, isLocked } = useFormRequirementsState('billPaymentCreate')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [applications, setApplications] = useState<BillPaymentApplicationInput[]>(initialApplications)
   const [headerValues, setHeaderValues] = useState<Record<string, string>>({
-    billId: initialHeaderValues?.billId ?? bills[0]?.id ?? '',
+    vendorId: initialHeaderValues?.vendorId ?? vendors[0]?.value ?? '',
+    bankAccountId: initialHeaderValues?.bankAccountId ?? bankAccountOptions[0]?.value ?? '',
     amount: initialHeaderValues?.amount ?? '',
     date: initialHeaderValues?.date ?? new Date().toISOString().slice(0, 10),
     method: initialHeaderValues?.method ?? methodOptions[0]?.value ?? '',
@@ -59,15 +67,21 @@ export default function BillPaymentCreatePageClient({
     notes: initialHeaderValues?.notes ?? '',
   })
 
-  const selectedBill = useMemo(
-    () => bills.find((bill) => bill.id === (headerValues.billId ?? '')) ?? null,
-    [headerValues.billId, bills],
+  const selectedVendor = useMemo(
+    () => vendors.find((vendor) => vendor.value === (headerValues.vendorId ?? '')) ?? null,
+    [headerValues.vendorId, vendors],
   )
 
-  const billOptions = bills.map((bill) => ({
-    value: bill.id,
-    label: `${bill.number} - ${bill.vendorName}`,
-  }))
+  const appliedTotal = useMemo(
+    () => roundMoney(applications.reduce((sum, application) => sum + application.appliedAmount, 0)),
+    [applications],
+  )
+
+  useEffect(() => {
+    setApplications((current) =>
+      current.filter((application) => bills.some((bill) => bill.id === application.billId && bill.vendorId === (headerValues.vendorId ?? ''))),
+    )
+  }, [bills, headerValues.vendorId])
 
   const headerFieldDefinitions: Record<BillPaymentDetailFieldKey, BillPaymentHeaderField> = {
     id: {
@@ -90,28 +104,53 @@ export default function BillPaymentCreatePageClient({
       subsectionTitle: 'Document Identity',
       subsectionDescription: 'Core bill payment identifiers and source-bill context.',
     },
+    vendorId: {
+      key: 'vendorId',
+      label: 'Vendor',
+      value: headerValues.vendorId ?? '',
+      displayValue: selectedVendor?.label ?? '-',
+      editable: true,
+      type: 'select',
+      options: vendors,
+      helpText: 'Vendor this payment is being applied against.',
+      fieldType: 'list',
+      sourceText: 'Vendor record',
+      subsectionTitle: 'Document Identity',
+      subsectionDescription: 'Core bill payment identifiers and source-bill context.',
+    },
     billId: {
       key: 'billId',
       label: 'Bill',
-      value: headerValues.billId ?? '',
-      displayValue: selectedBill?.number ?? '-',
-      editable: true,
-      type: 'select',
-      options: billOptions,
-      helpText: 'Linked bill for this payment.',
+      value: applications[0]?.billId ?? '',
+      displayValue: applications.length > 0 ? `${applications.length} applied bill${applications.length === 1 ? '' : 's'}` : '-',
+      editable: false,
+      helpText: 'Primary linked bill derived from the applied bill rows below.',
       fieldType: 'list',
       sourceText: 'Bill transaction',
       subsectionTitle: 'Document Identity',
       subsectionDescription: 'Core bill payment identifiers and source-bill context.',
     },
+    bankAccountId: {
+      key: 'bankAccountId',
+      label: 'Bank Account',
+      value: headerValues.bankAccountId ?? '',
+      displayValue: bankAccountOptions.find((option) => option.value === (headerValues.bankAccountId ?? ''))?.label ?? '-',
+      editable: true,
+      type: 'select',
+      options: bankAccountOptions,
+      helpText: 'Cash or bank GL account used for this payment.',
+      fieldType: 'list',
+      sourceText: 'Chart of accounts',
+      subsectionTitle: 'Payment Terms',
+      subsectionDescription: 'Monetary amount, date, payment method, and status.',
+    },
     amount: {
       key: 'amount',
       label: 'Amount',
-      value: headerValues.amount ?? '',
-      displayValue: headerValues.amount || '-',
-      editable: true,
-      type: 'number',
-      helpText: 'Payment amount applied to the bill.',
+      value: appliedTotal > 0 ? String(appliedTotal) : '',
+      displayValue: appliedTotal > 0 ? String(appliedTotal) : '-',
+      editable: false,
+      helpText: 'Payment amount derived from the bill applications below.',
       fieldType: 'currency',
       subsectionTitle: 'Payment Terms',
       subsectionDescription: 'Monetary amount, date, payment method, and status.',
@@ -220,13 +259,14 @@ export default function BillPaymentCreatePageClient({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          billId: values.billId,
-          amount: values.amount,
+          vendorId: values.vendorId,
+          bankAccountId: values.bankAccountId || null,
           date: values.date,
           method: values.method,
           status: values.status,
           reference: values.reference || null,
           notes: values.notes || null,
+          applications,
         }),
       })
 
@@ -256,7 +296,7 @@ export default function BillPaymentCreatePageClient({
       widthClassName="w-full max-w-none"
       actions={<TransactionActionStack mode="create" cancelHref="/bill-payments" formId="create-bill-payment-form" />}
     >
-      <TransactionHeaderSections
+      <RecordHeaderDetails
         editing
         sections={headerSections}
         columns={customization.formColumns}
@@ -268,6 +308,15 @@ export default function BillPaymentCreatePageClient({
         onSubmit={handleSubmit}
         onValuesChange={setHeaderValues}
       />
+      <div className="mt-6">
+        <BillPaymentApplicationsSection
+          bills={bills}
+          selectedVendorId={headerValues.vendorId ?? ''}
+          applications={applications}
+          onChange={setApplications}
+          editing
+        />
+      </div>
       {error ? (
         <p className="mt-4 text-sm" style={{ color: 'var(--danger)' }}>
           {error}

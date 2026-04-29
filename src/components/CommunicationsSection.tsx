@@ -1,6 +1,8 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { DetailTableDisplayControl, DetailTablePaginationFooter } from '@/components/DetailTablePaging'
 import { fmtDocumentDate } from '@/lib/format'
 import {
@@ -28,9 +30,17 @@ type FilterKey = 'date' | 'direction' | 'channel' | 'subject' | 'from' | 'to' | 
 export default function CommunicationsSection({
   rows,
   compose,
+  embedded = false,
+  toolbarTargetId,
+  extraToolbarActions,
+  showDisplayControl = true,
 }: {
   rows: CommunicationRow[]
   compose?: TransactionCommunicationComposePayload
+  embedded?: boolean
+  toolbarTargetId?: string
+  extraToolbarActions?: ReactNode
+  showDisplayControl?: boolean
 }) {
   const [localRows, setLocalRows] = useState(rows)
   const [filters, setFilters] = useState<Record<FilterKey, string>>({
@@ -55,6 +65,8 @@ export default function CommunicationsSection({
   const [attachPdf, setAttachPdf] = useState(true)
   const [pageSize, setPageSize] = useState(10)
   const [page, setPage] = useState(1)
+  const externalToolbarTarget =
+    toolbarTargetId && typeof document !== 'undefined' ? document.getElementById(toolbarTargetId) : null
 
   const filteredRows = useMemo(
     () =>
@@ -154,38 +166,37 @@ export default function CommunicationsSection({
     }
   }
 
-  return (
-    <RecordDetailSection
-      title="Communications"
-      count={filteredRows.length}
-      summary={localRows.length ? `${localRows.length} total` : undefined}
-      collapsible
-      actions={
-        <>
-          <DetailTableDisplayControl
-            value={pageSize}
-            onChange={(value) => {
-              setPageSize(value)
-              setPage(1)
-            }}
-          />
-          {compose ? (
-            <button
-              type="button"
-              onClick={() => {
-                setComposeError('')
-                setComposeSuccess('')
-                setShowComposer((prev) => !prev)
-              }}
-              className="rounded-md px-3 py-1.5 text-xs font-semibold text-white"
-              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-            >
-              Send Email
-            </button>
-          ) : null}
-        </>
-      }
-    >
+  const actions = (
+    <>
+      {extraToolbarActions}
+      {showDisplayControl ? (
+        <DetailTableDisplayControl
+          value={pageSize}
+          onChange={(value) => {
+            setPageSize(value)
+            setPage(1)
+          }}
+        />
+      ) : null}
+      {compose ? (
+        <button
+          type="button"
+          onClick={() => {
+            setComposeError('')
+            setComposeSuccess('')
+            setShowComposer((prev) => !prev)
+          }}
+          className="rounded-md px-3 py-1.5 text-xs font-semibold text-white"
+          style={{ backgroundColor: 'var(--accent-primary-strong)' }}
+        >
+          Send Email
+        </button>
+      ) : null}
+    </>
+  )
+
+  const content = (
+    <>
       {showComposer ? (
         <div className="border-b px-6 py-4" style={{ borderColor: 'var(--border-muted)' }}>
           <div className="grid gap-4 md:grid-cols-2">
@@ -371,6 +382,31 @@ export default function CommunicationsSection({
           />
         </>
       )}
+    </>
+  )
+
+  if (embedded) {
+    return (
+      <>
+        {externalToolbarTarget ? createPortal(actions, externalToolbarTarget) : showDisplayControl || compose || extraToolbarActions ? (
+          <div className="flex items-center justify-end gap-2 border-b px-6 py-4" style={{ borderColor: 'var(--border-muted)' }}>
+            {actions}
+          </div>
+        ) : null}
+        {content}
+      </>
+    )
+  }
+
+  return (
+    <RecordDetailSection
+      title="Communications"
+      count={filteredRows.length}
+      summary={localRows.length ? `${localRows.length} total` : undefined}
+      collapsible
+      actions={actions}
+    >
+      {content}
     </RecordDetailSection>
   )
 }

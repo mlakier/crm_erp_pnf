@@ -8,6 +8,7 @@ import {
   getCountryConfig,
   normalizeCountryCode,
 } from '@/lib/address-country-config'
+import SearchableSelect from '@/components/SearchableSelect'
 
 export type AddressFields = {
   street1: string
@@ -241,22 +242,17 @@ export default function AddressModal({
           {/* Country first — drives all field labels below */}
           <div>
             <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Country *</label>
-            <select
-              value={country}
-              onChange={(e) => handleCountryChange(e.target.value)}
-              className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              {COUNTRY_OPTIONS.map((c) => (
-                <option
-                  key={c.code}
-                  value={c.code}
-                  style={{ backgroundColor: 'var(--card-elevated)', color: '#fff' }}
-                >
-                  {c.label}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <SearchableSelect
+                selectedValue={country}
+                options={COUNTRY_OPTIONS.map((option) => ({
+                  value: option.code,
+                  label: option.label,
+                }))}
+                placeholder="Select country"
+                onSelect={handleCountryChange}
+              />
+            </div>
           </div>
 
           <div>

@@ -6,6 +6,7 @@ import {
   DEFAULT_COUNTRY_CODE,
   getCountryConfig,
 } from '@/lib/address-country-config'
+import SearchableSelect from '@/components/SearchableSelect'
 
 type IntegrationConfigResponse = {
   apiKey?: string
@@ -220,22 +221,17 @@ export default function GoogleAddressValidationTool() {
           ) : null}
           <div>
             <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Country *</label>
-            <select
-              value={form.country}
-              onChange={(e) => handleCountryChange(e.target.value)}
-              className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              {COUNTRY_OPTIONS.map((option) => (
-                <option
-                  key={option.code}
-                  value={option.code}
-                  style={{ backgroundColor: 'var(--card-elevated)', color: '#fff' }}
-                >
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <SearchableSelect
+                selectedValue={form.country}
+                options={COUNTRY_OPTIONS.map((option) => ({
+                  value: option.code,
+                  label: option.label,
+                }))}
+                placeholder="Select country"
+                onSelect={handleCountryChange}
+              />
+            </div>
           </div>
 
           <div>

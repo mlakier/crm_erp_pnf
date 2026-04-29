@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { DetailTableDisplayControl, DetailTablePaginationFooter } from '@/components/DetailTablePaging'
+import SearchableSelect from '@/components/SearchableSelect'
 import type { ManagedListRow } from '@/lib/manage-lists'
 import { COLORABLE_MANAGED_LIST_KEYS, getManagedListDefaultRowColorTone } from '@/lib/managed-list-color-tones'
 import { COMPANY_TRANSACTION_STATUS_TONE_OPTIONS, type TransactionStatusColorTone } from '@/lib/company-preferences-definitions'
@@ -420,18 +421,17 @@ export default function ManageListDetailClient({
                 />
                 {supportsColorTones ? (
                   <div className="flex items-center gap-2">
-                    <select
-                      value={row.colorTone ?? 'default'}
-                      onChange={(event) => updateRowColorTone(row, event.target.value as TransactionStatusColorTone)}
-                      className="min-w-0 flex-1 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                      style={{ borderColor: 'var(--border-muted)' }}
-                    >
-                      {COMPANY_TRANSACTION_STATUS_TONE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="min-w-0 flex-1">
+                      <SearchableSelect
+                        selectedValue={row.colorTone ?? 'default'}
+                        options={COMPANY_TRANSACTION_STATUS_TONE_OPTIONS.map((option) => ({
+                          value: option.value,
+                          label: option.label,
+                        }))}
+                        placeholder="Select tone"
+                        onSelect={(value) => updateRowColorTone(row, (value || 'default') as TransactionStatusColorTone)}
+                      />
+                    </div>
                     <span
                       className="inline-flex items-center justify-center overflow-hidden text-ellipsis whitespace-nowrap rounded-full border px-2 py-1 text-[11px] font-medium tracking-wide"
                       style={{

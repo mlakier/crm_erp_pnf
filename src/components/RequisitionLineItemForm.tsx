@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import SearchableSelect from '@/components/SearchableSelect'
 import { roundMoney } from '@/lib/format'
 import { parseMoneyValue, parseQuantity } from '@/lib/money'
 
@@ -32,13 +33,11 @@ export default function RequisitionLineItemForm({
 
   const handleItemChange = (id: string) => {
     setItemId(id)
-    if (id) {
-      const item = items.find((i) => i.id === id)
-      if (item) {
-        if (!description) setDescription(item.name)
-        setUnitPrice(roundMoney(item.listPrice).toFixed(2))
-      }
-    }
+    if (!id) return
+    const item = items.find((candidate) => candidate.id === id)
+    if (!item) return
+    if (!description) setDescription(item.name)
+    setUnitPrice(roundMoney(item.listPrice).toFixed(2))
   }
 
   const focusRow = (rowId: string) => {
@@ -52,13 +51,13 @@ export default function RequisitionLineItemForm({
     }, 200)
   }
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault()
     setSaving(true)
     setError('')
 
     try {
-      const res = await fetch('/api/purchase-requisitions/line-items', {
+      const response = await fetch('/api/purchase-requisitions/line-items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -71,8 +70,8 @@ export default function RequisitionLineItemForm({
         }),
       })
 
-      const body = await res.json()
-      if (!res.ok) {
+      const body = await response.json()
+      if (!response.ok) {
         setError(body?.error || 'Unable to add line item')
         setSaving(false)
         return
@@ -99,11 +98,7 @@ export default function RequisitionLineItemForm({
   return (
     <section
       className={embedded ? '' : 'rounded-xl border p-5'}
-      style={
-        embedded
-          ? undefined
-          : { backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }
-      }
+      style={embedded ? undefined : { backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}
     >
       {success ? (
         <div className="fixed right-4 top-4 z-[130] rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-lg">
@@ -119,19 +114,17 @@ export default function RequisitionLineItemForm({
         {items.length > 0 ? (
           <div>
             <label className="block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Item (optional)</label>
-            <select
-              value={itemId}
-              onChange={(e) => handleItemChange(e.target.value)}
-              className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>— Select item —</option>
-              {items.map((item) => (
-                <option key={item.id} value={item.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <SearchableSelect
+                selectedValue={itemId}
+                options={items.map((item) => ({
+                  value: item.id,
+                  label: item.name,
+                }))}
+                placeholder="Select item"
+                onSelect={handleItemChange}
+              />
+            </div>
           </div>
         ) : null}
 
@@ -195,7 +188,7 @@ export default function RequisitionLineItemForm({
           className="inline-flex items-center rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
           style={{ backgroundColor: 'var(--accent-primary-strong)' }}
         >
-          {saving ? 'Adding…' : 'Add line item'}
+          {saving ? 'Adding...' : 'Add line item'}
         </button>
       </form>
     </section>

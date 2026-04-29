@@ -11,6 +11,10 @@ export type ContactFormFieldKey =
   | 'position'
   | 'customerId'
   | 'vendorId'
+  | 'isPrimaryForCustomer'
+  | 'receivesQuotesSalesOrders'
+  | 'receivesInvoices'
+  | 'receivesInvoiceCc'
   | 'inactive'
 
 export type ContactFormFieldMeta = {
@@ -61,6 +65,10 @@ export const CONTACT_FORM_FIELDS: ContactFormFieldMeta[] = [
   { id: 'position', label: 'Position', fieldType: 'text', description: 'Job title or role for the contact.' },
   { id: 'customerId', label: 'Customer', fieldType: 'list', sourceType: 'reference', sourceKey: 'customers', source: getListSourceText({ sourceType: 'reference', sourceKey: 'customers' }), description: 'Customer account this contact belongs to.' },
   { id: 'vendorId', label: 'Vendor', fieldType: 'list', sourceType: 'reference', sourceKey: 'vendors', source: getListSourceText({ sourceType: 'reference', sourceKey: 'vendors' }), description: 'Vendor account this contact belongs to.' },
+  { id: 'isPrimaryForCustomer', label: 'Primary', fieldType: 'boolean', description: 'Marks the primary contact for the customer.' },
+  { id: 'receivesQuotesSalesOrders', label: 'Send Quote / SO', fieldType: 'boolean', description: 'Whether this contact receives quotes and sales orders.' },
+  { id: 'receivesInvoices', label: 'Send Invoice', fieldType: 'boolean', description: 'Whether this contact receives invoices.' },
+  { id: 'receivesInvoiceCc', label: 'CC Invoice', fieldType: 'boolean', description: 'Whether this contact receives invoice CC copies.' },
   { id: 'inactive', label: 'Inactive', fieldType: 'list', sourceType: 'system', sourceKey: 'activeInactive', source: getListSourceText({ sourceType: 'system', sourceKey: 'activeInactive' }), description: 'Marks the contact unavailable for new activity while preserving history.' },
 ]
 
@@ -82,6 +90,10 @@ export function defaultContactFormCustomization(): ContactFormCustomizationConfi
     position: 'Relationship',
     customerId: 'Relationship',
     vendorId: 'Relationship',
+    isPrimaryForCustomer: 'Relationship',
+    receivesQuotesSalesOrders: 'Relationship',
+    receivesInvoices: 'Relationship',
+    receivesInvoiceCc: 'Relationship',
     inactive: 'Status',
   }
 
@@ -95,6 +107,10 @@ export function defaultContactFormCustomization(): ContactFormCustomizationConfi
     position: 1,
     customerId: 2,
     vendorId: 1,
+    isPrimaryForCustomer: 2,
+    receivesQuotesSalesOrders: 1,
+    receivesInvoices: 2,
+    receivesInvoiceCc: 1,
     inactive: 1,
   }
 
@@ -108,6 +124,10 @@ export function defaultContactFormCustomization(): ContactFormCustomizationConfi
     position: 0,
     customerId: 0,
     vendorId: 1,
+    isPrimaryForCustomer: 1,
+    receivesQuotesSalesOrders: 2,
+    receivesInvoices: 2,
+    receivesInvoiceCc: 3,
     inactive: 0,
   }
 
@@ -117,7 +137,7 @@ export function defaultContactFormCustomization(): ContactFormCustomizationConfi
     sectionRows: {
       Core: 2,
       Contact: 2,
-      Relationship: 2,
+      Relationship: 4,
       Status: 1,
     },
     fields: Object.fromEntries(

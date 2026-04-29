@@ -4,6 +4,13 @@ import {
   type TransactionReferenceLayout,
 } from '@/lib/transaction-reference-layouts'
 import {
+  defaultTransactionGlImpactColumns,
+  defaultTransactionGlImpactSettings,
+  type TransactionGlImpactColumnCustomization,
+  type TransactionGlImpactColumnKey,
+  type TransactionGlImpactSettings,
+} from '@/lib/transaction-gl-impact'
+import {
   type LinkedRecordReferenceSource,
   CUSTOMER_FULL_REFERENCE_FIELDS,
   CURRENCY_FULL_REFERENCE_FIELDS,
@@ -120,6 +127,8 @@ export type InvoiceDetailCustomizationConfig = {
   referenceLayouts: TransactionReferenceLayout[]
   lineSettings: InvoiceLineSettings
   lineColumns: Record<InvoiceLineColumnKey, InvoiceLineColumnCustomization>
+  glImpactSettings: TransactionGlImpactSettings
+  glImpactColumns: Record<TransactionGlImpactColumnKey, TransactionGlImpactColumnCustomization>
   statCards: InvoiceStatCardSlot[]
 }
 
@@ -448,6 +457,8 @@ export function defaultInvoiceDetailCustomization(): InvoiceDetailCustomizationC
         },
       ]),
     ) as Record<InvoiceLineColumnKey, InvoiceLineColumnCustomization>,
+    glImpactSettings: defaultTransactionGlImpactSettings(),
+    glImpactColumns: defaultTransactionGlImpactColumns(),
     statCards: DEFAULT_INVOICE_STAT_CARD_METRICS.map((metric, index) => ({
       id: `slot-${index + 1}`,
       metric,

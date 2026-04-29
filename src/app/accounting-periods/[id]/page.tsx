@@ -1,19 +1,19 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
-import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSection'
+import type { InlineRecordSection } from '@/components/InlineRecordDetails'
+import MasterDataHeaderDetails from '@/components/MasterDataHeaderDetails'
+import { buildMasterDataSystemInformationItems } from '@/components/RecordSystemInformationSection'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import AccountingPeriodDetailCustomizeMode from '@/components/AccountingPeriodDetailCustomizeMode'
 import MasterDataActionBar from '@/components/MasterDataActionBar'
+import CommunicationsSection from '@/components/CommunicationsSection'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
-import {
-  RecordDetailCell,
-  RecordDetailEmptyState,
-  RecordDetailHeaderCell,
-  RecordDetailSection,
-} from '@/components/RecordDetailPanels'
+import TransactionRelatedDocumentsTabs, {
+  RelatedDocumentsStatusBadge,
+} from '@/components/TransactionRelatedDocumentsTabs'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
 import { loadAccountingPeriodFormCustomization } from '@/lib/accounting-period-form-customization-store'
@@ -21,6 +21,7 @@ import { ACCOUNTING_PERIOD_FORM_FIELDS, type AccountingPeriodFormFieldKey } from
 import { loadFormRequirements } from '@/lib/form-requirements-store'
 import { loadMasterDataSystemInfo } from '@/lib/master-data-system-info'
 import { loadMasterDataSystemNotes } from '@/lib/master-data-system-notes'
+import type { TransactionStatDefinition, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 function yesNo(value: boolean) {
   return value ? 'Yes' : 'No'
@@ -112,16 +113,55 @@ export default async function AccountingPeriodDetailPage({
   const systemNotes = await loadMasterDataSystemNotes({ entityType: 'accounting-period', entityId: period.id })
   const activeLocks = [period.arLocked, period.apLocked, period.inventoryLocked].filter(Boolean).length
   const statusLabel = statusOptions.find((option) => option.value === period.status)?.label ?? period.status
-  const statPreviewCards = [
-    { id: 'journalEntries', label: 'Journal Entries', value: period._count.journalEntries, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+  const statPreviewCards: Array<{
+    id: string
+    label: string
+    value: string | number
+    cardTone: TransactionVisualTone
+    valueTone: TransactionVisualTone
+    supportsColorized: boolean
+    supportsLink: boolean
+  }> = [
+    { id: 'journalEntries', label: 'Journal Entries', value: period._count.journalEntries, cardTone: 'accent', valueTone: 'accent', supportsColorized: true, supportsLink: false },
     { id: 'closed', label: 'Closed', value: yesNo(period.closed), cardTone: period.closed ? 'green' : 'yellow', valueTone: period.closed ? 'green' : 'yellow', supportsColorized: true, supportsLink: false },
     { id: 'lockedAreas', label: 'Locked Areas', value: activeLocks, cardTone: activeLocks > 0 ? 'yellow' : 'teal', valueTone: activeLocks > 0 ? 'yellow' : 'teal', supportsColorized: true, supportsLink: false },
   ]
-  const statDefinitions = [
-    { id: 'journalEntries', label: 'Journal Entries', getValue: () => period._count.journalEntries, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
-    { id: 'closed', label: 'Closed', getValue: () => yesNo(period.closed), getCardTone: () => (period.closed ? 'green' : 'yellow') as const, getValueTone: () => (period.closed ? 'green' : 'yellow') as const },
-    { id: 'lockedAreas', label: 'Locked Areas', getValue: () => activeLocks, getCardTone: () => (activeLocks > 0 ? 'yellow' : 'teal') as const, getValueTone: () => (activeLocks > 0 ? 'yellow' : 'teal') as const },
+  const statDefinitions: Array<TransactionStatDefinition<typeof period>> = [
+    { id: 'journalEntries', label: 'Journal Entries', getValue: () => period._count.journalEntries, getCardTone: () => 'accent', getValueTone: () => 'accent' },
+    { id: 'closed', label: 'Closed', getValue: () => yesNo(period.closed), getCardTone: () => (period.closed ? 'green' : 'yellow'), getValueTone: () => (period.closed ? 'green' : 'yellow') },
+    { id: 'lockedAreas', label: 'Locked Areas', getValue: () => activeLocks, getCardTone: () => (activeLocks > 0 ? 'yellow' : 'teal'), getValueTone: () => (activeLocks > 0 ? 'yellow' : 'teal') },
   ]
+  const relatedDocumentsTabs = [
+    {
+      key: 'journals',
+      label: 'Journals',
+      count: period.journalEntries.length,
+      tone: 'downstream' as const,
+      emptyMessage: 'No journals are linked to this accounting period yet.',
+      headers: ['Txn ID', 'Date', 'Status', 'Description', 'Total'],
+      rows: period.journalEntries.map((entry) => ({
+        id: entry.id,
+        cells: [
+          <Link key="link" href={`/journals/${entry.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+            {entry.number}
+          </Link>,
+          new Date(entry.date).toLocaleDateString(),
+          <RelatedDocumentsStatusBadge key="status" status={entry.status} />,
+          entry.description || '-',
+          Number(entry.total).toFixed(2),
+        ],
+        filterValues: [
+          entry.number,
+          new Date(entry.date).toLocaleDateString(),
+          entry.status,
+          entry.description || '-',
+          Number(entry.total).toFixed(2),
+        ],
+      })),
+    },
+  ]
+  const communicationsToolbarTargetId = 'accounting-period-communications-toolbar'
+  const systemNotesToolbarTargetId = 'accounting-period-system-notes-toolbar'
 
   return (
     <RecordDetailPageShell
@@ -177,55 +217,66 @@ export default async function AccountingPeriodDetailPage({
           statPreviewCards={statPreviewCards}
         />
       ) : (
-        <InlineRecordDetails
+        <MasterDataHeaderDetails
           resource="accounting-periods"
           id={period.id}
-          title="Accounting period details"
+          title="Accounting Period Details"
           sections={detailSections}
           editing={isEditing}
           columns={customization.formColumns}
-          showInternalActions={false}
+          systemInformationItems={buildMasterDataSystemInformationItems(systemInfo, period.id)}
         />
       )}
 
-      {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} internalId={period.id} /> : null}
-
       {!isCustomizing ? (
-      <RecordDetailSection title="Journals" count={period.journalEntries.length}>
-        {period.journalEntries.length === 0 ? (
-          <RecordDetailEmptyState message="No journals in this accounting period" />
-        ) : (
-          <table className="min-w-full">
-            <thead>
-              <tr>
-                <RecordDetailHeaderCell>Journal</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Date</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Status</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Description</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Total</RecordDetailHeaderCell>
-              </tr>
-            </thead>
-            <tbody>
-              {period.journalEntries.map((entry) => (
-                <tr key={entry.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                  <RecordDetailCell>
-                    <Link href={`/journals/${entry.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                      {entry.number}
-                    </Link>
-                  </RecordDetailCell>
-                  <RecordDetailCell>{new Date(entry.date).toLocaleDateString()}</RecordDetailCell>
-                  <RecordDetailCell>{entry.status}</RecordDetailCell>
-                  <RecordDetailCell>{entry.description || '-'}</RecordDetailCell>
-                  <RecordDetailCell>{Number(entry.total).toFixed(2)}</RecordDetailCell>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </RecordDetailSection>
+        <RecordBottomTabsSection
+          defaultActiveKey="related-documents"
+          tabs={[
+            {
+              key: 'related-documents',
+              label: 'Related Documents',
+              count: period.journalEntries.length,
+              content: (
+                <TransactionRelatedDocumentsTabs
+                  embedded
+                  tabs={relatedDocumentsTabs}
+                  showDisplayControl={false}
+                />
+              ),
+            },
+            {
+              key: 'communications',
+              label: 'Communications',
+              count: 0,
+              toolbarTargetId: communicationsToolbarTargetId,
+              toolbarPlacement: 'tab-bar',
+              content: (
+                <CommunicationsSection
+                  embedded
+                  toolbarTargetId={communicationsToolbarTargetId}
+                  rows={[]}
+                  showDisplayControl={false}
+                />
+              ),
+            },
+            {
+              key: 'system-notes',
+              label: 'System Notes',
+              count: systemNotes.length,
+              toolbarTargetId: systemNotesToolbarTargetId,
+              toolbarPlacement: 'tab-bar',
+              content: (
+                <SystemNotesSection
+                  embedded
+                  toolbarTargetId={systemNotesToolbarTargetId}
+                  notes={systemNotes}
+                  showDisplayControl={false}
+                />
+              ),
+            },
+          ]}
+        />
       ) : null}
-
-      {!isCustomizing ? <SystemNotesSection notes={systemNotes} /> : null}
     </RecordDetailPageShell>
   )
 }

@@ -15,8 +15,10 @@ export type JournalPageConfigRecord = {
 
 export const journalPageConfig: TransactionPageConfig<JournalPageConfigRecord> = {
   sectionDescriptions: {
-    'Journal Entry': 'Core journal header information and posting context.',
-    'Source And Approval': 'Reference source and approval ownership for the journal entry.',
+    'Document Identity': 'Core journal numbering, description, and classification fields.',
+    'Posting & Financials': 'Posting context, status, and header-level financial settings.',
+    'Source & Approval': 'Origin tracking and ownership/approval assignments for the journal.',
+    'System Dates': 'System-managed timestamps for the journal record.',
   },
   stats: [
     {

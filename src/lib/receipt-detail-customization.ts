@@ -4,6 +4,13 @@ import {
   type TransactionReferenceLayout,
 } from '@/lib/transaction-reference-layouts'
 import {
+  defaultTransactionGlImpactColumns,
+  defaultTransactionGlImpactSettings,
+  type TransactionGlImpactColumnCustomization,
+  type TransactionGlImpactColumnKey,
+  type TransactionGlImpactSettings,
+} from '@/lib/transaction-gl-impact'
+import {
   type LinkedRecordReferenceSource,
   PURCHASE_ORDER_FULL_REFERENCE_FIELDS,
 } from '@/lib/linked-record-reference-catalogs'
@@ -40,6 +47,8 @@ export type ReceiptDetailCustomizationConfig = {
   sectionRows: Record<string, number>
   fields: Record<ReceiptDetailFieldKey, ReceiptDetailFieldCustomization>
   referenceLayouts: TransactionReferenceLayout[]
+  glImpactSettings: TransactionGlImpactSettings
+  glImpactColumns: Record<TransactionGlImpactColumnKey, TransactionGlImpactColumnCustomization>
   statCards?: Array<TransactionStatCardSlot<ReceiptStatCardKey>>
 }
 
@@ -99,6 +108,8 @@ export function defaultReceiptDetailCustomization(): ReceiptDetailCustomizationC
       updatedAt: { visible: true, section: 'System Dates', order: 0, column: 2 },
     },
     referenceLayouts: [buildDefaultTransactionReferenceLayout(RECEIPT_REFERENCE_SOURCES, 'purchaseOrder')],
+    glImpactSettings: defaultTransactionGlImpactSettings(),
+    glImpactColumns: defaultTransactionGlImpactColumns(),
     statCards: [
       { id: 'receipt-quantity', metric: 'quantity', visible: true, order: 0 },
       { id: 'receipt-status', metric: 'status', visible: true, order: 1 },

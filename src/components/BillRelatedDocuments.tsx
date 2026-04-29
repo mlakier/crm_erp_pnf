@@ -13,6 +13,8 @@ export default function BillRelatedDocuments({
   receipts,
   billPayments,
   moneySettings,
+  embedded = false,
+  showDisplayControl = true,
 }: {
   purchaseRequisitions: Array<{
     id: string
@@ -45,6 +47,8 @@ export default function BillRelatedDocuments({
     reference: string | null
   }>
   moneySettings?: Parameters<typeof fmtCurrency>[2]
+  embedded?: boolean
+  showDisplayControl?: boolean
 }) {
   const tabs: TransactionRelatedDocumentsTab[] = [
     {
@@ -61,6 +65,12 @@ export default function BillRelatedDocuments({
             {req.number}
           </Link>,
           <RelatedDocumentsStatusBadge key={`${req.id}-status`} status={req.status} />,
+          fmtCurrency(req.total, undefined, moneySettings),
+          fmtDocumentDate(req.createdAt, moneySettings),
+        ],
+        filterValues: [
+          req.number,
+          req.status,
           fmtCurrency(req.total, undefined, moneySettings),
           fmtDocumentDate(req.createdAt, moneySettings),
         ],
@@ -83,6 +93,12 @@ export default function BillRelatedDocuments({
           fmtCurrency(po.total, undefined, moneySettings),
           fmtDocumentDate(po.createdAt, moneySettings),
         ],
+        filterValues: [
+          po.number,
+          po.status,
+          fmtCurrency(po.total, undefined, moneySettings),
+          fmtDocumentDate(po.createdAt, moneySettings),
+        ],
       })),
     },
     {
@@ -91,16 +107,23 @@ export default function BillRelatedDocuments({
       count: receipts.length,
       tone: 'upstream',
       emptyMessage: 'No related receipts.',
-      headers: ['TXN ID', 'DATE', 'STATUS', 'QTY', 'NOTES'],
+      headers: ['TXN ID', 'STATUS', 'DATE', 'QTY', 'NOTES'],
       rows: receipts.map((receipt) => ({
         id: receipt.id,
         cells: [
           <Link key={`${receipt.id}-number`} href={`/receipts/${receipt.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
             {receipt.number}
           </Link>,
-          fmtDocumentDate(receipt.date, moneySettings),
           <RelatedDocumentsStatusBadge key={`${receipt.id}-status`} status={receipt.status} />,
+          fmtDocumentDate(receipt.date, moneySettings),
           receipt.quantity,
+          receipt.notes ?? '-',
+        ],
+        filterValues: [
+          receipt.number,
+          receipt.status,
+          fmtDocumentDate(receipt.date, moneySettings),
+          String(receipt.quantity),
           receipt.notes ?? '-',
         ],
       })),
@@ -111,21 +134,28 @@ export default function BillRelatedDocuments({
       count: billPayments.length,
       tone: 'downstream',
       emptyMessage: 'No related bill payments.',
-      headers: ['TXN ID', 'DATE', 'STATUS', 'AMOUNT', 'REFERENCE'],
+      headers: ['TXN ID', 'STATUS', 'AMOUNT', 'DATE', 'REFERENCE'],
       rows: billPayments.map((payment) => ({
         id: payment.id,
         cells: [
           <Link key={`${payment.id}-number`} href={`/bill-payments/${payment.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
             {payment.number}
           </Link>,
-          fmtDocumentDate(payment.date, moneySettings),
           <RelatedDocumentsStatusBadge key={`${payment.id}-status`} status={payment.status} />,
           fmtCurrency(payment.amount, undefined, moneySettings),
+          fmtDocumentDate(payment.date, moneySettings),
+          payment.reference ?? '-',
+        ],
+        filterValues: [
+          payment.number,
+          payment.status,
+          fmtCurrency(payment.amount, undefined, moneySettings),
+          fmtDocumentDate(payment.date, moneySettings),
           payment.reference ?? '-',
         ],
       })),
     },
   ]
 
-  return <TransactionRelatedDocumentsTabs tabs={tabs} />
+  return <TransactionRelatedDocumentsTabs tabs={tabs} embedded={embedded} showDisplayControl={showDisplayControl} />
 }

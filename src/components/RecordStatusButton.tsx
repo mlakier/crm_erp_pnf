@@ -53,13 +53,13 @@ export default function RecordStatusButton({
       const body = await response.json()
       if (!response.ok) {
         setError(body?.error || 'Unable to update status')
-        setSaving(false)
         return
       }
 
       router.refresh()
     } catch {
       setError('Unable to update status')
+    } finally {
       setSaving(false)
     }
   }

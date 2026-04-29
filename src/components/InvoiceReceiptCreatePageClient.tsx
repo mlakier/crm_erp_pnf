@@ -4,9 +4,9 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionActionStack from '@/components/TransactionActionStack'
-import TransactionHeaderSections, {
-  type TransactionHeaderField,
-} from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, {
+  type RecordHeaderField,
+} from '@/components/RecordHeaderDetails'
 import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
 import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/lib/form-requirements-client'
 import {
@@ -29,7 +29,7 @@ type Option = { value: string; label: string }
 
 type InvoiceReceiptHeaderField = {
   key: InvoiceReceiptDetailFieldKey
-} & TransactionHeaderField
+} & RecordHeaderField
 
 const sectionDescriptions: Record<string, string> = {
   Customer: 'Customer context derived from the selected invoice.',
@@ -39,11 +39,13 @@ const sectionDescriptions: Record<string, string> = {
 export default function InvoiceReceiptCreatePageClient({
   invoices,
   methodOptions,
+  bankAccountOptions,
   customization,
   initialHeaderValues,
 }: {
   invoices: InvoiceOption[]
   methodOptions: Option[]
+  bankAccountOptions: Option[]
   customization: InvoiceReceiptDetailCustomizationConfig
   initialHeaderValues?: Partial<Record<string, string>>
 }) {
@@ -53,6 +55,7 @@ export default function InvoiceReceiptCreatePageClient({
   const [error, setError] = useState('')
   const [headerValues, setHeaderValues] = useState<Record<string, string>>({
     invoiceId: initialHeaderValues?.invoiceId ?? invoices[0]?.id ?? '',
+    bankAccountId: initialHeaderValues?.bankAccountId ?? bankAccountOptions[0]?.value ?? '',
     amount: initialHeaderValues?.amount ?? '',
     date: initialHeaderValues?.date ?? new Date().toISOString().slice(0, 10),
     method: initialHeaderValues?.method ?? methodOptions[0]?.value ?? '',
@@ -121,6 +124,20 @@ export default function InvoiceReceiptCreatePageClient({
       sourceText: 'Invoice transaction',
       subsectionTitle: 'Record Keys',
       subsectionDescription: 'Internal and linked transaction identifiers for this receipt.',
+    },
+    bankAccountId: {
+      key: 'bankAccountId',
+      label: 'Bank Account',
+      value: headerValues.bankAccountId ?? '',
+      displayValue: bankAccountOptions.find((option) => option.value === (headerValues.bankAccountId ?? ''))?.label ?? '-',
+      editable: true,
+      type: 'select',
+      options: bankAccountOptions,
+      helpText: 'Cash or bank GL account that receives this receipt.',
+      fieldType: 'list',
+      sourceText: 'Chart of accounts',
+      subsectionTitle: 'Receipt Terms',
+      subsectionDescription: 'Monetary amount, receipt date, and payment method.',
     },
     amount: {
       key: 'amount',
@@ -213,6 +230,7 @@ export default function InvoiceReceiptCreatePageClient({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           invoiceId: values.invoiceId,
+          bankAccountId: values.bankAccountId || null,
           amount: values.amount,
           date: values.date,
           method: values.method,
@@ -246,10 +264,13 @@ export default function InvoiceReceiptCreatePageClient({
       widthClassName="w-full max-w-none"
       actions={<TransactionActionStack mode="create" cancelHref="/invoice-receipts" formId="create-invoice-receipt-form" />}
     >
-      <TransactionHeaderSections
+      <RecordHeaderDetails
         editing
         sections={headerSections}
         columns={customization.formColumns}
+        containerTitle="Invoice Receipt Details"
+        containerDescription="Core invoice receipt fields organized into configurable sections."
+        showSubsections={false}
         formId="create-invoice-receipt-form"
         submitMode="controlled"
         onSubmit={handleSubmit}

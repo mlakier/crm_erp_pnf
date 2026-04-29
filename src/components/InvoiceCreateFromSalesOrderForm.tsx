@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import SearchableSelect from '@/components/SearchableSelect'
 
 type SalesOrderOption = {
   id: string
@@ -62,20 +63,17 @@ export default function InvoiceCreateFromSalesOrderForm({
     <form id={formId} className="space-y-4" onSubmit={handleSubmit}>
       <div>
         <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Sales Order</label>
-        <select
-          value={salesOrderId}
-          onChange={(event) => setSalesOrderId(event.target.value)}
-          required
-          className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-          style={{ borderColor: 'var(--border-muted)' }}
-        >
-          {salesOrders.length === 0 ? <option value="">No eligible sales orders</option> : null}
-          {salesOrders.map((salesOrder) => (
-            <option key={salesOrder.id} value={salesOrder.id}>
-              {salesOrder.label}
-            </option>
-          ))}
-        </select>
+        <div className="mt-1">
+          <SearchableSelect
+            selectedValue={salesOrderId}
+            options={salesOrders.map((salesOrder) => ({
+              value: salesOrder.id,
+              label: salesOrder.label,
+            }))}
+            placeholder={salesOrders.length === 0 ? 'No eligible sales orders' : 'Select sales order'}
+            onSelect={setSalesOrderId}
+          />
+        </div>
       </div>
 
       {error ? <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p> : null}

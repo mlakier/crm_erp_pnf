@@ -7,7 +7,6 @@ import {
   SALES_ORDER_REFERENCE_SOURCES,
   SALES_ORDER_STAT_CARDS,
   type SalesOrderDetailCustomizationConfig,
-  type SalesOrderDetailFieldKey,
   type SalesOrderLineColumnKey,
 } from '@/lib/sales-order-detail-customization'
 
@@ -24,7 +23,7 @@ const SALES_ORDER_LINE_SETTING_AVAILABILITY = Object.fromEntries(
 ) as Record<SalesOrderLineColumnKey, string[]>
 
 type CustomizeField = {
-  id: SalesOrderDetailFieldKey
+  id: string
   label: string
   fieldType: string
   source?: string

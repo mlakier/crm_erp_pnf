@@ -2,7 +2,6 @@
 
 import type {
   PurchaseOrderDetailCustomizationConfig,
-  PurchaseOrderDetailFieldKey,
   PurchaseOrderLineColumnKey,
 } from '@/lib/purchase-order-detail-customization'
 import TransactionRecordDetailCustomizeMode from '@/components/TransactionRecordDetailCustomizeMode'
@@ -28,7 +27,7 @@ const PURCHASE_ORDER_LINE_SETTING_AVAILABILITY = Object.fromEntries(
 ) as Record<PurchaseOrderLineColumnKey, string[]>
 
 type CustomizeField = {
-  id: PurchaseOrderDetailFieldKey
+  id: string
   label: string
   fieldType: string
   source?: string

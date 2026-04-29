@@ -23,6 +23,8 @@ export type CompanyInformationSettings = {
   legalEntityRegisteredAs: string
   uen: string
   brn: string
+  defaultApAccountId: string
+  defaultArAccountId: string
 }
 
 const STORE_PATH = path.join(process.cwd(), 'config', 'company-information-settings.json')
@@ -49,6 +51,8 @@ const DEFAULT_SETTINGS: CompanyInformationSettings = {
   legalEntityRegisteredAs: '',
   uen: '',
   brn: '',
+  defaultApAccountId: '',
+  defaultArAccountId: '',
 }
 
 function sanitize(input: unknown): CompanyInformationSettings {
@@ -77,6 +81,8 @@ function sanitize(input: unknown): CompanyInformationSettings {
     legalEntityRegisteredAs: str('legalEntityRegisteredAs'),
     uen: str('uen'),
     brn: str('brn'),
+    defaultApAccountId: str('defaultApAccountId'),
+    defaultArAccountId: str('defaultArAccountId'),
   }
 }
 

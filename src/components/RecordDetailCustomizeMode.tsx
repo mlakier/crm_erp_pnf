@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import DetailStatCardsCustomizeSection, { DEFAULT_DETAIL_STAT_CARDS_TITLE } from '@/components/DetailStatCardsCustomizeSection'
+import SearchableSelect, { type SearchableSelectOption } from '@/components/SearchableSelect'
 import type { TransactionStatCardSize, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 type FieldKey = string
@@ -24,7 +25,7 @@ type LayoutConfig = {
     referenceId: string
     formColumns: number
     rows: number
-    fields: Record<FieldKey, { visible: boolean; order: number; column: number }>
+    fields: Partial<Record<FieldKey, { visible: boolean; order: number; column: number }>>
   }>
   lineSettings?: Record<string, string>
   lineColumns?: Record<string, { visible: boolean; order: number; [key: string]: unknown }>
@@ -96,13 +97,13 @@ type LineColumnDefinition = {
 type LineColumnSettingDefinition = {
   id: string
   label: string
-  options: Array<{ value: string; label: string }>
+  options: ReadonlyArray<{ value: string; label: string }>
 }
 
 type LineSectionSettingDefinition = {
   id: string
   label: string
-  options: Array<{ value: string; label: string }>
+  options: ReadonlyArray<{ value: string; label: string }>
 }
 
 type DragState = {
@@ -118,6 +119,36 @@ type ReferenceDragState = {
   column: number
   row: number
 } | null
+
+function InlineSearchableSelect({
+  value,
+  options,
+  placeholder,
+  disabled = false,
+  textClassName = 'text-sm',
+  onChange,
+}: {
+  value: string
+  options: SearchableSelectOption[]
+  placeholder: string
+  disabled?: boolean
+  textClassName?: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <div className="w-full">
+      <SearchableSelect
+        selectedValue={value}
+        options={options}
+        placeholder={placeholder}
+        searchPlaceholder={placeholder}
+        disabled={disabled}
+        textClassName={textClassName}
+        onSelect={onChange}
+      />
+    </div>
+  )
+}
 
 export default function RecordDetailCustomizeMode({
   detailHref,
@@ -327,7 +358,7 @@ export default function RecordDetailCustomizeMode({
 
   function normalizeReferenceLayout(
     referenceLayout: NonNullable<LayoutConfig['referenceLayouts']>[number],
-    nextFields: Record<string, { visible: boolean; order: number; column: number }>,
+    nextFields: Partial<Record<string, { visible: boolean; order: number; column: number }>>,
     nextColumns = referenceLayout.formColumns,
     nextRows = referenceLayout.rows,
   ) {
@@ -1297,35 +1328,27 @@ export default function RecordDetailCustomizeMode({
                         <span className="block text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
                           Linked Field
                         </span>
-                        <select
-                          value={referenceLayout.referenceId}
-                          onChange={(event) => updateReferenceSource(referenceLayout.id, event.target.value)}
-                          className="rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                          style={{ borderColor: 'var(--border-muted)' }}
-                        >
-                          {referenceSourceDefinitions.map((definition) => (
-                            <option key={definition.id} value={definition.id} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                              {definition.label}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="w-48">
+                          <InlineSearchableSelect
+                            value={referenceLayout.referenceId}
+                            onChange={(value) => updateReferenceSource(referenceLayout.id, value)}
+                            options={referenceSourceDefinitions.map((definition) => ({ value: definition.id, label: definition.label }))}
+                            placeholder="Select linked field"
+                          />
+                        </div>
                       </label>
                       <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
                         <span className="block text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
                           Grid Columns
                         </span>
-                        <select
-                          value={referenceLayout.formColumns}
-                          onChange={(event) => updateReferenceColumns(referenceLayout.id, Number(event.target.value))}
-                          className="rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                          style={{ borderColor: 'var(--border-muted)' }}
-                        >
-                          {[1, 2, 3, 4].map((count) => (
-                            <option key={count} value={count} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                              {count}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="w-24">
+                          <InlineSearchableSelect
+                            value={String(referenceLayout.formColumns)}
+                            onChange={(value) => updateReferenceColumns(referenceLayout.id, Number(value))}
+                            options={[1, 2, 3, 4].map((count) => ({ value: String(count), label: String(count) }))}
+                            placeholder="Columns"
+                          />
+                        </div>
                       </label>
                       <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
                         <span className="block text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
@@ -1378,25 +1401,19 @@ export default function RecordDetailCustomizeMode({
                             >
                               <div className="mb-2 text-xs">{`Row ${row}, Column ${column}`}</div>
                               {availableOptions.length > 0 ? (
-                                <select
+                                <InlineSearchableSelect
                                   value=""
-                                  onChange={(event) => {
-                                    const fieldId = event.target.value
+                                  onChange={(fieldId) => {
                                     if (!fieldId) return
                                     moveReferenceFieldToEmptyCell(referenceLayout.id, fieldId, column, rowIndex)
                                   }}
-                                  className="w-full rounded-md border bg-transparent px-2 py-1.5 text-xs text-white"
-                                  style={{ borderColor: 'var(--border-muted)' }}
-                                >
-                                  <option value="" style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                                    Select field...
-                                  </option>
-                                  {availableOptions.map((fieldOption) => (
-                                    <option key={`${referenceLayout.id}-${fieldOption.id}`} value={fieldOption.id} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                                      {fieldOption.label}
-                                    </option>
-                                  ))}
-                                </select>
+                                  options={[
+                                    { value: '', label: 'Select field...' },
+                                    ...availableOptions.map((fieldOption) => ({ value: fieldOption.id, label: fieldOption.label })),
+                                  ]}
+                                  placeholder="Select field..."
+                                  textClassName="text-xs"
+                                />
                               ) : (
                                 <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                                   No more available fields
@@ -1491,18 +1508,14 @@ export default function RecordDetailCustomizeMode({
             <span className="block text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
               Form Columns
             </span>
-            <select
-              value={layout.formColumns}
-              onChange={(event) => updateFormColumns(Number(event.target.value))}
-              className="rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              {[1, 2, 3, 4].map((count) => (
-                <option key={count} value={count} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                  {count}
-                </option>
-              ))}
-            </select>
+            <div className="w-24">
+              <InlineSearchableSelect
+                value={String(layout.formColumns)}
+                onChange={(value) => updateFormColumns(Number(value))}
+                options={[1, 2, 3, 4].map((count) => ({ value: String(count), label: String(count) }))}
+                placeholder="Columns"
+              />
+            </div>
           </label>
           <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
             <span className="block text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
@@ -1623,25 +1636,22 @@ export default function RecordDetailCustomizeMode({
                           >
                             <div className="mb-2 text-xs">{`Row ${row}, Column ${column}`}</div>
                             {sectionFieldOptions.length > 0 ? (
-                              <select
+                              <InlineSearchableSelect
                                 value=""
-                                onChange={(event) => {
-                                  const fieldId = event.target.value
+                                onChange={(fieldId) => {
                                   if (!fieldId) return
                                   moveFieldToEmptyCell(fieldId, section, column, rowIndex)
                                 }}
-                                className="w-full rounded-md border bg-transparent px-2 py-1.5 text-xs text-white"
-                                style={{ borderColor: 'var(--border-muted)' }}
-                              >
-                                <option value="" style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                                  {emptyCellLabel}
-                                </option>
-                                {sectionFieldOptions.map((fieldOption) => (
-                                  <option key={`${section}-${fieldOption.id}`} value={fieldOption.id} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                                    {`${fieldOption.label} (${fieldOption.placement})`}
-                                  </option>
-                                ))}
-                              </select>
+                                options={[
+                                  { value: '', label: emptyCellLabel },
+                                  ...sectionFieldOptions.map((fieldOption) => ({
+                                    value: fieldOption.id,
+                                    label: `${fieldOption.label} (${fieldOption.placement})`,
+                                  })),
+                                ]}
+                                placeholder={emptyCellLabel}
+                                textClassName="text-xs"
+                              />
                             ) : (
                               <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                                 No more available fields
@@ -1746,18 +1756,15 @@ export default function RecordDetailCustomizeMode({
                   <span className="block text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
                     {definition.label}
                   </span>
-                  <select
-                    value={layout.lineSettings?.[definition.id] ?? definition.options[0]?.value ?? ''}
-                    onChange={(event) => updateLineSectionSetting(definition.id, event.target.value)}
-                    className="rounded-md border bg-transparent px-2 py-1 text-xs text-white"
-                    style={{ borderColor: 'var(--border-muted)' }}
-                  >
-                    {definition.options.map((option) => (
-                      <option key={option.value} value={option.value} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="w-32">
+                    <InlineSearchableSelect
+                      value={layout.lineSettings?.[definition.id] ?? definition.options[0]?.value ?? ''}
+                      onChange={(value) => updateLineSectionSetting(definition.id, value)}
+                      options={definition.options.map((option) => ({ value: option.value, label: option.label }))}
+                      placeholder={`Select ${definition.label.toLowerCase()}`}
+                      textClassName="text-xs"
+                    />
+                  </div>
                 </label>
               ))}
             </div>
@@ -1822,19 +1829,16 @@ export default function RecordDetailCustomizeMode({
                       <span className="block" style={{ color: 'var(--text-muted)' }}>
                         {definition.label}
                       </span>
-                      <select
-                        value={String(layout.lineColumns?.[column.id]?.[definition.id] ?? definition.options[0]?.value ?? '')}
-                        onChange={(event) => updateLineColumnSetting(column.id, definition.id, event.target.value)}
-                        disabled={Boolean(lineColumnSettingAvailability?.[column.id] && !lineColumnSettingAvailability[column.id].includes(definition.id))}
-                        className="rounded-md border bg-transparent px-2 py-1 text-xs text-white"
-                        style={{ borderColor: 'var(--border-muted)' }}
-                      >
-                        {definition.options.map((option) => (
-                          <option key={option.value} value={option.value} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="w-28">
+                        <InlineSearchableSelect
+                          value={String(layout.lineColumns?.[column.id]?.[definition.id] ?? definition.options[0]?.value ?? '')}
+                          onChange={(value) => updateLineColumnSetting(column.id, definition.id, value)}
+                          disabled={Boolean(lineColumnSettingAvailability?.[column.id] && !lineColumnSettingAvailability[column.id].includes(definition.id))}
+                          options={definition.options.map((option) => ({ value: option.value, label: option.label }))}
+                          placeholder={`Select ${definition.label.toLowerCase()}`}
+                          textClassName="text-xs"
+                        />
+                      </div>
                     </label>
                   ))}
                 </div>
@@ -1864,18 +1868,15 @@ export default function RecordDetailCustomizeMode({
                   <span className="block text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
                     {definition.label}
                   </span>
-                  <select
-                    value={layout.secondarySettings?.[definition.id] ?? definition.options[0]?.value ?? ''}
-                    onChange={(event) => updateSecondarySectionSetting(definition.id, event.target.value)}
-                    className="rounded-md border bg-transparent px-2 py-1 text-xs text-white"
-                    style={{ borderColor: 'var(--border-muted)' }}
-                  >
-                    {definition.options.map((option) => (
-                      <option key={option.value} value={option.value} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="w-32">
+                    <InlineSearchableSelect
+                      value={layout.secondarySettings?.[definition.id] ?? definition.options[0]?.value ?? ''}
+                      onChange={(value) => updateSecondarySectionSetting(definition.id, value)}
+                      options={definition.options.map((option) => ({ value: option.value, label: option.label }))}
+                      placeholder={`Select ${definition.label.toLowerCase()}`}
+                      textClassName="text-xs"
+                    />
+                  </div>
                 </label>
               ))}
             </div>
@@ -1940,19 +1941,16 @@ export default function RecordDetailCustomizeMode({
                       <span className="block" style={{ color: 'var(--text-muted)' }}>
                         {definition.label}
                       </span>
-                      <select
-                        value={String(layout.secondaryColumns?.[column.id]?.[definition.id] ?? definition.options[0]?.value ?? '')}
-                        onChange={(event) => updateSecondaryColumnSetting(column.id, definition.id, event.target.value)}
-                        disabled={Boolean(secondaryColumnSettingAvailability?.[column.id] && !secondaryColumnSettingAvailability[column.id].includes(definition.id))}
-                        className="rounded-md border bg-transparent px-2 py-1 text-xs text-white"
-                        style={{ borderColor: 'var(--border-muted)' }}
-                      >
-                        {definition.options.map((option) => (
-                          <option key={option.value} value={option.value} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="w-28">
+                        <InlineSearchableSelect
+                          value={String(layout.secondaryColumns?.[column.id]?.[definition.id] ?? definition.options[0]?.value ?? '')}
+                          onChange={(value) => updateSecondaryColumnSetting(column.id, definition.id, value)}
+                          disabled={Boolean(secondaryColumnSettingAvailability?.[column.id] && !secondaryColumnSettingAvailability[column.id].includes(definition.id))}
+                          options={definition.options.map((option) => ({ value: option.value, label: option.label }))}
+                          placeholder={`Select ${definition.label.toLowerCase()}`}
+                          textClassName="text-xs"
+                        />
+                      </div>
                     </label>
                   ))}
                 </div>

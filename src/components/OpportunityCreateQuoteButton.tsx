@@ -38,7 +38,6 @@ export default function OpportunityCreateQuoteButton({
         }
 
         setError(body?.error || 'Unable to create quote')
-        setSaving(false)
         return
       }
 
@@ -46,6 +45,7 @@ export default function OpportunityCreateQuoteButton({
       router.refresh()
     } catch {
       setError('Unable to create quote')
+    } finally {
       setSaving(false)
     }
   }

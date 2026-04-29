@@ -134,7 +134,7 @@ export async function PUT(request: NextRequest) {
       where: { id },
       data: {
         name: nextName,
-        stage: nextStage || null,
+        stage: nextStage ?? existing.stage,
         amount: amount === undefined ? existing.amount : parseOptionalMoneyValue(amount),
         closeDate: closeDate === undefined ? existing.closeDate : closeDate ? new Date(closeDate) : null,
         probability: probability === undefined ? existing.probability : probability === '' || probability == null ? null : Number(probability),

@@ -4,6 +4,13 @@ import {
   type TransactionReferenceLayout,
 } from '@/lib/transaction-reference-layouts'
 import {
+  defaultTransactionGlImpactColumns,
+  defaultTransactionGlImpactSettings,
+  type TransactionGlImpactColumnCustomization,
+  type TransactionGlImpactColumnKey,
+  type TransactionGlImpactSettings,
+} from '@/lib/transaction-gl-impact'
+import {
   type LinkedRecordReferenceSource,
   INVOICE_FULL_REFERENCE_FIELDS,
 } from '@/lib/linked-record-reference-catalogs'
@@ -14,6 +21,7 @@ export type InvoiceReceiptDetailFieldKey =
   | 'id'
   | 'number'
   | 'invoiceId'
+  | 'bankAccountId'
   | 'amount'
   | 'date'
   | 'method'
@@ -42,6 +50,8 @@ export type InvoiceReceiptDetailCustomizationConfig = {
   sectionRows: Record<string, number>
   fields: Record<InvoiceReceiptDetailFieldKey, InvoiceReceiptDetailFieldCustomization>
   referenceLayouts: TransactionReferenceLayout[]
+  glImpactSettings: TransactionGlImpactSettings
+  glImpactColumns: Record<TransactionGlImpactColumnKey, TransactionGlImpactColumnCustomization>
   statCards?: Array<TransactionStatCardSlot<InvoiceReceiptStatCardKey>>
 }
 
@@ -60,6 +70,7 @@ export const INVOICE_RECEIPT_DETAIL_FIELDS: InvoiceReceiptDetailFieldMeta[] = [
   { id: 'id', label: 'DB Id', fieldType: 'text', description: 'Internal database identifier for this invoice receipt.' },
   { id: 'number', label: 'Invoice Receipt Id', fieldType: 'text', description: 'Unique identifier for this invoice receipt.' },
   { id: 'invoiceId', label: 'Invoice', fieldType: 'text', source: 'Invoice transaction', description: 'Linked invoice identifier for this cash receipt.' },
+  { id: 'bankAccountId', label: 'Bank Account', fieldType: 'list', source: 'Chart of accounts', description: 'Cash or bank GL account that receives this receipt.' },
   { id: 'amount', label: 'Amount', fieldType: 'currency', description: 'Cash receipt amount applied to the invoice.' },
   { id: 'date', label: 'Receipt Date', fieldType: 'date', description: 'Date the receipt was recorded.' },
   { id: 'method', label: 'Method', fieldType: 'list', source: 'Payment method list', description: 'Method used to receive payment.' },
@@ -103,15 +114,18 @@ export function defaultInvoiceReceiptDetailCustomization(): InvoiceReceiptDetail
       invoiceId: { visible: true, section: 'Document Identity', order: 0, column: 2 },
       customerNumber: { visible: true, section: 'Customer Snapshot', order: 0, column: 1 },
       customerName: { visible: true, section: 'Customer Snapshot', order: 0, column: 2 },
-      amount: { visible: true, section: 'Receipt Terms', order: 0, column: 1 },
-      date: { visible: true, section: 'Receipt Terms', order: 0, column: 2 },
-      method: { visible: true, section: 'Receipt Terms', order: 0, column: 3 },
-      reference: { visible: true, section: 'Receipt Terms', order: 1, column: 1 },
+      bankAccountId: { visible: true, section: 'Receipt Terms', order: 0, column: 1 },
+      amount: { visible: true, section: 'Receipt Terms', order: 0, column: 2 },
+      date: { visible: true, section: 'Receipt Terms', order: 0, column: 3 },
+      method: { visible: true, section: 'Receipt Terms', order: 1, column: 1 },
+      reference: { visible: true, section: 'Receipt Terms', order: 1, column: 2 },
       id: { visible: true, section: 'Record Keys', order: 0, column: 1 },
       createdAt: { visible: true, section: 'System Dates', order: 0, column: 1 },
       updatedAt: { visible: true, section: 'System Dates', order: 0, column: 2 },
     },
     referenceLayouts: [buildDefaultTransactionReferenceLayout(INVOICE_RECEIPT_REFERENCE_SOURCES, 'invoice')],
+    glImpactSettings: defaultTransactionGlImpactSettings(),
+    glImpactColumns: defaultTransactionGlImpactColumns(),
     statCards: [
       { id: 'receipt-amount', metric: 'amount', visible: true, order: 0 },
       { id: 'receipt-date', metric: 'date', visible: true, order: 1 },

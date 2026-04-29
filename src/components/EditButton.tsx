@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { isValidEmail } from '@/lib/validation'
 import AddressModal, { parseAddress } from '@/components/AddressModal'
 import MultiSelectDropdown from '@/components/MultiSelectDropdown'
+import SearchableSelect from '@/components/SearchableSelect'
 
 export interface EditField {
   name: string
@@ -199,30 +200,22 @@ export default function EditButton({
                         />
                       </div>
                     ) : (
-                      <select
-                        value={values[f.name]}
-                        onChange={(e) =>
-                          setValues((prev) => ({
-                            ...prev,
-                            [f.name]: e.target.value,
-                          }))
-                        }
-                        className="mt-1 block w-full rounded-md border bg-transparent px-3 py-1.5 text-sm text-white shadow-sm focus:outline-none"
-                        style={{ borderColor: 'var(--border-muted)' }}
-                      >
-                        <option value="" style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                          {f.placeholder ?? 'Select option'}
-                        </option>
-                        {(f.options ?? []).map((option) => (
-                          <option
-                            key={`${f.name}-${option.value}`}
-                            value={option.value}
-                            style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}
-                          >
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="mt-1">
+                        <SearchableSelect
+                          selectedValue={values[f.name]}
+                          options={(f.options ?? []).map((option) => ({
+                            value: option.value,
+                            label: option.label,
+                          }))}
+                          placeholder={f.placeholder ?? 'Select option'}
+                          onSelect={(value) =>
+                            setValues((prev) => ({
+                              ...prev,
+                              [f.name]: value,
+                            }))
+                          }
+                        />
+                      </div>
                     )
                   ) : (
                     <input

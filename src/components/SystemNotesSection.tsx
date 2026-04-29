@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { DetailTableDisplayControl, DetailTablePaginationFooter } from '@/components/DetailTablePaging'
 import { RecordDetailCell, RecordDetailEmptyState, RecordDetailHeaderCell, RecordDetailSection } from '@/components/RecordDetailPanels'
 
@@ -16,7 +17,17 @@ export type SystemNoteRow = {
 
 type FilterKey = 'date' | 'setBy' | 'context' | 'fieldName' | 'oldValue' | 'newValue'
 
-export default function SystemNotesSection({ notes }: { notes: SystemNoteRow[] }) {
+export default function SystemNotesSection({
+  notes,
+  embedded = false,
+  toolbarTargetId,
+  showDisplayControl = true,
+}: {
+  notes: SystemNoteRow[]
+  embedded?: boolean
+  toolbarTargetId?: string
+  showDisplayControl?: boolean
+}) {
   const [filters, setFilters] = useState<Record<FilterKey, string>>({
     date: '',
     setBy: '',
@@ -27,6 +38,8 @@ export default function SystemNotesSection({ notes }: { notes: SystemNoteRow[] }
   })
   const [pageSize, setPageSize] = useState(10)
   const [page, setPage] = useState(1)
+  const externalToolbarTarget =
+    toolbarTargetId && typeof document !== 'undefined' ? document.getElementById(toolbarTargetId) : null
 
   const filteredNotes = useMemo(
     () =>
@@ -45,22 +58,18 @@ export default function SystemNotesSection({ notes }: { notes: SystemNoteRow[] }
     [currentPage, filteredNotes, pageSize]
   )
 
-  return (
-    <RecordDetailSection
-      title="System Notes"
-      count={filteredNotes.length}
-      summary={notes.length ? `${notes.length} total` : undefined}
-      collapsible
-      actions={
-        <DetailTableDisplayControl
-          value={pageSize}
-          onChange={(value) => {
-            setPageSize(value)
-            setPage(1)
-          }}
-        />
-      }
-    >
+  const actions = showDisplayControl ? (
+    <DetailTableDisplayControl
+      value={pageSize}
+      onChange={(value) => {
+        setPageSize(value)
+        setPage(1)
+      }}
+    />
+  ) : null
+
+  const content = (
+    <>
       {notes.length === 0 ? (
         <RecordDetailEmptyState message="No system notes yet." />
       ) : (
@@ -152,6 +161,31 @@ export default function SystemNotesSection({ notes }: { notes: SystemNoteRow[] }
           />
         </>
       )}
+    </>
+  )
+
+  if (embedded) {
+    return (
+      <>
+        {externalToolbarTarget && actions ? createPortal(actions, externalToolbarTarget) : actions ? (
+          <div className="flex items-center justify-end border-b px-6 py-4" style={{ borderColor: 'var(--border-muted)' }}>
+            {actions}
+          </div>
+        ) : null}
+        {content}
+      </>
+    )
+  }
+
+  return (
+    <RecordDetailSection
+      title="System Notes"
+      count={filteredNotes.length}
+      summary={notes.length ? `${notes.length} total` : undefined}
+      collapsible
+      actions={actions}
+    >
+      {content}
     </RecordDetailSection>
   )
 }

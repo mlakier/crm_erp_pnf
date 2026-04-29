@@ -32,7 +32,6 @@ export default function SalesOrderCreateInvoiceButton({ salesOrderId, existingIn
         }
 
         setError(body?.error || 'Unable to create invoice')
-        setSaving(false)
         return
       }
 
@@ -40,6 +39,7 @@ export default function SalesOrderCreateInvoiceButton({ salesOrderId, existingIn
       router.refresh()
     } catch {
       setError('Unable to create invoice')
+    } finally {
       setSaving(false)
     }
   }

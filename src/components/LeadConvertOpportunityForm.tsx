@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import SearchableSelect from '@/components/SearchableSelect'
 import type { SelectOption } from '@/lib/list-source'
 
 export default function LeadConvertOpportunityForm({
@@ -37,14 +38,14 @@ export default function LeadConvertOpportunityForm({
   }
 
   const removeLineItem = (index: number) => {
-    setLineItems((prev) => prev.filter((_, i) => i !== index))
+    setLineItems((prev) => prev.filter((_, currentIndex) => currentIndex !== index))
   }
 
   const updateLineItem = (index: number, field: 'itemId' | 'description' | 'quantity' | 'unitPrice' | 'notes', value: string) => {
-    setLineItems((prev) => prev.map((line, i) => {
-      if (i !== index) return line
+    setLineItems((prev) => prev.map((line, currentIndex) => {
+      if (currentIndex !== index) return line
       if (field === 'itemId') {
-        const item = items.find((it) => it.id === value)
+        const item = items.find((candidate) => candidate.id === value)
         return {
           ...line,
           itemId: value,
@@ -135,16 +136,17 @@ export default function LeadConvertOpportunityForm({
         </div>
         <div>
           <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Stage</label>
-          <select
-            value={stage}
-            onChange={(event) => setStage(event.target.value)}
-            className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm text-white"
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            {stageOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <SearchableSelect
+              selectedValue={stage}
+              options={stageOptions.map((option) => ({
+                value: option.value,
+                label: option.label,
+              }))}
+              placeholder="Select stage"
+              onSelect={setStage}
+            />
+          </div>
         </div>
       </div>
 
@@ -197,19 +199,17 @@ export default function LeadConvertOpportunityForm({
                 >
                   <div>
                     <label className="mb-1 block text-[11px] font-medium lg:hidden" style={{ color: 'var(--text-secondary)' }}>Item</label>
-                    <select
-                      value={line.itemId}
-                      onChange={(event) => updateLineItem(index, 'itemId', event.target.value)}
-                      className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm text-white"
-                      style={{ borderColor: 'var(--border-muted)' }}
-                    >
-                      <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>— Select item —</option>
-                      {items.map((item) => (
-                        <option key={item.id} value={item.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                          {item.itemId ? `${item.itemId} - ${item.name}` : item.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="mt-1">
+                      <SearchableSelect
+                        selectedValue={line.itemId}
+                        options={items.map((item) => ({
+                          value: item.id,
+                          label: item.itemId ? `${item.itemId} - ${item.name}` : item.name,
+                        }))}
+                        placeholder="Select item"
+                        onSelect={(value) => updateLineItem(index, 'itemId', value)}
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="mb-1 block text-[11px] font-medium lg:hidden" style={{ color: 'var(--text-secondary)' }}>Desc</label>
@@ -269,25 +269,16 @@ export default function LeadConvertOpportunityForm({
         )}
       </div>
 
-      {error ? <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p> : null}
+      {error ? <p className="text-xs" style={{ color: 'var(--danger)' }}>{error}</p> : null}
 
-      <div className="flex items-center justify-end gap-2 pt-2">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="rounded-md border px-3 py-2 text-sm"
-          style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-400"
-        >
-          {saving ? 'Creating...' : 'Create Opportunity'}
-        </button>
-      </div>
+      <button
+        type="submit"
+        disabled={saving}
+        className="rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        style={{ backgroundColor: 'var(--accent-primary-strong)' }}
+      >
+        {saving ? 'Converting...' : 'Convert Lead'}
+      </button>
     </form>
   )
 }

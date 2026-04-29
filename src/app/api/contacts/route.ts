@@ -10,6 +10,34 @@ function normalizeBoolean(value: unknown, fallback = false) {
   return String(value).trim().toLowerCase() === 'true'
 }
 
+async function wouldLeaveSourceWithoutContacts({
+  existingCustomerId,
+  existingVendorId,
+  nextCustomerId,
+  nextVendorId,
+}: {
+  existingCustomerId: string | null
+  existingVendorId: string | null
+  nextCustomerId: string | null
+  nextVendorId: string | null
+}) {
+  if (existingCustomerId && existingCustomerId !== nextCustomerId) {
+    const remainingCustomerContacts = await prisma.contact.count({ where: { customerId: existingCustomerId } })
+    if (remainingCustomerContacts <= 1) {
+      return 'Customers must keep at least one contact.'
+    }
+  }
+
+  if (existingVendorId && existingVendorId !== nextVendorId) {
+    const remainingVendorContacts = await prisma.contact.count({ where: { vendorId: existingVendorId } })
+    if (remainingVendorContacts <= 1) {
+      return 'Vendors must keep at least one contact.'
+    }
+  }
+
+  return null
+}
+
 export async function GET() {
   try {
     const contacts = await prisma.contact.findMany({ include: { customer: true, vendor: true } })
@@ -119,6 +147,16 @@ export async function PUT(request: NextRequest) {
         ? vendorId || null
         : existing.vendorId
 
+    const sourceValidationError = await wouldLeaveSourceWithoutContacts({
+      existingCustomerId: existing.customerId,
+      existingVendorId: existing.vendorId,
+      nextCustomerId: normalizedCustomerId,
+      nextVendorId: normalizedVendorId,
+    })
+    if (sourceValidationError) {
+      return NextResponse.json({ error: sourceValidationError }, { status: 400 })
+    }
+
     if ((normalizedCustomerId && normalizedVendorId) || (!normalizedCustomerId && !normalizedVendorId)) {
       return NextResponse.json({ error: 'Contact must be linked to either a customer or a vendor' }, { status: 400 })
     }
@@ -166,6 +204,20 @@ export async function DELETE(request: NextRequest) {
     }
 
     const existing = await prisma.contact.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+    }
+
+    const sourceValidationError = await wouldLeaveSourceWithoutContacts({
+      existingCustomerId: existing.customerId,
+      existingVendorId: existing.vendorId,
+      nextCustomerId: null,
+      nextVendorId: null,
+    })
+    if (sourceValidationError) {
+      return NextResponse.json({ error: sourceValidationError }, { status: 400 })
+    }
+
     await prisma.contact.delete({ where: { id } })
 
     await logActivity({

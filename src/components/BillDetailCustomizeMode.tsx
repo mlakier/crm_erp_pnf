@@ -2,11 +2,14 @@
 
 import type {
   BillDetailCustomizationConfig,
-  BillDetailFieldKey,
   BillLineColumnKey,
 } from '@/lib/bill-detail-customization'
 import TransactionRecordDetailCustomizeMode from '@/components/TransactionRecordDetailCustomizeMode'
 import { BILL_LINE_COLUMNS, BILL_REFERENCE_SOURCES, BILL_STAT_CARDS } from '@/lib/bill-detail-customization'
+import {
+  TRANSACTION_GL_IMPACT_COLUMNS,
+  TRANSACTION_GL_IMPACT_SETTING_AVAILABILITY,
+} from '@/lib/transaction-gl-impact'
 import type { TransactionVisualTone } from '@/lib/transaction-page-config'
 
 const LOOKUP_DISPLAY_COLUMNS = new Set<BillLineColumnKey>(['item-id'])
@@ -22,7 +25,7 @@ const BILL_LINE_SETTING_AVAILABILITY = Object.fromEntries(
 ) as Record<BillLineColumnKey, string[]>
 
 type CustomizeField = {
-  id: BillDetailFieldKey
+  id: string
   label: string
   fieldType: string
   source?: string
@@ -64,10 +67,16 @@ export default function BillDetailCustomizeMode({
     supportsLink?: boolean
   }>
 }) {
+  const customizeLayout = {
+    ...initialLayout,
+    secondarySettings: initialLayout.glImpactSettings,
+    secondaryColumns: initialLayout.glImpactColumns,
+  }
+
   return (
     <TransactionRecordDetailCustomizeMode
       detailHref={detailHref}
-      initialLayout={initialLayout}
+      initialLayout={customizeLayout}
       fields={fields}
       formKey="billCreate"
       saveEndpoint="/api/config/bill-detail-customization"
@@ -79,6 +88,9 @@ export default function BillDetailCustomizeMode({
       statPreviewCards={statPreviewCards}
       lineColumnDefinitions={BILL_LINE_COLUMNS}
       lineColumnSettingAvailability={BILL_LINE_SETTING_AVAILABILITY}
+      secondaryColumnsLabel="GL Impact"
+      secondaryColumnDefinitions={TRANSACTION_GL_IMPACT_COLUMNS}
+      secondaryColumnSettingAvailability={TRANSACTION_GL_IMPACT_SETTING_AVAILABILITY}
     />
   )
 }

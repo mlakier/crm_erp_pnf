@@ -175,11 +175,12 @@ export default async function QuotesPage({
               style={{ borderColor: 'var(--border-muted)' }}
             />
             <input type="hidden" name="status" value={statusFilter} />
-            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+            <input name="sort" list="quote-sort-options" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+            <datalist id="quote-sort-options">
               {sortOptions.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
-            </select>
+            </datalist>
             <input type="hidden" name="page" value="1" />
             <ExportButton
               tableId="estimates-list"

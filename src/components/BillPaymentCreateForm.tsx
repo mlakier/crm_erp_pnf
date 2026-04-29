@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import SearchableSelect from '@/components/SearchableSelect'
 
 type Option = { value: string; label: string }
 
@@ -91,13 +92,13 @@ export default function BillPaymentCreateForm({
         <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
           Bill
         </label>
-        <select value={billId} onChange={(e) => setBillId(e.target.value)} className={inputClass} style={inputStyle}>
-          {bills.map((bill) => (
-            <option key={bill.id} value={bill.id}>
-              {bill.label}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          selectedValue={billId}
+          options={bills.map((bill) => ({ value: bill.id, label: bill.label }))}
+          placeholder="Select bill"
+          searchPlaceholder="Search bill"
+          onSelect={setBillId}
+        />
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
@@ -123,25 +124,25 @@ export default function BillPaymentCreateForm({
         <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
           Method
         </label>
-        <select value={method} onChange={(e) => setMethod(e.target.value)} className={inputClass} style={inputStyle}>
-          {methodOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          selectedValue={method}
+          options={methodOptions}
+          placeholder="Select method"
+          searchPlaceholder="Search method"
+          onSelect={setMethod}
+        />
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
           Status
         </label>
-        <select value={status} onChange={(e) => setStatus(e.target.value)} className={inputClass} style={inputStyle}>
-          {statusOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          selectedValue={status}
+          options={statusOptions}
+          placeholder="Select status"
+          searchPlaceholder="Search status"
+          onSelect={setStatus}
+        />
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>

@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import AddressModal, { parseAddress } from '@/components/AddressModal'
 import MultiSelectDropdown from '@/components/MultiSelectDropdown'
+import SearchableSelect from '@/components/SearchableSelect'
 import { isValidEmail } from '@/lib/validation'
 
 export interface InlineRecordField {
@@ -12,10 +13,12 @@ export interface InlineRecordField {
   label: string
   value: string
   displayValue?: string
-  type?: 'text' | 'number' | 'date' | 'email' | 'select' | 'checkbox' | 'address'
+  type?: 'text' | 'number' | 'date' | 'email' | 'password' | 'select' | 'checkbox' | 'address'
   multiple?: boolean
   column?: number
   order?: number
+  required?: boolean
+  readOnly?: boolean
   options?: Array<{ value: string; label: string }>
   placeholder?: string
   helpText?: string
@@ -49,6 +52,8 @@ export default function InlineRecordDetails({
   editing,
   columns = 2,
   showInternalActions = true,
+  formId,
+  onSubmitValues,
 }: {
   resource: string
   id: string
@@ -58,11 +63,14 @@ export default function InlineRecordDetails({
   editing: boolean
   columns?: number
   showInternalActions?: boolean
+  formId?: string
+  onSubmitValues?: (values: Record<string, string>) => Promise<void>
 }) {
   const resolvedSections = sections ?? [{ title, fields: fields ?? [] }]
   const allFields = resolvedSections.flatMap((section) => section.fields)
   const router = useRouter()
   const pathname = usePathname()
+  const resolvedFormId = formId ?? `inline-record-form-${id}`
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(allFields.map((field) => [field.name, field.value]))
   )
@@ -104,27 +112,31 @@ export default function InlineRecordDetails({
     }
 
     try {
-      const response = await fetch(`/api/${resource}?id=${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      })
+      if (onSubmitValues) {
+        await onSubmitValues(values)
+      } else {
+        const response = await fetch(`/api/${resource}?id=${encodeURIComponent(id)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values),
+        })
 
-      const raw = await response.text()
-      if (!response.ok) {
-        try {
-          const body = JSON.parse(raw) as { error?: string }
-          setError(body.error ?? 'Failed to save changes')
-        } catch {
-          setError(raw || 'Failed to save changes')
+        const raw = await response.text()
+        if (!response.ok) {
+          try {
+            const body = JSON.parse(raw) as { error?: string }
+            setError(body.error ?? 'Failed to save changes')
+          } catch {
+            setError(raw || 'Failed to save changes')
+          }
+          return
         }
-        return
-      }
 
-      router.replace(pathname)
-      router.refresh()
-    } catch {
-      setError('Failed to save changes')
+        router.replace(pathname)
+        router.refresh()
+      }
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Failed to save changes')
     } finally {
       setSaving(false)
     }
@@ -145,7 +157,7 @@ export default function InlineRecordDetails({
             </Link>
             <button
               type="submit"
-              form={`inline-record-form-${id}`}
+              form={resolvedFormId}
               disabled={saving}
               className="rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
               style={{ backgroundColor: 'var(--accent-primary-strong)' }}
@@ -157,7 +169,7 @@ export default function InlineRecordDetails({
       </div>
 
       {editing ? (
-        <form id={`inline-record-form-${id}`} onSubmit={handleSubmit}>
+        <form id={resolvedFormId} onSubmit={handleSubmit}>
           <div className="space-y-6">
             {resolvedSections.map((section, index) => (
               <div
@@ -294,10 +306,15 @@ function SectionFieldGrid({
         const cellStyle = getFieldGridStyle(field, normalizedColumns)
         if (mode === 'edit' && setValues && setAddressFieldBeingEdited) {
           const isDisabled = isFieldDisabled(field, values)
+          const isReadOnly = field.readOnly === true
+          const isUnavailable = isDisabled || isReadOnly
           return (
             <div key={field.name} style={cellStyle}>
               <dt className="flex items-center gap-1 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                <span>{field.label}</span>
+                <span>
+                  {field.label}
+                  {field.required ? <span style={{ color: 'var(--danger)' }}> *</span> : null}
+                </span>
                 {field.helpText ? <FieldTooltip content={buildTooltipContent(field)} /> : null}
               </dt>
               <dd className="mt-1">
@@ -306,7 +323,7 @@ function SectionFieldGrid({
                     <input
                       type="checkbox"
                       checked={values[field.name] === 'true'}
-                      disabled={isDisabled}
+                      disabled={isUnavailable}
                       onChange={(event) =>
                         setValues((prev) => {
                           const checked = event.target.checked
@@ -328,7 +345,7 @@ function SectionFieldGrid({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      disabled={isDisabled}
+                      disabled={isUnavailable}
                       onClick={() => setAddressFieldBeingEdited(field.name)}
                       className="rounded-md border px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                       style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
@@ -344,7 +361,7 @@ function SectionFieldGrid({
                     <MultiSelectDropdown
                       value={splitMultiValue(values[field.name] ?? '')}
                       options={field.options ?? []}
-                      disabled={isDisabled}
+                      disabled={isUnavailable}
                       placeholder={field.placeholder ?? 'Select options'}
                       onChange={(next) =>
                         setValues((prev) => ({
@@ -354,12 +371,20 @@ function SectionFieldGrid({
                       }
                     />
                   ) : (
-                    <select
-                      value={values[field.name] ?? ''}
-                      disabled={isDisabled}
-                      onChange={(event) =>
+                    <SearchableSelect
+                      selectedValue={values[field.name] ?? ''}
+                      disabled={isUnavailable}
+                      options={(field.options ?? []).map((option) => ({
+                        value: option.value,
+                        label: option.label,
+                        searchText: `${option.value} ${option.label}`,
+                        sortIdText: option.value,
+                        sortLabelText: option.label,
+                      }))}
+                      placeholder={field.placeholder ?? 'Select option'}
+                      searchPlaceholder={`Search ${field.label}`}
+                      onSelect={(nextValue) =>
                         setValues((prev) => {
-                          const nextValue = event.target.value
                           const next = {
                             ...prev,
                             [field.name]: nextValue,
@@ -376,28 +401,15 @@ function SectionFieldGrid({
                           return next
                         })
                       }
-                      className="block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
-                      style={{ borderColor: 'var(--border-muted)' }}
-                    >
-                      <option value="" style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                        {field.placeholder ?? 'Select option'}
-                      </option>
-                      {(field.options ?? []).map((option) => (
-                        <option
-                          key={`${field.name}-${option.value}`}
-                          value={option.value}
-                          style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}
-                        >
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   )
                 ) : (
                   <input
                     type={field.type ?? 'text'}
                     value={values[field.name] ?? ''}
-                    disabled={isDisabled}
+                    disabled={isUnavailable}
+                    readOnly={isReadOnly}
+                    required={field.required}
                     onChange={(event) =>
                       setValues((prev) => ({ ...prev, [field.name]: event.target.value }))
                     }

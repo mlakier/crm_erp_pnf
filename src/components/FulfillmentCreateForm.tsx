@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import SearchableSelect from '@/components/SearchableSelect'
 
 type Option = { value: string; label: string }
 
@@ -33,9 +34,9 @@ export default function FulfillmentCreateForm({
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Sales Order</label><select value={salesOrderId} onChange={e => setSalesOrderId(e.target.value)} className={inputClass} style={inputStyle}>{salesOrders.map(so => <option key={so.id} value={so.id}>{so.label}</option>)}</select></div>
+      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Sales Order</label><SearchableSelect selectedValue={salesOrderId} options={salesOrders.map((salesOrder) => ({ value: salesOrder.id, label: salesOrder.label }))} placeholder="Select sales order" onSelect={setSalesOrderId} /></div>
       <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputClass} style={inputStyle} /></div>
-      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Status</label><select value={status} onChange={e => setStatus(e.target.value)} className={inputClass} style={inputStyle}>{statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+      <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Status</label><SearchableSelect selectedValue={status} options={statusOptions.map((option) => ({ value: option.value, label: option.label }))} placeholder="Select status" onSelect={setStatus} /></div>
       <div><label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Notes</label><textarea value={notes} onChange={e => setNotes(e.target.value)} className={inputClass} style={inputStyle} rows={2} /></div>
       <div className="flex justify-end gap-3 pt-2"><button type="button" onClick={onCancel} className="rounded-md border px-4 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>Cancel</button><button type="submit" disabled={saving} className="rounded-md px-4 py-2 text-sm font-medium text-white" style={{ backgroundColor: 'var(--accent-primary-strong)' }}>{saving ? 'Saving…' : 'Create Fulfillment'}</button></div>
     </form>

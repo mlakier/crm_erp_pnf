@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { SelectOption } from '@/lib/list-source'
 import { parseMoneyValue } from '@/lib/money'
+import SearchableSelect from '@/components/SearchableSelect'
 
 export default function CustomerDetailOpportunityForm({
   customerId,
@@ -108,16 +109,15 @@ export default function CustomerDetailOpportunityForm({
             className="block w-full rounded-md border bg-transparent px-3 py-1.5 text-sm text-white"
             style={{ borderColor: 'var(--border-muted)' }}
           />
-          <select
-            value={stage}
-            onChange={(e) => setStage(e.target.value)}
-            className="block w-full rounded-md border bg-transparent px-3 py-1.5 text-sm text-white"
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            {stageOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
+          <SearchableSelect
+            selectedValue={stage}
+            options={stageOptions.map((option) => ({
+              value: option.value,
+              label: option.label,
+            }))}
+            placeholder="Select stage"
+            onSelect={setStage}
+          />
         </div>
         <input
           type="date"

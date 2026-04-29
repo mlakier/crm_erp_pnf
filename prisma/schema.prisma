@@ -250,6 +250,7 @@ model Vendor {
   requisitions          Requisition[]
   purchaseOrders        PurchaseOrder[]
   bills                 Bill[]
+  billPayments          BillPayment[]
   billCredits           BillCredit[]
   contacts              Contact[]
   preferredItems        Item[]
@@ -398,6 +399,8 @@ model ChartOfAccounts {
   inventoryItems               Item[]                     @relation("ItemInventoryAccount")
   cogsExpenseItems             Item[]                     @relation("ItemCogsExpenseAccount")
   deferredCostItems            Item[]                     @relation("ItemDeferredCostAccount")
+  cashReceipts                 CashReceipt[]              @relation("CashReceiptBankAccount")
+  billPayments                 BillPayment[]              @relation("BillPaymentBankAccount")
   retainedEarningsSubsidiaries     Subsidiary[] @relation("SubsidiaryRetainedEarningsAccount")
   ctaSubsidiaries                  Subsidiary[] @relation("SubsidiaryCtaAccount")
   intercompanyClearingSubsidiaries Subsidiary[] @relation("SubsidiaryIntercompanyClearingAccount")
@@ -675,14 +678,17 @@ model CashReceipt {
   date      DateTime
   method    String // check, wire, etc.
   reference String?
+  bankAccountId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
   invoiceId String
   invoice   Invoice @relation(fields: [invoiceId], references: [id])
+  bankAccount ChartOfAccounts? @relation("CashReceiptBankAccount", fields: [bankAccountId], references: [id])
 
   @@index([invoiceId])
+  @@index([bankAccountId])
   @@map("cash_receipts")
 }
 
@@ -786,6 +792,7 @@ model PurchaseOrderLineItem {
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   itemId          String?
   item            Item?         @relation(fields: [itemId], references: [id])
+  receiptLines    ReceiptLine[]
 
   @@index([purchaseOrderId])
   @@index([itemId])
@@ -1081,9 +1088,23 @@ model Receipt {
   // Relations
   purchaseOrderId String
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  lines           ReceiptLine[]
 
   @@index([purchaseOrderId])
   @@map("receipts")
+}
+
+model ReceiptLine {
+  id                  String  @id @default(cuid())
+  quantity            Int     @default(1)
+  notes               String?
+  receiptId           String
+  purchaseOrderLineItemId String?
+
+  receipt               Receipt            @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  purchaseOrderLineItem PurchaseOrderLineItem? @relation(fields: [purchaseOrderLineItemId], references: [id])
+
+  @@map("receipt_lines")
 }
 
 model Bill {
@@ -1112,6 +1133,7 @@ model Bill {
   subsidiary      Subsidiary?    @relation(fields: [subsidiaryId], references: [id])
   currency        Currency?      @relation(fields: [currencyId], references: [id])
   billPayments    BillPayment[]
+  paymentApplications BillPaymentApplication[]
 
   @@index([vendorId])
   @@index([purchaseOrderId])
@@ -1631,11 +1653,36 @@ model BillPayment {
   reference String?
   status    String   @default("pending")
   notes     String?
-  billId    String
+  vendorId  String?
+  billId    String?
+  bankAccountId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  bill Bill @relation(fields: [billId], references: [id])
+  vendor Vendor? @relation(fields: [vendorId], references: [id])
+  bill Bill? @relation(fields: [billId], references: [id])
+  bankAccount ChartOfAccounts? @relation("BillPaymentBankAccount", fields: [bankAccountId], references: [id])
+  applications BillPaymentApplication[]
 
+  @@index([vendorId])
+  @@index([billId])
+  @@index([bankAccountId])
   @@map("bill_payments")
+}
+
+model BillPaymentApplication {
+  id            String      @id @default(cuid())
+  billPaymentId String
+  billId        String
+  appliedAmount Decimal     @default(0) @db.Decimal(18, 2)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  billPayment BillPayment @relation(fields: [billPaymentId], references: [id], onDelete: Cascade)
+  bill        Bill        @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([billPaymentId])
+  @@index([billId])
+  @@unique([billPaymentId, billId])
+  @@map("bill_payment_applications")
 }

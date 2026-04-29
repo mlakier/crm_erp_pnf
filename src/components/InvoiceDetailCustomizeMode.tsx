@@ -2,11 +2,14 @@
 
 import type {
   InvoiceDetailCustomizationConfig,
-  InvoiceDetailFieldKey,
   InvoiceLineColumnKey,
 } from '@/lib/invoice-detail-customization'
 import TransactionRecordDetailCustomizeMode from '@/components/TransactionRecordDetailCustomizeMode'
 import { INVOICE_LINE_COLUMNS, INVOICE_REFERENCE_SOURCES, INVOICE_STAT_CARDS } from '@/lib/invoice-detail-customization'
+import {
+  TRANSACTION_GL_IMPACT_COLUMNS,
+  TRANSACTION_GL_IMPACT_SETTING_AVAILABILITY,
+} from '@/lib/transaction-gl-impact'
 import type { TransactionVisualTone } from '@/lib/transaction-page-config'
 
 const LOOKUP_DISPLAY_COLUMNS = new Set<InvoiceLineColumnKey>([
@@ -28,7 +31,7 @@ const INVOICE_LINE_SETTING_AVAILABILITY = Object.fromEntries(
 ) as Record<InvoiceLineColumnKey, string[]>
 
 type CustomizeField = {
-  id: InvoiceDetailFieldKey
+  id: string
   label: string
   fieldType: string
   source?: string
@@ -70,10 +73,16 @@ export default function InvoiceDetailCustomizeMode({
     supportsLink?: boolean
   }>
 }) {
+  const customizeLayout = {
+    ...initialLayout,
+    secondarySettings: initialLayout.glImpactSettings,
+    secondaryColumns: initialLayout.glImpactColumns,
+  }
+
   return (
     <TransactionRecordDetailCustomizeMode
       detailHref={detailHref}
-      initialLayout={initialLayout}
+      initialLayout={customizeLayout}
       fields={fields}
       formKey="invoiceCreate"
       saveEndpoint="/api/config/invoice-detail-customization"
@@ -85,6 +94,9 @@ export default function InvoiceDetailCustomizeMode({
       statPreviewCards={statPreviewCards}
       lineColumnDefinitions={INVOICE_LINE_COLUMNS}
       lineColumnSettingAvailability={INVOICE_LINE_SETTING_AVAILABILITY}
+      secondaryColumnsLabel="GL Impact"
+      secondaryColumnDefinitions={TRANSACTION_GL_IMPACT_COLUMNS}
+      secondaryColumnSettingAvailability={TRANSACTION_GL_IMPACT_SETTING_AVAILABILITY}
     />
   )
 }

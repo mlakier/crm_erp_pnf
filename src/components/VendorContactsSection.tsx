@@ -20,6 +20,9 @@ type VendorContact = {
   email: string | null
   phone: string | null
   position: string | null
+  receivesQuotesSalesOrders: boolean
+  receivesInvoices: boolean
+  receivesInvoiceCc: boolean
 }
 
 type DraftContact = {
@@ -29,6 +32,9 @@ type DraftContact = {
   email: string
   phone: string
   position: string
+  receivesQuotesSalesOrders: boolean
+  receivesInvoices: boolean
+  receivesInvoiceCc: boolean
 }
 
 function createDraftContact(): DraftContact {
@@ -39,6 +45,9 @@ function createDraftContact(): DraftContact {
     email: '',
     phone: '',
     position: '',
+    receivesQuotesSalesOrders: false,
+    receivesInvoices: false,
+    receivesInvoiceCc: false,
   }
 }
 
@@ -148,6 +157,9 @@ export default function VendorContactsSection({
               <RecordDetailHeaderCell>Email</RecordDetailHeaderCell>
               <RecordDetailHeaderCell>Phone</RecordDetailHeaderCell>
               <RecordDetailHeaderCell>Position</RecordDetailHeaderCell>
+              <RecordDetailHeaderCell>Quote/SO</RecordDetailHeaderCell>
+              <RecordDetailHeaderCell>Invoice</RecordDetailHeaderCell>
+              <RecordDetailHeaderCell>Invoice CC</RecordDetailHeaderCell>
               {isAdding ? <RecordDetailHeaderCell>Actions</RecordDetailHeaderCell> : null}
             </tr>
           </thead>
@@ -163,6 +175,9 @@ export default function VendorContactsSection({
                 <RecordDetailCell>{contact.email ?? '-'}</RecordDetailCell>
                 <RecordDetailCell>{fmtPhone(contact.phone)}</RecordDetailCell>
                 <RecordDetailCell>{contact.position ?? '-'}</RecordDetailCell>
+                <RecordDetailCell>{contact.receivesQuotesSalesOrders ? 'Yes' : 'No'}</RecordDetailCell>
+                <RecordDetailCell>{contact.receivesInvoices ? 'Yes' : 'No'}</RecordDetailCell>
+                <RecordDetailCell>{contact.receivesInvoiceCc ? 'Yes' : 'No'}</RecordDetailCell>
                 {isAdding ? <RecordDetailCell /> : null}
               </tr>
             ))}
@@ -212,6 +227,30 @@ export default function VendorContactsSection({
                     style={inputStyle}
                   />
                 </RecordDetailCell>
+                <RecordDetailCell className="text-center">
+                  <input
+                    type="checkbox"
+                    checked={draft.receivesQuotesSalesOrders}
+                    onChange={(event) => updateDraft(draft.id, { receivesQuotesSalesOrders: event.target.checked })}
+                    className="h-4 w-4"
+                  />
+                </RecordDetailCell>
+                <RecordDetailCell className="text-center">
+                  <input
+                    type="checkbox"
+                    checked={draft.receivesInvoices}
+                    onChange={(event) => updateDraft(draft.id, { receivesInvoices: event.target.checked })}
+                    className="h-4 w-4"
+                  />
+                </RecordDetailCell>
+                <RecordDetailCell className="text-center">
+                  <input
+                    type="checkbox"
+                    checked={draft.receivesInvoiceCc}
+                    onChange={(event) => updateDraft(draft.id, { receivesInvoiceCc: event.target.checked })}
+                    className="h-4 w-4"
+                  />
+                </RecordDetailCell>
                 <RecordDetailCell>
                   <div className="flex items-center gap-2">
                     <button
@@ -237,7 +276,7 @@ export default function VendorContactsSection({
             ))}
             {Object.entries(errorsByDraftId).map(([draftId, error]) => error ? (
               <tr key={`draft-error-${draftId}`}>
-                <td colSpan={6} className="px-4 py-2">
+                <td colSpan={9} className="px-4 py-2">
                   <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>
                 </td>
               </tr>

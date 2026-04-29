@@ -8,6 +8,7 @@ import {
   type VendorStatCardMetric,
 } from '@/lib/vendor-form-customization'
 import { loadVendorFormCustomization, saveVendorFormCustomization } from '@/lib/vendor-form-customization-store'
+import type { TransactionStatCardSize, TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 function sanitizeInput(input: unknown): VendorFormCustomizationConfig {
   const defaults = defaultVendorFormCustomization()
@@ -62,19 +63,21 @@ function sanitizeInput(input: unknown): VendorFormCustomizationConfig {
       ])
     ),
     fields,
-    statCards: (() => {
-      const normalized = statCardsInput
+    statCards: (() : Array<TransactionStatCardSlot<VendorStatCardMetric>> => {
+      const normalized: Array<TransactionStatCardSlot<VendorStatCardMetric>> = statCardsInput
         .map((entry, index) => {
           const statRoot = entry && typeof entry === 'object' ? entry as Record<string, unknown> : null
           if (!statRoot) return null
           const metric = String(statRoot.metric ?? '').trim() as VendorStatCardMetric
           if (!allowedMetrics.has(metric)) return null
+          const size: TransactionStatCardSize =
+            statRoot.size === 'sm' || statRoot.size === 'lg' ? statRoot.size : 'md'
           return {
             id: String(statRoot.id ?? `vendor-stat-${metric}`),
             metric,
             visible: statRoot.visible === undefined ? true : statRoot.visible === true,
             order: typeof statRoot.order === 'number' && Number.isFinite(statRoot.order) ? statRoot.order : index,
-            size: statRoot.size === 'sm' || statRoot.size === 'lg' ? statRoot.size : 'md',
+            size,
             colorized: statRoot.colorized === undefined ? true : statRoot.colorized === true,
             linked: statRoot.linked === undefined ? true : statRoot.linked === true,
           }

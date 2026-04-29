@@ -4,6 +4,13 @@ import {
   type TransactionReferenceLayout,
 } from '@/lib/transaction-reference-layouts'
 import {
+  defaultTransactionGlImpactColumns,
+  defaultTransactionGlImpactSettings,
+  type TransactionGlImpactColumnCustomization,
+  type TransactionGlImpactColumnKey,
+  type TransactionGlImpactSettings,
+} from '@/lib/transaction-gl-impact'
+import {
   type LinkedRecordReferenceSource,
   CURRENCY_FULL_REFERENCE_FIELDS,
   SALES_ORDER_FULL_REFERENCE_FIELDS,
@@ -95,6 +102,8 @@ export type FulfillmentDetailCustomizationConfig = {
   referenceLayouts: TransactionReferenceLayout[]
   lineSettings: FulfillmentLineSettings
   lineColumns: Record<FulfillmentLineColumnKey, FulfillmentLineColumnCustomization>
+  glImpactSettings: TransactionGlImpactSettings
+  glImpactColumns: Record<TransactionGlImpactColumnKey, TransactionGlImpactColumnCustomization>
   statCards: FulfillmentStatCardSlot[]
 }
 
@@ -257,6 +266,8 @@ export function defaultFulfillmentDetailCustomization(): FulfillmentDetailCustom
         },
       ]),
     ) as FulfillmentDetailCustomizationConfig['lineColumns'],
+    glImpactSettings: defaultTransactionGlImpactSettings(),
+    glImpactColumns: defaultTransactionGlImpactColumns(),
     statCards: [
       { id: 'fulfillment-status', metric: 'status', visible: true, order: 0 },
       { id: 'fulfillment-sales-order', metric: 'salesOrder', visible: true, order: 1 },

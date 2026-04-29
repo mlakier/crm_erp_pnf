@@ -1,12 +1,16 @@
 'use client'
 
-import type { BillPaymentDetailCustomizationConfig, BillPaymentDetailFieldKey } from '@/lib/bill-payment-detail-customization'
+import type { BillPaymentDetailCustomizationConfig } from '@/lib/bill-payment-detail-customization'
 import TransactionRecordDetailCustomizeMode from '@/components/TransactionRecordDetailCustomizeMode'
 import { BILL_PAYMENT_REFERENCE_SOURCES, BILL_PAYMENT_STAT_CARDS } from '@/lib/bill-payment-detail-customization'
+import {
+  TRANSACTION_GL_IMPACT_COLUMNS,
+  TRANSACTION_GL_IMPACT_SETTING_AVAILABILITY,
+} from '@/lib/transaction-gl-impact'
 import type { TransactionVisualTone } from '@/lib/transaction-page-config'
 
 type CustomizeField = {
-  id: BillPaymentDetailFieldKey
+  id: string
   label: string
   fieldType: string
   source?: string
@@ -48,10 +52,16 @@ export default function BillPaymentDetailCustomizeMode({
     supportsLink?: boolean
   }>
 }) {
+  const customizeLayout = {
+    ...initialLayout,
+    secondarySettings: initialLayout.glImpactSettings,
+    secondaryColumns: initialLayout.glImpactColumns,
+  }
+
   return (
     <TransactionRecordDetailCustomizeMode
       detailHref={detailHref}
-      initialLayout={initialLayout}
+      initialLayout={customizeLayout}
       fields={fields}
       formKey="billPaymentCreate"
       saveEndpoint="/api/config/bill-payment-detail-customization"
@@ -60,6 +70,9 @@ export default function BillPaymentDetailCustomizeMode({
       referenceSourceDefinitions={referenceSourceDefinitions ?? BILL_PAYMENT_REFERENCE_SOURCES}
       statCardDefinitions={BILL_PAYMENT_STAT_CARDS}
       statPreviewCards={statPreviewCards}
+      secondaryColumnsLabel="GL Impact"
+      secondaryColumnDefinitions={TRANSACTION_GL_IMPACT_COLUMNS}
+      secondaryColumnSettingAvailability={TRANSACTION_GL_IMPACT_SETTING_AVAILABILITY}
     />
   )
 }

@@ -1,5 +1,7 @@
 'use client'
 
+import SearchableSelect from '@/components/SearchableSelect'
+
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
 
 export function DetailTableDisplayControl({
@@ -12,18 +14,16 @@ export function DetailTableDisplayControl({
   return (
     <label className="inline-flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
       <span>Display</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="rounded-md border bg-transparent px-2 py-1 text-xs text-white"
-        style={{ borderColor: 'var(--border-muted)' }}
-      >
-        {PAGE_SIZE_OPTIONS.map((option) => (
-          <option key={option} value={option} style={{ backgroundColor: 'var(--background)', color: '#fff' }}>
-            {option}
-          </option>
-        ))}
-      </select>
+      <div className="w-20">
+        <SearchableSelect
+          selectedValue={String(value)}
+          options={PAGE_SIZE_OPTIONS.map((option) => ({ value: String(option), label: String(option) }))}
+          placeholder="Rows"
+          searchPlaceholder="Search rows"
+          onSelect={(nextValue) => onChange(Number(nextValue))}
+          textClassName="text-xs"
+        />
+      </div>
     </label>
   )
 }

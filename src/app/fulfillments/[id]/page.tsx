@@ -7,7 +7,7 @@ import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
 import { loadManagedListDetail } from '@/lib/manage-lists'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import CommunicationsSection from '@/components/CommunicationsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
@@ -19,7 +19,6 @@ import RecordStatusButton from '@/components/RecordStatusButton'
 import FulfillmentDetailCustomizeMode from '@/components/FulfillmentDetailCustomizeMode'
 import FulfillmentLineItemsSection from '@/components/FulfillmentLineItemsSection'
 import FulfillmentRelatedDocuments from '@/components/FulfillmentRelatedDocuments'
-import FulfillmentGlImpactSection from '@/components/FulfillmentGlImpactSection'
 import { parseCommunicationSummary, parseFieldChangeSummary } from '@/lib/activity'
 import {
   buildLinkedReferenceFieldDefinitions,
@@ -50,7 +49,7 @@ import type { TransactionVisualTone } from '@/lib/transaction-page-config'
 
 type FulfillmentHeaderField = {
   key: FulfillmentDetailFieldKey
-} & TransactionHeaderField
+} & RecordHeaderField
 
 function formatFulfillmentStatus(status: string | null) {
   if (!status) return 'Unknown'
@@ -135,7 +134,7 @@ export default async function FulfillmentDetailPage({
             include: {
               cashReceipts: {
                 orderBy: { date: 'desc' },
-                select: { id: true, amount: true, date: true, method: true, reference: true },
+                select: { id: true, number: true, amount: true, date: true, method: true, reference: true },
               },
             },
           },
@@ -254,7 +253,7 @@ export default async function FulfillmentDetailPage({
         itemName: line.item?.name ?? null,
         description: line.description,
         orderedQuantity: line.quantity,
-        alreadyFulfilledQuantity: fulfilledByOthers,
+        alreadyProcessedQuantity: fulfilledByOthers,
         openQuantity: Math.max(0, line.quantity - fulfilledByOthers),
       }
     })
@@ -491,7 +490,7 @@ export default async function FulfillmentDetailPage({
     subsidiary: subsidiaryHref,
     currency: currencyHref,
   })
-  const allFieldDefinitions = {
+  const allFieldDefinitions: Record<string, RecordHeaderField> = {
     ...headerFieldDefinitions,
     ...referenceFieldDefinitions,
   }
@@ -505,7 +504,7 @@ export default async function FulfillmentDetailPage({
 
   const customizeFields = buildTransactionCustomizePreviewFields({
     fields: FULFILLMENT_DETAIL_FIELDS,
-    fieldDefinitions: allFieldDefinitions,
+    fieldDefinitions: headerFieldDefinitions,
     previewOverrides: {
       quoteId: fulfillment.salesOrder?.quote?.number ?? '',
       opportunityId: fulfillment.salesOrder?.quote?.opportunity?.opportunityNumber ?? '',
@@ -574,7 +573,7 @@ export default async function FulfillmentDetailPage({
         fields,
       }
     })
-    .filter((section): section is { title: string; description: string; columns: number; rows: number; fields: TransactionHeaderField[] } => Boolean(section))
+    .filter((section): section is NonNullable<typeof section> => Boolean(section))
   const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
   const fulfillmentStatusActions = getAvailableWorkflowStatusActions(workflow, 'fulfillment', fulfillment.status)
   return (
@@ -697,7 +696,7 @@ export default async function FulfillmentDetailPage({
           ) : (
             <div className="space-y-6">
               {referenceSections.length > 0 ? (
-                <TransactionHeaderSections
+                <RecordHeaderDetails
                   editing={false}
                   sections={referenceSections.map((section) => ({
                     title: section.title,
@@ -711,7 +710,7 @@ export default async function FulfillmentDetailPage({
                   showSubsections={false}
                 />
               ) : null}
-              <TransactionHeaderSections
+              <RecordHeaderDetails
                 purchaseOrderId={fulfillment.id}
                 editing={isEditing}
                 sections={headerSections}
@@ -745,6 +744,8 @@ export default async function FulfillmentDetailPage({
         }
         relatedDocuments={isCustomizing ? null : (
           <FulfillmentRelatedDocuments
+            embedded
+            showDisplayControl={false}
             opportunities={
               fulfillment.salesOrder?.quote?.opportunity
                 ? [
@@ -794,6 +795,7 @@ export default async function FulfillmentDetailPage({
             cashReceipts={(fulfillment.salesOrder?.invoices ?? []).flatMap((invoice) =>
               invoice.cashReceipts.map((receipt) => ({
                 id: receipt.id,
+                number: receipt.number ?? null,
                 amount: Number(receipt.amount),
                 date: receipt.date.toISOString(),
                 method: receipt.method,
@@ -803,9 +805,18 @@ export default async function FulfillmentDetailPage({
             )}
           />
         )}
-        supplementarySections={isCustomizing ? null : <FulfillmentGlImpactSection rows={[]} />}
+        relatedDocumentsCount={
+          (fulfillment.salesOrder?.quote?.opportunity ? 1 : 0) +
+          (fulfillment.salesOrder?.quote ? 1 : 0) +
+          (fulfillment.salesOrder?.fulfillments.filter((row) => row.id !== fulfillment.id).length ?? 0) +
+          (fulfillment.salesOrder?.invoices.length ?? 0) +
+          (fulfillment.salesOrder?.invoices.reduce((sum, invoice) => sum + invoice.cashReceipts.length, 0) ?? 0)
+        }
+        supplementarySections={null}
         communications={isCustomizing ? null : (
           <CommunicationsSection
+            embedded
+            showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
               recordId: fulfillment.id,
@@ -833,7 +844,9 @@ export default async function FulfillmentDetailPage({
             })}
           />
         )}
-        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
+        communicationsCount={communications.length}
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        systemNotesCount={systemNotes.length}
       />
     </RecordDetailPageShell>
   )

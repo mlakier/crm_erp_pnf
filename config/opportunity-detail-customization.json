@@ -9,12 +9,12 @@
     "System Dates"
   ],
   "sectionRows": {
-    "Document Identity": 1,
-    "Customer Snapshot": 2,
-    "Pipeline & Forecast": 2,
-    "Commercial Context": 1,
-    "Record Keys": 1,
-    "System Dates": 1
+    "Document Identity": 2,
+    "Customer Snapshot": 3,
+    "Pipeline & Forecast": 3,
+    "Commercial Context": 2,
+    "Record Keys": 2,
+    "System Dates": 2
   },
   "lineSettings": {
     "fontSize": "xs"
@@ -271,19 +271,10 @@
   },
   "statCards": [
     {
-      "id": "slot-2",
-      "metric": "closeDate",
-      "visible": true,
-      "order": 0,
-      "size": "md",
-      "colorized": true,
-      "linked": true
-    },
-    {
       "id": "slot-3",
       "metric": "lineCount",
       "visible": true,
-      "order": 1,
+      "order": 0,
       "size": "md",
       "colorized": true,
       "linked": true
@@ -292,7 +283,7 @@
       "id": "slot-4",
       "metric": "stage",
       "visible": true,
-      "order": 2,
+      "order": 1,
       "size": "md",
       "colorized": true,
       "linked": true
@@ -301,7 +292,7 @@
       "id": "slot-1777333656455",
       "metric": "quoteNumber",
       "visible": true,
-      "order": 3,
+      "order": 2,
       "size": "md",
       "colorized": true,
       "linked": true
@@ -310,7 +301,7 @@
       "id": "slot-1",
       "metric": "amount",
       "visible": true,
-      "order": 4,
+      "order": 3,
       "size": "md",
       "colorized": true,
       "linked": true

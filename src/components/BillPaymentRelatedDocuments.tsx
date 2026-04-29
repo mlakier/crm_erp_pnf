@@ -13,6 +13,8 @@ export default function BillPaymentRelatedDocuments({
   receipts,
   bills,
   moneySettings,
+  embedded = false,
+  showDisplayControl = true,
 }: {
   purchaseRequisitions: Array<{
     id: string
@@ -46,6 +48,8 @@ export default function BillPaymentRelatedDocuments({
     notes: string | null
   }>
   moneySettings?: Parameters<typeof fmtCurrency>[2]
+  embedded?: boolean
+  showDisplayControl?: boolean
 }) {
   const tabs: TransactionRelatedDocumentsTab[] = [
     {
@@ -62,6 +66,12 @@ export default function BillPaymentRelatedDocuments({
             {req.number}
           </Link>,
           <RelatedDocumentsStatusBadge key={`${req.id}-status`} status={req.status} />,
+          fmtCurrency(req.total, undefined, moneySettings),
+          fmtDocumentDate(req.createdAt, moneySettings),
+        ],
+        filterValues: [
+          req.number,
+          req.status,
           fmtCurrency(req.total, undefined, moneySettings),
           fmtDocumentDate(req.createdAt, moneySettings),
         ],
@@ -84,6 +94,12 @@ export default function BillPaymentRelatedDocuments({
           fmtCurrency(po.total, undefined, moneySettings),
           fmtDocumentDate(po.createdAt, moneySettings),
         ],
+        filterValues: [
+          po.number,
+          po.status,
+          fmtCurrency(po.total, undefined, moneySettings),
+          fmtDocumentDate(po.createdAt, moneySettings),
+        ],
       })),
     },
     {
@@ -92,16 +108,23 @@ export default function BillPaymentRelatedDocuments({
       count: receipts.length,
       tone: 'upstream',
       emptyMessage: 'No related receipts.',
-      headers: ['TXN ID', 'DATE', 'STATUS', 'QTY', 'NOTES'],
+      headers: ['TXN ID', 'STATUS', 'DATE', 'QTY', 'NOTES'],
       rows: receipts.map((receipt) => ({
         id: receipt.id,
         cells: [
           <Link key={`${receipt.id}-number`} href={`/receipts/${receipt.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
             {receipt.number}
           </Link>,
-          fmtDocumentDate(receipt.date, moneySettings),
           <RelatedDocumentsStatusBadge key={`${receipt.id}-status`} status={receipt.status} />,
+          fmtDocumentDate(receipt.date, moneySettings),
           receipt.quantity,
+          receipt.notes ?? '-',
+        ],
+        filterValues: [
+          receipt.number,
+          receipt.status,
+          fmtDocumentDate(receipt.date, moneySettings),
+          String(receipt.quantity),
           receipt.notes ?? '-',
         ],
       })),
@@ -112,22 +135,30 @@ export default function BillPaymentRelatedDocuments({
       count: bills.length,
       tone: 'upstream',
       emptyMessage: 'No related bills.',
-      headers: ['TXN ID', 'BILL DATE', 'DUE DATE', 'STATUS', 'TOTAL', 'NOTES'],
+      headers: ['TXN ID', 'STATUS', 'TOTAL', 'BILL DATE', 'DUE DATE', 'NOTES'],
       rows: bills.map((bill) => ({
         id: bill.id,
         cells: [
           <Link key={`${bill.id}-number`} href={`/bills/${bill.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
             {bill.number}
           </Link>,
-          fmtDocumentDate(bill.date, moneySettings),
-          bill.dueDate ? fmtDocumentDate(bill.dueDate, moneySettings) : '-',
           <RelatedDocumentsStatusBadge key={`${bill.id}-status`} status={bill.status} />,
           fmtCurrency(bill.total, undefined, moneySettings),
+          fmtDocumentDate(bill.date, moneySettings),
+          bill.dueDate ? fmtDocumentDate(bill.dueDate, moneySettings) : '-',
+          bill.notes ?? '-',
+        ],
+        filterValues: [
+          bill.number,
+          bill.status,
+          fmtCurrency(bill.total, undefined, moneySettings),
+          fmtDocumentDate(bill.date, moneySettings),
+          bill.dueDate ? fmtDocumentDate(bill.dueDate, moneySettings) : '-',
           bill.notes ?? '-',
         ],
       })),
     },
   ]
 
-  return <TransactionRelatedDocumentsTabs tabs={tabs} />
+  return <TransactionRelatedDocumentsTabs tabs={tabs} embedded={embedded} showDisplayControl={showDisplayControl} />
 }

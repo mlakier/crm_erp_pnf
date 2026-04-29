@@ -38,7 +38,6 @@ export default function QuoteCreateSalesOrderButton({
         }
 
         setError(body?.error || 'Unable to create sales order')
-        setSaving(false)
         return
       }
 
@@ -46,6 +45,7 @@ export default function QuoteCreateSalesOrderButton({
       router.refresh()
     } catch {
       setError('Unable to create sales order')
+    } finally {
       setSaving(false)
     }
   }

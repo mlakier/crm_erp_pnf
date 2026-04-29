@@ -12,6 +12,8 @@ export default function InvoiceRelatedDocuments({
   opportunities,
   cashReceipts,
   moneySettings,
+  embedded = false,
+  showDisplayControl = true,
 }: {
   salesOrders: Array<{
     id: string
@@ -41,9 +43,13 @@ export default function InvoiceRelatedDocuments({
     reference: string | null
   }>
   moneySettings?: Parameters<typeof fmtCurrency>[2]
+  embedded?: boolean
+  showDisplayControl?: boolean
 }) {
   return (
     <TransactionRelatedDocumentsTabs
+      embedded={embedded}
+      showDisplayControl={showDisplayControl}
       defaultActiveKey="opportunities"
       tabs={[
         {
@@ -66,6 +72,12 @@ export default function InvoiceRelatedDocuments({
               </Link>,
               opportunity.name,
               <RelatedDocumentsStatusBadge key="status" status={opportunity.status} />,
+              fmtCurrency(opportunity.total, undefined, moneySettings),
+            ],
+            filterValues: [
+              opportunity.number,
+              opportunity.name,
+              opportunity.status,
               fmtCurrency(opportunity.total, undefined, moneySettings),
             ],
           })),
@@ -91,6 +103,11 @@ export default function InvoiceRelatedDocuments({
               <RelatedDocumentsStatusBadge key="status" status={quote.status} />,
               fmtCurrency(quote.total, undefined, moneySettings),
             ],
+            filterValues: [
+              quote.number,
+              quote.status,
+              fmtCurrency(quote.total, undefined, moneySettings),
+            ],
           })),
         },
         {
@@ -114,6 +131,11 @@ export default function InvoiceRelatedDocuments({
               <RelatedDocumentsStatusBadge key="status" status={salesOrder.status} />,
               fmtCurrency(salesOrder.total, undefined, moneySettings),
             ],
+            filterValues: [
+              salesOrder.number,
+              salesOrder.status,
+              fmtCurrency(salesOrder.total, undefined, moneySettings),
+            ],
           })),
         },
         {
@@ -126,6 +148,20 @@ export default function InvoiceRelatedDocuments({
           rows: cashReceipts.map((receipt) => ({
             id: receipt.id,
             cells: [
+              <Link
+                key="link"
+                href={`/invoice-receipts/${receipt.id}`}
+                className="hover:underline"
+                style={{ color: 'var(--accent-primary-strong)' }}
+              >
+                {receipt.number ?? receipt.id}
+              </Link>,
+              fmtCurrency(receipt.amount, undefined, moneySettings),
+              fmtDocumentDate(receipt.date, moneySettings),
+              receipt.method,
+              receipt.reference ?? '-',
+            ],
+            filterValues: [
               receipt.number ?? receipt.id,
               fmtCurrency(receipt.amount, undefined, moneySettings),
               fmtDocumentDate(receipt.date, moneySettings),

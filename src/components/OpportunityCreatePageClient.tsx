@@ -2,11 +2,10 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionActionStack from '@/components/TransactionActionStack'
-import TransactionStatsRow from '@/components/TransactionStatsRow'
 import { fmtCurrency } from '@/lib/format'
 import { sumMoney } from '@/lib/money'
 import {
@@ -55,7 +54,7 @@ type InitialLineItem = {
   notes: string | null
   lineTotal?: number
 }
-type OpportunityCreateHeaderField = TransactionHeaderField & { key: OpportunityDetailFieldKey }
+type OpportunityCreateHeaderField = RecordHeaderField & { key: OpportunityDetailFieldKey }
 
 function formatStage(stage: string | null) {
   if (!stage) return 'Unknown'
@@ -317,7 +316,7 @@ export default function OpportunityCreatePageClient({
       value: 'No',
       displayValue: 'No',
       helpText: 'Whether the opportunity is inactive.',
-      fieldType: 'boolean',
+      fieldType: 'checkbox',
     },
     createdAt: {
       key: 'createdAt',
@@ -403,35 +402,13 @@ export default function OpportunityCreatePageClient({
       widthClassName="w-full max-w-none"
       actions={<TransactionActionStack mode="create" cancelHref="/opportunities" formId="create-opportunity-form" />}
     >
-      <div className="mb-8">
-        <TransactionStatsRow
-          record={{
-            amount: effectiveAmount,
-            closeDate: headerValues.closeDate ? new Date(headerValues.closeDate) : null,
-            lineCount: draftLines.length,
-            quoteNumber: null,
-            quoteHref: null,
-            stageLabel: stageOptions.find((option) => option.value === headerValues.stage)?.label ?? formatStage(headerValues.stage),
-            stageTone:
-              headerValues.stage === 'won'
-                ? 'green'
-                : headerValues.stage === 'lost'
-                  ? 'red'
-                  : headerValues.stage === 'negotiation'
-                    ? 'yellow'
-                    : headerValues.stage === 'qualification' || headerValues.stage === 'qualified'
-                      ? 'accent'
-                      : 'default',
-          }}
-          stats={opportunityPageConfig.stats}
-          visibleStatCards={customization.statCards}
-        />
-      </div>
-
-      <TransactionHeaderSections
+      <RecordHeaderDetails
         editing
         sections={headerSections}
         columns={customization.formColumns}
+        containerTitle="Opportunity Details"
+        containerDescription="Core opportunity fields organized into configurable sections."
+        showSubsections={false}
         formId="create-opportunity-form"
         submitMode="controlled"
         onValuesChange={(nextValues) => {

@@ -110,13 +110,15 @@
           "level": 1,
           "operator": ">=",
           "value": 0,
-          "approverType": "employee",
-          "approverValue": "cmo3jdmca0001rjvr16ne447m"
+          "approverType": "role",
+          "approverValue": "purchase_coordinator"
         },
         {
           "level": 2,
-          "value": 0,
-          "approverRole": "manager"
+          "value": 2000,
+          "approverRole": "manager",
+          "approverValue": "department_manager",
+          "operator": ">="
         }
       ]
     },

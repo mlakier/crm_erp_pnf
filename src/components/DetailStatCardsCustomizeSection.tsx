@@ -1,6 +1,7 @@
 'use client'
 
 import { RecordDetailStatCard } from '@/components/RecordDetailPanels'
+import SearchableSelect from '@/components/SearchableSelect'
 import type { TransactionStatCardSize, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 type StatCardDefinition = {
@@ -58,7 +59,7 @@ export default function DetailStatCardsCustomizeSection({
   cards: LayoutStatCard[]
   onAddCard: () => void
   onToggleVisible: (cardId: string) => void
-  onUpdateSetting: (cardId: string, key: 'size' | 'colorized' | 'linked', value: string | boolean) => void
+  onUpdateSetting: (cardId: string, key: 'size' | 'colorized' | 'linked', value: TransactionStatCardSize | boolean) => void
   onAssignMetric: (cardId: string, metric: string) => void
   onMoveCard: (cardId: string, direction: -1 | 1) => void
   onRemoveCard: (cardId: string) => void
@@ -140,18 +141,16 @@ export default function DetailStatCardsCustomizeSection({
                   <span className="block" style={{ color: 'var(--text-muted)' }}>
                     Size
                   </span>
-                  <select
-                    value={card.size ?? 'md'}
-                    onChange={(event) => onUpdateSetting(card.id, 'size', event.target.value as TransactionStatCardSize)}
-                    className="rounded-md border bg-transparent px-2 py-1 text-xs text-white"
-                    style={{ borderColor: 'var(--border-muted)' }}
-                  >
-                    {STAT_CARD_SIZE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="w-28">
+                    <SearchableSelect
+                      selectedValue={card.size ?? 'md'}
+                      options={STAT_CARD_SIZE_OPTIONS}
+                      placeholder="Select size"
+                      searchPlaceholder="Search size"
+                      onSelect={(value) => onUpdateSetting(card.id, 'size', value as TransactionStatCardSize)}
+                      textClassName="text-xs"
+                    />
+                  </div>
                 </label>
                 <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
                   <input
@@ -173,18 +172,16 @@ export default function DetailStatCardsCustomizeSection({
                   />
                   Link
                 </label>
-                <select
-                  value={card.metric}
-                  onChange={(event) => onAssignMetric(card.id, event.target.value)}
-                  className="rounded-md border bg-transparent px-2 py-1 text-xs text-white"
-                  style={{ borderColor: 'var(--border-muted)' }}
-                >
-                  {statCardDefinitions.map((option) => (
-                    <option key={option.id} value={option.id} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="w-44">
+                  <SearchableSelect
+                    selectedValue={card.metric}
+                    options={statCardDefinitions.map((option) => ({ value: option.id, label: option.label }))}
+                    placeholder="Select metric"
+                    searchPlaceholder="Search metric"
+                    onSelect={(value) => onAssignMetric(card.id, value)}
+                    textClassName="text-xs"
+                  />
+                </div>
                 <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                   Order {index + 1}
                 </span>

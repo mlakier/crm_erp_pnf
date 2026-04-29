@@ -67,6 +67,8 @@ export default function OpportunityRelatedDocumentsSection({
   fulfillments,
   invoices,
   invoiceReceipts,
+  embedded = false,
+  showDisplayControl = true,
 }: {
   quote: QuoteRow | null
   contacts: ContactRow[]
@@ -74,11 +76,15 @@ export default function OpportunityRelatedDocumentsSection({
   fulfillments: FulfillmentRow[]
   invoices: InvoiceRow[]
   invoiceReceipts: InvoiceReceiptRow[]
+  embedded?: boolean
+  showDisplayControl?: boolean
 }) {
   const quoteRows = quote ? [quote] : []
 
   return (
     <TransactionRelatedDocumentsTabs
+      embedded={embedded}
+      showDisplayControl={showDisplayControl}
       defaultActiveKey="quotes"
       tabs={[
         {
@@ -97,6 +103,7 @@ export default function OpportunityRelatedDocumentsSection({
               <RelatedDocumentsStatusBadge key="status" status={row.status} />,
               fmtCurrency(row.total),
             ],
+            filterValues: [row.number, row.status, fmtCurrency(row.total)],
           })),
         },
         {
@@ -115,6 +122,7 @@ export default function OpportunityRelatedDocumentsSection({
               <RelatedDocumentsStatusBadge key="status" status={salesOrder.status} />,
               fmtCurrency(salesOrder.total),
             ],
+            filterValues: [salesOrder.number, salesOrder.status, fmtCurrency(salesOrder.total)],
           })),
         },
         {
@@ -123,15 +131,21 @@ export default function OpportunityRelatedDocumentsSection({
           count: fulfillments.length,
           tone: 'downstream',
           emptyMessage: 'No fulfillments are linked downstream from this opportunity yet.',
-          headers: ['Txn ID', 'Date', 'Status', 'Notes'],
+          headers: ['Txn ID', 'Status', 'Date', 'Notes'],
           rows: fulfillments.map((fulfillment) => ({
             id: fulfillment.id,
             cells: [
               <Link key="link" href={fulfillment.href} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                 {fulfillment.number}
               </Link>,
-              fmtDocumentDate(fulfillment.date),
               <RelatedDocumentsStatusBadge key="status" status={fulfillment.status} />,
+              fmtDocumentDate(fulfillment.date),
+              fulfillment.notes ?? '-',
+            ],
+            filterValues: [
+              fulfillment.number,
+              fulfillment.status,
+              fmtDocumentDate(fulfillment.date),
               fulfillment.notes ?? '-',
             ],
           })),
@@ -142,17 +156,24 @@ export default function OpportunityRelatedDocumentsSection({
           count: invoices.length,
           tone: 'downstream',
           emptyMessage: 'No invoices are linked downstream from this opportunity yet.',
-          headers: ['Txn ID', 'Created', 'Due Date', 'Status', 'Total'],
+          headers: ['Txn ID', 'Status', 'Total', 'Created', 'Due Date'],
           rows: invoices.map((invoice) => ({
             id: invoice.id,
             cells: [
               <Link key="link" href={invoice.href} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                 {invoice.number}
               </Link>,
-              fmtDocumentDate(invoice.createdAt),
-              invoice.dueDate ? fmtDocumentDate(invoice.dueDate) : '-',
               <RelatedDocumentsStatusBadge key="status" status={invoice.status} />,
               fmtCurrency(invoice.total),
+              fmtDocumentDate(invoice.createdAt),
+              invoice.dueDate ? fmtDocumentDate(invoice.dueDate) : '-',
+            ],
+            filterValues: [
+              invoice.number,
+              invoice.status,
+              fmtCurrency(invoice.total),
+              fmtDocumentDate(invoice.createdAt),
+              invoice.dueDate ? fmtDocumentDate(invoice.dueDate) : '-',
             ],
           })),
         },
@@ -162,17 +183,24 @@ export default function OpportunityRelatedDocumentsSection({
           count: invoiceReceipts.length,
           tone: 'downstream',
           emptyMessage: 'No invoice receipts are linked downstream from this opportunity yet.',
-          headers: ['Txn ID', 'Date', 'Method', 'Reference', 'Amount'],
+          headers: ['Txn ID', 'Amount', 'Date', 'Method', 'Reference'],
           rows: invoiceReceipts.map((receipt) => ({
             id: receipt.id,
             cells: [
               <Link key="link" href={receipt.href} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                 {receipt.number}
               </Link>,
+              fmtCurrency(receipt.amount),
               fmtDocumentDate(receipt.date),
               receipt.method ?? '-',
               receipt.reference ?? '-',
+            ],
+            filterValues: [
+              receipt.number,
               fmtCurrency(receipt.amount),
+              fmtDocumentDate(receipt.date),
+              receipt.method ?? '-',
+              receipt.reference ?? '-',
             ],
           })),
         },
@@ -182,7 +210,7 @@ export default function OpportunityRelatedDocumentsSection({
           count: contacts.length,
           tone: 'upstream',
           emptyMessage: 'No related customer contacts.',
-          headers: ['Contact #', 'Name', 'Details'],
+          headers: ['Contact #', 'Name', 'Email', 'Position'],
           rows: contacts.map((contact) => ({
             id: contact.id,
             cells: [
@@ -190,8 +218,10 @@ export default function OpportunityRelatedDocumentsSection({
                 {contact.number}
               </Link>,
               contact.name,
-              `${contact.email} · ${contact.position}`,
+              contact.email,
+              contact.position,
             ],
+            filterValues: [contact.number, contact.name, contact.email, contact.position],
           })),
         },
       ]}

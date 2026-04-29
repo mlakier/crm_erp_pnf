@@ -62,7 +62,6 @@ const routeConstant = slug.toUpperCase().replace(/-/g, '_')
 const detailKeyType = `${pascal}DetailFieldKey`
 const detailConfigType = `${pascal}DetailCustomizationConfig`
 const detailFieldsConst = `${constant}_DETAIL_FIELDS`
-const routeBase = `src/app/${slug}`
 const formKey = `${pascal.charAt(0).toLowerCase()}${pascal.slice(1)}Create`
 const repoRoot = process.cwd()
 

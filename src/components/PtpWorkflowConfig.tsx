@@ -1,5 +1,7 @@
 "use client";
+
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import SearchableSelect, { type SearchableSelectOption } from '@/components/SearchableSelect';
 import { parseMoneyValue } from '@/lib/money';
 import type { PtpWorkflowConfig, PtpStep, PtpTrigger, PtpApproval, ApprovalTier } from '@/lib/ptp-workflow-store';
 
@@ -18,6 +20,28 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean
         style={{ transform: enabled ? 'translateX(16px)' : 'translateX(0)' }}
       />
     </button>
+  );
+}
+
+function InlineSearchableSelect({
+  value,
+  options,
+  placeholder,
+  onChange,
+}: {
+  value: string;
+  options: SearchableSelectOption[];
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <SearchableSelect
+      selectedValue={value}
+      options={options}
+      placeholder={placeholder}
+      textClassName="text-sm"
+      onSelect={onChange}
+    />
   );
 }
 
@@ -59,10 +83,8 @@ export default function PtpWorkflowConfig() {
     setSaving(false);
   }, []);
 
-
   const enabledSteps = (config?.steps ?? []).filter((s) => s.enabled);
 
-  // Compute dynamic triggers from consecutive enabled steps
   const dynamicTriggers = useMemo(() => {
     if (!config) return [];
     const sorted = [...enabledSteps].sort((a, b) => a.order - b.order);
@@ -91,7 +113,7 @@ export default function PtpWorkflowConfig() {
     return pairs;
   }, [config, enabledSteps]);
 
-  if (!config) return <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>;
+  if (!config) return <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading...</p>;
 
   function updateStep(id: string, patch: Partial<PtpStep>) {
     if (!config) return;
@@ -190,7 +212,6 @@ export default function PtpWorkflowConfig() {
     save(next);
   }
 
-  // Map fromStep to Manage Lists key for trigger condition value dropdown
   const fromStepToListKey: Record<string, string> = {
     requisition: 'REQ-STATUS',
     po: 'PO-STATUS',
@@ -199,7 +220,6 @@ export default function PtpWorkflowConfig() {
     payment: 'BILL-STATUS',
   };
 
-  // Map toStep to Manage Lists key for result status dropdown
   const stepToListKey: Record<string, string> = {
     po: 'PO-STATUS',
     receipt: 'RECEIPT-STATUS',
@@ -207,7 +227,7 @@ export default function PtpWorkflowConfig() {
     payment: 'BILL-STATUS',
   };
 
-return (
+  return (
     <div className="space-y-8">
       {toast && (
         <div className="fixed right-4 top-4 z-50 rounded-md px-4 py-2 text-sm font-medium text-white" style={{ backgroundColor: 'var(--success)' }}>
@@ -215,7 +235,6 @@ return (
         </div>
       )}
 
-      {/* Workflow Steps */}
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Workflow Steps</h2>
         <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Toggle which stages are active in the Procure-to-Pay flow.</p>
@@ -229,7 +248,7 @@ return (
                 {step.label}
               </span>
               {idx < enabledSteps.length - 1 && (
-                <span style={{ color: 'var(--text-muted)' }}>→</span>
+                <span style={{ color: 'var(--text-muted)' }}>&rarr;</span>
               )}
             </span>
           ))}
@@ -251,7 +270,6 @@ return (
         </div>
       </section>
 
-      {/* Status Triggers */}
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Status Triggers</h2>
         <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Auto-create the next record when a status condition is met.</p>
@@ -270,31 +288,27 @@ return (
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   <div>
                     <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>{(config.steps.find(s => s.id === trigger.fromStep)?.label || 'From') + ' Status'}</label>
-                    <select
+                    <InlineSearchableSelect
                       value={trigger.condition.value}
-                      onChange={(e) => updateTriggerCondition(trigger.id, 'value', e.target.value)}
-                      className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                      style={{ borderColor: 'var(--border-muted)' }}
-                    >
-                      <option value="">— select —</option>
-                      {(statusOptions[fromStepToListKey[trigger.fromStep]] || []).map((opt) => (
-                        <option key={opt.id} value={opt.value}>{opt.value}</option>
-                      ))}
-                    </select>
+                      onChange={(value) => updateTriggerCondition(trigger.id, 'value', value)}
+                      placeholder="Select status"
+                      options={(statusOptions[fromStepToListKey[trigger.fromStep]] || []).map((opt) => ({
+                        value: opt.value,
+                        label: opt.value,
+                      }))}
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>{'Auto-Created ' + (config.steps.find(s => s.id === trigger.toStep)?.label || 'To') + ' Status'}</label>
-                    <select
+                    <InlineSearchableSelect
                       value={trigger.resultStatus || ''}
-                      onChange={(e) => updateTrigger(trigger.id, { resultStatus: e.target.value })}
-                      className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                      style={{ borderColor: 'var(--border-muted)' }}
-                    >
-                      <option value="">— select —</option>
-                      {(statusOptions[stepToListKey[trigger.toStep]] || []).map((opt) => (
-                        <option key={opt.id} value={opt.value}>{opt.value}</option>
-                      ))}
-                    </select>
+                      onChange={(value) => updateTrigger(trigger.id, { resultStatus: value })}
+                      placeholder="Select status"
+                      options={(statusOptions[stepToListKey[trigger.toStep]] || []).map((opt) => ({
+                        value: opt.value,
+                        label: opt.value,
+                      }))}
+                    />
                   </div>
                 </div>
               )}
@@ -303,10 +317,9 @@ return (
         </div>
       </section>
 
-      {/* Approval Workflows (Multi-Level) */}
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--text-muted)' }}>Approval Workflows</h2>
-        <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Multi-level approvals — rows sharing the same level require all listed approvers to sign off.</p>
+        <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Multi-level approvals - rows sharing the same level require all listed approvers to sign off.</p>
         <div className="rounded-lg border" style={{ borderColor: 'var(--border-muted)' }}>
           {config.approvals.map((approval, idx) => (
             <div
@@ -338,18 +351,18 @@ return (
                         className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white text-center"
                         style={{ borderColor: 'var(--border-muted)' }}
                       />
-                      <select
+                      <InlineSearchableSelect
                         value={tier.operator}
-                        onChange={(e) => updateTier(approval.id, tierIdx, { operator: e.target.value })}
-                        className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                        style={{ borderColor: 'var(--border-muted)' }}
-                      >
-                        <option value="=">=</option>
-                        <option value=">">{'>'}</option>
-                        <option value=">=">{'>='}</option>
-                        <option value="<">{'<'}</option>
-                        <option value="<=">{'<='}</option>
-                      </select>
+                        onChange={(value) => updateTier(approval.id, tierIdx, { operator: value })}
+                        placeholder="Select operator"
+                        options={[
+                          { value: '=', label: '=' },
+                          { value: '>', label: '>' },
+                          { value: '>=', label: '>=' },
+                          { value: '<', label: '<' },
+                          { value: '<=', label: '<=' },
+                        ]}
+                      />
                       <input
                         type="number"
                         value={tier.value}
@@ -357,43 +370,41 @@ return (
                         className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
                         style={{ borderColor: 'var(--border-muted)' }}
                       />
-                      <select
+                      <InlineSearchableSelect
                         value={tier.approverType}
-                        onChange={(e) => updateTier(approval.id, tierIdx, { approverType: e.target.value as 'role' | 'employee', approverValue: e.target.value === 'role' ? 'manager' : '' })}
-                        className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                        style={{ borderColor: 'var(--border-muted)' }}
-                      >
-                        <option value="role">Role</option>
-                        <option value="employee">Employee</option>
-                      </select>
+                        onChange={(value) => updateTier(approval.id, tierIdx, { approverType: (value || 'role') as 'role' | 'employee', approverValue: value === 'employee' ? '' : 'manager' })}
+                        placeholder="Select approver type"
+                        options={[
+                          { value: 'role', label: 'Role' },
+                          { value: 'employee', label: 'Employee' },
+                        ]}
+                      />
                       {tier.approverType === 'employee' ? (
-                        <select
+                        <InlineSearchableSelect
                           value={tier.approverValue}
-                          onChange={(e) => updateTier(approval.id, tierIdx, { approverValue: e.target.value })}
-                          className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                          style={{ borderColor: 'var(--border-muted)' }}
-                        >
-                          <option value="">— select —</option>
-                          {employees.map((emp) => (
-                            <option key={emp.id} value={emp.id}>{emp.lastName}, {emp.firstName}{emp.employeeId ? ` (${emp.employeeId})` : ''}</option>
-                          ))}
-                        </select>
+                          onChange={(value) => updateTier(approval.id, tierIdx, { approverValue: value })}
+                          placeholder="Select employee"
+                          options={employees.map((emp) => ({
+                            value: emp.id,
+                            label: `${emp.lastName}, ${emp.firstName}${emp.employeeId ? ` (${emp.employeeId})` : ''}`,
+                          }))}
+                        />
                       ) : (
-                        <select
+                        <InlineSearchableSelect
                           value={tier.approverValue}
-                          onChange={(e) => updateTier(approval.id, tierIdx, { approverValue: e.target.value })}
-                          className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                          style={{ borderColor: 'var(--border-muted)' }}
-                        >
-                          <option value="manager">Manager</option>
-                          <option value="department_manager">Department Manager</option>
-                          <option value="purchase_coordinator">Purchase Coordinator</option>
-                          <option value="purchase_manager">Purchase Manager</option>
-                          <option value="finance_manager">Finance Manager</option>
-                          <option value="director">Director</option>
-                          <option value="vp">VP</option>
-                          <option value="cfo">CFO</option>
-                        </select>
+                          onChange={(value) => updateTier(approval.id, tierIdx, { approverValue: value })}
+                          placeholder="Select role"
+                          options={[
+                            { value: 'manager', label: 'Manager' },
+                            { value: 'department_manager', label: 'Department Manager' },
+                            { value: 'purchase_coordinator', label: 'Purchase Coordinator' },
+                            { value: 'purchase_manager', label: 'Purchase Manager' },
+                            { value: 'finance_manager', label: 'Finance Manager' },
+                            { value: 'director', label: 'Director' },
+                            { value: 'vp', label: 'VP' },
+                            { value: 'cfo', label: 'CFO' },
+                          ]}
+                        />
                       )}
                       <button
                         type="button"
@@ -401,7 +412,9 @@ return (
                         className="w-6 h-6 flex items-center justify-center rounded text-xs hover:bg-red-900/30"
                         style={{ color: '#ef4444' }}
                         title="Remove row"
-                      >×</button>
+                      >
+                        x
+                      </button>
                     </div>
                   ))}
                   <button
@@ -409,7 +422,9 @@ return (
                     onClick={() => addTier(approval.id)}
                     className="mt-1 flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium hover:opacity-80"
                     style={{ color: 'var(--accent-primary)', border: '1px dashed var(--border-muted)' }}
-                  >+ Add Approval Row</button>
+                  >
+                    + Add Approval Row
+                  </button>
                 </div>
               )}
             </div>
@@ -418,7 +433,7 @@ return (
       </section>
 
       {saving && (
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Saving…</p>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Saving...</p>
       )}
     </div>
   );

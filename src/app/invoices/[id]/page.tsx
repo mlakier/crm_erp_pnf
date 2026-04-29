@@ -14,7 +14,7 @@ import {
   RecordDetailHeaderCell,
   RecordDetailSection,
 } from '@/components/RecordDetailPanels'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import CommunicationsSection from '@/components/CommunicationsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
@@ -41,6 +41,7 @@ import { buildTransactionCommunicationComposePayload } from '@/lib/transaction-c
 import InvoiceGlImpactSection from '@/components/InvoiceGlImpactSection'
 import {
   buildConfiguredTransactionSections,
+  buildTransactionGlImpactRows,
   buildTransactionCustomizePreviewFields,
   getOrderedVisibleTransactionLineColumns,
 } from '@/lib/transaction-detail-helpers'
@@ -54,7 +55,7 @@ import type { TransactionVisualTone } from '@/lib/transaction-page-config'
 
 type InvoiceHeaderField = {
   key: InvoiceDetailFieldKey
-} & TransactionHeaderField
+} & RecordHeaderField
 
 function getToneStyle(tone: TransactionStatusColorTone) {
   if (tone === 'gray') {
@@ -178,6 +179,30 @@ export default async function InvoiceDetailPage({
   ])
 
   if (!invoice) notFound()
+
+  const glImpactEntries = await prisma.journalEntry.findMany({
+    where: { sourceId: invoice.id },
+    include: {
+      lineItems: {
+        include: {
+          account: {
+            select: { accountId: true, name: true },
+          },
+        },
+      },
+    },
+    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+  })
+  const glSourceNumberByKey = new Map<string, string>()
+  for (const entry of glImpactEntries) {
+    glSourceNumberByKey.set(`${entry.sourceType ?? ''}:${entry.sourceId ?? ''}`, invoice.number)
+  }
+  const glImpactRows = buildTransactionGlImpactRows({
+    entries: glImpactEntries,
+    sourceNumberByKey: glSourceNumberByKey,
+    formatDate: (date) => fmtDocumentDate(date, moneySettings),
+    toNumericValue: (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback,
+  })
 
   const detailHref = `/invoices/${invoice.id}`
   const subsidiaryOptions = subsidiaries.map((subsidiary) => ({
@@ -568,13 +593,13 @@ export default async function InvoiceDetailPage({
     subsidiary: subsidiaryHref,
     currency: currencyHref,
   })
-  const allFieldDefinitions = {
+  const allFieldDefinitions: Record<string, RecordHeaderField> = {
     ...headerFieldDefinitions,
     ...referenceFieldDefinitions,
   }
   const customizeFields = buildTransactionCustomizePreviewFields({
     fields: INVOICE_DETAIL_FIELDS,
-    fieldDefinitions: allFieldDefinitions,
+    fieldDefinitions: headerFieldDefinitions,
     previewOverrides: {
       id: invoice.id,
       customerId: invoice.customer.customerId ?? '',
@@ -652,7 +677,7 @@ export default async function InvoiceDetailPage({
         fields,
       }
     })
-    .filter((section): section is { title: string; description: string; columns: number; rows: number; fields: TransactionHeaderField[] } => Boolean(section))
+    .filter((section): section is NonNullable<typeof section> => Boolean(section))
   const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
   const invoiceStatusActions = getAvailableWorkflowStatusActions(workflow, 'invoice', invoice.status)
 
@@ -781,7 +806,7 @@ export default async function InvoiceDetailPage({
           ) : (
             <div className="space-y-6">
               {referenceSections.length > 0 ? (
-                <TransactionHeaderSections
+                <RecordHeaderDetails
                   editing={false}
                   sections={referenceSections.map((section) => ({
                     title: section.title,
@@ -795,7 +820,7 @@ export default async function InvoiceDetailPage({
                   showSubsections={false}
                 />
               ) : null}
-              <TransactionHeaderSections
+              <RecordHeaderDetails
                 purchaseOrderId={invoice.id}
                 editing={isEditing}
                 sections={headerSections}
@@ -891,6 +916,8 @@ export default async function InvoiceDetailPage({
         }
         relatedDocuments={isCustomizing ? null : (
           <InvoiceRelatedDocuments
+            embedded
+            showDisplayControl={false}
             salesOrders={
               invoice.salesOrder
                 ? [
@@ -939,9 +966,25 @@ export default async function InvoiceDetailPage({
             moneySettings={moneySettings}
           />
         )}
-        supplementarySections={isCustomizing ? null : <InvoiceGlImpactSection rows={[]} />}
+        relatedDocumentsCount={
+          (invoice.salesOrder ? 1 : 0) +
+          (invoice.salesOrder?.quote ? 1 : 0) +
+          (invoice.salesOrder?.quote?.opportunity ? 1 : 0) +
+          invoice.cashReceipts.length
+        }
+        supplementarySections={
+          isCustomizing ? null : (
+            <InvoiceGlImpactSection
+              rows={glImpactRows}
+              settings={customization.glImpactSettings}
+              columnCustomization={customization.glImpactColumns}
+            />
+          )
+        }
         communications={isCustomizing ? null : (
           <CommunicationsSection
+            embedded
+            showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
               recordId: invoice.id,
@@ -969,7 +1012,9 @@ export default async function InvoiceDetailPage({
             })}
           />
         )}
-        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
+        communicationsCount={communications.length}
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        systemNotesCount={systemNotes.length}
       />
     </RecordDetailPageShell>
   )

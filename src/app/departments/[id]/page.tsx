@@ -1,20 +1,19 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import DeleteButton from '@/components/DeleteButton'
-import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
+import type { InlineRecordSection } from '@/components/InlineRecordDetails'
+import MasterDataHeaderDetails from '@/components/MasterDataHeaderDetails'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
 import { formatCustomFieldValue } from '@/lib/custom-fields'
-import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
-import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
-import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSection'
+import RecordDetailActionBar from '@/components/RecordDetailActionBar'
+import { buildMasterDataSystemInformationItems } from '@/components/RecordSystemInformationSection'
 import DepartmentDetailCustomizeMode from '@/components/DepartmentDetailCustomizeMode'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import CommunicationsSection from '@/components/CommunicationsSection'
+import RelatedRecordsSection from '@/components/RelatedRecordsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import {
-  RecordDetailCell,
   RecordDetailField,
-  RecordDetailHeaderCell,
   RecordDetailSection,
 } from '@/components/RecordDetailPanels'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
@@ -24,6 +23,7 @@ import { loadFormRequirements } from '@/lib/form-requirements-store'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { loadMasterDataSystemInfo } from '@/lib/master-data-system-info'
 import { loadMasterDataSystemNotes } from '@/lib/master-data-system-notes'
+import type { TransactionStatDefinition, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 function joinSubsidiaryLabels(
   assignments: Array<{ subsidiary: { id: string; subsidiaryId: string; name: string } }>,
@@ -195,17 +195,25 @@ export default async function DepartmentDetailPage({
   }
 
   const customizeFields = buildCustomizePreviewFields(DEPARTMENT_FORM_FIELDS, fieldDefinitions)
-  const statPreviewCards = [
-    { id: 'employees', label: 'Employees', value: department.employees.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+  const statPreviewCards: Array<{
+    id: string
+    label: string
+    value: string | number
+    cardTone?: TransactionVisualTone
+    valueTone?: TransactionVisualTone
+    supportsColorized: boolean
+    supportsLink: boolean
+  }> = [
+    { id: 'employees', label: 'Employees', value: department.employees.length, cardTone: 'accent', valueTone: 'accent', supportsColorized: true, supportsLink: false },
     { id: 'subsidiaries', label: 'Subsidiaries', value: department.departmentSubsidiaries.length, cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
     { id: 'customFields', label: 'Custom Fields', value: customFields.length, cardTone: 'yellow', valueTone: 'yellow', supportsColorized: true, supportsLink: false },
     { id: 'status', label: 'Status', value: department.active ? 'Active' : 'Inactive', cardTone: department.active ? 'green' : 'red', valueTone: department.active ? 'green' : 'red', supportsColorized: true, supportsLink: false },
   ]
-  const statDefinitions = [
-    { id: 'employees', label: 'Employees', getValue: () => department.employees.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
-    { id: 'subsidiaries', label: 'Subsidiaries', getValue: () => department.departmentSubsidiaries.length, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
-    { id: 'customFields', label: 'Custom Fields', getValue: () => customFields.length, getCardTone: () => 'yellow' as const, getValueTone: () => 'yellow' as const },
-    { id: 'status', label: 'Status', getValue: () => (department.active ? 'Active' : 'Inactive'), getCardTone: () => (department.active ? 'green' : 'red') as const, getValueTone: () => (department.active ? 'green' : 'red') as const },
+  const statDefinitions: Array<TransactionStatDefinition<typeof department>> = [
+    { id: 'employees', label: 'Employees', getValue: () => department.employees.length, getCardTone: () => 'accent', getValueTone: () => 'accent' },
+    { id: 'subsidiaries', label: 'Subsidiaries', getValue: () => department.departmentSubsidiaries.length, getCardTone: () => 'teal', getValueTone: () => 'teal' },
+    { id: 'customFields', label: 'Custom Fields', getValue: () => customFields.length, getCardTone: () => 'yellow', getValueTone: () => 'yellow' },
+    { id: 'status', label: 'Status', getValue: () => (department.active ? 'Active' : 'Inactive'), getCardTone: () => (department.active ? 'green' : 'red'), getValueTone: () => (department.active ? 'green' : 'red') },
   ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: DEPARTMENT_FORM_FIELDS,
@@ -220,6 +228,66 @@ export default async function DepartmentDetailPage({
     updatedAt: department.updatedAt,
   })
   const systemNotes = await loadMasterDataSystemNotes({ entityType: 'department', entityId: department.id })
+  const relatedRecordsTabs = [
+    {
+      key: 'subsidiaries',
+      label: 'Subsidiaries',
+      count: department.departmentSubsidiaries.length,
+      emptyMessage: 'No subsidiaries are linked to this department yet.',
+      rows: department.departmentSubsidiaries.map(({ subsidiary }) => ({
+        id: subsidiary.id,
+        type: 'Subsidiary',
+        reference: subsidiary.subsidiaryId,
+        name: subsidiary.name,
+        details: department.includeChildren ? 'Available (+children)' : 'Available',
+        href: `/subsidiaries/${subsidiary.id}`,
+      })),
+    },
+    {
+      key: 'leadership',
+      label: 'Leadership',
+      count: [department.manager, department.approver].filter(Boolean).length,
+      emptyMessage: 'No leadership assignments are set for this department yet.',
+      rows: [
+        ...(department.manager
+          ? [{
+              id: department.manager.id,
+              type: 'Employee',
+              reference: department.manager.employeeId ?? 'Pending',
+              name: `${department.manager.firstName} ${department.manager.lastName}`.trim(),
+              details: 'Department Manager',
+              href: `/employees/${department.manager.id}`,
+            }]
+          : []),
+        ...(department.approver
+          ? [{
+              id: department.approver.id,
+              type: 'Employee',
+              reference: department.approver.employeeId ?? 'Pending',
+              name: `${department.approver.firstName} ${department.approver.lastName}`.trim(),
+              details: 'Department Approver',
+              href: `/employees/${department.approver.id}`,
+            }]
+          : []),
+      ],
+    },
+    {
+      key: 'employees',
+      label: 'Employees',
+      count: department.employees.length,
+      emptyMessage: 'No employees are assigned to this department yet.',
+      rows: department.employees.map((employee) => ({
+        id: employee.id,
+        type: 'Employee',
+        reference: employee.employeeId ?? 'Pending',
+        name: `${employee.firstName} ${employee.lastName}`.trim(),
+        details: employee.title ?? '-',
+        href: `/employees/${employee.id}`,
+      })),
+    },
+  ]
+  const communicationsToolbarTargetId = 'department-communications-toolbar'
+  const systemNotesToolbarTargetId = 'department-system-notes-toolbar'
 
   return (
     <RecordDetailPageShell
@@ -236,48 +304,22 @@ export default async function DepartmentDetailPage({
         </span>
       )}
       actions={(
-        <>
-          {isEditing && !isCustomizing ? (
-            <>
-              <Link
-                href={detailHref}
-                className="rounded-md border px-3 py-1.5 text-xs font-medium"
-                style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-              >
-                Cancel
-              </Link>
-              <button
-                type="submit"
-                form={`inline-record-form-${department.id}`}
-                className="rounded-md px-3 py-1.5 text-xs font-semibold text-white"
-                style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-              >
-                Save
-              </button>
-            </>
-          ) : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailCreateMenu newHref="/departments/new" duplicateHref={`/departments/new?duplicateFrom=${department.id}`} /> : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailExportMenu title={department.name} fileName={`department-${department.departmentId}`} sections={detailSections} /> : null}
-          {!isEditing && !isCustomizing ? (
-            <Link
-              href={`${detailHref}?customize=1`}
-              className="rounded-md border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-            >
-              Customize
-            </Link>
-          ) : null}
-          {!isEditing && !isCustomizing ? (
-            <Link
-              href={`${detailHref}?edit=1`}
-              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
-              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-            >
-              Edit
-            </Link>
-          ) : null}
-          {!isCustomizing ? <DeleteButton resource="departments" id={department.id} /> : null}
-        </>
+        isCustomizing ? null : (
+          <RecordDetailActionBar
+            mode={isEditing ? 'edit' : 'detail'}
+            detailHref={detailHref}
+            formId={`inline-record-form-${department.id}`}
+            newHref="/departments/new"
+            duplicateHref={`/departments/new?duplicateFrom=${department.id}`}
+            exportTitle={department.name}
+            exportFileName={`department-${department.departmentId}`}
+            exportSections={detailSections}
+            customizeHref={`${detailHref}?customize=1`}
+            editHref={`${detailHref}?edit=1`}
+            deleteResource="departments"
+            deleteId={department.id}
+          />
+        )
       )}
     >
       {!isCustomizing ? (
@@ -300,26 +342,24 @@ export default async function DepartmentDetailPage({
           statPreviewCards={statPreviewCards}
         />
       ) : (
-        <InlineRecordDetails
+        <MasterDataHeaderDetails
           resource="departments"
           id={department.id}
-          title="Department details"
+          title="Department Details"
           sections={detailSections}
           editing={isEditing}
           columns={formCustomization.formColumns}
-          showInternalActions={false}
+          systemInformationItems={buildMasterDataSystemInformationItems(systemInfo, department.id)}
         />
       )}
 
-      {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} internalId={department.id} /> : null}
-
       {!isCustomizing ? (
-      <RecordDetailSection title="Subsidiary Availability" count={department.departmentSubsidiaries.length}>
-        <dl className="grid gap-3 sm:grid-cols-2">
-          <RecordDetailField label="Subsidiaries">{subsidiaryDisplay || '-'}</RecordDetailField>
-          <RecordDetailField label="Include Children">{department.includeChildren ? 'Yes' : 'No'}</RecordDetailField>
-        </dl>
-      </RecordDetailSection>
+        <RecordDetailSection title="Subsidiary Availability" count={department.departmentSubsidiaries.length}>
+          <dl className="grid gap-3 sm:grid-cols-2">
+            <RecordDetailField label="Subsidiaries">{subsidiaryDisplay || '-'}</RecordDetailField>
+            <RecordDetailField label="Include Children">{department.includeChildren ? 'Yes' : 'No'}</RecordDetailField>
+          </dl>
+        </RecordDetailSection>
       ) : null}
 
       {!isCustomizing && customFields.length > 0 ? (
@@ -338,42 +378,48 @@ export default async function DepartmentDetailPage({
       ) : null}
 
       {!isCustomizing ? (
-      <RecordDetailSection title="Employees" count={department.employees.length}>
-        {department.employees.length === 0 ? (
-          <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>
-            No employees in this department
-          </p>
-        ) : (
-          <table className="min-w-full">
-            <thead>
-              <tr>
-                <RecordDetailHeaderCell>Employee Id</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
-                <RecordDetailHeaderCell>Title</RecordDetailHeaderCell>
-              </tr>
-            </thead>
-            <tbody>
-              {department.employees.map((employee) => (
-                <tr key={employee.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                  <RecordDetailCell>
-                    <Link
-                      href={`/employees/${employee.id}`}
-                      className="hover:underline"
-                      style={{ color: 'var(--accent-primary-strong)' }}
-                    >
-                      {employee.employeeId ?? 'Pending'}
-                    </Link>
-                  </RecordDetailCell>
-                  <RecordDetailCell>{employee.firstName} {employee.lastName}</RecordDetailCell>
-                  <RecordDetailCell>{employee.title ?? '-'}</RecordDetailCell>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </RecordDetailSection>
+        <RecordBottomTabsSection
+          defaultActiveKey="related-records"
+          tabs={[
+            {
+              key: 'related-records',
+              label: 'Related Records',
+              count: relatedRecordsTabs.reduce((sum, tab) => sum + tab.count, 0),
+              content: <RelatedRecordsSection embedded tabs={relatedRecordsTabs} showDisplayControl={false} />,
+            },
+            {
+              key: 'communications',
+              label: 'Communications',
+              count: 0,
+              toolbarTargetId: communicationsToolbarTargetId,
+              toolbarPlacement: 'tab-bar',
+              content: (
+                <CommunicationsSection
+                  embedded
+                  toolbarTargetId={communicationsToolbarTargetId}
+                  rows={[]}
+                  showDisplayControl={false}
+                />
+              ),
+            },
+            {
+              key: 'system-notes',
+              label: 'System Notes',
+              count: systemNotes.length,
+              toolbarTargetId: systemNotesToolbarTargetId,
+              toolbarPlacement: 'tab-bar',
+              content: (
+                <SystemNotesSection
+                  embedded
+                  toolbarTargetId={systemNotesToolbarTargetId}
+                  notes={systemNotes}
+                  showDisplayControl={false}
+                />
+              ),
+            },
+          ]}
+        />
       ) : null}
-      {!isCustomizing ? <SystemNotesSection notes={systemNotes} /> : null}
     </RecordDetailPageShell>
   )
 }

@@ -1,12 +1,16 @@
 {
   "formColumns": 4,
   "sections": [
-    "Journal Entry",
-    "Source And Approval"
+    "Document Identity",
+    "Posting & Financials",
+    "Source & Approval",
+    "System Dates"
   ],
   "sectionRows": {
-    "Journal Entry": 3,
-    "Source And Approval": 2
+    "Document Identity": 1,
+    "Posting & Financials": 2,
+    "Source & Approval": 1,
+    "System Dates": 1
   },
   "lineSettings": {
     "fontSize": "xs"
@@ -17,99 +21,99 @@
   "fields": {
     "number": {
       "visible": true,
-      "section": "Journal Entry",
+      "section": "Document Identity",
       "order": 0,
       "column": 1
     },
     "date": {
       "visible": true,
-      "section": "Journal Entry",
-      "order": 1,
+      "section": "Posting & Financials",
+      "order": 0,
       "column": 1
     },
     "description": {
       "visible": true,
-      "section": "Journal Entry",
-      "order": 2,
-      "column": 1
+      "section": "Document Identity",
+      "order": 0,
+      "column": 2
     },
     "status": {
       "visible": true,
-      "section": "Journal Entry",
+      "section": "Posting & Financials",
       "order": 0,
       "column": 2
     },
     "subsidiaryId": {
       "visible": true,
-      "section": "Journal Entry",
-      "order": 1,
-      "column": 2
-    },
-    "currencyId": {
-      "visible": true,
-      "section": "Journal Entry",
-      "order": 2,
-      "column": 2
-    },
-    "accountingPeriodId": {
-      "visible": true,
-      "section": "Journal Entry",
+      "section": "Posting & Financials",
       "order": 0,
       "column": 3
     },
+    "currencyId": {
+      "visible": true,
+      "section": "Posting & Financials",
+      "order": 0,
+      "column": 4
+    },
+    "accountingPeriodId": {
+      "visible": true,
+      "section": "Posting & Financials",
+      "order": 1,
+      "column": 1
+    },
     "journalType": {
       "visible": true,
-      "section": "Journal Entry",
-      "order": 2,
+      "section": "Document Identity",
+      "order": 0,
       "column": 3
     },
     "total": {
       "visible": true,
-      "section": "Journal Entry",
-      "order": 0,
-      "column": 4
+      "section": "Posting & Financials",
+      "order": 1,
+      "column": 2
     },
     "sourceType": {
       "visible": true,
-      "section": "Source And Approval",
+      "section": "Source & Approval",
       "order": 0,
       "column": 1
     },
     "sourceId": {
       "visible": true,
-      "section": "Source And Approval",
-      "order": 1,
-      "column": 1
+      "section": "Source & Approval",
+      "order": 0,
+      "column": 2
     },
     "userId": {
       "visible": true,
-      "section": "Source And Approval",
+      "section": "Source & Approval",
       "order": 0,
       "column": 3
     },
     "postedByEmployeeId": {
       "visible": true,
-      "section": "Source And Approval",
+      "section": "Source & Approval",
       "order": 0,
-      "column": 2
+      "column": 4
     },
     "approvedByEmployeeId": {
       "visible": true,
-      "section": "Source And Approval",
+      "section": "Source & Approval",
       "order": 1,
-      "column": 2
+      "column": 4
     },
     "createdAt": {
       "visible": true,
-      "section": "Source And Approval",
+      "section": "System Dates",
       "order": 0,
-      "column": 4
+      "column": 1
     },
     "updatedAt": {
       "visible": true,
-      "section": "Source And Approval",
-      "order": 1,
-      "column": 4
+      "section": "System Dates",
+      "order": 0,
+      "column": 2
     }
   },
   "lineColumns": {

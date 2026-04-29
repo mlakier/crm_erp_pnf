@@ -6,7 +6,7 @@ import { fmtCurrency, fmtDocumentDate, toNumericValue } from '@/lib/format'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
 import QuoteCreateSalesOrderButton from '@/components/QuoteCreateSalesOrderButton'
 import QuoteDetailCustomizeMode from '@/components/QuoteDetailCustomizeMode'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import SystemNotesSection from '@/components/SystemNotesSection'
@@ -14,6 +14,7 @@ import TransactionDetailFrame from '@/components/TransactionDetailFrame'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import CommunicationsSection from '@/components/CommunicationsSection'
 import QuoteRelatedDocuments from '@/components/QuoteRelatedDocuments'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
 import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
 import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
 import TransactionActionStack from '@/components/TransactionActionStack'
@@ -47,7 +48,7 @@ import {
 import type { TransactionStatusColorTone } from '@/lib/company-preferences-definitions'
 import type { TransactionVisualTone } from '@/lib/transaction-page-config'
 
-type QuoteHeaderField = TransactionHeaderField & { key: QuoteDetailFieldKey }
+type QuoteHeaderField = RecordHeaderField & { key: QuoteDetailFieldKey }
 
 function getToneStyle(tone: TransactionStatusColorTone) {
   if (tone === 'gray') {
@@ -565,7 +566,7 @@ export default async function QuoteDetailPage({
     currency: currencyHref,
     salesOrder: salesOrderHref,
   })
-  const allFieldDefinitions = {
+  const allFieldDefinitions: Record<string, RecordHeaderField> = {
     ...headerFieldDefinitions,
     ...referenceFieldDefinitions,
   }
@@ -579,7 +580,7 @@ export default async function QuoteDetailPage({
 
   const customizeFields = buildTransactionCustomizePreviewFields({
     fields: QUOTE_DETAIL_FIELDS,
-    fieldDefinitions: allFieldDefinitions,
+    fieldDefinitions: headerFieldDefinitions,
     previewOverrides: {
       id: quote.id,
       userId: quote.userId,
@@ -656,10 +657,18 @@ export default async function QuoteDetailPage({
         fields,
       }
     })
-    .filter((section): section is { title: string; description: string; columns: number; rows: number; fields: TransactionHeaderField[] } => Boolean(section))
+    .filter((section): section is NonNullable<typeof section> => Boolean(section))
   const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
   const quoteStatusActions = getAvailableWorkflowStatusActions(workflow, 'quote', quote.status)
   const createSalesOrderAction = getWorkflowDocumentAction(workflow, 'quote', 'sales-order', quote.status)
+  const relatedDocumentsCount =
+    (quote.opportunity ? 1 : 0) +
+    (quote.salesOrder ? 1 : 0) +
+    (quote.salesOrder?.fulfillments.length ?? 0) +
+    (quote.salesOrder?.invoices.length ?? 0) +
+    (quote.salesOrder?.invoices.flatMap((invoice) => invoice.cashReceipts).length ?? 0)
+  const communicationsToolbarTargetId = 'quote-communications-toolbar'
+  const systemNotesToolbarTargetId = 'quote-system-notes-toolbar'
 
   return (
     <RecordDetailPageShell
@@ -783,7 +792,7 @@ export default async function QuoteDetailPage({
           ) : (
             <div className="space-y-6">
               {referenceSections.length > 0 ? (
-                <TransactionHeaderSections
+                <RecordHeaderDetails
                   editing={false}
                   sections={referenceSections.map((section) => ({
                     title: section.title,
@@ -797,7 +806,7 @@ export default async function QuoteDetailPage({
                   showSubsections={false}
                 />
               ) : null}
-              <TransactionHeaderSections
+              <RecordHeaderDetails
                 purchaseOrderId={quote.id}
                 editing={isEditing}
                 sections={headerSections}
@@ -846,7 +855,17 @@ export default async function QuoteDetailPage({
           )
         }
         relatedDocuments={isCustomizing ? null : (
-          <QuoteRelatedDocuments
+          <RecordBottomTabsSection
+            defaultActiveKey="related-documents"
+            tabs={[
+              {
+                key: 'related-documents',
+                label: 'Related Documents',
+                count: relatedDocumentsCount,
+                content: (
+                  <QuoteRelatedDocuments
+                    embedded
+                    showDisplayControl={false}
             opportunities={
               quote.opportunity
                 ? [
@@ -897,36 +916,59 @@ export default async function QuoteDetailPage({
                 reference: receipt.reference,
               })),
             )}
-          />
-        )}
-        communications={isCustomizing ? null : (
-          <CommunicationsSection
-            rows={communications}
-            compose={buildTransactionCommunicationComposePayload({
-              recordId: quote.id,
-              userId: quote.userId,
-              number: quote.number,
-              counterpartyName: quote.customer.name,
-              counterpartyEmail: quote.customer.email ?? null,
-              fromEmail: quote.user?.email ?? null,
-              status: formatQuoteStatus(quote.status),
-              total: fmtCurrency(quote.total, undefined, moneySettings),
-              lineItems: lineRows.map((row, index) => ({
-                line: index + 1,
-                itemId: row.itemId ?? '-',
-                description: row.description,
-                quantity: row.quantity,
-                receivedQuantity: 0,
-                openQuantity: row.quantity,
-                billedQuantity: 0,
-                unitPrice: row.unitPrice,
-                lineTotal: row.lineTotal,
-              })),
-            })}
+                  />
+                ),
+              },
+              {
+                key: 'communications',
+                label: 'Communications',
+                count: communications.length,
+                toolbarTargetId: communicationsToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <CommunicationsSection
+                    embedded
+                    toolbarTargetId={communicationsToolbarTargetId}
+                    showDisplayControl={false}
+                    rows={communications}
+                    compose={buildTransactionCommunicationComposePayload({
+                      recordId: quote.id,
+                      userId: quote.userId,
+                      number: quote.number,
+                      counterpartyName: quote.customer.name,
+                      counterpartyEmail: quote.customer.email ?? null,
+                      fromEmail: quote.user?.email ?? null,
+                      status: formatQuoteStatus(quote.status),
+                      total: fmtCurrency(quote.total, undefined, moneySettings),
+                      lineItems: lineRows.map((row, index) => ({
+                        line: index + 1,
+                        itemId: row.itemId ?? '-',
+                        description: row.description,
+                        quantity: row.quantity,
+                        receivedQuantity: 0,
+                        openQuantity: row.quantity,
+                        billedQuantity: 0,
+                        unitPrice: row.unitPrice,
+                        lineTotal: row.lineTotal,
+                      })),
+                    })}
+                  />
+                ),
+              },
+              {
+                key: 'system-notes',
+                label: 'System Notes',
+                count: systemNotes.length,
+                toolbarTargetId: systemNotesToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: <SystemNotesSection embedded toolbarTargetId={systemNotesToolbarTargetId} showDisplayControl={false} notes={systemNotes} />,
+              },
+            ]}
           />
         )}
         supplementarySections={null}
-        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
+        communications={null}
+        systemNotes={null}
       />
     </RecordDetailPageShell>
   )

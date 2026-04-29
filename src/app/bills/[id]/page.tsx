@@ -6,7 +6,7 @@ import { fmtCurrency, fmtDocumentDate } from '@/lib/format'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import BillDetailCustomizeMode from '@/components/BillDetailCustomizeMode'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
@@ -17,10 +17,12 @@ import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
 import TransactionActionStack from '@/components/TransactionActionStack'
 import DeleteButton from '@/components/DeleteButton'
 import BillRelatedDocuments from '@/components/BillRelatedDocuments'
+import BillGlImpactSection from '@/components/BillGlImpactSection'
 import { parseCommunicationSummary, parseFieldChangeSummary } from '@/lib/activity'
 import { buildTransactionCommunicationComposePayload } from '@/lib/transaction-communications'
 import {
   buildConfiguredTransactionSections,
+  buildTransactionGlImpactRows,
   buildTransactionCustomizePreviewFields,
   buildTransactionExportHeaderFields,
   getOrderedVisibleTransactionLineColumns,
@@ -39,7 +41,7 @@ import { loadBillDetailCustomization } from '@/lib/bill-detail-customization-sto
 
 type BillHeaderField = {
   key: BillDetailFieldKey
-} & TransactionHeaderField
+} & RecordHeaderField
 
 const BILL_STATUS_OPTIONS = [
   { value: 'received', label: 'Received' },
@@ -123,6 +125,30 @@ export default async function BillDetailPage({
   ])
 
   if (!bill) notFound()
+
+  const glImpactEntries = await prisma.journalEntry.findMany({
+    where: { sourceId: bill.id },
+    include: {
+      lineItems: {
+        include: {
+          account: {
+            select: { accountId: true, name: true },
+          },
+        },
+      },
+    },
+    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+  })
+  const glSourceNumberByKey = new Map<string, string>()
+  for (const entry of glImpactEntries) {
+    glSourceNumberByKey.set(`${entry.sourceType ?? ''}:${entry.sourceId ?? ''}`, bill.number)
+  }
+  const glImpactRows = buildTransactionGlImpactRows({
+    entries: glImpactEntries,
+    sourceNumberByKey: glSourceNumberByKey,
+    formatDate: (date) => fmtDocumentDate(date, moneySettings),
+    toNumericValue: (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback,
+  })
 
   const linkedPurchaseOrder = bill.purchaseOrderId
     ? await prisma.purchaseOrder.findUnique({
@@ -426,10 +452,10 @@ export default async function BillDetailPage({
       currency: bill.currency ? `/currencies/${bill.currency.id}` : null,
     },
   )
-  const allFieldDefinitions = { ...headerFieldDefinitions, ...referenceFieldDefinitions }
+  const allFieldDefinitions: Record<string, RecordHeaderField> = { ...headerFieldDefinitions, ...referenceFieldDefinitions }
   const customizeFields = buildTransactionCustomizePreviewFields({
     fields: BILL_DETAIL_FIELDS,
-    fieldDefinitions: allFieldDefinitions,
+    fieldDefinitions: headerFieldDefinitions,
     previewOverrides: {
       userId: bill.user
         ? `${bill.user.userId ?? '-'}${bill.user.name ? ` - ${bill.user.name}` : ''}`
@@ -478,10 +504,7 @@ export default async function BillDetailPage({
         fields,
       }
     })
-    .filter(
-      (section): section is { title: string; description: string; columns: number; rows: number; fields: TransactionHeaderField[] } =>
-        Boolean(section),
-    )
+    .filter((section): section is NonNullable<typeof section> => Boolean(section))
   const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
 
   const systemNotes = activities
@@ -615,7 +638,7 @@ export default async function BillDetailPage({
           ) : (
             <div className="space-y-6">
               {referenceSections.length > 0 ? (
-                <TransactionHeaderSections
+                <RecordHeaderDetails
                   editing={false}
                   sections={referenceSections.map((section) => ({
                     title: section.title,
@@ -629,7 +652,7 @@ export default async function BillDetailPage({
                   showSubsections={false}
                 />
               ) : null}
-              <TransactionHeaderSections
+              <RecordHeaderDetails
                 purchaseOrderId={bill.id}
                 editing={isEditing}
                 updateUrl={`/api/bills?id=${encodeURIComponent(bill.id)}`}
@@ -671,6 +694,8 @@ export default async function BillDetailPage({
         }
         relatedDocuments={isCustomizing ? null : (
           <BillRelatedDocuments
+            embedded
+            showDisplayControl={false}
             purchaseRequisitions={linkedPurchaseOrder?.requisition ? [{
               id: linkedPurchaseOrder.requisition.id,
               number: linkedPurchaseOrder.requisition.number,
@@ -704,8 +729,25 @@ export default async function BillDetailPage({
             moneySettings={moneySettings}
           />
         )}
+        relatedDocumentsCount={
+          (linkedPurchaseOrder?.requisition ? 1 : 0) +
+          (bill.purchaseOrder ? 1 : 0) +
+          (linkedPurchaseOrder?.receipts.length ?? 0) +
+          bill.billPayments.length
+        }
+        supplementarySections={
+          isCustomizing ? null : (
+            <BillGlImpactSection
+              rows={glImpactRows}
+              settings={customization.glImpactSettings}
+              columnCustomization={customization.glImpactColumns}
+            />
+          )
+        }
         communications={isCustomizing ? null : (
           <CommunicationsSection
+            embedded
+            showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
               recordId: bill.id,
@@ -732,7 +774,9 @@ export default async function BillDetailPage({
             })}
           />
         )}
-        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
+        communicationsCount={communications.length}
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        systemNotesCount={systemNotes.length}
       />
     </RecordDetailPageShell>
   )

@@ -81,7 +81,8 @@ export default async function ActivityPage({
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <form method="get" className="border-b px-6 py-4" style={{ borderColor: 'var(--border-muted)' }}>
           <div className="grid gap-3 sm:grid-cols-[auto_auto_auto_auto]">
-            <select name="entity" defaultValue={entity} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+            <input name="entity" list="activity-entity-options" defaultValue={entity} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+            <datalist id="activity-entity-options">
               <option value="all">All entities</option>
               <option value="customer">Customers</option>
               <option value="vendor">Vendors</option>
@@ -91,13 +92,14 @@ export default async function ActivityPage({
               <option value="sales-order">Sales Orders</option>
               <option value="invoice">Invoices</option>
               <option value="purchase-order">Purchase Orders</option>
-            </select>
-            <select name="action" defaultValue={action} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+            </datalist>
+            <input name="action" list="activity-action-options" defaultValue={action} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+            <datalist id="activity-action-options">
               <option value="all">All actions</option>
               <option value="create">Create</option>
               <option value="update">Update</option>
               <option value="delete">Delete</option>
-            </select>
+            </datalist>
             <input type="hidden" name="page" value="1" />
             <ExportButton tableId="activity-list" fileName="activity" />
             <ColumnSelector tableId="activity-list" columns={ACTIVITY_COLUMNS} />

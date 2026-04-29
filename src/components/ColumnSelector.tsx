@@ -35,9 +35,11 @@ function loadOrder(raw: string | null): string[] {
 export default function ColumnSelector({
   tableId,
   columns,
+  enableReordering = true,
 }: {
   tableId: string
   columns: ColumnOption[]
+  enableReordering?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [hiddenColumns, setHiddenColumns] = useState<string[]>([])
@@ -283,6 +285,8 @@ export default function ColumnSelector({
   }, [columns, columnOrder, lockedColumnIds])
 
   useEffect(() => {
+    if (!enableReordering) return
+
     const tableContainer = document.querySelector(`[data-column-selector-table="${tableId}"]`)
     if (!tableContainer) return
     const tableElement = tableContainer
@@ -298,6 +302,16 @@ export default function ColumnSelector({
       const cells = Array.from(row.children) as HTMLElement[]
       if (cells.length <= 1) return
       if (cells[0]?.getAttribute('colspan')) return
+
+      const currentOrder = cells.map((cell) => cell.getAttribute('data-column') ?? '')
+      const nextOrder = fullOrder.filter((columnId) => currentOrder.includes(columnId))
+      const remainingOrder = currentOrder.filter((columnId) => columnId && !nextOrder.includes(columnId))
+      const desiredOrder = [...nextOrder, ...remainingOrder]
+      const orderChanged =
+        desiredOrder.length === currentOrder.length
+        && desiredOrder.some((columnId, index) => columnId !== currentOrder[index])
+
+      if (!orderChanged) return
 
       const cellsByCol = new Map<string, HTMLElement>()
       for (const cell of cells) {
@@ -331,10 +345,24 @@ export default function ColumnSelector({
 
     reorderAll()
 
-    const observer = new MutationObserver(reorderAll)
+    let frameId: number | null = null
+    const scheduleReorder = () => {
+      if (frameId !== null) return
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null
+        reorderAll()
+      })
+    }
+
+    const observer = new MutationObserver(scheduleReorder)
     observer.observe(tableElement, { childList: true, subtree: true })
-    return () => observer.disconnect()
-  }, [tableId, columns, lockedColumnIds, sortableColumns])
+    return () => {
+      observer.disconnect()
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId)
+      }
+    }
+  }, [enableReordering, tableId, columns, lockedColumnIds, sortableColumns])
 
   const styleMarkup = useMemo(() => {
     if (hiddenColumns.length === 0) return ''
@@ -620,19 +648,21 @@ export default function ColumnSelector({
                   return (
                     <div
                       key={column.id}
-                      draggable
-                      onDragStart={() => handleDragStart(index)}
-                      onDragOver={(event) => handleDragOver(event, index)}
-                      onDrop={() => handleDrop(index)}
-                      onDragEnd={handleDragEnd}
+                      draggable={enableReordering}
+                      onDragStart={enableReordering ? () => handleDragStart(index) : undefined}
+                      onDragOver={enableReordering ? (event) => handleDragOver(event, index) : undefined}
+                      onDrop={enableReordering ? () => handleDrop(index) : undefined}
+                      onDragEnd={enableReordering ? handleDragEnd : undefined}
                       className="flex items-center gap-2 rounded-md border px-3 py-2 transition-colors"
                       style={{
                         borderColor: isDragOver ? 'var(--accent-primary-strong)' : 'var(--border-muted)',
                         opacity: isDragging ? 0.5 : 1,
-                        cursor: 'grab',
+                        cursor: enableReordering ? 'grab' : 'default',
                       }}
                     >
-                      <span className="text-xs select-none" style={{ color: 'var(--text-muted)' }} aria-hidden>::</span>
+                      <span className="text-xs select-none" style={{ color: 'var(--text-muted)' }} aria-hidden>
+                        {enableReordering ? '::' : ''}
+                      </span>
                       <label className="flex flex-1 cursor-pointer items-center justify-between">
                         <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                           {column.label}

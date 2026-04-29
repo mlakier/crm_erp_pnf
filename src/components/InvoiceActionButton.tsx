@@ -39,13 +39,13 @@ export default function InvoiceActionButton({
       const body = await response.json()
       if (!response.ok) {
         setError(body?.error || 'Unable to update invoice')
-        setSaving(false)
         return
       }
 
       router.refresh()
     } catch {
       setError('Unable to update invoice')
+    } finally {
       setSaving(false)
     }
   }

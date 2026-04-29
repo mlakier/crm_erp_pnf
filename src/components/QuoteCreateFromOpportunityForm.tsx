@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import SearchableSelect from '@/components/SearchableSelect'
 
 type OpportunityOption = {
   id: string
@@ -72,20 +73,17 @@ export default function QuoteCreateFromOpportunityForm({
 
       <div>
         <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Opportunity</label>
-        <select
-          value={opportunityId}
-          onChange={(event) => setOpportunityId(event.target.value)}
-          required
-          className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-          style={{ borderColor: 'var(--border-muted)' }}
-        >
-          {opportunities.length === 0 ? <option value="">No eligible opportunities</option> : null}
-          {opportunities.map((opportunity) => (
-            <option key={opportunity.id} value={opportunity.id}>
-              {opportunity.label}
-            </option>
-          ))}
-        </select>
+        <div className="mt-1">
+          <SearchableSelect
+            selectedValue={opportunityId}
+            options={opportunities.map((opportunity) => ({
+              value: opportunity.id,
+              label: opportunity.label,
+            }))}
+            placeholder={opportunities.length === 0 ? 'No eligible opportunities' : 'Select opportunity'}
+            onSelect={setOpportunityId}
+          />
+        </div>
       </div>
 
       {error ? <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p> : null}

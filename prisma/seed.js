@@ -68,8 +68,10 @@ async function main() {
 
   for (const currency of currencies) {
     await prisma.currency.upsert({
-      where: { currencyId: currency.code },
+      where: { code: currency.code },
       update: {
+        currencyId: currency.code,
+        code: currency.code,
         name: currencyDisplayName(currency.code),
         symbol: currency.symbol,
         decimals: currency.decimals,
@@ -78,6 +80,7 @@ async function main() {
       },
       create: {
         currencyId: currency.code,
+        code: currency.code,
         name: currencyDisplayName(currency.code),
         symbol: currency.symbol,
         decimals: currency.decimals,
@@ -197,6 +200,7 @@ async function main() {
     await prisma.chartOfAccounts.upsert({
       where: { accountId: account.accountId },
       update: {
+        accountNumber: account.accountId,
         name: account.name,
         accountType: account.accountType,
         category: account.category,
@@ -220,6 +224,7 @@ async function main() {
       },
       create: {
         accountId: account.accountId,
+        accountNumber: account.accountId,
         name: account.name,
         accountType: account.accountType,
         category: account.category,
@@ -319,7 +324,6 @@ async function main() {
         name: department.name,
         description: department.description,
         division: department.division,
-        subsidiaryId: subsidiaryByCode.get(department.subsidiaryCode)?.id ?? null,
         active: false,
       },
       create: {
@@ -327,7 +331,6 @@ async function main() {
         name: department.name,
         description: department.description,
         division: department.division,
-        subsidiaryId: subsidiaryByCode.get(department.subsidiaryCode)?.id ?? null,
         active: false,
       },
     })
@@ -337,6 +340,26 @@ async function main() {
     where: { departmentId: { in: departmentSeeds.map((department) => department.departmentId) } },
   })
   const departmentByCode = new Map(departmentRecords.map((department) => [department.departmentId, department]))
+
+  for (const department of departmentSeeds) {
+    const departmentRecord = departmentByCode.get(department.departmentId)
+    const subsidiaryRecord = subsidiaryByCode.get(department.subsidiaryCode)
+    if (!departmentRecord || !subsidiaryRecord) continue
+
+    await prisma.departmentSubsidiary.upsert({
+      where: {
+        departmentId_subsidiaryId: {
+          departmentId: departmentRecord.id,
+          subsidiaryId: subsidiaryRecord.id,
+        },
+      },
+      update: {},
+      create: {
+        departmentId: departmentRecord.id,
+        subsidiaryId: subsidiaryRecord.id,
+      },
+    })
+  }
 
   const employeeSeeds = [
     {
@@ -663,9 +686,7 @@ async function main() {
       subsidiaryCode: 'SUB-001',
       currencyCode: 'USD',
       incomeAccountNumber: '4030',
-      deferredRevenueAccountNumber: '2200',
       cogsExpenseAccountNumber: '5010',
-      deferredCostAccountNumber: '1220',
       directRevenuePosting: true,
     },
     {
@@ -689,7 +710,7 @@ async function main() {
       currencyCode: 'EUR',
       incomeAccountNumber: '4020',
       deferredRevenueAccountNumber: '2200',
-      cogsExpenseAccountNumber: '5010',
+      cogsExpenseAccountNumber: '5020',
       deferredCostAccountNumber: '1220',
       directRevenuePosting: false,
     },
@@ -715,14 +736,14 @@ async function main() {
       incomeAccountNumber: '4000',
       inventoryAccountNumber: '1210',
       cogsExpenseAccountNumber: '5000',
-      directRevenuePosting: false,
+      directRevenuePosting: true,
     },
     {
       itemId: 'ITM-0004',
       sku: 'SKU-0004',
       name: 'Support Retainer',
       description: 'Monthly support retainer',
-      itemType: 'expense',
+      itemType: 'service',
       revenueStream: 'support',
       recognitionMethod: 'over_time',
       recognitionTrigger: 'ratable',
@@ -736,7 +757,10 @@ async function main() {
       standardCost: 90,
       subsidiaryCode: 'SUB-001',
       currencyCode: 'USD',
-      cogsExpenseAccountNumber: '6800',
+      incomeAccountNumber: '4010',
+      deferredRevenueAccountNumber: '2200',
+      cogsExpenseAccountNumber: '5020',
+      deferredCostAccountNumber: '1220',
       directRevenuePosting: false,
     },
   ]

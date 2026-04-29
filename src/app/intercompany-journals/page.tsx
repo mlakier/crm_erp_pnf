@@ -111,7 +111,10 @@ export default async function IntercompanyJournalsPage({
           <input type="hidden" name="page" value="1" /><input type="hidden" name="status" value={statusFilter} />
           <div className="flex gap-3 items-center flex-nowrap">
             <input type="text" name="q" defaultValue={params.q ?? ''} placeholder="Search journal id, description, status" className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
-            <select name="sort" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+            <input name="sort" list="intercompany-journal-sort-options" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+            <datalist id="intercompany-journal-sort-options">
+              {sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </datalist>
             <ExportButton tableId="intercompany-journals-list" fileName="intercompany-journals" />
             <ColumnSelector tableId="intercompany-journals-list" columns={JE_COLUMNS} />
           </div>

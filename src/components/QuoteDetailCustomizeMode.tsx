@@ -7,7 +7,6 @@ import {
   QUOTE_REFERENCE_SOURCES,
   QUOTE_STAT_CARDS,
   type QuoteDetailCustomizationConfig,
-  type QuoteDetailFieldKey,
   type QuoteLineColumnKey,
 } from '@/lib/quotes-detail-customization'
 
@@ -24,7 +23,7 @@ const QUOTE_LINE_SETTING_AVAILABILITY = Object.fromEntries(
 ) as Record<QuoteLineColumnKey, string[]>
 
 type CustomizeField = {
-  id: QuoteDetailFieldKey
+  id: string
   label: string
   fieldType: string
   source?: string

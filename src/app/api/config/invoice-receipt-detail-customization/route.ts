@@ -4,8 +4,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   defaultInvoiceReceiptDetailCustomization,
   INVOICE_RECEIPT_DETAIL_FIELDS,
+  INVOICE_RECEIPT_STAT_CARDS,
   type InvoiceReceiptDetailCustomizationConfig,
 } from '@/lib/invoice-receipt-detail-customization'
+import { TRANSACTION_GL_IMPACT_COLUMNS } from '@/lib/transaction-gl-impact'
 import {
   loadInvoiceReceiptDetailCustomization,
   saveInvoiceReceiptDetailCustomization,
@@ -14,7 +16,7 @@ import {
 export async function GET() {
   try {
     const config = await loadInvoiceReceiptDetailCustomization()
-    return NextResponse.json({ config, fields: INVOICE_RECEIPT_DETAIL_FIELDS })
+    return NextResponse.json({ config, fields: INVOICE_RECEIPT_DETAIL_FIELDS, glImpactColumns: TRANSACTION_GL_IMPACT_COLUMNS, statCards: INVOICE_RECEIPT_STAT_CARDS })
   } catch {
     return NextResponse.json({ error: 'Failed to load invoice-receipts detail customization' }, { status: 500 })
   }
@@ -23,9 +25,26 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const nextConfig = ((body as { config?: unknown }).config ?? defaultInvoiceReceiptDetailCustomization()) as InvoiceReceiptDetailCustomizationConfig
+    const input = ((body as { config?: unknown }).config ?? defaultInvoiceReceiptDetailCustomization()) as Record<string, unknown>
+    const defaults = defaultInvoiceReceiptDetailCustomization()
+    const nextConfig = {
+      ...defaults,
+      ...(input as Partial<InvoiceReceiptDetailCustomizationConfig>),
+      glImpactSettings:
+        input.glImpactSettings && typeof input.glImpactSettings === 'object'
+          ? (input.glImpactSettings as InvoiceReceiptDetailCustomizationConfig['glImpactSettings'])
+          : input.secondarySettings && typeof input.secondarySettings === 'object'
+            ? (input.secondarySettings as InvoiceReceiptDetailCustomizationConfig['glImpactSettings'])
+            : defaults.glImpactSettings,
+      glImpactColumns:
+        input.glImpactColumns && typeof input.glImpactColumns === 'object'
+          ? (input.glImpactColumns as InvoiceReceiptDetailCustomizationConfig['glImpactColumns'])
+          : input.secondaryColumns && typeof input.secondaryColumns === 'object'
+            ? (input.secondaryColumns as InvoiceReceiptDetailCustomizationConfig['glImpactColumns'])
+            : defaults.glImpactColumns,
+    } as InvoiceReceiptDetailCustomizationConfig
     const saved = await saveInvoiceReceiptDetailCustomization(nextConfig)
-    return NextResponse.json({ config: saved, fields: INVOICE_RECEIPT_DETAIL_FIELDS })
+    return NextResponse.json({ config: saved, fields: INVOICE_RECEIPT_DETAIL_FIELDS, glImpactColumns: TRANSACTION_GL_IMPACT_COLUMNS, statCards: INVOICE_RECEIPT_STAT_CARDS })
   } catch {
     return NextResponse.json({ error: 'Failed to save invoice-receipts detail customization' }, { status: 500 })
   }

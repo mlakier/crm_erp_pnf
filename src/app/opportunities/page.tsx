@@ -196,10 +196,11 @@ export default async function OpportunitiesPage({
                   style={{ borderColor: 'var(--border-muted)' }}
                 />
                 <input type="hidden" name="stage" value={stageFilter} />
-                <select name="view" defaultValue={view} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }}>
+                <input name="view" list="opportunity-view-options" defaultValue={view} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+                <datalist id="opportunity-view-options">
                   <option value="table">Table view</option>
                   <option value="board">Kanban view</option>
-                </select>
+                </datalist>
                 <input type="hidden" name="page" value="1" />
                 <div className="flex items-center gap-2">
                   <ExportButton

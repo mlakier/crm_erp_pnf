@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import SearchableSelect, { type SearchableSelectOption } from '@/components/SearchableSelect'
 import type { TransactionStatusColorTone } from '@/lib/company-preferences-definitions'
 import { parseMoneyValue } from '@/lib/money'
 import type {
@@ -119,6 +120,36 @@ function SearchableOptionInput({
           ))}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function InlineSearchableSelect({
+  value,
+  options,
+  placeholder,
+  disabled = false,
+  textClassName = 'text-sm',
+  onChange,
+}: {
+  value: string
+  options: SearchableSelectOption[]
+  placeholder: string
+  disabled?: boolean
+  textClassName?: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <div className="w-full">
+      <SearchableSelect
+        selectedValue={value}
+        options={options}
+        placeholder={placeholder}
+        searchPlaceholder={placeholder}
+        disabled={disabled}
+        textClassName={textClassName}
+        onSelect={onChange}
+      />
     </div>
   )
 }
@@ -337,6 +368,8 @@ export default function OtcWorkflowConfig() {
     return <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading...</p>
   }
 
+  const workflowConfig = config
+
   function replaceConfig(next: OtcWorkflowConfig) {
     setConfig(next)
   }
@@ -381,7 +414,7 @@ export default function OtcWorkflowConfig() {
   }
 
   function setAllTransitionsCollapsed(stepId: string, collapsed: boolean) {
-    const transitionIds = (config.transitions ?? [])
+    const transitionIds = workflowConfig.transitions
       .filter((transition) => transition.step === stepId)
       .map((transition) => transition.id)
     setCollapsedTransitions((current) => {
@@ -401,15 +434,15 @@ export default function OtcWorkflowConfig() {
 
   function updateStep(id: string, patch: Partial<OtcStep>) {
     replaceConfig({
-      ...config,
-      steps: config.steps.map((step) => (step.id === id ? { ...step, ...patch } : step)),
+      ...workflowConfig,
+      steps: workflowConfig.steps.map((step) => (step.id === id ? { ...step, ...patch } : step)),
     })
   }
 
   function updateTransition(id: string, patch: Partial<OtcTransition>) {
     replaceConfig({
-      ...config,
-      transitions: config.transitions.map((transition) => (
+      ...workflowConfig,
+      transitions: workflowConfig.transitions.map((transition) => (
         transition.id === id ? { ...transition, ...patch } : transition
       )),
     })
@@ -421,8 +454,8 @@ export default function OtcWorkflowConfig() {
     patch: Partial<NonNullable<OtcTransition['conditions']>[number]>,
   ) {
     replaceConfig({
-      ...config,
-      transitions: config.transitions.map((transition) => {
+      ...workflowConfig,
+      transitions: workflowConfig.transitions.map((transition) => {
         if (transition.id !== transitionId) return transition
         const conditions = transition.conditions ?? []
         return {
@@ -437,8 +470,8 @@ export default function OtcWorkflowConfig() {
 
   function addTransitionCondition(transitionId: string) {
     replaceConfig({
-      ...config,
-      transitions: config.transitions.map((transition) => (
+      ...workflowConfig,
+      transitions: workflowConfig.transitions.map((transition) => (
         transition.id === transitionId
           ? {
               ...transition,
@@ -454,8 +487,8 @@ export default function OtcWorkflowConfig() {
 
   function removeTransitionCondition(transitionId: string, conditionIndex: number) {
     replaceConfig({
-      ...config,
-      transitions: config.transitions.map((transition) => (
+      ...workflowConfig,
+      transitions: workflowConfig.transitions.map((transition) => (
         transition.id === transitionId
           ? {
               ...transition,
@@ -470,9 +503,9 @@ export default function OtcWorkflowConfig() {
     const options = statusOptions[stepToListKey[stepId]] ?? []
     const first = options[0]?.value ?? ''
     replaceConfig({
-      ...config,
+      ...workflowConfig,
       transitions: [
-        ...config.transitions,
+        ...workflowConfig.transitions,
         {
           id: createClientId(`${stepId}-transition`),
           label: 'Custom Transition',
@@ -504,15 +537,15 @@ export default function OtcWorkflowConfig() {
 
   function removeTransition(id: string) {
     replaceConfig({
-      ...config,
-      transitions: config.transitions.filter((transition) => transition.id !== id),
+      ...workflowConfig,
+      transitions: workflowConfig.transitions.filter((transition) => transition.id !== id),
     })
   }
 
   function updateTier(approvalId: string, tierIndex: number, patch: Partial<ApprovalTier>) {
     replaceConfig({
-      ...config,
-      approvals: config.approvals.map((approval) => {
+      ...workflowConfig,
+      approvals: workflowConfig.approvals.map((approval) => {
         if (approval.id !== approvalId) return approval
         return {
           ...approval,
@@ -524,8 +557,8 @@ export default function OtcWorkflowConfig() {
 
   function addTier(approvalId: string) {
     replaceConfig({
-      ...config,
-      approvals: config.approvals.map((approval) => {
+      ...workflowConfig,
+      approvals: workflowConfig.approvals.map((approval) => {
         if (approval.id !== approvalId) return approval
         const maxLevel = approval.tiers.length > 0 ? Math.max(...approval.tiers.map((tier) => tier.level)) : 0
         return {
@@ -541,8 +574,8 @@ export default function OtcWorkflowConfig() {
 
   function removeTier(approvalId: string, tierIndex: number) {
     replaceConfig({
-      ...config,
-      approvals: config.approvals.map((approval) => {
+      ...workflowConfig,
+      approvals: workflowConfig.approvals.map((approval) => {
         if (approval.id !== approvalId) return approval
         return {
           ...approval,
@@ -553,12 +586,12 @@ export default function OtcWorkflowConfig() {
   }
 
   function addApproval(stepId: string) {
-    if (config.approvals.some((approval) => approval.step === stepId)) return
+    if (workflowConfig.approvals.some((approval) => approval.step === stepId)) return
     const stepLabel = stepLabelById[stepId] ?? stepId
     replaceConfig({
-      ...config,
+      ...workflowConfig,
       approvals: [
-        ...config.approvals,
+        ...workflowConfig.approvals,
         {
           id: createClientId(`${stepId}-approval`),
           label: `${stepLabel} Approval`,
@@ -582,20 +615,20 @@ export default function OtcWorkflowConfig() {
     if (!savedConfig) return
     const baseline = savedConfig
     replaceConfig({
-      ...config,
+      ...workflowConfig,
       transitions: [
-        ...config.transitions.filter((transition) => transition.step !== stepId),
+        ...workflowConfig.transitions.filter((transition) => transition.step !== stepId),
         ...baseline.transitions.filter((transition) => transition.step === stepId),
       ],
       approvals: [
-        ...config.approvals.filter((approval) => approval.step !== stepId),
+        ...workflowConfig.approvals.filter((approval) => approval.step !== stepId),
         ...baseline.approvals.filter((approval) => approval.step === stepId),
       ],
     })
     setCollapsedTransitions((current) => {
       const next = { ...current }
       for (const key of Object.keys(next)) {
-        if ((baseline.transitions.some((transition) => transition.id === key && transition.step === stepId)) || (config.transitions.some((transition) => transition.id === key && transition.step === stepId))) {
+        if ((baseline.transitions.some((transition) => transition.id === key && transition.step === stepId)) || (workflowConfig.transitions.some((transition) => transition.id === key && transition.step === stepId))) {
           delete next[key]
         }
       }
@@ -604,10 +637,10 @@ export default function OtcWorkflowConfig() {
   }
 
   function isStepDirty(stepId: string) {
-    if (!config || !savedConfig) return false
+    if (!savedConfig) return false
     const current = {
-      transitions: config.transitions.filter((transition) => transition.step === stepId),
-      approvals: config.approvals.filter((approval) => approval.step === stepId),
+      transitions: workflowConfig.transitions.filter((transition) => transition.step === stepId),
+      approvals: workflowConfig.approvals.filter((approval) => approval.step === stepId),
     }
     const saved = {
       transitions: savedConfig.transitions.filter((transition) => transition.step === stepId),
@@ -619,13 +652,13 @@ export default function OtcWorkflowConfig() {
   function cancelStepEditing(stepId: string) {
     if (!savedConfig) return
     setConfig({
-      ...config,
+      ...workflowConfig,
       transitions: [
-        ...config.transitions.filter((transition) => transition.step !== stepId),
+        ...workflowConfig.transitions.filter((transition) => transition.step !== stepId),
         ...savedConfig.transitions.filter((transition) => transition.step === stepId),
       ],
       approvals: [
-        ...config.approvals.filter((approval) => approval.step !== stepId),
+        ...workflowConfig.approvals.filter((approval) => approval.step !== stepId),
         ...savedConfig.approvals.filter((approval) => approval.step === stepId),
       ],
     })
@@ -684,11 +717,11 @@ export default function OtcWorkflowConfig() {
         </div>
 
         <div className="rounded-lg border" style={{ borderColor: 'var(--border-muted)' }}>
-          {config.steps.map((step, index) => (
+          {workflowConfig.steps.map((step, index) => (
             <div
               key={step.id}
               className="flex items-center justify-between px-4 py-3"
-              style={index < config.steps.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}
+              style={index < workflowConfig.steps.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}
             >
               <div>
                 <span className="text-sm font-medium text-white">{step.label}</span>
@@ -730,7 +763,7 @@ export default function OtcWorkflowConfig() {
         </div>
 
         <div className="space-y-4">
-          {config.steps
+          {workflowConfig.steps
             .filter((step) => step.id === visibleStepId)
             .map((step) => {
             const stepStatusOptions = statusOptions[stepToListKey[step.id]] ?? []
@@ -802,8 +835,8 @@ export default function OtcWorkflowConfig() {
                           <button
                             type="button"
                             onClick={() => {
-                              if (!config || !stepDirty) return
-                              void save(config)
+                              if (!stepDirty) return
+                              void save(workflowConfig)
                             }}
                             disabled={!stepDirty || saving}
                             className="rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
@@ -909,33 +942,31 @@ export default function OtcWorkflowConfig() {
                           <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                             From Status
                           </label>
-                          <select
+                          <InlineSearchableSelect
                             value={transition.fromStatus}
-                            onChange={(event) => updateTransition(transition.id, { fromStatus: event.target.value })}
-                            className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                            style={{ borderColor: 'var(--border-muted)' }}
-                          >
-                            <option value="">-- select --</option>
-                            {stepStatusOptions.map((option) => (
-                              <option key={option.id} value={option.value}>{option.value}</option>
-                            ))}
-                          </select>
+                            onChange={(value) => updateTransition(transition.id, { fromStatus: value })}
+                            options={[
+                              { value: '', label: '-- select --' },
+                              ...stepStatusOptions.map((option) => ({ value: option.value, label: option.value })),
+                            ]}
+                            placeholder="Select from status"
+                            disabled={stepControlsDisabled}
+                          />
                         </div>
                         <div>
                           <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                             To Status
                           </label>
-                          <select
+                          <InlineSearchableSelect
                             value={transition.toStatus}
-                            onChange={(event) => updateTransition(transition.id, { toStatus: event.target.value })}
-                            className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                            style={{ borderColor: 'var(--border-muted)' }}
-                          >
-                            <option value="">-- select --</option>
-                            {stepStatusOptions.map((option) => (
-                              <option key={option.id} value={option.value}>{option.value}</option>
-                            ))}
-                          </select>
+                            onChange={(value) => updateTransition(transition.id, { toStatus: value })}
+                            options={[
+                              { value: '', label: '-- select --' },
+                              ...stepStatusOptions.map((option) => ({ value: option.value, label: option.value })),
+                            ]}
+                            placeholder="Select to status"
+                            disabled={stepControlsDisabled}
+                          />
                         </div>
                       </div>
                       <div className={`grid gap-3 ${transition.triggerType === 'approval_workflow' ? 'sm:grid-cols-1' : transition.actionType === 'send_for_signature' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
@@ -943,19 +974,19 @@ export default function OtcWorkflowConfig() {
                           <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                             Trigger Type
                           </label>
-                          <select
+                          <InlineSearchableSelect
                             value={transition.triggerType}
-                            onChange={(event) =>
+                            onChange={(value) =>
                               updateTransition(transition.id, {
-                                triggerType: event.target.value as OtcTransition['triggerType'],
-                                ...(event.target.value === 'approval_workflow'
+                                triggerType: value as OtcTransition['triggerType'],
+                                ...(value === 'approval_workflow'
                                   ? {
                                       actionType: 'status_change' as const,
                                       autoCreateNextRecord: false,
                                       autoCreateToStep: '',
                                       autoCreateResultStatus: '',
                                     }
-                                  : event.target.value === 'auto_create'
+                                  : value === 'auto_create'
                                     ? {
                                         autoCreateNextRecord: true,
                                       }
@@ -968,15 +999,16 @@ export default function OtcWorkflowConfig() {
                                       : {}),
                               })
                             }
-                            className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                            style={{ borderColor: 'var(--border-muted)' }}
-                          >
-                            <option value="manual_action">Manual Button</option>
-                            <option value="approval_workflow">Approval Workflow</option>
-                            <option value="auto_create">Auto Create</option>
-                            <option value="external_event">External Event</option>
-                            {step.id === 'lead' ? <option value="auto_rule">Auto Rule</option> : null}
-                          </select>
+                            options={[
+                              { value: 'manual_action', label: 'Manual Button' },
+                              { value: 'approval_workflow', label: 'Approval Workflow' },
+                              { value: 'auto_create', label: 'Auto Create' },
+                              { value: 'external_event', label: 'External Event' },
+                              ...(step.id === 'lead' ? [{ value: 'auto_rule', label: 'Auto Rule' }] : []),
+                            ]}
+                            placeholder="Select trigger type"
+                            disabled={stepControlsDisabled}
+                          />
                         </div>
                         {transition.triggerType === 'approval_workflow' || transition.triggerType === 'auto_create' ? null : (
                           <>
@@ -984,10 +1016,10 @@ export default function OtcWorkflowConfig() {
                               <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                                 Action Type
                               </label>
-                              <select
+                              <InlineSearchableSelect
                                 value={transition.actionType}
-                                onChange={(event) => {
-                                  const nextActionType = event.target.value as OtcTransition['actionType']
+                                onChange={(value) => {
+                                  const nextActionType = value as OtcTransition['actionType']
                                   const actionLabel =
                                     nextActionType === 'send_for_signature'
                                       ? 'Send for Signature'
@@ -1003,29 +1035,27 @@ export default function OtcWorkflowConfig() {
                                         : transition.integrationKey,
                                   })
                                 }}
-                                className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                                style={{ borderColor: 'var(--border-muted)' }}
-                              >
-                                <option value="status_change">Status Change</option>
-                                <option value="send_for_signature">Send for Signature</option>
-                                <option value="send_approval_email">Send Approval Email</option>
-                              </select>
+                                options={[
+                                  { value: 'status_change', label: 'Status Change' },
+                                  { value: 'send_for_signature', label: 'Send for Signature' },
+                                  { value: 'send_approval_email', label: 'Send Approval Email' },
+                                ]}
+                                placeholder="Select action type"
+                                disabled={stepControlsDisabled}
+                              />
                             </div>
                             {transition.actionType === 'send_for_signature' ? (
                               <div>
                                 <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                                   Integration
                                 </label>
-                                <select
+                                <InlineSearchableSelect
                                   value={transition.integrationKey}
-                                  onChange={(event) => updateTransition(transition.id, { integrationKey: event.target.value })}
-                                  className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                                  style={{ borderColor: 'var(--border-muted)' }}
-                                >
-                                  {getIntegrationOptions(transition.actionType).map((option) => (
-                                    <option key={option.value || 'none'} value={option.value}>{option.label}</option>
-                                  ))}
-                                </select>
+                                  onChange={(value) => updateTransition(transition.id, { integrationKey: value })}
+                                  options={getIntegrationOptions(transition.actionType)}
+                                  placeholder="Select integration"
+                                  disabled={stepControlsDisabled}
+                                />
                               </div>
                             ) : null}
                           </>
@@ -1086,18 +1116,19 @@ export default function OtcWorkflowConfig() {
                                               className="w-full rounded-md border bg-transparent px-2 py-1.5 text-center text-sm text-white"
                                               style={{ borderColor: 'var(--border-muted)' }}
                                             />
-                                            <select
+                                            <InlineSearchableSelect
                                               value={tier.operator}
-                                              onChange={(event) => updateTier(approval.id, tierIndex, { operator: event.target.value })}
-                                              className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                                              style={{ borderColor: 'var(--border-muted)' }}
-                                            >
-                                              <option value=">=">{'>='}</option>
-                                              <option value=">">{'>'}</option>
-                                              <option value="=">=</option>
-                                              <option value="<">{'<'}</option>
-                                              <option value="<=">{'<='}</option>
-                                            </select>
+                                              onChange={(value) => updateTier(approval.id, tierIndex, { operator: value })}
+                                              options={[
+                                                { value: '>=', label: '>=' },
+                                                { value: '>', label: '>' },
+                                                { value: '=', label: '=' },
+                                                { value: '<', label: '<' },
+                                                { value: '<=', label: '<=' },
+                                              ]}
+                                              placeholder="Select operator"
+                                              disabled={stepControlsDisabled}
+                                            />
                                             <input
                                               type="number"
                                               value={tier.value}
@@ -1105,18 +1136,19 @@ export default function OtcWorkflowConfig() {
                                               className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
                                               style={{ borderColor: 'var(--border-muted)' }}
                                             />
-                                            <select
+                                            <InlineSearchableSelect
                                               value={tier.approverType}
-                                              onChange={(event) => updateTier(approval.id, tierIndex, {
-                                                approverType: event.target.value as 'role' | 'employee',
-                                                approverValue: event.target.value === 'role' ? 'manager' : '',
+                                              onChange={(value) => updateTier(approval.id, tierIndex, {
+                                                approverType: value as 'role' | 'employee',
+                                                approverValue: value === 'role' ? 'manager' : '',
                                               })}
-                                              className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                                              style={{ borderColor: 'var(--border-muted)' }}
-                                            >
-                                              <option value="role">Role</option>
-                                              <option value="employee">Employee</option>
-                                            </select>
+                                              options={[
+                                                { value: 'role', label: 'Role' },
+                                                { value: 'employee', label: 'Employee' },
+                                              ]}
+                                              placeholder="Select approver"
+                                              disabled={stepControlsDisabled}
+                                            />
                                             <SearchableOptionInput
                                               value={getApproverDisplayValue(tier.approverType, tier.approverValue)}
                                               options={getApproverOptions(tier.approverType)}
@@ -1173,33 +1205,35 @@ export default function OtcWorkflowConfig() {
                               <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                                 Auto Create Step
                               </label>
-                              <select
+                              <InlineSearchableSelect
                                 value={transition.autoCreateToStep ?? ''}
-                                onChange={(event) => updateTransition(transition.id, { autoCreateToStep: event.target.value, autoCreateResultStatus: '' })}
-                                className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                                style={{ borderColor: 'var(--border-muted)' }}
-                              >
-                                <option value="">-- select --</option>
-                                {config.steps.filter((candidate) => candidate.order > step.order).map((candidate) => (
-                                  <option key={candidate.id} value={candidate.id}>{candidate.label}</option>
-                                ))}
-                              </select>
+                                onChange={(value) => updateTransition(transition.id, { autoCreateToStep: value, autoCreateResultStatus: '' })}
+                                options={[
+                                  { value: '', label: '-- select --' },
+                                  ...workflowConfig.steps
+                                    .filter((candidate) => candidate.order > step.order)
+                                    .map((candidate) => ({ value: candidate.id, label: candidate.label })),
+                                ]}
+                                placeholder="Select step"
+                                disabled={stepControlsDisabled}
+                              />
                             </div>
                             <div>
                               <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                                 New Record Status
                               </label>
-                              <select
+                              <InlineSearchableSelect
                                 value={transition.autoCreateResultStatus ?? ''}
-                                onChange={(event) => updateTransition(transition.id, { autoCreateResultStatus: event.target.value })}
-                                className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                                style={{ borderColor: 'var(--border-muted)' }}
-                              >
-                                <option value="">-- select --</option>
-                                {transition.autoCreateToStep ? (statusOptions[stepToListKey[transition.autoCreateToStep]] ?? []).map((option) => (
-                                  <option key={option.id} value={option.value}>{option.value}</option>
-                                )) : null}
-                              </select>
+                                onChange={(value) => updateTransition(transition.id, { autoCreateResultStatus: value })}
+                                options={[
+                                  { value: '', label: '-- select --' },
+                                  ...(transition.autoCreateToStep
+                                    ? (statusOptions[stepToListKey[transition.autoCreateToStep]] ?? []).map((option) => ({ value: option.value, label: option.value }))
+                                    : []),
+                                ]}
+                                placeholder="Select status"
+                                disabled={stepControlsDisabled}
+                              />
                             </div>
                           </div>
                         </div>
@@ -1240,35 +1274,31 @@ export default function OtcWorkflowConfig() {
                                   >
                                     (
                                   </button>
-                                  <select
+                                  <InlineSearchableSelect
                                     value={conditionIndex === 0 ? 'and' : (condition.joinOperator ?? 'and')}
-                                    onChange={(event) => updateTransitionCondition(transition.id, conditionIndex, { joinOperator: event.target.value as 'and' | 'or' })}
+                                    onChange={(value) => updateTransitionCondition(transition.id, conditionIndex, { joinOperator: value as 'and' | 'or' })}
                                     disabled={conditionIndex === 0}
-                                    className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white disabled:opacity-50"
-                                    style={{ borderColor: 'var(--border-muted)' }}
-                                  >
-                                    <option value="and">AND</option>
-                                    <option value="or">OR</option>
-                                  </select>
-                                  <select
+                                    options={[
+                                      { value: 'and', label: 'AND' },
+                                      { value: 'or', label: 'OR' },
+                                    ]}
+                                    placeholder="Select join"
+                                  />
+                                  <InlineSearchableSelect
                                     value={condition.field}
-                                    onChange={(event) => updateTransitionCondition(transition.id, conditionIndex, { field: event.target.value })}
-                                    className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                                    style={{ borderColor: 'var(--border-muted)' }}
-                                  >
-                                    {leadAutoRuleFieldOptions.map((option) => (
-                                      <option key={option.value} value={option.value}>{option.label}</option>
-                                    ))}
-                                  </select>
-                                  <select
+                                    onChange={(value) => updateTransitionCondition(transition.id, conditionIndex, { field: value })}
+                                    options={leadAutoRuleFieldOptions}
+                                    placeholder="Select field"
+                                  />
+                                  <InlineSearchableSelect
                                     value={condition.operator}
-                                    onChange={(event) => updateTransitionCondition(transition.id, conditionIndex, { operator: event.target.value as 'not_empty' | 'equals' })}
-                                    className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                                    style={{ borderColor: 'var(--border-muted)' }}
-                                  >
-                                    <option value="not_empty">is not empty</option>
-                                    <option value="equals">equals</option>
-                                  </select>
+                                    onChange={(value) => updateTransitionCondition(transition.id, conditionIndex, { operator: value as 'not_empty' | 'equals' })}
+                                    options={[
+                                      { value: 'not_empty', label: 'is not empty' },
+                                      { value: 'equals', label: 'equals' },
+                                    ]}
+                                    placeholder="Select operator"
+                                  />
                                   <input
                                     type="text"
                                     value={condition.value}
@@ -1323,32 +1353,26 @@ export default function OtcWorkflowConfig() {
                               <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                                 Recipient Source
                               </label>
-                              <select
+                              <InlineSearchableSelect
                                 value={transition.recipientSource}
-                                onChange={(event) => updateTransition(transition.id, { recipientSource: event.target.value })}
-                                className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                                style={{ borderColor: 'var(--border-muted)' }}
-                              >
-                                {recipientSourceOptions.map((option) => (
-                                  <option key={option.value || 'none'} value={option.value}>{option.label}</option>
-                                ))}
-                              </select>
+                                onChange={(value) => updateTransition(transition.id, { recipientSource: value })}
+                                options={recipientSourceOptions}
+                                placeholder="Select recipient source"
+                                disabled={stepControlsDisabled}
+                              />
                             </div>
                             {transition.triggerType === 'external_event' ? (
                               <div>
                                 <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                                   External Event
                                 </label>
-                                <select
+                                <InlineSearchableSelect
                                   value={transition.externalEvent}
-                                  onChange={(event) => updateTransition(transition.id, { externalEvent: event.target.value })}
-                                  className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                                  style={{ borderColor: 'var(--border-muted)' }}
-                                >
-                                  {externalEventOptions.map((option) => (
-                                    <option key={option.value || 'none'} value={option.value}>{option.label}</option>
-                                  ))}
-                                </select>
+                                  onChange={(value) => updateTransition(transition.id, { externalEvent: value })}
+                                  options={externalEventOptions}
+                                  placeholder="Select external event"
+                                  disabled={stepControlsDisabled}
+                                />
                               </div>
                             ) : (
                               <div>
@@ -1377,49 +1401,46 @@ export default function OtcWorkflowConfig() {
                               <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                                 On Success
                               </label>
-                              <select
+                              <InlineSearchableSelect
                                 value={transition.successStatus}
-                                onChange={(event) => updateTransition(transition.id, { successStatus: event.target.value })}
-                                className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                                style={{ borderColor: 'var(--border-muted)' }}
-                              >
-                                <option value="">-- select --</option>
-                                {stepStatusOptions.map((option) => (
-                                  <option key={option.id} value={option.value}>{option.value}</option>
-                                ))}
-                              </select>
+                                onChange={(value) => updateTransition(transition.id, { successStatus: value })}
+                                options={[
+                                  { value: '', label: '-- select --' },
+                                  ...stepStatusOptions.map((option) => ({ value: option.value, label: option.value })),
+                                ]}
+                                placeholder="Select success status"
+                                disabled={stepControlsDisabled}
+                              />
                             </div>
                             <div>
                               <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                                 On Decline
                               </label>
-                              <select
+                              <InlineSearchableSelect
                                 value={transition.declineStatus}
-                                onChange={(event) => updateTransition(transition.id, { declineStatus: event.target.value })}
-                                className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                                style={{ borderColor: 'var(--border-muted)' }}
-                              >
-                                <option value="">-- select --</option>
-                                {stepStatusOptions.map((option) => (
-                                  <option key={option.id} value={option.value}>{option.value}</option>
-                                ))}
-                              </select>
+                                onChange={(value) => updateTransition(transition.id, { declineStatus: value })}
+                                options={[
+                                  { value: '', label: '-- select --' },
+                                  ...stepStatusOptions.map((option) => ({ value: option.value, label: option.value })),
+                                ]}
+                                placeholder="Select decline status"
+                                disabled={stepControlsDisabled}
+                              />
                             </div>
                             <div>
                               <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                                 {transition.actionType === 'send_approval_email' ? 'On Cancel / Expire' : 'On Void / Expire'}
                               </label>
-                              <select
+                              <InlineSearchableSelect
                                 value={transition.voidStatus}
-                                onChange={(event) => updateTransition(transition.id, { voidStatus: event.target.value })}
-                                className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                                style={{ borderColor: 'var(--border-muted)' }}
-                              >
-                                <option value="">-- select --</option>
-                                {stepStatusOptions.map((option) => (
-                                  <option key={option.id} value={option.value}>{option.value}</option>
-                                ))}
-                              </select>
+                                onChange={(value) => updateTransition(transition.id, { voidStatus: value })}
+                                options={[
+                                  { value: '', label: '-- select --' },
+                                  ...stepStatusOptions.map((option) => ({ value: option.value, label: option.value })),
+                                ]}
+                                placeholder="Select void status"
+                                disabled={stepControlsDisabled}
+                              />
                             </div>
                           </div>
                           <div className="flex items-center justify-between rounded-md border px-3 py-2" style={{ borderColor: 'var(--border-subtle)' }}>

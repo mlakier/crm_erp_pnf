@@ -1,10 +1,21 @@
 import { prisma } from '@/lib/prisma'
-import MasterDataCreatePageShell from '@/components/MasterDataCreatePageShell'
-import SubsidiaryCreateForm from '@/components/SubsidiaryCreateForm'
+import RecordCreateDetailPageClient from '@/components/RecordCreateDetailPageClient'
 import { generateNextSubsidiaryCode } from '@/lib/subsidiary-code'
-import { loadListOptionsForSource } from '@/lib/list-source'
 import { loadFormRequirements } from '@/lib/form-requirements-store'
 import { loadSubsidiaryFormCustomization } from '@/lib/subsidiary-form-customization-store'
+import { SUBSIDIARY_FORM_FIELDS, type SubsidiaryFormFieldKey } from '@/lib/subsidiary-form-customization'
+import { buildConfiguredInlineSections, buildCreateInlineFieldDefinitions } from '@/lib/detail-page-helpers'
+import { buildFieldMetaById, loadFieldOptionsMap } from '@/lib/field-source-helpers'
+
+const SUBSIDIARY_SECTION_DESCRIPTIONS: Record<string, string> = {
+  Core: 'Primary identity and operating name for the subsidiary.',
+  Registration: 'Legal registration, country, and statutory identifiers.',
+  Hierarchy: 'Parent-child relationships used for organization and consolidation.',
+  Currency: 'Default, functional, and reporting currency settings.',
+  Consolidation: 'Consolidation ownership and group reporting configuration.',
+  Accounting: 'Default account mappings used for close and intercompany activity.',
+  Status: 'Availability and active-state controls.',
+}
 
 export default async function NewSubsidiaryPage({
   searchParams,
@@ -12,65 +23,85 @@ export default async function NewSubsidiaryPage({
   searchParams: Promise<{ duplicateFrom?: string }>
 }) {
   const { duplicateFrom } = await searchParams
-  const [currencies, glAccounts, parentEntities, countryOptions, inactiveOptions, formCustomization, formRequirements, nextEntityCode, duplicateEntity] = await Promise.all([
-    prisma.currency.findMany({ orderBy: { code: 'asc' }, select: { id: true, currencyId: true, code: true, name: true } }),
-    prisma.chartOfAccounts.findMany({ where: { active: true }, orderBy: { accountId: 'asc' }, select: { id: true, accountId: true, name: true } }),
-    prisma.subsidiary.findMany({ orderBy: { subsidiaryId: 'asc' }, select: { id: true, subsidiaryId: true, name: true } }),
-    loadListOptionsForSource({ sourceType: 'system', sourceKey: 'countries' }),
-    loadListOptionsForSource({ sourceType: 'system', sourceKey: 'activeInactive' }),
+  const fieldMetaById = buildFieldMetaById(SUBSIDIARY_FORM_FIELDS)
+  const [formCustomization, formRequirements, nextEntityCode, fieldOptions, duplicateEntity] = await Promise.all([
     loadSubsidiaryFormCustomization(),
     loadFormRequirements(),
     generateNextSubsidiaryCode(),
+    loadFieldOptionsMap(fieldMetaById, [
+      'country',
+      'defaultCurrencyId',
+      'functionalCurrencyId',
+      'reportingCurrencyId',
+      'parentSubsidiaryId',
+      'retainedEarningsAccountId',
+      'ctaAccountId',
+      'intercompanyClearingAccountId',
+      'dueToAccountId',
+      'dueFromAccountId',
+      'inactive',
+    ]),
     duplicateFrom
       ? prisma.subsidiary.findUnique({ where: { id: duplicateFrom } })
       : Promise.resolve(null),
   ])
 
+  const initialValues: Partial<Record<SubsidiaryFormFieldKey, unknown>> = duplicateEntity
+    ? {
+        subsidiaryId: nextEntityCode,
+        name: `Copy of ${duplicateEntity.name}`,
+        legalName: duplicateEntity.legalName ? `Copy of ${duplicateEntity.legalName}` : '',
+        entityType: duplicateEntity.entityType,
+        country: duplicateEntity.country,
+        taxId: duplicateEntity.taxId,
+        registrationNumber: duplicateEntity.registrationNumber,
+        address: duplicateEntity.address,
+        defaultCurrencyId: duplicateEntity.defaultCurrencyId,
+        functionalCurrencyId: duplicateEntity.functionalCurrencyId,
+        reportingCurrencyId: duplicateEntity.reportingCurrencyId,
+        parentSubsidiaryId: duplicateEntity.parentSubsidiaryId,
+        consolidationMethod: duplicateEntity.consolidationMethod,
+        ownershipPercent: duplicateEntity.ownershipPercent != null ? String(duplicateEntity.ownershipPercent) : '',
+        retainedEarningsAccountId: duplicateEntity.retainedEarningsAccountId,
+        ctaAccountId: duplicateEntity.ctaAccountId,
+        intercompanyClearingAccountId: duplicateEntity.intercompanyClearingAccountId,
+        dueToAccountId: duplicateEntity.dueToAccountId,
+        dueFromAccountId: duplicateEntity.dueFromAccountId,
+        inactive: !duplicateEntity.active,
+      }
+    : {
+        subsidiaryId: nextEntityCode,
+        inactive: false,
+      }
+
+  const fieldDefinitions = buildCreateInlineFieldDefinitions<SubsidiaryFormFieldKey, (typeof SUBSIDIARY_FORM_FIELDS)[number]>({
+    fields: SUBSIDIARY_FORM_FIELDS,
+    initialValues,
+    fieldOptions,
+    requirements: formRequirements.subsidiaryCreate,
+    readOnlyFields: ['subsidiaryId'],
+    generatedFieldLabels: ['subsidiaryId'],
+  })
+
+  const sections = buildConfiguredInlineSections({
+    fields: SUBSIDIARY_FORM_FIELDS,
+    layout: formCustomization,
+    fieldDefinitions,
+    sectionDescriptions: SUBSIDIARY_SECTION_DESCRIPTIONS,
+  })
+
   return (
-    <MasterDataCreatePageShell backHref="/subsidiaries" backLabel="<- Back to Subsidiaries" title="New Subsidiary" formId="create-subsidiary-form">
-      <SubsidiaryCreateForm
-        formId="create-subsidiary-form"
-        showFooterActions={false}
-        redirectBasePath="/subsidiaries"
-        currencies={currencies}
-        glAccounts={glAccounts}
-        parentEntities={parentEntities}
-        countryOptions={countryOptions}
-        inactiveOptions={inactiveOptions}
-        initialSubsidiaryId={nextEntityCode}
-        initialLayoutConfig={formCustomization}
-        initialRequirements={{ ...formRequirements.subsidiaryCreate }}
-        sectionDescriptions={{
-          Core: 'Primary identity and operating name for the subsidiary.',
-          Registration: 'Legal registration, country, and statutory identifiers.',
-          Hierarchy: 'Parent-child relationships used for organization and consolidation.',
-          Currency: 'Default, functional, and reporting currency settings.',
-          Consolidation: 'Consolidation ownership and group reporting configuration.',
-          Accounting: 'Default account mappings used for close and intercompany activity.',
-          Status: 'Availability and active-state controls.',
-        }}
-        initialValues={duplicateEntity ? {
-          name: `Copy of ${duplicateEntity.name}`,
-          legalName: duplicateEntity.legalName ? `Copy of ${duplicateEntity.legalName}` : '',
-          entityType: duplicateEntity.entityType,
-          country: duplicateEntity.country,
-          taxId: duplicateEntity.taxId,
-          registrationNumber: duplicateEntity.registrationNumber,
-          address: duplicateEntity.address,
-          defaultCurrencyId: duplicateEntity.defaultCurrencyId,
-          functionalCurrencyId: duplicateEntity.functionalCurrencyId,
-          reportingCurrencyId: duplicateEntity.reportingCurrencyId,
-          parentSubsidiaryId: duplicateEntity.parentSubsidiaryId,
-          consolidationMethod: duplicateEntity.consolidationMethod,
-          ownershipPercent: duplicateEntity.ownershipPercent != null ? String(duplicateEntity.ownershipPercent) : '',
-          retainedEarningsAccountId: duplicateEntity.retainedEarningsAccountId,
-          ctaAccountId: duplicateEntity.ctaAccountId,
-          intercompanyClearingAccountId: duplicateEntity.intercompanyClearingAccountId,
-          dueToAccountId: duplicateEntity.dueToAccountId,
-          dueFromAccountId: duplicateEntity.dueFromAccountId,
-          inactive: !duplicateEntity.active,
-        } : undefined}
-      />
-    </MasterDataCreatePageShell>
+    <RecordCreateDetailPageClient
+      resource="subsidiaries"
+      backHref="/subsidiaries"
+      backLabel="<- Back to Subsidiaries"
+      title="New Subsidiary"
+      detailsTitle="Subsidiary details"
+      formId="create-subsidiary-inline-form"
+      sections={sections}
+      formColumns={formCustomization.formColumns}
+      createEndpoint="/api/subsidiaries"
+      successRedirectBasePath="/subsidiaries"
+    />
   )
 }

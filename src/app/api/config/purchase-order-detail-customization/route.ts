@@ -6,6 +6,7 @@ import {
   PURCHASE_ORDER_STAT_CARDS,
   type PurchaseOrderDetailCustomizationConfig,
 } from '@/lib/purchase-order-detail-customization'
+import { TRANSACTION_GL_IMPACT_COLUMNS } from '@/lib/transaction-gl-impact'
 import {
   loadPurchaseOrderDetailCustomization,
   savePurchaseOrderDetailCustomization,
@@ -14,10 +15,23 @@ import {
 function sanitizeInput(input: unknown): PurchaseOrderDetailCustomizationConfig {
   const defaults = defaultPurchaseOrderDetailCustomization()
   if (!input || typeof input !== 'object') return defaults
+  const root = input as Record<string, unknown>
 
   return {
     ...defaults,
     ...(input as Partial<PurchaseOrderDetailCustomizationConfig>),
+    glImpactSettings:
+      root.glImpactSettings && typeof root.glImpactSettings === 'object'
+        ? (root.glImpactSettings as PurchaseOrderDetailCustomizationConfig['glImpactSettings'])
+        : root.secondarySettings && typeof root.secondarySettings === 'object'
+          ? (root.secondarySettings as PurchaseOrderDetailCustomizationConfig['glImpactSettings'])
+          : defaults.glImpactSettings,
+    glImpactColumns:
+      root.glImpactColumns && typeof root.glImpactColumns === 'object'
+        ? (root.glImpactColumns as PurchaseOrderDetailCustomizationConfig['glImpactColumns'])
+        : root.secondaryColumns && typeof root.secondaryColumns === 'object'
+          ? (root.secondaryColumns as PurchaseOrderDetailCustomizationConfig['glImpactColumns'])
+          : defaults.glImpactColumns,
   }
 }
 
@@ -28,6 +42,7 @@ export async function GET() {
       config,
       fields: PURCHASE_ORDER_DETAIL_FIELDS,
       lineColumns: PURCHASE_ORDER_LINE_COLUMNS,
+      glImpactColumns: TRANSACTION_GL_IMPACT_COLUMNS,
       statCards: PURCHASE_ORDER_STAT_CARDS,
     })
   } catch {
@@ -49,6 +64,7 @@ export async function POST(request: NextRequest) {
       config: saved,
       fields: PURCHASE_ORDER_DETAIL_FIELDS,
       lineColumns: PURCHASE_ORDER_LINE_COLUMNS,
+      glImpactColumns: TRANSACTION_GL_IMPACT_COLUMNS,
       statCards: PURCHASE_ORDER_STAT_CARDS,
     })
   } catch {

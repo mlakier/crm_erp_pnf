@@ -1,21 +1,16 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import DeleteButton from '@/components/DeleteButton'
-import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
-import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
-import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
-import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSection'
+import type { InlineRecordSection } from '@/components/InlineRecordDetails'
+import MasterDataHeaderDetails from '@/components/MasterDataHeaderDetails'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
+import RecordDetailActionBar from '@/components/RecordDetailActionBar'
+import { buildMasterDataSystemInformationItems } from '@/components/RecordSystemInformationSection'
 import SubsidiaryDetailCustomizeMode from '@/components/SubsidiaryDetailCustomizeMode'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import CommunicationsSection from '@/components/CommunicationsSection'
+import RelatedRecordsSection from '@/components/RelatedRecordsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
-import {
-  RecordDetailCell,
-  RecordDetailEmptyState,
-  RecordDetailHeaderCell,
-  RecordDetailSection,
-} from '@/components/RecordDetailPanels'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
 import { loadSubsidiaryFormCustomization } from '@/lib/subsidiary-form-customization-store'
 import { SUBSIDIARY_FORM_FIELDS, type SubsidiaryFormFieldKey } from '@/lib/subsidiary-form-customization'
@@ -23,6 +18,7 @@ import { loadFormRequirements } from '@/lib/form-requirements-store'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { loadMasterDataSystemInfo } from '@/lib/master-data-system-info'
 import { loadMasterDataSystemNotes } from '@/lib/master-data-system-notes'
+import type { TransactionStatDefinition, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 export default async function SubsidiaryDetailPage({
   params,
@@ -209,17 +205,25 @@ export default async function SubsidiaryDetailPage({
   }
 
   const customizeFields = buildCustomizePreviewFields(SUBSIDIARY_FORM_FIELDS, fieldDefinitions)
-  const statPreviewCards = [
-    { id: 'childSubsidiaries', label: 'Child Subsidiaries', value: Subsidiary.childSubsidiaries.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+  const statPreviewCards: Array<{
+    id: string
+    label: string
+    value: string | number
+    cardTone?: TransactionVisualTone
+    valueTone?: TransactionVisualTone
+    supportsColorized: boolean
+    supportsLink: boolean
+  }> = [
+    { id: 'childSubsidiaries', label: 'Child Subsidiaries', value: Subsidiary.childSubsidiaries.length, cardTone: 'accent', valueTone: 'accent', supportsColorized: true, supportsLink: false },
     { id: 'employees', label: 'Employees', value: Subsidiary.employees.length, cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
     { id: 'customers', label: 'Customers', value: Subsidiary.customers.length, cardTone: 'yellow', valueTone: 'yellow', supportsColorized: true, supportsLink: false },
     { id: 'vendors', label: 'Vendors', value: Subsidiary.vendors.length, cardTone: 'green', valueTone: 'green', supportsColorized: true, supportsLink: false },
   ]
-  const statDefinitions = [
-    { id: 'childSubsidiaries', label: 'Child Subsidiaries', getValue: () => Subsidiary.childSubsidiaries.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
-    { id: 'employees', label: 'Employees', getValue: () => Subsidiary.employees.length, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
-    { id: 'customers', label: 'Customers', getValue: () => Subsidiary.customers.length, getCardTone: () => 'yellow' as const, getValueTone: () => 'yellow' as const },
-    { id: 'vendors', label: 'Vendors', getValue: () => Subsidiary.vendors.length, getCardTone: () => 'green' as const, getValueTone: () => 'green' as const },
+  const statDefinitions: Array<TransactionStatDefinition<typeof Subsidiary>> = [
+    { id: 'childSubsidiaries', label: 'Child Subsidiaries', getValue: () => Subsidiary.childSubsidiaries.length, getCardTone: () => 'accent', getValueTone: () => 'accent' },
+    { id: 'employees', label: 'Employees', getValue: () => Subsidiary.employees.length, getCardTone: () => 'teal', getValueTone: () => 'teal' },
+    { id: 'customers', label: 'Customers', getValue: () => Subsidiary.customers.length, getCardTone: () => 'yellow', getValueTone: () => 'yellow' },
+    { id: 'vendors', label: 'Vendors', getValue: () => Subsidiary.vendors.length, getCardTone: () => 'green', getValueTone: () => 'green' },
   ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: SUBSIDIARY_FORM_FIELDS,
@@ -234,6 +238,66 @@ export default async function SubsidiaryDetailPage({
     updatedAt: Subsidiary.updatedAt,
   })
   const systemNotes = await loadMasterDataSystemNotes({ entityType: 'Subsidiary', entityId: Subsidiary.id })
+  const relatedRecordsTabs = [
+    {
+      key: 'child-subsidiaries',
+      label: 'Child Subsidiaries',
+      count: Subsidiary.childSubsidiaries.length,
+      emptyMessage: 'No child subsidiaries are linked to this subsidiary yet.',
+      rows: Subsidiary.childSubsidiaries.map((child) => ({
+        id: child.id,
+        type: 'Subsidiary',
+        reference: child.subsidiaryId,
+        name: child.name,
+        details: '-',
+        href: `/subsidiaries/${child.id}`,
+      })),
+    },
+    {
+      key: 'employees',
+      label: 'Employees',
+      count: Subsidiary.employees.length,
+      emptyMessage: 'No employees are linked to this subsidiary yet.',
+      rows: Subsidiary.employees.map((employee) => ({
+        id: employee.id,
+        type: 'Employee',
+        reference: employee.email ?? employee.id,
+        name: `${employee.firstName} ${employee.lastName}`.trim(),
+        details: [employee.title, employee.email].filter(Boolean).join(' | ') || '-',
+        href: `/employees/${employee.id}`,
+      })),
+    },
+    {
+      key: 'customers',
+      label: 'Customers',
+      count: Subsidiary.customers.length,
+      emptyMessage: 'No customers are linked to this subsidiary yet.',
+      rows: Subsidiary.customers.map((customer) => ({
+        id: customer.id,
+        type: 'Customer',
+        reference: customer.customerId ?? 'Pending',
+        name: customer.name,
+        details: '-',
+        href: `/customers/${customer.id}`,
+      })),
+    },
+    {
+      key: 'vendors',
+      label: 'Vendors',
+      count: Subsidiary.vendors.length,
+      emptyMessage: 'No vendors are linked to this subsidiary yet.',
+      rows: Subsidiary.vendors.map((vendor) => ({
+        id: vendor.id,
+        type: 'Vendor',
+        reference: vendor.vendorNumber ?? 'Pending',
+        name: vendor.name,
+        details: '-',
+        href: `/vendors/${vendor.id}`,
+      })),
+    },
+  ]
+  const communicationsToolbarTargetId = 'subsidiary-communications-toolbar'
+  const systemNotesToolbarTargetId = 'subsidiary-system-notes-toolbar'
 
   return (
     <RecordDetailPageShell
@@ -249,40 +313,22 @@ export default async function SubsidiaryDetailPage({
         ) : null
       }
       actions={
-        <>
-          {isEditing && !isCustomizing ? (
-            <>
-              <Link href={detailHref} className="rounded-md border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-                Cancel
-              </Link>
-              <button
-                type="submit"
-                form={`inline-record-form-${Subsidiary.id}`}
-                className="rounded-md px-3 py-1.5 text-xs font-semibold text-white"
-                style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-              >
-                Save
-              </button>
-            </>
-          ) : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailCreateMenu newHref="/subsidiaries/new" duplicateHref={`/subsidiaries/new?duplicateFrom=${Subsidiary.id}`} /> : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailExportMenu title={Subsidiary.name} fileName={`subsidiary-${Subsidiary.subsidiaryId}`} sections={detailSections} /> : null}
-          {!isEditing && !isCustomizing ? (
-            <Link href={`${detailHref}?customize=1`} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-              Customize
-            </Link>
-          ) : null}
-          {!isEditing && !isCustomizing ? (
-            <Link
-              href={`${detailHref}?edit=1`}
-              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
-              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-            >
-              Edit
-            </Link>
-          ) : null}
-          {!isCustomizing ? <DeleteButton resource="subsidiaries" id={Subsidiary.id} /> : null}
-        </>
+        isCustomizing ? null : (
+          <RecordDetailActionBar
+            mode={isEditing ? 'edit' : 'detail'}
+            detailHref={detailHref}
+            formId={`inline-record-form-${Subsidiary.id}`}
+            newHref="/subsidiaries/new"
+            duplicateHref={`/subsidiaries/new?duplicateFrom=${Subsidiary.id}`}
+            exportTitle={Subsidiary.name}
+            exportFileName={`subsidiary-${Subsidiary.subsidiaryId}`}
+            exportSections={detailSections}
+            customizeHref={`${detailHref}?customize=1`}
+            editHref={`${detailHref}?edit=1`}
+            deleteResource="subsidiaries"
+            deleteId={Subsidiary.id}
+          />
+        )
       }
     >
         {!isCustomizing ? (
@@ -305,137 +351,60 @@ export default async function SubsidiaryDetailPage({
             statPreviewCards={statPreviewCards}
           />
         ) : (
-          <InlineRecordDetails
+          <MasterDataHeaderDetails
             resource="entities"
             id={Subsidiary.id}
-            title="Subsidiary details"
+            title="Subsidiary Details"
             sections={detailSections}
             editing={isEditing}
             columns={formCustomization.formColumns}
-            showInternalActions={false}
+            systemInformationItems={buildMasterDataSystemInformationItems(systemInfo, Subsidiary.id)}
           />
         )}
 
-        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} internalId={Subsidiary.id} /> : null}
-
         {!isCustomizing ? (
-        <RecordDetailSection title="Child Subsidiaries" count={Subsidiary.childSubsidiaries.length}>
-          {Subsidiary.childSubsidiaries.length === 0 ? (
-            <RecordDetailEmptyState message="No child subsidiaries" />
-          ) : (
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <RecordDetailHeaderCell>Subsidiary ID</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
-                </tr>
-              </thead>
-              <tbody>
-                {Subsidiary.childSubsidiaries.map((child) => (
-                  <tr key={child.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <RecordDetailCell>
-                      <Link href={`/subsidiaries/${child.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {child.subsidiaryId}
-                      </Link>
-                    </RecordDetailCell>
-                    <RecordDetailCell>{child.name}</RecordDetailCell>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </RecordDetailSection>
+          <RecordBottomTabsSection
+            defaultActiveKey="related-records"
+            tabs={[
+              {
+                key: 'related-records',
+                label: 'Related Records',
+                count: relatedRecordsTabs.reduce((sum, tab) => sum + tab.count, 0),
+                content: <RelatedRecordsSection embedded tabs={relatedRecordsTabs} showDisplayControl={false} />,
+              },
+              {
+                key: 'communications',
+                label: 'Communications',
+                count: 0,
+                toolbarTargetId: communicationsToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <CommunicationsSection
+                    embedded
+                    toolbarTargetId={communicationsToolbarTargetId}
+                    rows={[]}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+              {
+                key: 'system-notes',
+                label: 'System Notes',
+                count: systemNotes.length,
+                toolbarTargetId: systemNotesToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <SystemNotesSection
+                    embedded
+                    toolbarTargetId={systemNotesToolbarTargetId}
+                    notes={systemNotes}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+            ]}
+          />
         ) : null}
-
-        {!isCustomizing ? (
-        <RecordDetailSection title="Employees" count={Subsidiary.employees.length}>
-          {Subsidiary.employees.length === 0 ? (
-            <RecordDetailEmptyState message="No employees in this subsidiary" />
-          ) : (
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Title</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Email</RecordDetailHeaderCell>
-                </tr>
-              </thead>
-              <tbody>
-                {Subsidiary.employees.map((employee) => (
-                  <tr key={employee.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <RecordDetailCell>
-                      <Link href={`/employees/${employee.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {employee.firstName} {employee.lastName}
-                      </Link>
-                    </RecordDetailCell>
-                    <RecordDetailCell>{employee.title ?? '-'}</RecordDetailCell>
-                    <RecordDetailCell>{employee.email ?? '-'}</RecordDetailCell>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </RecordDetailSection>
-        ) : null}
-
-        {!isCustomizing ? (
-        <RecordDetailSection title="Customers" count={Subsidiary.customers.length}>
-          {Subsidiary.customers.length === 0 ? (
-            <RecordDetailEmptyState message="No customers in this subsidiary" />
-          ) : (
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <RecordDetailHeaderCell>Customer #</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
-                </tr>
-              </thead>
-              <tbody>
-                {Subsidiary.customers.map((customer) => (
-                  <tr key={customer.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <RecordDetailCell>
-                      <Link href={`/customers/${customer.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {customer.customerId ?? 'Pending'}
-                      </Link>
-                    </RecordDetailCell>
-                    <RecordDetailCell>{customer.name}</RecordDetailCell>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </RecordDetailSection>
-        ) : null}
-
-        {!isCustomizing ? (
-        <RecordDetailSection title="Vendors" count={Subsidiary.vendors.length}>
-          {Subsidiary.vendors.length === 0 ? (
-            <RecordDetailEmptyState message="No vendors in this subsidiary" />
-          ) : (
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <RecordDetailHeaderCell>Vendor ID</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
-                </tr>
-              </thead>
-              <tbody>
-                {Subsidiary.vendors.map((vendor) => (
-                  <tr key={vendor.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <RecordDetailCell>
-                      <Link href={`/vendors/${vendor.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {vendor.vendorNumber ?? 'Pending'}
-                      </Link>
-                    </RecordDetailCell>
-                    <RecordDetailCell>{vendor.name}</RecordDetailCell>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </RecordDetailSection>
-        ) : null}
-        {!isCustomizing ? <SystemNotesSection notes={systemNotes} /> : null}
     </RecordDetailPageShell>
   )
 }

@@ -1,4 +1,4 @@
-import type { TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import type { RecordHeaderField } from '@/components/RecordHeaderDetails'
 import type { TransactionReferenceSourceMeta } from '@/lib/transaction-reference-layouts'
 
 type LinkedRecordFieldCatalogEntry = {
@@ -12,6 +12,25 @@ type LinkedRecordFieldCatalogEntry = {
 
 export type LinkedRecordReferenceSource = Omit<TransactionReferenceSourceMeta, 'fields'> & {
   fields: LinkedRecordFieldCatalogEntry[]
+}
+
+function normalizeLinkedRecordFieldType(
+  fieldType: LinkedRecordFieldCatalogEntry['fieldType'],
+): RecordHeaderField['fieldType'] {
+  switch (fieldType) {
+    case 'boolean':
+      return 'checkbox'
+    case 'currency':
+    case 'date':
+    case 'email':
+    case 'list':
+    case 'number':
+    case 'checkbox':
+    case 'text':
+      return fieldType
+    default:
+      return 'text'
+  }
 }
 
 function formatReferenceValue(value: unknown): string {
@@ -51,7 +70,7 @@ export function buildLinkedReferenceFieldDefinitions(
   sources: LinkedRecordReferenceSource[],
   recordsBySourceId: Record<string, unknown>,
   recordHrefBySourceId?: Record<string, string | null | undefined>,
-): Record<string, TransactionHeaderField> {
+): Record<string, RecordHeaderField> {
   return Object.fromEntries(
     sources.flatMap((source) =>
       source.fields.map((field) => [
@@ -61,10 +80,10 @@ export function buildLinkedReferenceFieldDefinitions(
           label: field.label,
           value: formatReferenceValue(readPath(recordsBySourceId[source.id], field.path)),
           helpText: field.description,
-          fieldType: field.fieldType,
+          fieldType: normalizeLinkedRecordFieldType(field.fieldType),
           sourceText: field.source,
           href: isIdentifierLikeReferenceField(field) ? (recordHrefBySourceId?.[source.id] ?? null) : null,
-        } satisfies TransactionHeaderField,
+        } satisfies RecordHeaderField,
       ]),
     ),
   )

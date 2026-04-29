@@ -50,14 +50,20 @@ export default function PurchaseOrderRelatedDocuments({
   receipts,
   bills,
   billPayments,
+  embedded = false,
+  showDisplayControl = true,
 }: {
   requisitions: PurchaseRequisition[]
   receipts: Receipt[]
   bills: Bill[]
   billPayments: BillPayment[]
+  embedded?: boolean
+  showDisplayControl?: boolean
 }) {
   return (
     <TransactionRelatedDocumentsTabs
+      embedded={embedded}
+      showDisplayControl={showDisplayControl}
       defaultActiveKey="purchase-requisitions"
       tabs={[
         {
@@ -66,16 +72,24 @@ export default function PurchaseOrderRelatedDocuments({
           count: requisitions.length,
           tone: 'upstream',
           emptyMessage: 'No purchase requisition is linked to this purchase order yet.',
-          headers: ['Txn ID', 'Created', 'Status', 'Total', 'Priority', 'Title'],
+          headers: ['Txn ID', 'Status', 'Total', 'Created', 'Priority', 'Title'],
           rows: requisitions.map((requisition) => ({
             id: requisition.id,
             cells: [
               <Link key="link" href={`/purchase-requisitions/${requisition.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                 {requisition.number}
               </Link>,
-              fmtDocumentDate(requisition.createdAt),
               <RelatedDocumentsStatusBadge key="status" status={requisition.status} />,
               fmtCurrency(requisition.total),
+              fmtDocumentDate(requisition.createdAt),
+              requisition.priority ?? '-',
+              requisition.title ?? '-',
+            ],
+            filterValues: [
+              requisition.number,
+              requisition.status,
+              fmtCurrency(requisition.total),
+              fmtDocumentDate(requisition.createdAt),
               requisition.priority ?? '-',
               requisition.title ?? '-',
             ],
@@ -87,18 +101,24 @@ export default function PurchaseOrderRelatedDocuments({
           count: receipts.length,
           tone: 'downstream',
           emptyMessage: 'No receipts recorded yet.',
-          headers: ['Txn ID', 'Date', 'Status', 'Quantity', 'Notes', 'Created'],
+          headers: ['Txn ID', 'Status', 'Date', 'Quantity', 'Notes'],
           rows: receipts.map((receipt) => ({
             id: receipt.id,
             cells: [
               <Link key="link" href={`/receipts/${receipt.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                 {receipt.number}
               </Link>,
-              fmtDocumentDate(receipt.date),
               <RelatedDocumentsStatusBadge key="status" status={receipt.status} />,
+              fmtDocumentDate(receipt.date),
               receipt.quantity,
               receipt.notes ?? '-',
-              receipt.createdAt ? fmtDocumentDate(receipt.createdAt) : '-',
+            ],
+            filterValues: [
+              receipt.number,
+              receipt.status,
+              fmtDocumentDate(receipt.date),
+              String(receipt.quantity),
+              receipt.notes ?? '-',
             ],
           })),
         },
@@ -108,17 +128,25 @@ export default function PurchaseOrderRelatedDocuments({
           count: bills.length,
           tone: 'downstream',
           emptyMessage: 'No bills are linked to this purchase order yet.',
-          headers: ['Txn ID', 'Date', 'Due Date', 'Status', 'Total', 'Notes'],
+          headers: ['Txn ID', 'Status', 'Total', 'Date', 'Due Date', 'Notes'],
           rows: bills.map((bill) => ({
             id: bill.id,
             cells: [
               <Link key="link" href={`/bills/${bill.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                 {bill.number}
               </Link>,
-              fmtDocumentDate(bill.date),
-              bill.dueDate ? fmtDocumentDate(bill.dueDate) : '-',
               <RelatedDocumentsStatusBadge key="status" status={bill.status} />,
               fmtCurrency(bill.total),
+              fmtDocumentDate(bill.date),
+              bill.dueDate ? fmtDocumentDate(bill.dueDate) : '-',
+              bill.notes ?? '-',
+            ],
+            filterValues: [
+              bill.number,
+              bill.status,
+              fmtCurrency(bill.total),
+              fmtDocumentDate(bill.date),
+              bill.dueDate ? fmtDocumentDate(bill.dueDate) : '-',
               bill.notes ?? '-',
             ],
           })),
@@ -129,19 +157,28 @@ export default function PurchaseOrderRelatedDocuments({
           count: billPayments.length,
           tone: 'downstream',
           emptyMessage: 'No bill payments are linked to bills for this purchase order yet.',
-          headers: ['Txn ID', 'Date', 'Status', 'Amount', 'Method', 'Reference', 'Bill'],
+          headers: ['Txn ID', 'Status', 'Amount', 'Date', 'Bill', 'Method', 'Reference'],
           rows: billPayments.map((payment) => ({
             id: payment.id,
             cells: [
               <Link key="link" href={`/bill-payments/${payment.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                 {payment.number}
               </Link>,
-              fmtDocumentDate(payment.date),
               <RelatedDocumentsStatusBadge key="status" status={payment.status} />,
               fmtCurrency(payment.amount),
+              fmtDocumentDate(payment.date),
+              payment.billNumber,
               payment.method ?? '-',
               payment.reference ?? '-',
+            ],
+            filterValues: [
+              payment.number,
+              payment.status,
+              fmtCurrency(payment.amount),
+              fmtDocumentDate(payment.date),
               payment.billNumber,
+              payment.method ?? '-',
+              payment.reference ?? '-',
             ],
           })),
         },

@@ -40,13 +40,13 @@ export default function OpportunityStageMoveButton({
       if (!response.ok) {
         const body = await response.json()
         setError(body?.error || 'Unable to move stage')
-        setSaving(false)
         return
       }
 
       router.refresh()
     } catch {
       setError('Unable to move stage')
+    } finally {
       setSaving(false)
     }
   }

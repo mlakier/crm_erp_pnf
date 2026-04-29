@@ -4,6 +4,13 @@ import {
   type TransactionReferenceLayout,
 } from '@/lib/transaction-reference-layouts'
 import {
+  defaultTransactionGlImpactColumns,
+  defaultTransactionGlImpactSettings,
+  type TransactionGlImpactColumnCustomization,
+  type TransactionGlImpactColumnKey,
+  type TransactionGlImpactSettings,
+} from '@/lib/transaction-gl-impact'
+import {
   type LinkedRecordReferenceSource,
   CURRENCY_FULL_REFERENCE_FIELDS,
   SUBSIDIARY_FULL_REFERENCE_FIELDS,
@@ -92,6 +99,8 @@ export type PurchaseOrderDetailCustomizationConfig = {
   referenceLayouts: TransactionReferenceLayout[]
   lineSettings: PurchaseOrderLineSettings
   lineColumns: Record<PurchaseOrderLineColumnKey, PurchaseOrderLineColumnCustomization>
+  glImpactSettings: TransactionGlImpactSettings
+  glImpactColumns: Record<TransactionGlImpactColumnKey, TransactionGlImpactColumnCustomization>
   statCards: PurchaseOrderStatCardSlot[]
 }
 
@@ -371,6 +380,8 @@ export function defaultPurchaseOrderDetailCustomization(): PurchaseOrderDetailCu
         },
       ]),
     ) as Record<PurchaseOrderLineColumnKey, PurchaseOrderLineColumnCustomization>,
+    glImpactSettings: defaultTransactionGlImpactSettings(),
+    glImpactColumns: defaultTransactionGlImpactColumns(),
     statCards: DEFAULT_PURCHASE_ORDER_STAT_CARD_METRICS.map((metric, index) => ({
       id: `slot-${index + 1}`,
       metric,

@@ -51,15 +51,21 @@ export default function QuoteRelatedDocuments({
   fulfillments,
   invoices,
   invoiceReceipts,
+  embedded = false,
+  showDisplayControl = true,
 }: {
   opportunities: OpportunityDoc[]
   salesOrders: SalesOrderDoc[]
   fulfillments: FulfillmentDoc[]
   invoices: InvoiceDoc[]
   invoiceReceipts: InvoiceReceiptDoc[]
+  embedded?: boolean
+  showDisplayControl?: boolean
 }) {
   return (
     <TransactionRelatedDocumentsTabs
+      embedded={embedded}
+      showDisplayControl={showDisplayControl}
       defaultActiveKey="opportunities"
       tabs={[
         {
@@ -77,6 +83,12 @@ export default function QuoteRelatedDocuments({
               </Link>,
               opportunity.name,
               <RelatedDocumentsStatusBadge key="status" status={opportunity.status} />,
+              fmtCurrency(opportunity.total),
+            ],
+            filterValues: [
+              opportunity.number,
+              opportunity.name,
+              opportunity.status,
               fmtCurrency(opportunity.total),
             ],
           })),
@@ -97,6 +109,11 @@ export default function QuoteRelatedDocuments({
               <RelatedDocumentsStatusBadge key="status" status={salesOrder.status} />,
               fmtCurrency(salesOrder.total),
             ],
+            filterValues: [
+              salesOrder.number,
+              salesOrder.status,
+              fmtCurrency(salesOrder.total),
+            ],
           })),
         },
         {
@@ -105,13 +122,21 @@ export default function QuoteRelatedDocuments({
           count: fulfillments.length,
           tone: 'downstream',
           emptyMessage: 'No fulfillments are linked downstream from this quote yet.',
-          headers: ['Txn ID', 'Date', 'Status', 'Notes'],
+          headers: ['Txn ID', 'Status', 'Date', 'Notes'],
           rows: fulfillments.map((fulfillment) => ({
             id: fulfillment.id,
             cells: [
-              fulfillment.number,
-              fmtDocumentDate(fulfillment.date),
+              <Link key="link" href={`/fulfillments/${fulfillment.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                {fulfillment.number}
+              </Link>,
               <RelatedDocumentsStatusBadge key="status" status={fulfillment.status} />,
+              fmtDocumentDate(fulfillment.date),
+              fulfillment.notes ?? '-',
+            ],
+            filterValues: [
+              fulfillment.number,
+              fulfillment.status,
+              fmtDocumentDate(fulfillment.date),
               fulfillment.notes ?? '-',
             ],
           })),
@@ -122,17 +147,24 @@ export default function QuoteRelatedDocuments({
           count: invoices.length,
           tone: 'downstream',
           emptyMessage: 'No invoices are linked downstream from this quote yet.',
-          headers: ['Txn ID', 'Created', 'Due Date', 'Status', 'Total'],
+          headers: ['Txn ID', 'Status', 'Total', 'Created', 'Due Date'],
           rows: invoices.map((invoice) => ({
             id: invoice.id,
             cells: [
               <Link key="link" href={`/invoices/${invoice.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                 {invoice.number}
               </Link>,
-              fmtDocumentDate(invoice.createdAt),
-              invoice.dueDate ? fmtDocumentDate(invoice.dueDate) : '-',
               <RelatedDocumentsStatusBadge key="status" status={invoice.status} />,
               fmtCurrency(invoice.total),
+              fmtDocumentDate(invoice.createdAt),
+              invoice.dueDate ? fmtDocumentDate(invoice.dueDate) : '-',
+            ],
+            filterValues: [
+              invoice.number,
+              invoice.status,
+              fmtCurrency(invoice.total),
+              fmtDocumentDate(invoice.createdAt),
+              invoice.dueDate ? fmtDocumentDate(invoice.dueDate) : '-',
             ],
           })),
         },
@@ -142,17 +174,24 @@ export default function QuoteRelatedDocuments({
           count: invoiceReceipts.length,
           tone: 'downstream',
           emptyMessage: 'No invoice receipts are linked downstream from this quote yet.',
-          headers: ['Txn ID', 'Date', 'Method', 'Reference', 'Amount'],
+          headers: ['Txn ID', 'Amount', 'Date', 'Method', 'Reference'],
           rows: invoiceReceipts.map((receipt) => ({
             id: receipt.id,
             cells: [
               <Link key="link" href={`/invoice-receipts/${receipt.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                 {receipt.number}
               </Link>,
+              fmtCurrency(receipt.amount),
               fmtDocumentDate(receipt.date),
               receipt.method ?? '-',
               receipt.reference ?? '-',
+            ],
+            filterValues: [
+              receipt.number,
               fmtCurrency(receipt.amount),
+              fmtDocumentDate(receipt.date),
+              receipt.method ?? '-',
+              receipt.reference ?? '-',
             ],
           })),
         },

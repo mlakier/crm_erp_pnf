@@ -1,11 +1,22 @@
 "use client"
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import SearchableSelect from '@/components/SearchableSelect'
 
 type CabinetFile = {
   id: string
   originalName: string
+}
+
+type AccountOption = {
+  id: string
+  accountId: string
+  accountNumber: string
+  name: string
+  accountType: string
+  isPosting: boolean
+  active: boolean
 }
 
 type Settings = {
@@ -30,10 +41,13 @@ type Settings = {
   legalEntityRegisteredAs: string
   uen: string
   brn: string
+  defaultApAccountId: string
+  defaultArAccountId: string
 }
 
 export default function CompanyInformationPage() {
   const [cabinetFiles, setCabinetFiles] = useState<CabinetFile[]>([])
+  const [accounts, setAccounts] = useState<AccountOption[]>([])
   const [loadingCabinet, setLoadingCabinet] = useState(true)
   const [settings, setSettings] = useState<Settings>({
     companyName: '',
@@ -57,6 +71,8 @@ export default function CompanyInformationPage() {
     legalEntityRegisteredAs: '',
     uen: '',
     brn: '',
+    defaultApAccountId: '',
+    defaultArAccountId: '',
   })
 
   useEffect(() => {
@@ -71,6 +87,8 @@ export default function CompanyInformationPage() {
 
         const settingsResponse = await fetch('/api/company-information/settings', { cache: 'no-store' })
         const settingsBody = (await settingsResponse.json()) as Partial<Settings>
+        const accountsResponse = await fetch('/api/chart-of-accounts', { cache: 'no-store' })
+        const accountsBody = accountsResponse.ok ? ((await accountsResponse.json()) as AccountOption[]) : []
 
         const files = body.files ?? []
         const hasForms = typeof settingsBody.companyLogoFormsFileId === 'string' && settingsBody.companyLogoFormsFileId.length > 0
@@ -99,10 +117,13 @@ export default function CompanyInformationPage() {
           legalEntityRegisteredAs: str('legalEntityRegisteredAs'),
           uen: str('uen'),
           brn: str('brn'),
+          defaultApAccountId: str('defaultApAccountId'),
+          defaultArAccountId: str('defaultArAccountId'),
         }
 
         if (mounted) {
           setCabinetFiles(files)
+          setAccounts(accountsBody)
           setSettings(nextSettings)
         }
 
@@ -140,6 +161,41 @@ export default function CompanyInformationPage() {
     }
   }
 
+  const postingAccounts = accounts.filter((account) => account.active !== false && account.isPosting !== false)
+  const apAccounts = postingAccounts.filter((account) =>
+    account.accountType.toLowerCase().includes('liability'),
+  )
+  const arAccounts = postingAccounts.filter((account) =>
+    account.accountType.toLowerCase().includes('asset'),
+  )
+  const cabinetFileOptions = useMemo(
+    () =>
+      cabinetFiles.map((file) => ({
+        value: file.id,
+        label: file.originalName,
+        searchText: file.originalName,
+      })),
+    [cabinetFiles],
+  )
+  const apAccountOptions = useMemo(
+    () =>
+      apAccounts.map((account) => ({
+        value: account.id,
+        label: `${account.accountId} - ${account.accountNumber} - ${account.name}`,
+        searchText: `${account.accountId} ${account.accountNumber} ${account.name}`,
+      })),
+    [apAccounts],
+  )
+  const arAccountOptions = useMemo(
+    () =>
+      arAccounts.map((account) => ({
+        value: account.id,
+        label: `${account.accountId} - ${account.accountNumber} - ${account.name}`,
+        searchText: `${account.accountId} ${account.accountNumber} ${account.name}`,
+      })),
+    [arAccounts],
+  )
+
   return (
     <div className="min-h-full px-8 py-8">
       <div className="max-w-6xl rounded-2xl border p-8" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
@@ -176,44 +232,24 @@ export default function CompanyInformationPage() {
 
             <label className="block">
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Company Logo (Forms)</span>
-              <select
-                value={settings.companyLogoFormsFileId}
-                onChange={(event) => updateSetting('companyLogoFormsFileId', event.target.value)}
-                className="w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                style={{ borderColor: 'var(--border-muted)' }}
-              >
-                <option value="" disabled>
-                  {loadingCabinet
-                    ? 'Loading File Cabinet...'
-                    : cabinetFiles.length > 0
-                      ? 'Select from File Cabinet'
-                      : 'No files in File Cabinet'}
-                </option>
-                {cabinetFiles.map((file) => (
-                  <option key={file.id} value={file.id}>{file.originalName}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                selectedValue={settings.companyLogoFormsFileId}
+                onSelect={(value) => updateSetting('companyLogoFormsFileId', value)}
+                options={cabinetFileOptions}
+                placeholder={loadingCabinet ? 'Loading File Cabinet...' : cabinetFiles.length > 0 ? 'Select from File Cabinet' : 'No files in File Cabinet'}
+                searchPlaceholder="Search file cabinet"
+              />
             </label>
 
             <label className="block">
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Company Logo (Pages)</span>
-              <select
-                value={settings.companyLogoPagesFileId}
-                onChange={(event) => updateSetting('companyLogoPagesFileId', event.target.value)}
-                className="w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                style={{ borderColor: 'var(--border-muted)' }}
-              >
-                <option value="" disabled>
-                  {loadingCabinet
-                    ? 'Loading File Cabinet...'
-                    : cabinetFiles.length > 0
-                      ? 'Select from File Cabinet'
-                      : 'No files in File Cabinet'}
-                </option>
-                {cabinetFiles.map((file) => (
-                  <option key={file.id} value={file.id}>{file.originalName}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                selectedValue={settings.companyLogoPagesFileId}
+                onSelect={(value) => updateSetting('companyLogoPagesFileId', value)}
+                options={cabinetFileOptions}
+                placeholder={loadingCabinet ? 'Loading File Cabinet...' : cabinetFiles.length > 0 ? 'Select from File Cabinet' : 'No files in File Cabinet'}
+                searchPlaceholder="Search file cabinet"
+              />
             </label>
 
             <label className="flex items-center gap-2 pt-1">
@@ -278,6 +314,32 @@ export default function CompanyInformationPage() {
             <label className="block">
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Account ID</span>
               <input value={settings.accountId} onChange={(e) => updateSetting('accountId', e.target.value)} className="w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+            </label>
+
+            <div className="pt-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Accounting Defaults</h2>
+            </div>
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Default AP Account</span>
+              <SearchableSelect
+                selectedValue={settings.defaultApAccountId}
+                onSelect={(value) => updateSetting('defaultApAccountId', value)}
+                options={apAccountOptions}
+                placeholder="Select AP account"
+                searchPlaceholder="Search AP account"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Default AR Account</span>
+              <SearchableSelect
+                selectedValue={settings.defaultArAccountId}
+                onSelect={(value) => updateSetting('defaultArAccountId', value)}
+                options={arAccountOptions}
+                placeholder="Select AR account"
+                searchPlaceholder="Search AR account"
+              />
             </label>
 
             <label className="block">

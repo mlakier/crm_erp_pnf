@@ -196,7 +196,7 @@ function sanitizeTransition(input: Record<string, unknown>, fallback: OtcTransit
           : 'status_change',
     conditions: rawConditions
       .filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === 'object')
-      .map((condition) => ({
+      .map<TransitionCondition>((condition) => ({
         field: typeof condition.field === 'string' ? condition.field : '',
         operator: condition.operator === 'equals' ? 'equals' : 'not_empty',
         value: typeof condition.value === 'string' ? condition.value : '',

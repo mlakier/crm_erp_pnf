@@ -21,17 +21,38 @@ export default function TransactionStatsRow<TRecord>({
             const stat = stats.find((candidate) => candidate.id === card.metric)
             return stat ? { stat, card } : null
           })
-          .filter((entry): entry is { stat: TransactionStatDefinition<TRecord>; card: TransactionStatCardSlot<string> } => Boolean(entry))
+          .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
       : visibleStatIds && visibleStatIds.length > 0
         ? visibleStatIds
             .map((id, index) => {
               const stat = stats.find((candidate) => candidate.id === id)
-              return stat ? { stat, card: { id: `${id}-${index}`, metric: id, visible: true, order: index } } : null
+              return stat
+                ? {
+                    stat,
+                    card: {
+                      id: `${id}-${index}`,
+                      metric: id,
+                      visible: true,
+                      order: index,
+                      size: 'md' as const,
+                      colorized: true,
+                      linked: true,
+                    },
+                  }
+                : null
             })
-            .filter((entry): entry is { stat: TransactionStatDefinition<TRecord>; card: TransactionStatCardSlot<string> } => Boolean(entry))
+            .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
         : stats.map((stat, index) => ({
             stat,
-            card: { id: `${stat.id}-${index}`, metric: stat.id, visible: true, order: index },
+            card: {
+              id: `${stat.id}-${index}`,
+              metric: stat.id,
+              visible: true,
+              order: index,
+              size: 'md' as const,
+              colorized: true,
+              linked: true,
+            },
           }))
 
   return (

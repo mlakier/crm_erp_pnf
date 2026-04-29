@@ -1,21 +1,16 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import DeleteButton from '@/components/DeleteButton'
-import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
-import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
-import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
-import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSection'
+import type { InlineRecordSection } from '@/components/InlineRecordDetails'
+import MasterDataHeaderDetails from '@/components/MasterDataHeaderDetails'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
+import RecordDetailActionBar from '@/components/RecordDetailActionBar'
+import { buildMasterDataSystemInformationItems } from '@/components/RecordSystemInformationSection'
 import CurrencyDetailCustomizeMode from '@/components/CurrencyDetailCustomizeMode'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import CommunicationsSection from '@/components/CommunicationsSection'
+import RelatedRecordsSection from '@/components/RelatedRecordsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
-import {
-  RecordDetailCell,
-  RecordDetailEmptyState,
-  RecordDetailHeaderCell,
-  RecordDetailSection,
-} from '@/components/RecordDetailPanels'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
 import { loadCurrencyFormCustomization } from '@/lib/currency-form-customization-store'
@@ -23,6 +18,7 @@ import { CURRENCY_FORM_FIELDS, type CurrencyFormFieldKey } from '@/lib/currency-
 import { loadFormRequirements } from '@/lib/form-requirements-store'
 import { loadMasterDataSystemInfo } from '@/lib/master-data-system-info'
 import { loadMasterDataSystemNotes } from '@/lib/master-data-system-notes'
+import type { TransactionStatDefinition, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 export default async function CurrencyDetailPage({
   params,
@@ -80,15 +76,23 @@ export default async function CurrencyDetailPage({
     inactive: { name: 'inactive', label: 'Inactive', value: String(!currency.active), type: 'select', options: inactiveOptions, helpText: 'Marks the currency unavailable for new records while preserving history.', sourceText: getFieldSourceText(fieldMetaById, 'inactive') },
   }
   const customizeFields = buildCustomizePreviewFields(CURRENCY_FORM_FIELDS, fieldDefinitions)
-  const statPreviewCards = [
-    { id: 'subsidiaries', label: 'Subsidiaries', value: currency.defaultCurrencySubsidiaries.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+  const statPreviewCards: Array<{
+    id: string
+    label: string
+    value: string | number
+    cardTone?: TransactionVisualTone
+    valueTone?: TransactionVisualTone
+    supportsColorized: boolean
+    supportsLink: boolean
+  }> = [
+    { id: 'subsidiaries', label: 'Subsidiaries', value: currency.defaultCurrencySubsidiaries.length, cardTone: 'accent', valueTone: 'accent', supportsColorized: true, supportsLink: false },
     { id: 'customers', label: 'Customers', value: currency.customers.length, cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
     { id: 'vendors', label: 'Vendors', value: currency.vendors.length, cardTone: 'yellow', valueTone: 'yellow', supportsColorized: true, supportsLink: false },
   ]
-  const statDefinitions = [
-    { id: 'subsidiaries', label: 'Subsidiaries', getValue: () => currency.defaultCurrencySubsidiaries.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
-    { id: 'customers', label: 'Customers', getValue: () => currency.customers.length, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
-    { id: 'vendors', label: 'Vendors', getValue: () => currency.vendors.length, getCardTone: () => 'yellow' as const, getValueTone: () => 'yellow' as const },
+  const statDefinitions: Array<TransactionStatDefinition<typeof currency>> = [
+    { id: 'subsidiaries', label: 'Subsidiaries', getValue: () => currency.defaultCurrencySubsidiaries.length, getCardTone: () => 'accent', getValueTone: () => 'accent' },
+    { id: 'customers', label: 'Customers', getValue: () => currency.customers.length, getCardTone: () => 'teal', getValueTone: () => 'teal' },
+    { id: 'vendors', label: 'Vendors', getValue: () => currency.vendors.length, getCardTone: () => 'yellow', getValueTone: () => 'yellow' },
   ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: CURRENCY_FORM_FIELDS,
@@ -103,6 +107,52 @@ export default async function CurrencyDetailPage({
     updatedAt: currency.updatedAt,
   })
   const systemNotes = await loadMasterDataSystemNotes({ entityType: 'currency', entityId: currency.id })
+  const relatedRecordsTabs = [
+    {
+      key: 'subsidiaries',
+      label: 'Subsidiaries',
+      count: currency.defaultCurrencySubsidiaries.length,
+      emptyMessage: 'No subsidiaries use this as their default currency.',
+      rows: currency.defaultCurrencySubsidiaries.map((subsidiary) => ({
+        id: subsidiary.id,
+        type: 'Subsidiary',
+        reference: subsidiary.subsidiaryId,
+        name: subsidiary.name,
+        details: 'Default Currency',
+        href: `/subsidiaries/${subsidiary.id}`,
+      })),
+    },
+    {
+      key: 'customers',
+      label: 'Customers',
+      count: currency.customers.length,
+      emptyMessage: 'No customers use this as their primary currency.',
+      rows: currency.customers.map((customer) => ({
+        id: customer.id,
+        type: 'Customer',
+        reference: customer.customerId ?? 'Pending',
+        name: customer.name,
+        details: 'Primary Currency',
+        href: `/customers/${customer.id}`,
+      })),
+    },
+    {
+      key: 'vendors',
+      label: 'Vendors',
+      count: currency.vendors.length,
+      emptyMessage: 'No vendors use this as their primary currency.',
+      rows: currency.vendors.map((vendor) => ({
+        id: vendor.id,
+        type: 'Vendor',
+        reference: vendor.vendorNumber ?? 'Pending',
+        name: vendor.name,
+        details: 'Primary Currency',
+        href: `/vendors/${vendor.id}`,
+      })),
+    },
+  ]
+  const communicationsToolbarTargetId = 'currency-communications-toolbar'
+  const systemNotesToolbarTargetId = 'currency-system-notes-toolbar'
 
   return (
     <RecordDetailPageShell
@@ -121,44 +171,22 @@ export default async function CurrencyDetailPage({
         ) : null
       }
       actions={
-        <>
-          {isEditing && !isCustomizing ? (
-            <>
-              <Link href={detailHref} className="rounded-md border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-                Cancel
-              </Link>
-              <button
-                type="submit"
-                form={`inline-record-form-${currency.id}`}
-                className="rounded-md px-3 py-1.5 text-xs font-semibold text-white"
-                style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-              >
-                Save
-              </button>
-            </>
-          ) : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailCreateMenu newHref="/currencies/new" duplicateHref={`/currencies/new?duplicateFrom=${currency.id}`} /> : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailExportMenu title={currency.name} fileName={`currency-${currency.currencyId}`} sections={detailSections} /> : null}
-          {!isEditing && !isCustomizing ? (
-            <Link
-              href={`${detailHref}?customize=1`}
-              className="rounded-md border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-            >
-              Customize
-            </Link>
-          ) : null}
-          {!isEditing && !isCustomizing ? (
-            <Link
-              href={`${detailHref}?edit=1`}
-              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
-              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-            >
-              Edit
-            </Link>
-          ) : null}
-          {!isCustomizing ? <DeleteButton resource="currencies" id={currency.id} /> : null}
-        </>
+        isCustomizing ? null : (
+          <RecordDetailActionBar
+            mode={isEditing ? 'edit' : 'detail'}
+            detailHref={detailHref}
+            formId={`inline-record-form-${currency.id}`}
+            newHref="/currencies/new"
+            duplicateHref={`/currencies/new?duplicateFrom=${currency.id}`}
+            exportTitle={currency.name}
+            exportFileName={`currency-${currency.currencyId}`}
+            exportSections={detailSections}
+            customizeHref={`${detailHref}?customize=1`}
+            editHref={`${detailHref}?edit=1`}
+            deleteResource="currencies"
+            deleteId={currency.id}
+          />
+        )
       }
     >
         {!isCustomizing ? (
@@ -181,103 +209,59 @@ export default async function CurrencyDetailPage({
             statPreviewCards={statPreviewCards}
           />
         ) : (
-          <InlineRecordDetails
+          <MasterDataHeaderDetails
             resource="currencies"
             id={currency.id}
-            title="Currency details"
+            title="Currency Details"
             sections={detailSections}
             editing={isEditing}
             columns={currencyFormCustomization.formColumns}
-            showInternalActions={false}
+            systemInformationItems={buildMasterDataSystemInformationItems(systemInfo, currency.id)}
           />
         )}
 
         {!isCustomizing ? (
-        <>
-        <MasterDataSystemInfoSection info={systemInfo} internalId={currency.id} />
-
-        <RecordDetailSection title="Subsidiaries (Default Currency)" count={currency.defaultCurrencySubsidiaries.length}>
-          {currency.defaultCurrencySubsidiaries.length === 0 ? (
-            <RecordDetailEmptyState message="No subsidiaries use this as default currency" />
-          ) : (
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <RecordDetailHeaderCell>Code</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
-                </tr>
-              </thead>
-              <tbody>
-                {currency.defaultCurrencySubsidiaries.map((subsidiary) => (
-                  <tr key={subsidiary.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <RecordDetailCell>
-                      <Link href={`/subsidiaries/${subsidiary.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {subsidiary.subsidiaryId}
-                      </Link>
-                    </RecordDetailCell>
-                    <RecordDetailCell>{subsidiary.name}</RecordDetailCell>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </RecordDetailSection>
-
-        <RecordDetailSection title="Customers" count={currency.customers.length}>
-          {currency.customers.length === 0 ? (
-            <RecordDetailEmptyState message="No customers with this primary currency" />
-          ) : (
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <RecordDetailHeaderCell>Customer #</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
-                </tr>
-              </thead>
-              <tbody>
-                {currency.customers.map((customer) => (
-                  <tr key={customer.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <RecordDetailCell>
-                      <Link href={`/customers/${customer.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {customer.customerId ?? 'Pending'}
-                      </Link>
-                    </RecordDetailCell>
-                    <RecordDetailCell>{customer.name}</RecordDetailCell>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </RecordDetailSection>
-
-        <RecordDetailSection title="Vendors" count={currency.vendors.length}>
-          {currency.vendors.length === 0 ? (
-            <RecordDetailEmptyState message="No vendors with this primary currency" />
-          ) : (
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <RecordDetailHeaderCell>Vendor Id</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
-                </tr>
-              </thead>
-              <tbody>
-                {currency.vendors.map((vendor) => (
-                  <tr key={vendor.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <RecordDetailCell>
-                      <Link href={`/vendors/${vendor.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {vendor.vendorNumber ?? 'Pending'}
-                      </Link>
-                    </RecordDetailCell>
-                    <RecordDetailCell>{vendor.name}</RecordDetailCell>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </RecordDetailSection>
-        <SystemNotesSection notes={systemNotes} />
-        </>
+          <RecordBottomTabsSection
+            defaultActiveKey="related-records"
+            tabs={[
+              {
+                key: 'related-records',
+                label: 'Related Records',
+                count: relatedRecordsTabs.reduce((sum, tab) => sum + tab.count, 0),
+                content: <RelatedRecordsSection embedded tabs={relatedRecordsTabs} showDisplayControl={false} />,
+              },
+              {
+                key: 'communications',
+                label: 'Communications',
+                count: 0,
+                toolbarTargetId: communicationsToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <CommunicationsSection
+                    embedded
+                    toolbarTargetId={communicationsToolbarTargetId}
+                    rows={[]}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+              {
+                key: 'system-notes',
+                label: 'System Notes',
+                count: systemNotes.length,
+                toolbarTargetId: systemNotesToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <SystemNotesSection
+                    embedded
+                    toolbarTargetId={systemNotesToolbarTargetId}
+                    notes={systemNotes}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+            ]}
+          />
         ) : null}
     </RecordDetailPageShell>
   )

@@ -8,6 +8,7 @@ import {
   type UserStatCardMetric,
 } from '@/lib/user-form-customization'
 import { loadUserFormCustomization, saveUserFormCustomization } from '@/lib/user-form-customization-store'
+import type { TransactionStatCardSize, TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 function sanitizeInput(input: unknown): UserFormCustomizationConfig {
   const defaults = defaultUserFormCustomization()
@@ -62,21 +63,23 @@ function sanitizeInput(input: unknown): UserFormCustomizationConfig {
       ])
     ),
     fields,
-    statCards: (() => {
-      const normalized = statCardsInput
+    statCards: (() : Array<TransactionStatCardSlot<UserStatCardMetric>> => {
+      const normalized: Array<TransactionStatCardSlot<UserStatCardMetric>> = statCardsInput
         .map((entry, index) => {
           const statRoot = entry && typeof entry === 'object' ? entry as Record<string, unknown> : null
           if (!statRoot) return null
 
           const metric = String(statRoot.metric ?? '').trim() as UserStatCardMetric
           if (!allowedMetrics.has(metric)) return null
+          const size: TransactionStatCardSize =
+            statRoot.size === 'sm' || statRoot.size === 'lg' ? statRoot.size : 'md'
 
           return {
             id: String(statRoot.id ?? `user-stat-${metric}`),
             metric,
             visible: statRoot.visible === undefined ? index < 4 : statRoot.visible === true,
             order: typeof statRoot.order === 'number' && Number.isFinite(statRoot.order) ? statRoot.order : index,
-            size: statRoot.size === 'sm' || statRoot.size === 'lg' ? statRoot.size : 'md',
+            size,
             colorized: statRoot.colorized === undefined ? true : statRoot.colorized === true,
             linked: statRoot.linked === undefined ? true : statRoot.linked === true,
           }

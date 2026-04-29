@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import SearchableSelect from '@/components/SearchableSelect'
 
 type Item = { id: string; name: string; listPrice: number; itemId: string | null }
 
@@ -24,7 +25,7 @@ export default function OpportunityLineItemForm({
   const handleItemChange = (id: string) => {
     setItemId(id)
     if (!id) return
-    const item = items.find((i) => i.id === id)
+    const item = items.find((candidate) => candidate.id === id)
     if (!item) return
     if (!description) setDescription(item.name)
     setUnitPrice(String(item.listPrice))
@@ -77,19 +78,17 @@ export default function OpportunityLineItemForm({
       <form className="space-y-3" onSubmit={handleSubmit}>
         <div>
           <label className="block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Item (optional)</label>
-          <select
-            value={itemId}
-            onChange={(e) => handleItemChange(e.target.value)}
-            className="mt-1 block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>— Select item —</option>
-            {items.map((item) => (
-              <option key={item.id} value={item.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                {item.itemId ? `${item.itemId} - ${item.name}` : item.name}
-              </option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <SearchableSelect
+              selectedValue={itemId}
+              options={items.map((item) => ({
+                value: item.id,
+                label: item.itemId ? `${item.itemId} - ${item.name}` : item.name,
+              }))}
+              placeholder="Select item"
+              onSelect={handleItemChange}
+            />
+          </div>
         </div>
 
         <div>
@@ -148,7 +147,7 @@ export default function OpportunityLineItemForm({
           className="inline-flex items-center rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
           style={{ backgroundColor: 'var(--accent-primary-strong)' }}
         >
-          {saving ? 'Adding…' : 'Add line item'}
+          {saving ? 'Adding...' : 'Add line item'}
         </button>
       </form>
     </section>

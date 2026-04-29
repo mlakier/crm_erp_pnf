@@ -34,7 +34,7 @@
     "amount": {
       "visible": true,
       "section": "Payment Terms",
-      "order": 0,
+      "order": 1,
       "column": 1
     },
     "date": {
@@ -64,8 +64,20 @@
     "notes": {
       "visible": true,
       "section": "Payment Terms",
-      "order": 1,
+      "order": 2,
+      "column": 1
+    },
+    "vendorId": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
       "column": 3
+    },
+    "bankAccountId": {
+      "visible": true,
+      "section": "Payment Terms",
+      "order": 0,
+      "column": 1
     },
     "createdAt": {
       "visible": true,

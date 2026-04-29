@@ -7,7 +7,6 @@ import {
   OPPORTUNITY_REFERENCE_SOURCES,
   OPPORTUNITY_STAT_CARDS,
   type OpportunityDetailCustomizationConfig,
-  type OpportunityDetailFieldKey,
   type OpportunityLineColumnKey,
 } from '@/lib/opportunity-detail-customization'
 
@@ -24,7 +23,7 @@ const OPPORTUNITY_LINE_SETTING_AVAILABILITY = Object.fromEntries(
 ) as Record<OpportunityLineColumnKey, string[]>
 
 type CustomizeField = {
-  id: OpportunityDetailFieldKey
+  id: string
   label: string
   fieldType: string
   source?: string

@@ -94,3 +94,82 @@ export function buildConfiguredInlineSections<TKey extends string, TField extend
       }]
     })
 }
+
+type CreateFieldMeta<TKey extends string> = FieldWithId<TKey> & {
+  label: string
+}
+
+function inferCreateFieldType(fieldType: string): InlineRecordField['type'] | undefined {
+  const normalized = fieldType.trim().toLowerCase()
+  if (normalized === 'list') return 'select'
+  if (normalized === 'boolean') return 'checkbox'
+  if (normalized === 'address') return 'address'
+  if (normalized === 'date') return 'date'
+  if (normalized === 'number') return 'number'
+  if (normalized === 'email') return 'email'
+  return undefined
+}
+
+function stringifyCreateFieldValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry ?? '').trim()).filter(Boolean).join(',')
+  }
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  return String(value ?? '')
+}
+
+export function buildCreateInlineFieldDefinitions<TKey extends string, TField extends CreateFieldMeta<TKey>>({
+  fields,
+  initialValues,
+  fieldOptions = {},
+  requirements = {},
+  readOnlyFields = [],
+  multipleFields = [],
+  typeOverrides = {},
+  blankSelectLabel = '-- Select --',
+  generatedFieldLabels = [],
+}: {
+  fields: readonly TField[]
+  initialValues?: Partial<Record<TKey, unknown>>
+  fieldOptions?: Partial<Record<TKey, Array<{ value: string; label: string }>>>
+  requirements?: Partial<Record<TKey, boolean>>
+  readOnlyFields?: readonly TKey[]
+  multipleFields?: readonly TKey[]
+  typeOverrides?: Partial<Record<TKey, NonNullable<InlineRecordField['type']>>>
+  blankSelectLabel?: string
+  generatedFieldLabels?: readonly TKey[]
+}): Record<TKey, InlineRecordField> {
+  const readOnlyFieldSet = new Set<TKey>(readOnlyFields)
+  const multipleFieldSet = new Set<TKey>(multipleFields)
+  const generatedFieldSet = new Set<TKey>(generatedFieldLabels)
+
+  return Object.fromEntries(
+    fields.map((field) => {
+      const type = typeOverrides[field.id] ?? inferCreateFieldType(field.fieldType)
+      const multiple = multipleFieldSet.has(field.id)
+      const rawOptions = fieldOptions[field.id] ?? []
+      const options =
+        type === 'select'
+          ? (multiple
+              ? rawOptions
+              : [{ value: '', label: blankSelectLabel }, ...rawOptions])
+          : undefined
+
+      const inlineField: InlineRecordField = {
+        name: field.id,
+        label: field.label,
+        value: stringifyCreateFieldValue(initialValues?.[field.id]),
+        type,
+        options,
+        multiple: multiple || undefined,
+        helpText: field.description,
+        sourceText: field.source,
+        required: Boolean(requirements[field.id]),
+        readOnly: readOnlyFieldSet.has(field.id),
+        placeholder: generatedFieldSet.has(field.id) ? 'Generated automatically' : undefined,
+      }
+
+      return [field.id, inlineField]
+    })
+  ) as Record<TKey, InlineRecordField>
+}

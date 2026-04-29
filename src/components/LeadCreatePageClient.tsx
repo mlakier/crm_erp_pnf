@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionActionStack from '@/components/TransactionActionStack'
 import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
@@ -15,7 +15,7 @@ import {
 import { leadPageConfig } from '@/lib/transaction-page-configs/lead'
 import { isValidEmail } from '@/lib/validation'
 
-type LeadCreateHeaderField = TransactionHeaderField & { key: LeadDetailFieldKey }
+type LeadCreateHeaderField = RecordHeaderField & { key: LeadDetailFieldKey }
 
 export default function LeadCreatePageClient({
   userId,
@@ -306,7 +306,7 @@ export default function LeadCreatePageClient({
       value: headerValues.inactive,
       displayValue: 'No',
       helpText: 'Whether the lead is inactive.',
-      fieldType: 'boolean',
+      fieldType: 'checkbox',
     },
     createdBy: {
       key: 'createdBy',
@@ -410,7 +410,7 @@ export default function LeadCreatePageClient({
       widthClassName="w-full max-w-none"
       actions={<TransactionActionStack mode="create" cancelHref="/leads" formId="create-lead-form" />}
     >
-      <TransactionHeaderSections
+      <RecordHeaderDetails
         editing
         sections={headerSections}
         columns={customization.formColumns}

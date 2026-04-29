@@ -1,7 +1,18 @@
 import { prisma } from '@/lib/prisma'
-import MasterDataCreatePageShell from '@/components/MasterDataCreatePageShell'
-import EmployeeCreateForm from '@/components/EmployeeCreateForm'
-import { loadListOptionsForSource } from '@/lib/list-source'
+import RecordCreateDetailPageClient from '@/components/RecordCreateDetailPageClient'
+import { loadEmployeeFormCustomization } from '@/lib/employee-form-customization-store'
+import { loadFormRequirements } from '@/lib/form-requirements-store'
+import { EMPLOYEE_FORM_FIELDS, type EmployeeFormFieldKey } from '@/lib/employee-form-customization'
+import { buildConfiguredInlineSections, buildCreateInlineFieldDefinitions } from '@/lib/detail-page-helpers'
+import { buildFieldMetaById, loadFieldOptionsMap } from '@/lib/field-source-helpers'
+
+const EMPLOYEE_SECTION_DESCRIPTIONS: Record<string, string> = {
+  Core: 'Identity and primary contact details for the employee.',
+  Organization: 'Reporting structure and organizational placement.',
+  Access: 'User account linkage and access context.',
+  Employment: 'Dates and employment lifecycle details.',
+  Status: 'Availability and active-state controls.',
+}
 
 export default async function NewEmployeePage({
   searchParams,
@@ -9,20 +20,11 @@ export default async function NewEmployeePage({
   searchParams: Promise<{ duplicateFrom?: string }>
 }) {
   const { duplicateFrom } = await searchParams
-  const [entities, departments, managers, users, inactiveOptions, laborTypeOptions, duplicateEmployee] = await Promise.all([
-    prisma.subsidiary.findMany({ orderBy: { subsidiaryId: 'asc' }, select: { id: true, subsidiaryId: true, name: true } }),
-    prisma.department.findMany({ orderBy: [{ departmentId: 'asc' }, { name: 'asc' }], select: { id: true, departmentId: true, name: true } }),
-    prisma.employee.findMany({
-      where: { active: true },
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-      select: { id: true, firstName: true, lastName: true, employeeId: true },
-    }),
-    prisma.user.findMany({
-      orderBy: [{ name: 'asc' }, { email: 'asc' }],
-      select: { id: true, name: true, email: true, userId: true },
-    }),
-    loadListOptionsForSource({ sourceType: 'system', sourceKey: 'activeInactive' }),
-    loadListOptionsForSource({ sourceType: 'managed-list', sourceKey: 'LIST-EMP-LABOR-TYPE' }),
+  const fieldMetaById = buildFieldMetaById(EMPLOYEE_FORM_FIELDS)
+  const [formCustomization, formRequirements, fieldOptions, duplicateEmployee] = await Promise.all([
+    loadEmployeeFormCustomization(),
+    loadFormRequirements(),
+    loadFieldOptionsMap(fieldMetaById, ['laborType', 'departmentId', 'subsidiaryIds', 'managerId', 'userId', 'inactive']),
     duplicateFrom
       ? prisma.employee.findUnique({
           where: { id: duplicateFrom },
@@ -48,45 +50,64 @@ export default async function NewEmployeePage({
       : Promise.resolve(null),
   ])
 
-  return (
-    <MasterDataCreatePageShell backHref="/employees" backLabel="<- Back to Employees" title="New Employee" formId="create-employee-form">
-      <EmployeeCreateForm
-        formId="create-employee-form"
-        showFooterActions={false}
-        redirectBasePath="/employees"
-        entities={entities}
-        departments={departments}
-        managers={managers}
-        users={users}
-        inactiveOptions={inactiveOptions}
-        laborTypeOptions={laborTypeOptions}
-        initialValues={duplicateEmployee ? {
-          employeeId: '',
-          eid: '',
-          firstName: duplicateEmployee.firstName,
-          lastName: duplicateEmployee.lastName,
-          email: '',
-          phone: duplicateEmployee.phone,
-          title: duplicateEmployee.title,
-          laborType: duplicateEmployee.laborType,
-          departmentId: duplicateEmployee.departmentId,
-          subsidiaryIds: duplicateEmployee.employeeSubsidiaries.length > 0
+  const initialValues: Partial<Record<EmployeeFormFieldKey, unknown>> = duplicateEmployee
+    ? {
+        employeeId: '',
+        eid: '',
+        firstName: duplicateEmployee.firstName,
+        lastName: duplicateEmployee.lastName,
+        email: '',
+        phone: duplicateEmployee.phone,
+        title: duplicateEmployee.title,
+        laborType: duplicateEmployee.laborType,
+        departmentId: duplicateEmployee.departmentId,
+        subsidiaryIds:
+          duplicateEmployee.employeeSubsidiaries.length > 0
             ? duplicateEmployee.employeeSubsidiaries.map((assignment) => assignment.subsidiaryId)
-            : duplicateEmployee.subsidiaryId ? [duplicateEmployee.subsidiaryId] : [],
-          includeChildren: duplicateEmployee.includeChildren,
-          managerId: duplicateEmployee.managerId,
-          hireDate: duplicateEmployee.hireDate ? duplicateEmployee.hireDate.toISOString().split('T')[0] : '',
-          terminationDate: duplicateEmployee.terminationDate ? duplicateEmployee.terminationDate.toISOString().split('T')[0] : '',
-          inactive: !duplicateEmployee.active,
-        } : undefined}
-        sectionDescriptions={{
-          Core: 'Identity and primary contact details for the employee.',
-          Organization: 'Reporting structure and organizational placement.',
-          Access: 'User account linkage and access context.',
-          Employment: 'Dates and employment lifecycle details.',
-          Status: 'Availability and active-state controls.',
-        }}
-      />
-    </MasterDataCreatePageShell>
+            : duplicateEmployee.subsidiaryId
+              ? [duplicateEmployee.subsidiaryId]
+              : [],
+        includeChildren: duplicateEmployee.includeChildren,
+        managerId: duplicateEmployee.managerId,
+        hireDate: duplicateEmployee.hireDate ? duplicateEmployee.hireDate.toISOString().split('T')[0] : '',
+        terminationDate: duplicateEmployee.terminationDate ? duplicateEmployee.terminationDate.toISOString().split('T')[0] : '',
+        inactive: !duplicateEmployee.active,
+      }
+    : {
+        includeChildren: false,
+        inactive: false,
+      }
+
+  const fieldDefinitions = buildCreateInlineFieldDefinitions<EmployeeFormFieldKey, (typeof EMPLOYEE_FORM_FIELDS)[number]>({
+    fields: EMPLOYEE_FORM_FIELDS,
+    initialValues,
+    fieldOptions,
+    requirements: formRequirements.employeeCreate,
+    multipleFields: ['subsidiaryIds'],
+    typeOverrides: {
+      email: 'email',
+    },
+  })
+
+  const sections = buildConfiguredInlineSections({
+    fields: EMPLOYEE_FORM_FIELDS,
+    layout: formCustomization,
+    fieldDefinitions,
+    sectionDescriptions: EMPLOYEE_SECTION_DESCRIPTIONS,
+  })
+
+  return (
+    <RecordCreateDetailPageClient
+      resource="employees"
+      backHref="/employees"
+      backLabel="<- Back to Employees"
+      title="New Employee"
+      detailsTitle="Employee details"
+      formId="create-employee-inline-form"
+      sections={sections}
+      formColumns={formCustomization.formColumns}
+      createEndpoint="/api/employees"
+      successRedirectBasePath="/employees"
+    />
   )
 }

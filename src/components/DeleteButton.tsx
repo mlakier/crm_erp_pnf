@@ -28,7 +28,6 @@ export default function DeleteButton({ resource, endpoint, id, label }: DeleteBu
 
       if (!deleteEndpoint) {
         setError('Unable to delete item')
-        setDeleting(false)
         return
       }
 
@@ -39,13 +38,13 @@ export default function DeleteButton({ resource, endpoint, id, label }: DeleteBu
       if (!response.ok) {
         const body = await response.json().catch(() => null)
         setError(body?.error || 'Unable to delete item')
-        setDeleting(false)
         return
       }
 
       router.refresh()
     } catch {
       setError('Unable to delete item')
+    } finally {
       setDeleting(false)
     }
   }

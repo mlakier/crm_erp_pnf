@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { MASTER_DATA_ENTITY_OPTIONS, MASTER_DATA_IMPORT_SCHEMA, type SupportedEntity } from '@/lib/master-data-import-schema'
+import SearchableSelect from '@/components/SearchableSelect'
 
 type ImportMode = 'add' | 'update' | 'addOrUpdate'
 
@@ -64,18 +65,15 @@ export default function MasterDataImportForm() {
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
           <span>Master Data Type</span>
-          <select
-            value={entity}
-            onChange={(event) => setEntity(event.target.value as SupportedEntity)}
-            className="w-full rounded-md border px-3 py-2 text-white bg-transparent"
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            {MASTER_DATA_ENTITY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            selectedValue={entity}
+            options={MASTER_DATA_ENTITY_OPTIONS.map((option) => ({
+              value: option.value,
+              label: option.label,
+            }))}
+            placeholder="Select master data type"
+            onSelect={(value) => setEntity((value || 'currencies') as SupportedEntity)}
+          />
         </label>
 
         <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
@@ -93,16 +91,16 @@ export default function MasterDataImportForm() {
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
           <span>Import Mode</span>
-          <select
-            value={mode}
-            onChange={(event) => setMode(event.target.value as ImportMode)}
-            className="w-full rounded-md border px-3 py-2 text-white bg-transparent"
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            <option value="addOrUpdate">Add or Update (Upsert)</option>
-            <option value="add">Add Only (Skip existing)</option>
-            <option value="update">Update Only (Skip new)</option>
-          </select>
+          <SearchableSelect
+            selectedValue={mode}
+            options={[
+              { value: 'addOrUpdate', label: 'Add or Update (Upsert)' },
+              { value: 'add', label: 'Add Only (Skip existing)' },
+              { value: 'update', label: 'Update Only (Skip new)' },
+            ]}
+            placeholder="Select import mode"
+            onSelect={(value) => setMode((value || 'addOrUpdate') as ImportMode)}
+          />
         </label>
 
         <div className="space-y-1">

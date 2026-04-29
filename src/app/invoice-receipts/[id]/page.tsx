@@ -7,7 +7,7 @@ import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
 import { loadListValues } from '@/lib/load-list-values'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import InvoiceReceiptDetailCustomizeMode from '@/components/InvoiceReceiptDetailCustomizeMode'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import SystemNotesSection from '@/components/SystemNotesSection'
@@ -26,6 +26,7 @@ import {
 import { buildTransactionCommunicationComposePayload } from '@/lib/transaction-communications'
 import {
   buildConfiguredTransactionSections,
+  buildTransactionGlImpactRows,
   buildTransactionCustomizePreviewFields,
   buildTransactionExportHeaderFields,
 } from '@/lib/transaction-detail-helpers'
@@ -38,9 +39,11 @@ import {
 import { loadInvoiceReceiptDetailCustomization } from '@/lib/invoice-receipt-detail-customization-store'
 import type { TransactionStatDefinition } from '@/lib/transaction-page-config'
 
+export const runtime = 'nodejs'
+
 type InvoiceReceiptHeaderField = {
   key: InvoiceReceiptDetailFieldKey
-} & TransactionHeaderField
+} & RecordHeaderField
 
 export default async function InvoiceReceiptDetailPage({
   params,
@@ -56,10 +59,11 @@ export default async function InvoiceReceiptDetailPage({
   const isCustomizing = customize === '1'
   const { moneySettings } = await loadCompanyDisplaySettings()
 
-  const [receipt, customization, invoices, paymentMethodValues] = await Promise.all([
+  const [receipt, customization, invoices, paymentMethodValues, cashAccounts] = await Promise.all([
     prisma.cashReceipt.findUnique({
       where: { id },
       include: {
+        bankAccount: true,
         invoice: {
           include: {
             customer: true,
@@ -86,14 +90,58 @@ export default async function InvoiceReceiptDetailPage({
       take: 200,
     }),
     loadListValues('PAYMENT-METHOD'),
+    prisma.chartOfAccounts.findMany({
+      where: {
+        active: true,
+        isPosting: true,
+        accountType: 'Asset',
+        OR: [
+          { name: { contains: 'Cash', mode: 'insensitive' } },
+          { name: { contains: 'Bank', mode: 'insensitive' } },
+          { accountId: { in: ['1000', '1010'] } },
+        ],
+      },
+      orderBy: [{ accountId: 'asc' }],
+    }),
   ])
 
   if (!receipt) notFound()
+
+  const glImpactEntries = await prisma.journalEntry.findMany({
+    where: { sourceId: receipt.id },
+    include: {
+      lineItems: {
+        include: {
+          account: {
+            select: { accountId: true, name: true },
+          },
+        },
+      },
+    },
+    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+  })
+  const glSourceNumberByKey = new Map<string, string>()
+  for (const entry of glImpactEntries) {
+    glSourceNumberByKey.set(
+      `${entry.sourceType ?? ''}:${entry.sourceId ?? ''}`,
+      receipt.number ?? receipt.id,
+    )
+  }
+  const glImpactRows = buildTransactionGlImpactRows({
+    entries: glImpactEntries,
+    sourceNumberByKey: glSourceNumberByKey,
+    formatDate: (date) => fmtDocumentDate(date, moneySettings),
+    toNumericValue: (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback,
+  })
 
   const detailHref = `/invoice-receipts/${receipt.id}`
   const invoiceOptions = invoices.map((invoice) => ({
     value: invoice.id,
     label: `${invoice.number} - ${invoice.customer.name}`,
+  }))
+  const bankAccountOptions = cashAccounts.map((account) => ({
+    value: account.id,
+    label: `${account.accountId} - ${account.name}`,
   }))
   const methodOptions = paymentMethodValues.map((value) => ({
     value: value.toLowerCase(),
@@ -219,6 +267,20 @@ export default async function InvoiceReceiptDetailPage({
       subsectionTitle: 'Record Keys',
       subsectionDescription: 'Internal and linked transaction identifiers for this receipt.',
     },
+    bankAccountId: {
+      key: 'bankAccountId',
+      label: 'Bank Account',
+      value: receipt.bankAccountId ?? '',
+      displayValue: receipt.bankAccount ? `${receipt.bankAccount.accountId} - ${receipt.bankAccount.name}` : '-',
+      editable: true,
+      type: 'select',
+      options: bankAccountOptions,
+      helpText: 'Cash or bank GL account that receives this receipt.',
+      fieldType: 'list',
+      sourceText: 'Chart of accounts',
+      subsectionTitle: 'Receipt Terms',
+      subsectionDescription: 'Monetary amount, receipt date, and payment method.',
+    },
     amount: {
       key: 'amount',
       label: 'Amount',
@@ -307,14 +369,14 @@ export default async function InvoiceReceiptDetailPage({
   }, {
     invoice: invoiceHref,
   })
-  const allFieldDefinitions = {
+  const allFieldDefinitions: Record<string, RecordHeaderField> = {
     ...headerFieldDefinitions,
     ...referenceFieldDefinitions,
   }
 
   const customizeFields = buildTransactionCustomizePreviewFields({
     fields: INVOICE_RECEIPT_DETAIL_FIELDS,
-    fieldDefinitions: allFieldDefinitions,
+    fieldDefinitions: headerFieldDefinitions,
     previewOverrides: {
       amount: fmtCurrency(receipt.amount, undefined, moneySettings),
       date: fmtDocumentDate(receipt.date, moneySettings),
@@ -383,7 +445,7 @@ export default async function InvoiceReceiptDetailPage({
         fields,
       }
     })
-    .filter((section): section is { title: string; description: string; columns: number; rows: number; fields: TransactionHeaderField[] } => Boolean(section))
+    .filter((section): section is NonNullable<typeof section> => Boolean(section))
   const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
 
   return (
@@ -470,7 +532,7 @@ export default async function InvoiceReceiptDetailPage({
           ) : (
             <div className="space-y-6">
               {referenceSections.length > 0 ? (
-                <TransactionHeaderSections
+                <RecordHeaderDetails
                   editing={false}
                   sections={referenceSections.map((section) => ({
                     title: section.title,
@@ -484,7 +546,7 @@ export default async function InvoiceReceiptDetailPage({
                   showSubsections={false}
                 />
               ) : null}
-              <TransactionHeaderSections
+              <RecordHeaderDetails
                 purchaseOrderId={receipt.id}
                 editing={isEditing}
                 sections={headerSections}
@@ -500,6 +562,8 @@ export default async function InvoiceReceiptDetailPage({
         lineItems={null}
         relatedDocuments={isCustomizing ? null : (
           <InvoiceReceiptRelatedDocuments
+            embedded
+            showDisplayControl={false}
             invoice={{
               id: receipt.invoice.id,
               number: receipt.invoice.number,
@@ -542,9 +606,25 @@ export default async function InvoiceReceiptDetailPage({
             moneySettings={moneySettings}
           />
         )}
-        supplementarySections={isCustomizing ? null : <InvoiceReceiptGlImpactSection rows={[]} />}
+        relatedDocumentsCount={
+          1 +
+          (receipt.invoice.salesOrder ? 1 : 0) +
+          (receipt.invoice.salesOrder?.quote ? 1 : 0) +
+          (receipt.invoice.salesOrder?.quote?.opportunity ? 1 : 0)
+        }
+        supplementarySections={
+          isCustomizing ? null : (
+            <InvoiceReceiptGlImpactSection
+              rows={glImpactRows}
+              settings={customization.glImpactSettings}
+              columnCustomization={customization.glImpactColumns}
+            />
+          )
+        }
         communications={isCustomizing ? null : (
           <CommunicationsSection
+            embedded
+            showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
               recordId: receipt.id,
@@ -557,7 +637,9 @@ export default async function InvoiceReceiptDetailPage({
             })}
           />
         )}
-        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
+        communicationsCount={communications.length}
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        systemNotesCount={systemNotes.length}
       />
     </RecordDetailPageShell>
   )

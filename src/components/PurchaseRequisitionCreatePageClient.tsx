@@ -2,10 +2,9 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import TransactionHeaderSections, {
-  type TransactionHeaderField,
-  type TransactionHeaderSection,
-} from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, {
+  type RecordHeaderSection,
+} from '@/components/RecordHeaderDetails'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import { buildConfiguredTransactionSections, getOrderedVisibleTransactionLineColumns } from '@/lib/transaction-detail-helpers'
@@ -14,7 +13,6 @@ import {
   PURCHASE_REQUISITION_DETAIL_FIELDS,
   PURCHASE_REQUISITION_LINE_COLUMNS,
   type PurchaseRequisitionDetailCustomizationConfig,
-  type PurchaseRequisitionDetailFieldKey,
   type PurchaseRequisitionLineColumnKey,
 } from '@/lib/purchase-requisitions-detail-customization'
 import { purchaseRequisitionPageConfig } from '@/lib/transaction-page-configs/purchase-requisition'
@@ -151,10 +149,7 @@ export default function PurchaseRequisitionCreatePageClient({
     label: `${currency.code ?? currency.currencyId} - ${currency.name}`,
   }))
 
-  const headerFieldDefinitions: Record<
-    PurchaseRequisitionDetailFieldKey,
-    TransactionHeaderField & { key: PurchaseRequisitionDetailFieldKey }
-  > = {
+  const headerFieldDefinitions: Record<string, RecordHeaderSection['fields'][number]> = {
     vendorName: {
       key: 'vendorName',
       label: 'Vendor Name',
@@ -510,7 +505,7 @@ export default function PurchaseRequisitionCreatePageClient({
   applyRequirementsToEditableFields(headerFieldDefinitions, req, isLocked)
 
 
-  const headerSections: TransactionHeaderSection[] = buildConfiguredTransactionSections({
+  const headerSections: RecordHeaderSection[] = buildConfiguredTransactionSections({
     fields: PURCHASE_REQUISITION_DETAIL_FIELDS,
     layout: customization,
     fieldDefinitions: headerFieldDefinitions,
@@ -605,7 +600,7 @@ export default function PurchaseRequisitionCreatePageClient({
         </>
       }
     >
-      <TransactionHeaderSections
+      <RecordHeaderDetails
         editing
         sections={headerSections}
         columns={customization.formColumns}

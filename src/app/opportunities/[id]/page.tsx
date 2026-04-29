@@ -9,9 +9,10 @@ import OpportunityCreateQuoteButton from '@/components/OpportunityCreateQuoteBut
 import RecordStatusButton from '@/components/RecordStatusButton'
 import OpportunityDetailCustomizeMode from '@/components/OpportunityDetailCustomizeMode'
 import OpportunityRelatedDocumentsSection from '@/components/OpportunityRelatedDocumentsSection'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
@@ -47,7 +48,7 @@ import {
 import type { TransactionStatusColorTone } from '@/lib/company-preferences-definitions'
 import type { TransactionVisualTone } from '@/lib/transaction-page-config'
 
-type OpportunityHeaderField = TransactionHeaderField & { key: OpportunityDetailFieldKey }
+type OpportunityHeaderField = RecordHeaderField & { key: OpportunityDetailFieldKey }
 
 function formatStage(stage: string | null) {
   if (!stage) return 'Unknown'
@@ -448,7 +449,7 @@ export default async function OpportunityDetailPage({
       value: opportunity.inactive ? 'Yes' : 'No',
       displayValue: opportunity.inactive ? 'Yes' : 'No',
       helpText: 'Whether the opportunity is inactive.',
-      fieldType: 'boolean',
+      fieldType: 'checkbox',
       subsectionTitle: 'System Dates',
       subsectionDescription: 'System-managed timestamps for this opportunity.',
     },
@@ -499,7 +500,7 @@ export default async function OpportunityDetailPage({
     subsidiary: subsidiaryHref,
     currency: currencyHref,
   })
-  const allFieldDefinitions = {
+  const allFieldDefinitions: Record<string, RecordHeaderField> = {
     ...headerFieldDefinitions,
     ...referenceFieldDefinitions,
   }
@@ -512,7 +513,7 @@ export default async function OpportunityDetailPage({
   })
   const customizeFields = buildTransactionCustomizePreviewFields({
     fields: OPPORTUNITY_DETAIL_FIELDS,
-    fieldDefinitions: allFieldDefinitions,
+    fieldDefinitions: headerFieldDefinitions,
   })
   const visibleLineColumns = getOrderedVisibleTransactionLineColumns(OPPORTUNITY_LINE_COLUMNS, customization)
   const statsRecord = {
@@ -572,10 +573,19 @@ export default async function OpportunityDetailPage({
         fields,
       }
     })
-    .filter((section): section is { title: string; description: string; columns: number; rows: number; fields: TransactionHeaderField[] } => Boolean(section))
+    .filter((section): section is NonNullable<typeof section> => Boolean(section))
   const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
   const opportunityStatusActions = getAvailableWorkflowStatusActions(workflow, 'opportunity', opportunity.stage)
   const createQuoteAction = getWorkflowDocumentAction(workflow, 'opportunity', 'quote', opportunity.stage)
+  const relatedDocumentsCount =
+    (opportunity.quote ? 1 : 0) +
+    opportunity.customer.contacts.length +
+    (opportunity.quote?.salesOrder ? 1 : 0) +
+    (opportunity.quote?.salesOrder?.fulfillments.length ?? 0) +
+    (opportunity.quote?.salesOrder?.invoices.length ?? 0) +
+    (opportunity.quote?.salesOrder?.invoices.flatMap((invoice) => invoice.cashReceipts).length ?? 0)
+  const communicationsToolbarTargetId = 'opportunity-communications-toolbar'
+  const systemNotesToolbarTargetId = 'opportunity-system-notes-toolbar'
 
   return (
     <RecordDetailPageShell
@@ -699,7 +709,7 @@ export default async function OpportunityDetailPage({
           ) : (
             <div className="space-y-6">
               {referenceSections.length > 0 ? (
-                <TransactionHeaderSections
+                <RecordHeaderDetails
                   editing={false}
                   sections={referenceSections.map((section) => ({
                     title: section.title,
@@ -713,7 +723,7 @@ export default async function OpportunityDetailPage({
                   showSubsections={false}
                 />
               ) : null}
-              <TransactionHeaderSections
+              <RecordHeaderDetails
                 purchaseOrderId={opportunity.id}
                 editing={isEditing}
                 sections={headerSections}
@@ -768,7 +778,17 @@ export default async function OpportunityDetailPage({
           )
         }
         relatedDocuments={isCustomizing ? null : (
-          <OpportunityRelatedDocumentsSection
+          <RecordBottomTabsSection
+            defaultActiveKey="related-documents"
+            tabs={[
+              {
+                key: 'related-documents',
+                label: 'Related Documents',
+                count: relatedDocumentsCount,
+                content: (
+                  <OpportunityRelatedDocumentsSection
+                    embedded
+                    showDisplayControl={false}
             quote={
               opportunity.quote
                 ? {
@@ -835,36 +855,59 @@ export default async function OpportunityDetailPage({
               email: contact.email ?? '-',
               position: contact.position ?? '-',
             }))}
+                  />
+                ),
+              },
+              {
+                key: 'communications',
+                label: 'Communications',
+                count: communications.length,
+                toolbarTargetId: communicationsToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <CommunicationsSection
+                    embedded
+                    toolbarTargetId={communicationsToolbarTargetId}
+                    showDisplayControl={false}
+                    rows={communications}
+                    compose={buildTransactionCommunicationComposePayload({
+                      recordId: opportunity.id,
+                      userId: opportunity.userId,
+                      number: opportunity.opportunityNumber ?? opportunity.name,
+                      counterpartyName: opportunity.customer.name,
+                      counterpartyEmail: opportunity.customer.email ?? null,
+                      fromEmail: opportunity.user?.email ?? null,
+                      status: formatStage(opportunity.stage),
+                      total: fmtCurrency(opportunity.amount, undefined, moneySettings),
+                      lineItems: lineRows.map((row) => ({
+                        line: row.lineNumber,
+                        itemId: row.itemId ?? '-',
+                        description: row.description,
+                        quantity: row.quantity,
+                        receivedQuantity: 0,
+                        openQuantity: row.quantity,
+                        billedQuantity: 0,
+                        unitPrice: row.unitPrice,
+                        lineTotal: row.lineTotal,
+                      })),
+                    })}
+                  />
+                ),
+              },
+              {
+                key: 'system-notes',
+                label: 'System Notes',
+                count: systemNotes.length,
+                toolbarTargetId: systemNotesToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: <SystemNotesSection embedded toolbarTargetId={systemNotesToolbarTargetId} showDisplayControl={false} notes={systemNotes} />,
+              },
+            ]}
           />
         )}
         supplementarySections={isCustomizing ? null : []}
-        communications={isCustomizing ? null : (
-          <CommunicationsSection
-            rows={communications}
-            compose={buildTransactionCommunicationComposePayload({
-              recordId: opportunity.id,
-              userId: opportunity.userId,
-              number: opportunity.opportunityNumber ?? opportunity.name,
-              counterpartyName: opportunity.customer.name,
-              counterpartyEmail: opportunity.customer.email ?? null,
-              fromEmail: opportunity.user?.email ?? null,
-              status: formatStage(opportunity.stage),
-              total: fmtCurrency(opportunity.amount, undefined, moneySettings),
-              lineItems: lineRows.map((row) => ({
-                line: row.lineNumber,
-                itemId: row.itemId ?? '-',
-                description: row.description,
-                quantity: row.quantity,
-                receivedQuantity: 0,
-                openQuantity: row.quantity,
-                billedQuantity: 0,
-                unitPrice: row.unitPrice,
-                lineTotal: row.lineTotal,
-              })),
-            })}
-          />
-        )}
-        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
+        communications={null}
+        systemNotes={null}
       />
     </RecordDetailPageShell>
   )

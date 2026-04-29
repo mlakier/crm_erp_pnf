@@ -3,21 +3,20 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { fmtCurrency, fmtDocumentDate, fmtPhone, normalizePhone } from '@/lib/format'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
-import DeleteButton from '@/components/DeleteButton'
-import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
-import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
-import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
-import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSection'
+import type { InlineRecordSection } from '@/components/InlineRecordDetails'
+import MasterDataHeaderDetails from '@/components/MasterDataHeaderDetails'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
+import RecordDetailActionBar from '@/components/RecordDetailActionBar'
+import { buildMasterDataSystemInformationItems } from '@/components/RecordSystemInformationSection'
 import ContactDetailCustomizeMode from '@/components/ContactDetailCustomizeMode'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import CommunicationsSection from '@/components/CommunicationsSection'
+import RelatedRecordsSection from '@/components/RelatedRecordsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
-import {
-  RecordDetailCell,
-  RecordDetailField,
-  RecordDetailHeaderCell,
-  RecordDetailSection,
-} from '@/components/RecordDetailPanels'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
+import TransactionRelatedDocumentsTabs, {
+  RelatedDocumentsStatusBadge,
+} from '@/components/TransactionRelatedDocumentsTabs'
 import { loadContactFormCustomization } from '@/lib/contact-form-customization-store'
 import { CONTACT_FORM_FIELDS, type ContactFormFieldKey } from '@/lib/contact-form-customization'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
@@ -25,6 +24,7 @@ import { loadFormRequirements } from '@/lib/form-requirements-store'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { loadMasterDataSystemInfo } from '@/lib/master-data-system-info'
 import { loadMasterDataSystemNotes } from '@/lib/master-data-system-notes'
+import type { TransactionStatDefinition, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 export default async function ContactDetailPage({
   params,
@@ -141,6 +141,38 @@ export default async function ContactDetailPage({
       helpText: 'Vendor account this contact belongs to, when vendor-linked.',
       sourceText: getFieldSourceText(fieldMetaById, 'vendorId'),
     },
+    isPrimaryForCustomer: {
+      name: 'isPrimaryForCustomer',
+      label: 'Primary',
+      value: contact.isPrimaryForCustomer ? 'true' : 'false',
+      type: 'checkbox',
+      helpText: 'Marks the primary contact for the linked customer.',
+      sourceText: getFieldSourceText(fieldMetaById, 'isPrimaryForCustomer'),
+    },
+    receivesQuotesSalesOrders: {
+      name: 'receivesQuotesSalesOrders',
+      label: 'Send Quote / SO',
+      value: contact.receivesQuotesSalesOrders ? 'true' : 'false',
+      type: 'checkbox',
+      helpText: 'Whether this contact receives quotes and sales orders.',
+      sourceText: getFieldSourceText(fieldMetaById, 'receivesQuotesSalesOrders'),
+    },
+    receivesInvoices: {
+      name: 'receivesInvoices',
+      label: 'Send Invoice',
+      value: contact.receivesInvoices ? 'true' : 'false',
+      type: 'checkbox',
+      helpText: 'Whether this contact receives invoices.',
+      sourceText: getFieldSourceText(fieldMetaById, 'receivesInvoices'),
+    },
+    receivesInvoiceCc: {
+      name: 'receivesInvoiceCc',
+      label: 'CC Invoice',
+      value: contact.receivesInvoiceCc ? 'true' : 'false',
+      type: 'checkbox',
+      helpText: 'Whether this contact receives invoice CC copies.',
+      sourceText: getFieldSourceText(fieldMetaById, 'receivesInvoiceCc'),
+    },
     inactive: {
       name: 'inactive',
       label: 'Inactive',
@@ -157,17 +189,27 @@ export default async function ContactDetailPage({
   const accountName = contact.customer?.name ?? contact.vendor?.name ?? '-'
   const ownerName = contact.user.name ?? contact.user.email
   const activityCount = contact.customer ? contact.customer.opportunities.length : contact.vendor?.purchaseOrders.length ?? 0
-  const statPreviewCards = [
-    { id: 'accountType', label: 'Account Type', value: accountType, cardTone: contact.customer ? 'blue' : 'yellow', valueTone: contact.customer ? 'blue' : 'yellow', supportsColorized: true, supportsLink: false },
+  const statPreviewCards: Array<{
+    id: string
+    label: string
+    value: string | number
+    href?: string | null
+    accent?: true | 'teal' | 'yellow'
+    cardTone?: TransactionVisualTone
+    valueTone?: TransactionVisualTone
+    supportsColorized: boolean
+    supportsLink: boolean
+  }> = [
+    { id: 'accountType', label: 'Account Type', value: accountType, cardTone: contact.customer ? 'accent' : 'yellow', valueTone: contact.customer ? 'accent' : 'yellow', supportsColorized: true, supportsLink: false },
     { id: 'account', label: 'Account', value: accountName, href: contact.customer ? `/customers/${contact.customer.id}` : contact.vendor ? `/vendors/${contact.vendor.id}` : null, cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: true },
-    { id: 'owner', label: 'Owner', value: ownerName, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+    { id: 'owner', label: 'Owner', value: ownerName, cardTone: 'accent', valueTone: 'accent', supportsColorized: true, supportsLink: false },
     { id: 'activityCount', label: contact.customer ? 'Open Opportunities' : 'Purchase Orders', value: activityCount, accent: true, cardTone: 'green', valueTone: 'green', supportsColorized: true, supportsLink: false },
   ]
-  const statDefinitions = [
-    { id: 'accountType', label: 'Account Type', getValue: () => accountType, getCardTone: () => (contact.customer ? 'blue' : 'yellow') as const, getValueTone: () => (contact.customer ? 'blue' : 'yellow') as const },
-    { id: 'account', label: 'Account', getValue: () => accountName, getHref: () => (contact.customer ? `/customers/${contact.customer.id}` : contact.vendor ? `/vendors/${contact.vendor.id}` : null), accent: 'teal' as const, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
-    { id: 'owner', label: 'Owner', getValue: () => ownerName, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
-    { id: 'activityCount', label: contact.customer ? 'Open Opportunities' : 'Purchase Orders', getValue: () => activityCount, accent: true as const, getCardTone: () => 'green' as const, getValueTone: () => 'green' as const },
+  const statDefinitions: Array<TransactionStatDefinition<typeof contact>> = [
+    { id: 'accountType', label: 'Account Type', getValue: () => accountType, getCardTone: () => (contact.customer ? 'accent' : 'yellow'), getValueTone: () => (contact.customer ? 'accent' : 'yellow') },
+    { id: 'account', label: 'Account', getValue: () => accountName, getHref: () => (contact.customer ? `/customers/${contact.customer.id}` : contact.vendor ? `/vendors/${contact.vendor.id}` : null), accent: 'teal', getCardTone: () => 'teal', getValueTone: () => 'teal' },
+    { id: 'owner', label: 'Owner', getValue: () => ownerName, getCardTone: () => 'accent', getValueTone: () => 'accent' },
+    { id: 'activityCount', label: contact.customer ? 'Open Opportunities' : 'Purchase Orders', getValue: () => activityCount, accent: true, getCardTone: () => 'green', getValueTone: () => 'green' },
   ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: CONTACT_FORM_FIELDS,
@@ -183,6 +225,116 @@ export default async function ContactDetailPage({
     fallbackCreatedByUserId: contact.userId,
   })
   const systemNotes = await loadMasterDataSystemNotes({ entityType: 'contact', entityId: contact.id })
+  const relatedRecordsTabs = [
+    ...(contact.customer
+      ? [
+          {
+            key: 'customer',
+            label: 'Customer',
+            count: 1,
+            emptyMessage: 'No customer is linked to this contact.',
+            rows: [
+              {
+                id: contact.customer.id,
+                type: 'Customer',
+                reference: contact.customer.customerId ?? 'Pending',
+                name: contact.customer.name,
+                details: [contact.customer.email ?? '-', fmtPhone(contact.customer.phone), contact.customer.address ?? '-']
+                  .filter(Boolean)
+                  .join(' | '),
+                href: `/customers/${contact.customer.id}`,
+              },
+            ],
+          },
+        ]
+      : []),
+    ...(contact.vendor
+      ? [
+          {
+            key: 'vendor',
+            label: 'Vendor',
+            count: 1,
+            emptyMessage: 'No vendor is linked to this contact.',
+            rows: [
+              {
+                id: contact.vendor.id,
+                type: 'Vendor',
+                reference: contact.vendor.vendorNumber ?? 'Pending',
+                name: contact.vendor.name,
+                details: [contact.vendor.email ?? '-', fmtPhone(contact.vendor.phone), contact.vendor.address ?? '-']
+                  .filter(Boolean)
+                  .join(' | '),
+                href: `/vendors/${contact.vendor.id}`,
+              },
+            ],
+          },
+        ]
+      : []),
+  ]
+  const relatedDocumentsTabs = [
+    ...(contact.customer
+      ? [
+          {
+            key: 'opportunities',
+            label: 'Opportunities',
+            count: contact.customer.opportunities.length,
+            tone: 'downstream' as const,
+            emptyMessage: 'No opportunities are linked to this contact yet.',
+            headers: ['Txn ID', 'Name', 'Status', 'Amount', 'Close Date'],
+            rows: contact.customer.opportunities.map((opportunity) => ({
+              id: opportunity.id,
+              cells: [
+                <Link key="link" href={`/opportunities/${opportunity.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                  {opportunity.opportunityNumber ?? 'Pending'}
+                </Link>,
+                opportunity.name,
+                <RelatedDocumentsStatusBadge key="status" status={opportunity.stage} />,
+                fmtCurrency(opportunity.amount, undefined, moneySettings),
+                opportunity.closeDate ? fmtDocumentDate(opportunity.closeDate, moneySettings) : '-',
+              ],
+              filterValues: [
+                opportunity.opportunityNumber ?? 'Pending',
+                opportunity.name,
+                opportunity.stage,
+                fmtCurrency(opportunity.amount, undefined, moneySettings),
+                opportunity.closeDate ? fmtDocumentDate(opportunity.closeDate, moneySettings) : '-',
+              ],
+            })),
+          },
+        ]
+      : []),
+    ...(contact.vendor
+      ? [
+          {
+            key: 'purchase-orders',
+            label: 'Purchase Orders',
+            count: contact.vendor.purchaseOrders.length,
+            tone: 'downstream' as const,
+            emptyMessage: 'No purchase orders are linked to this contact yet.',
+            headers: ['Txn ID', 'Status', 'Total', 'Created'],
+            rows: contact.vendor.purchaseOrders.map((purchaseOrder) => ({
+              id: purchaseOrder.id,
+              cells: [
+                <Link key="link" href={`/purchase-orders/${purchaseOrder.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                  {purchaseOrder.number}
+                </Link>,
+                <RelatedDocumentsStatusBadge key="status" status={purchaseOrder.status} />,
+                fmtCurrency(purchaseOrder.total, undefined, moneySettings),
+                fmtDocumentDate(purchaseOrder.createdAt, moneySettings),
+              ],
+              filterValues: [
+                purchaseOrder.number,
+                purchaseOrder.status,
+                fmtCurrency(purchaseOrder.total, undefined, moneySettings),
+                fmtDocumentDate(purchaseOrder.createdAt, moneySettings),
+              ],
+            })),
+          },
+        ]
+      : []),
+  ]
+  const communicationsToolbarTargetId = 'contact-communications-toolbar'
+  const systemNotesToolbarTargetId = 'contact-system-notes-toolbar'
 
   return (
     <RecordDetailPageShell
@@ -198,40 +350,22 @@ export default async function ContactDetailPage({
         ) : null
       }
       actions={
-        <>
-          {isEditing && !isCustomizing ? (
-            <>
-              <Link href={detailHref} className="rounded-md border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-                Cancel
-              </Link>
-              <button
-                type="submit"
-                form={`inline-record-form-${contact.id}`}
-                className="rounded-md px-3 py-1.5 text-xs font-semibold text-white"
-                style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-              >
-                Save
-              </button>
-            </>
-          ) : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailCreateMenu newHref="/contacts/new" duplicateHref={`/contacts/new?duplicateFrom=${contact.id}`} /> : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailExportMenu title={`${contact.firstName} ${contact.lastName}`} fileName={`contact-${contact.contactNumber ?? contact.id}`} sections={detailSections} /> : null}
-          {!isEditing && !isCustomizing ? (
-            <Link href={`${detailHref}?customize=1`} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-              Customize
-            </Link>
-          ) : null}
-          {!isEditing && !isCustomizing ? (
-            <Link
-              href={`${detailHref}?edit=1`}
-              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
-              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-            >
-              Edit
-            </Link>
-          ) : null}
-          {!isCustomizing ? <DeleteButton resource="contacts" id={contact.id} /> : null}
-        </>
+        isCustomizing ? null : (
+          <RecordDetailActionBar
+            mode={isEditing ? 'edit' : 'detail'}
+            detailHref={detailHref}
+            formId={`inline-record-form-${contact.id}`}
+            newHref="/contacts/new"
+            duplicateHref={`/contacts/new?duplicateFrom=${contact.id}`}
+            exportTitle={`${contact.firstName} ${contact.lastName}`}
+            exportFileName={`contact-${contact.contactNumber ?? contact.id}`}
+            exportSections={detailSections}
+            customizeHref={`${detailHref}?customize=1`}
+            editHref={`${detailHref}?edit=1`}
+            deleteResource="contacts"
+            deleteId={contact.id}
+          />
+        )
       }
     >
         {isCustomizing ? (
@@ -252,129 +386,76 @@ export default async function ContactDetailPage({
               visibleStatCards={formCustomization.statCards as Array<{ id: string; metric: string; visible: boolean; order: number; size?: 'sm' | 'md' | 'lg'; colorized?: boolean; linked?: boolean }> | undefined}
             />
           </div>
-          <InlineRecordDetails
+          <MasterDataHeaderDetails
             resource="contacts"
             id={contact.id}
-            title="Contact details"
+            title="Contact Details"
             sections={detailSections}
             editing={isEditing}
             columns={formCustomization.formColumns}
-            showInternalActions={false}
+            systemInformationItems={buildMasterDataSystemInformationItems(systemInfo, contact.id)}
           />
           </>
         )}
 
         {!isCustomizing ? (
-          <>
-            <MasterDataSystemInfoSection info={systemInfo} internalId={contact.id} />
-
-            {contact.customer ? (
-              <>
-                <RecordDetailSection title="Linked customer" count={1}>
-                  <div className="mb-4 flex items-center justify-between px-6 pt-6">
-                    <Link href={`/customers/${contact.customer.id}`} className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                      {'View customer ->'}
-                    </Link>
-                  </div>
-                  <div className="px-6 pb-6">
-                    <p className="text-lg font-semibold text-white">{contact.customer.name}</p>
-                    <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-                      <RecordDetailField label="Industry">{contact.customer.industry ?? '-'}</RecordDetailField>
-                      <RecordDetailField label="Customer email">{contact.customer.email ?? '-'}</RecordDetailField>
-                      <RecordDetailField label="Customer phone">{fmtPhone(contact.customer.phone)}</RecordDetailField>
-                      <RecordDetailField label="Address">{contact.customer.address ?? '-'}</RecordDetailField>
-                    </dl>
-                  </div>
-                </RecordDetailSection>
-
-                <RecordDetailSection title="Recent customer opportunities" count={contact.customer.opportunities.length}>
-                  {contact.customer.opportunities.length === 0 ? (
-                    <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>No opportunities for this customer yet.</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full">
-                        <thead>
-                          <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                            <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
-                            <RecordDetailHeaderCell>Stage</RecordDetailHeaderCell>
-                            <RecordDetailHeaderCell>Amount</RecordDetailHeaderCell>
-                            <RecordDetailHeaderCell>Close Date</RecordDetailHeaderCell>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {contact.customer.opportunities.map((opportunity, index) => (
-                            <tr key={opportunity.id} style={index < contact.customer!.opportunities.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                              <RecordDetailCell>
-                                <Link href={`/opportunities/${opportunity.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                                  {opportunity.name}
-                                </Link>
-                              </RecordDetailCell>
-                              <RecordDetailCell>{opportunity.stage}</RecordDetailCell>
-                              <RecordDetailCell>{fmtCurrency(opportunity.amount, undefined, moneySettings)}</RecordDetailCell>
-                              <RecordDetailCell>{opportunity.closeDate ? fmtDocumentDate(opportunity.closeDate, moneySettings) : '-'}</RecordDetailCell>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </RecordDetailSection>
-              </>
-            ) : contact.vendor ? (
-              <>
-                <RecordDetailSection title="Linked vendor" count={1}>
-                  <div className="mb-4 flex items-center justify-between px-6 pt-6">
-                    <Link href={`/vendors/${contact.vendor.id}`} className="text-sm hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                      {'View vendor ->'}
-                    </Link>
-                  </div>
-                  <div className="px-6 pb-6">
-                    <p className="text-lg font-semibold text-white">{contact.vendor.name}</p>
-                    <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-                      <RecordDetailField label="Vendor email">{contact.vendor.email ?? '-'}</RecordDetailField>
-                      <RecordDetailField label="Vendor phone">{fmtPhone(contact.vendor.phone)}</RecordDetailField>
-                      <RecordDetailField label="Tax ID">{contact.vendor.taxId ?? '-'}</RecordDetailField>
-                      <RecordDetailField label="Address">{contact.vendor.address ?? '-'}</RecordDetailField>
-                    </dl>
-                  </div>
-                </RecordDetailSection>
-
-                <RecordDetailSection title="Recent vendor purchase orders" count={contact.vendor.purchaseOrders.length}>
-                  {contact.vendor.purchaseOrders.length === 0 ? (
-                    <p className="px-6 py-4 text-sm" style={{ color: 'var(--text-muted)' }}>No purchase orders for this vendor yet.</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full">
-                        <thead>
-                          <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                            <RecordDetailHeaderCell>Number</RecordDetailHeaderCell>
-                            <RecordDetailHeaderCell>Status</RecordDetailHeaderCell>
-                            <RecordDetailHeaderCell>Total</RecordDetailHeaderCell>
-                            <RecordDetailHeaderCell>Date</RecordDetailHeaderCell>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {contact.vendor.purchaseOrders.map((purchaseOrder, index) => (
-                            <tr key={purchaseOrder.id} style={index < contact.vendor!.purchaseOrders.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                              <RecordDetailCell>
-                                <Link href={`/purchase-orders/${purchaseOrder.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                                  {purchaseOrder.number}
-                                </Link>
-                              </RecordDetailCell>
-                              <RecordDetailCell>{purchaseOrder.status}</RecordDetailCell>
-                              <RecordDetailCell>{fmtCurrency(purchaseOrder.total, undefined, moneySettings)}</RecordDetailCell>
-                              <RecordDetailCell>{fmtDocumentDate(purchaseOrder.createdAt, moneySettings)}</RecordDetailCell>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </RecordDetailSection>
-              </>
-            ) : null}
-            <SystemNotesSection notes={systemNotes} />
-          </>
+          <RecordBottomTabsSection
+            defaultActiveKey="related-records"
+            tabs={[
+              {
+                key: 'related-records',
+                label: 'Related Records',
+                count: relatedRecordsTabs.reduce((sum, tab) => sum + tab.count, 0),
+                content: <RelatedRecordsSection embedded tabs={relatedRecordsTabs} showDisplayControl={false} />,
+              },
+              ...(relatedDocumentsTabs.length
+                ? [
+                    {
+                      key: 'related-documents',
+                      label: 'Related Documents',
+                      count: relatedDocumentsTabs.reduce((sum, tab) => sum + tab.count, 0),
+                      content: (
+                        <TransactionRelatedDocumentsTabs
+                          embedded
+                          tabs={relatedDocumentsTabs}
+                          showDisplayControl={false}
+                        />
+                      ),
+                    },
+                  ]
+                : []),
+              {
+                key: 'communications',
+                label: 'Communications',
+                count: 0,
+                toolbarTargetId: communicationsToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <CommunicationsSection
+                    embedded
+                    toolbarTargetId={communicationsToolbarTargetId}
+                    rows={[]}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+              {
+                key: 'system-notes',
+                label: 'System Notes',
+                count: systemNotes.length,
+                toolbarTargetId: systemNotesToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <SystemNotesSection
+                    embedded
+                    toolbarTargetId={systemNotesToolbarTargetId}
+                    notes={systemNotes}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+            ]}
+          />
         ) : null}
     </RecordDetailPageShell>
   )

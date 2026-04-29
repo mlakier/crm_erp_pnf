@@ -38,6 +38,7 @@ type InvoiceDoc = {
 
 type CashReceiptDoc = {
   id: string
+  number: string | null
   amount: number
   date: string
   method: string | null
@@ -51,15 +52,21 @@ export default function FulfillmentRelatedDocuments({
   fulfillments,
   invoices,
   cashReceipts,
+  embedded = false,
+  showDisplayControl = true,
 }: {
   opportunities: OpportunityDoc[]
   quotes: QuoteDoc[]
   fulfillments: FulfillmentDoc[]
   invoices: InvoiceDoc[]
   cashReceipts: CashReceiptDoc[]
+  embedded?: boolean
+  showDisplayControl?: boolean
 }) {
   return (
     <SalesOrderRelatedDocuments
+      embedded={embedded}
+      showDisplayControl={showDisplayControl}
       opportunities={opportunities}
       quotes={quotes}
       fulfillments={fulfillments}

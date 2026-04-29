@@ -8,7 +8,7 @@ import { loadListValues } from '@/lib/load-list-values'
 import { createRecordLabelMapFromValues, formatRecordLabel } from '@/lib/record-status-label'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import BillPaymentDetailCustomizeMode from '@/components/BillPaymentDetailCustomizeMode'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import SystemNotesSection from '@/components/SystemNotesSection'
@@ -18,6 +18,9 @@ import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
 import TransactionActionStack from '@/components/TransactionActionStack'
 import DeleteButton from '@/components/DeleteButton'
 import BillPaymentRelatedDocuments from '@/components/BillPaymentRelatedDocuments'
+import BillPaymentGlImpactSection from '@/components/BillPaymentGlImpactSection'
+import BillPaymentApplicationsSection from '@/components/BillPaymentApplicationsSection'
+import BillPaymentDetailEditor from '@/components/BillPaymentDetailEditor'
 import { parseCommunicationSummary, parseFieldChangeSummary } from '@/lib/activity'
 import {
   buildLinkedReferenceFieldDefinitions,
@@ -26,6 +29,7 @@ import {
 import { buildTransactionCommunicationComposePayload } from '@/lib/transaction-communications'
 import {
   buildConfiguredTransactionSections,
+  buildTransactionGlImpactRows,
   buildTransactionCustomizePreviewFields,
   buildTransactionExportHeaderFields,
 } from '@/lib/transaction-detail-helpers'
@@ -37,10 +41,16 @@ import {
 } from '@/lib/bill-payment-detail-customization'
 import { loadBillPaymentDetailCustomization } from '@/lib/bill-payment-detail-customization-store'
 import type { TransactionStatDefinition } from '@/lib/transaction-page-config'
+import {
+  roundMoney,
+  type BillPaymentApplicationInput,
+} from '@/lib/bill-payment-applications'
+
+export const runtime = 'nodejs'
 
 type BillPaymentHeaderField = {
   key: BillPaymentDetailFieldKey
-} & TransactionHeaderField
+} & RecordHeaderField
 
 export default async function BillPaymentDetailPage({
   params,
@@ -56,10 +66,12 @@ export default async function BillPaymentDetailPage({
   const isCustomizing = customize === '1'
   const { moneySettings } = await loadCompanyDisplaySettings()
 
-  const [payment, statusValues, methodValues, customization] = await Promise.all([
+  const [payment, statusValues, methodValues, customization, cashAccounts, vendors, candidateBills] = await Promise.all([
     prisma.billPayment.findUnique({
       where: { id },
       include: {
+        vendor: true,
+        bankAccount: true,
         bill: {
           include: {
             vendor: true,
@@ -73,20 +85,206 @@ export default async function BillPaymentDetailPage({
             },
           },
         },
+        applications: {
+          select: {
+            billId: true,
+            appliedAmount: true,
+            createdAt: true,
+          },
+          orderBy: [{ createdAt: 'asc' }],
+        },
       },
     }),
     loadListValues('BILL-PAYMENT-STATUS'),
     loadListValues('PAYMENT-METHOD'),
     loadBillPaymentDetailCustomization(),
+    prisma.chartOfAccounts.findMany({
+      where: {
+        active: true,
+        isPosting: true,
+        accountType: 'Asset',
+        OR: [
+          { name: { contains: 'Cash', mode: 'insensitive' } },
+          { name: { contains: 'Bank', mode: 'insensitive' } },
+          { accountId: { in: ['1000', '1010'] } },
+        ],
+      },
+      orderBy: [{ accountId: 'asc' }],
+    }),
+    prisma.vendor.findMany({
+      where: { inactive: false },
+      orderBy: [{ vendorNumber: 'asc' }, { name: 'asc' }],
+    }),
+    prisma.bill.findMany({
+      include: {
+        vendor: true,
+        paymentApplications: {
+          include: {
+            billPayment: {
+              select: { id: true, status: true },
+            },
+          },
+        },
+        billPayments: {
+          select: {
+            id: true,
+            amount: true,
+            status: true,
+            applications: { select: { id: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    }),
   ])
 
   if (!payment) notFound()
 
+  const appliedBillIds = Array.from(
+    new Set(
+      payment.applications.map((application) => application.billId).filter(Boolean),
+    ),
+  )
+  const allBillIds = Array.from(
+    new Set([payment.billId, ...appliedBillIds].filter((value): value is string => Boolean(value))),
+  )
+
+  const [applicationBillRecords, nestedApplications, legacyBillPayments] = await Promise.all([
+    allBillIds.length > 0
+      ? prisma.bill.findMany({
+          where: { id: { in: allBillIds } },
+          include: {
+            vendor: true,
+            purchaseOrder: {
+              include: {
+                vendor: true,
+                user: true,
+                requisition: true,
+                receipts: true,
+              },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    allBillIds.length > 0
+      ? prisma.billPaymentApplication.findMany({
+          where: { billId: { in: allBillIds } },
+          include: {
+            billPayment: {
+              select: { id: true, status: true },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    allBillIds.length > 0
+      ? prisma.billPayment.findMany({
+          where: { billId: { in: allBillIds } },
+          select: {
+            id: true,
+            billId: true,
+            amount: true,
+            status: true,
+            applications: { select: { id: true } },
+          },
+        })
+      : Promise.resolve([]),
+  ])
+
+  const billById = new Map(applicationBillRecords.map((bill) => [bill.id, bill]))
+  const primaryBill = (payment.billId ? billById.get(payment.billId) : null) ?? payment.bill ?? null
+
+  const glImpactEntries = await prisma.journalEntry.findMany({
+    where: { sourceId: payment.id },
+    include: {
+      lineItems: {
+        include: {
+          account: {
+            select: { accountId: true, name: true },
+          },
+        },
+      },
+    },
+    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+  })
+  const glSourceNumberByKey = new Map<string, string>()
+  for (const entry of glImpactEntries) {
+    glSourceNumberByKey.set(`${entry.sourceType ?? ''}:${entry.sourceId ?? ''}`, payment.number)
+  }
+  const glImpactRows = buildTransactionGlImpactRows({
+    entries: glImpactEntries,
+    sourceNumberByKey: glSourceNumberByKey,
+    formatDate: (date) => fmtDocumentDate(date, moneySettings),
+    toNumericValue: (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback,
+  })
+
   const detailHref = `/bill-payments/${payment.id}`
+  const paymentApplications: BillPaymentApplicationInput[] =
+    payment.applications.length > 0
+      ? payment.applications.map((application) => ({
+          billId: application.billId,
+          appliedAmount: Number(application.appliedAmount),
+        }))
+      : payment.billId
+        ? [{ billId: payment.billId, appliedAmount: Number(payment.amount) }]
+        : []
+
+  const applicationBills =
+    payment.applications.length > 0
+      ? payment.applications.flatMap((application) => {
+          const bill = billById.get(application.billId)
+          if (!bill) return []
+          const appliedViaApplications = nestedApplications.reduce((sum, nestedApplication) => {
+            if (nestedApplication.billId !== application.billId) return sum
+            if (nestedApplication.billPaymentId === payment.id) return sum
+            if ((nestedApplication.billPayment.status ?? '').toLowerCase() === 'cancelled') return sum
+            return sum + Number(nestedApplication.appliedAmount)
+          }, 0)
+          const appliedViaLegacyPayments = legacyBillPayments.reduce((sum, legacyPayment) => {
+            if (legacyPayment.billId !== application.billId) return sum
+            if (legacyPayment.id === payment.id) return sum
+            if ((legacyPayment.status ?? '').toLowerCase() === 'cancelled') return sum
+            if (legacyPayment.applications.length > 0) return sum
+            return sum + Number(legacyPayment.amount)
+          }, 0)
+
+          return [{
+            id: bill.id,
+            number: bill.number,
+            vendorId: bill.vendorId,
+            vendorName: bill.vendor.name,
+            status: bill.status,
+            total: Number(bill.total),
+            date: bill.date,
+            subsidiaryId: bill.subsidiaryId ?? null,
+            currencyId: bill.currencyId ?? null,
+            userId: bill.userId ?? null,
+            openAmount: roundMoney(Number(bill.total) - appliedViaApplications - appliedViaLegacyPayments),
+          }]
+        })
+      : primaryBill
+        ? [{
+            id: primaryBill.id,
+            number: primaryBill.number,
+            vendorId: primaryBill.vendorId,
+            vendorName: primaryBill.vendor.name,
+            status: primaryBill.status,
+            total: Number(primaryBill.total),
+            date: primaryBill.date,
+            subsidiaryId: primaryBill.subsidiaryId ?? null,
+            currencyId: primaryBill.currencyId ?? null,
+            userId: primaryBill.userId ?? null,
+            openAmount: 0,
+          }]
+        : []
   const statusLabelMap = createRecordLabelMapFromValues(statusValues)
   const formattedStatus = formatRecordLabel(payment.status, statusLabelMap)
   const statusOptions = statusValues.map((value) => ({ value: value.toLowerCase(), label: value }))
   const methodOptions = methodValues.map((value) => ({ value: value.toLowerCase(), label: value }))
+  const bankAccountOptions = cashAccounts.map((account) => ({
+    value: account.id,
+    label: `${account.accountId} - ${account.name}`,
+  }))
 
   const sectionDescriptions: Record<string, string> = {
     'Document Identity': 'Core bill payment identifiers and source-bill context.',
@@ -125,9 +323,8 @@ export default async function BillPaymentDetailPage({
     },
     {
       id: 'bill',
-      label: 'Bill',
-      getValue: (record) => record.bill.number,
-      getHref: (record) => `/bills/${record.bill.id}`,
+      label: 'Vendor',
+      getValue: (record) => record.vendor?.name ?? record.bill?.vendor?.name ?? '-',
       getValueTone: () => 'accent',
     },
   ]
@@ -185,33 +382,61 @@ export default async function BillPaymentDetailPage({
       subsectionTitle: 'Document Identity',
       subsectionDescription: 'Core bill payment identifiers and source-bill context.',
     },
+    vendorId: {
+      key: 'vendorId',
+      label: 'Vendor',
+      value: payment.vendorId ?? '',
+      displayValue: payment.vendor ? (
+        <Link href={`/vendors/${payment.vendor.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+          {payment.vendor.vendorNumber ? `${payment.vendor.vendorNumber} - ${payment.vendor.name}` : payment.vendor.name}
+        </Link>
+      ) : '-',
+      helpText: 'Vendor this payment is being applied against.',
+      fieldType: 'list',
+      sourceText: 'Vendor record',
+      subsectionTitle: 'Document Identity',
+      subsectionDescription: 'Core bill payment identifiers and source-bill context.',
+      href: payment.vendor ? `/vendors/${payment.vendor.id}` : undefined,
+    },
     billId: {
       key: 'billId',
       label: 'Bill',
-      value: payment.billId,
-      displayValue: (
-        <Link href={`/bills/${payment.bill.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-          {payment.bill.number}
-        </Link>
-      ),
-      editable: true,
-      type: 'select',
-      options: [{ value: payment.bill.id, label: payment.bill.number }],
-      helpText: 'Linked bill for this payment.',
+      value: payment.billId ?? '',
+      displayValue:
+        payment.applications.length > 0
+          ? `${payment.applications.length} applied bill${payment.applications.length === 1 ? '' : 's'}`
+          : primaryBill ? (
+              <Link href={`/bills/${primaryBill.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                {primaryBill.number}
+              </Link>
+            ) : '-',
+      helpText: 'Primary linked bill derived from the applied bill rows below.',
       fieldType: 'text',
       sourceText: 'Bill transaction',
       subsectionTitle: 'Document Identity',
       subsectionDescription: 'Core bill payment identifiers and source-bill context.',
-      href: `/bills/${payment.bill.id}`,
+      href: payment.applications.length === 0 && primaryBill ? `/bills/${primaryBill.id}` : undefined,
+    },
+    bankAccountId: {
+      key: 'bankAccountId',
+      label: 'Bank Account',
+      value: payment.bankAccountId ?? '',
+      displayValue: payment.bankAccount ? `${payment.bankAccount.accountId} - ${payment.bankAccount.name}` : '-',
+      editable: true,
+      type: 'select',
+      options: bankAccountOptions,
+      helpText: 'Cash or bank GL account used for this payment.',
+      fieldType: 'list',
+      sourceText: 'Chart of accounts',
+      subsectionTitle: 'Payment Terms',
+      subsectionDescription: 'Monetary amount, date, payment method, and status.',
     },
     amount: {
       key: 'amount',
       label: 'Amount',
       value: String(payment.amount),
       displayValue: fmtCurrency(payment.amount, undefined, moneySettings),
-      editable: true,
-      type: 'number',
-      helpText: 'Payment amount applied to the bill.',
+      helpText: paymentApplications.length > 0 ? 'Payment amount derived from the bill applications below.' : 'Payment amount applied to the bill.',
       fieldType: 'currency',
       subsectionTitle: 'Payment Terms',
       subsectionDescription: 'Monetary amount, date, payment method, and status.',
@@ -311,18 +536,18 @@ export default async function BillPaymentDetailPage({
 
   const referenceFieldDefinitions = buildLinkedReferenceFieldDefinitions(
     BILL_PAYMENT_REFERENCE_SOURCES,
-    { bill: payment.bill },
-    { bill: `/bills/${payment.bill.id}` },
+    primaryBill ? { bill: primaryBill } : {},
+    primaryBill ? { bill: `/bills/${primaryBill.id}` } : {},
   )
 
-  const allFieldDefinitions = {
+  const allFieldDefinitions: Record<string, RecordHeaderField> = {
     ...headerFieldDefinitions,
     ...referenceFieldDefinitions,
   }
 
   const customizeFields = buildTransactionCustomizePreviewFields({
     fields: BILL_PAYMENT_DETAIL_FIELDS,
-    fieldDefinitions: allFieldDefinitions,
+    fieldDefinitions: headerFieldDefinitions,
     previewOverrides: {
       amount: fmtCurrency(payment.amount, undefined, moneySettings),
       date: fmtDocumentDate(payment.date, moneySettings),
@@ -364,9 +589,10 @@ export default async function BillPaymentDetailPage({
     })
     .filter((communication): communication is Exclude<typeof communication, null> => Boolean(communication))
 
-  const referenceSourceDefinitions = buildLinkedReferencePreviewSources(BILL_PAYMENT_REFERENCE_SOURCES, {
-    bill: payment.bill,
-  })
+  const referenceSourceDefinitions = buildLinkedReferencePreviewSources(
+    BILL_PAYMENT_REFERENCE_SOURCES,
+    primaryBill ? { bill: primaryBill } : {},
+  )
 
   const referenceSections = (customization.referenceLayouts ?? [])
     .map((referenceLayout) => {
@@ -395,7 +621,7 @@ export default async function BillPaymentDetailPage({
         fields,
       }
     })
-    .filter((section): section is { title: string; description: string; columns: number; rows: number; fields: TransactionHeaderField[] } => Boolean(section))
+    .filter((section): section is NonNullable<typeof section> => Boolean(section))
 
   const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
 
@@ -404,7 +630,7 @@ export default async function BillPaymentDetailPage({
       backHref={isCustomizing ? detailHref : '/bill-payments'}
       backLabel={isCustomizing ? '<- Back to Bill Payment Detail' : '<- Back to Bill Payments'}
       meta={payment.number}
-      title={`Bill Payment for ${payment.bill.vendor.name}`}
+      title={`Bill Payment for ${payment.vendor?.name ?? primaryBill?.vendor?.name ?? 'Vendor'}`}
       widthClassName="w-full max-w-none"
       actions={
         isCustomizing ? null : (
@@ -412,7 +638,7 @@ export default async function BillPaymentDetailPage({
             mode={isEditing ? 'edit' : 'detail'}
             cancelHref={detailHref}
             formId={`inline-record-form-${payment.id}`}
-            recordId={payment.id}
+              recordId={payment.id}
             primaryActions={
               isEditing ? (
                 <Link
@@ -483,7 +709,7 @@ export default async function BillPaymentDetailPage({
           ) : (
             <div className="space-y-6">
               {referenceSections.length > 0 ? (
-                <TransactionHeaderSections
+                <RecordHeaderDetails
                   editing={false}
                   sections={referenceSections.map((section) => ({
                     title: section.title,
@@ -497,50 +723,112 @@ export default async function BillPaymentDetailPage({
                   showSubsections={false}
                 />
               ) : null}
-              <TransactionHeaderSections
-                purchaseOrderId={payment.id}
-                editing={isEditing}
-                sections={headerSections}
-                columns={customization.formColumns}
-                containerTitle="Bill Payment Details"
-                containerDescription="Core bill payment fields organized into configurable sections."
-                showSubsections={false}
-                updateUrl={`/api/bill-payments?id=${encodeURIComponent(payment.id)}`}
-              />
+              {isEditing ? (
+                <BillPaymentDetailEditor
+                  paymentId={payment.id}
+                  detailHref={detailHref}
+                  customization={customization}
+                  vendors={vendors.map((vendor) => ({
+                    value: vendor.id,
+                    label: `${vendor.vendorNumber ?? 'VENDOR'} - ${vendor.name}`,
+                  }))}
+                  bills={candidateBills.map((bill) => {
+                    const appliedViaApplications = bill.paymentApplications.reduce((sum, application) => {
+                      if (application.billPaymentId === payment.id) return sum
+                      if ((application.billPayment.status ?? '').toLowerCase() === 'cancelled') return sum
+                      return sum + Number(application.appliedAmount)
+                    }, 0)
+                    const appliedViaLegacyPayments = bill.billPayments.reduce((sum, legacyPayment) => {
+                      if (legacyPayment.id === payment.id) return sum
+                      if ((legacyPayment.status ?? '').toLowerCase() === 'cancelled') return sum
+                      if (legacyPayment.applications.length > 0) return sum
+                      return sum + Number(legacyPayment.amount)
+                    }, 0)
+
+                    return {
+                      id: bill.id,
+                      number: bill.number,
+                      vendorId: bill.vendorId,
+                      vendorName: bill.vendor.name,
+                      status: bill.status,
+                      total: Number(bill.total),
+                      date: bill.date,
+                      subsidiaryId: bill.subsidiaryId ?? null,
+                      currencyId: bill.currencyId ?? null,
+                      userId: bill.userId ?? null,
+                      openAmount: roundMoney(Number(bill.total) - appliedViaApplications - appliedViaLegacyPayments),
+                    }
+                  })}
+                  statusOptions={statusOptions}
+                  methodOptions={methodOptions}
+                  bankAccountOptions={bankAccountOptions}
+                  initialHeaderValues={{
+                    id: payment.id,
+                    number: payment.number,
+                    vendorId: payment.vendorId ?? '',
+                    billId: payment.billId ?? '',
+                    bankAccountId: payment.bankAccountId ?? '',
+                    amount: String(payment.amount),
+                    date: payment.date.toISOString().slice(0, 10),
+                    method: payment.method ?? '',
+                    reference: payment.reference ?? '',
+                    status: payment.status,
+                    notes: payment.notes ?? '',
+                    createdAt: payment.createdAt.toISOString(),
+                    createdAtDisplay: fmtDocumentDate(payment.createdAt, moneySettings),
+                    updatedAt: payment.updatedAt.toISOString(),
+                    updatedAtDisplay: fmtDocumentDate(payment.updatedAt, moneySettings),
+                  }}
+                  initialApplications={paymentApplications}
+                  moneySettings={moneySettings}
+                />
+              ) : (
+                <RecordHeaderDetails
+                  purchaseOrderId={payment.id}
+                  editing={false}
+                  sections={headerSections}
+                  columns={customization.formColumns}
+                  containerTitle="Bill Payment Details"
+                  containerDescription="Core bill payment fields organized into configurable sections."
+                  showSubsections={false}
+                />
+              )}
             </div>
           )
         }
         lineItems={null}
-        relatedDocuments={isCustomizing ? null : (
+        relatedDocuments={isCustomizing || !primaryBill ? null : (
           <BillPaymentRelatedDocuments
+            embedded
+            showDisplayControl={false}
             purchaseRequisitions={
-              payment.bill.purchaseOrder?.requisition
+              primaryBill.purchaseOrder?.requisition
                 ? [
                     {
-                      id: payment.bill.purchaseOrder.requisition.id,
-                      number: payment.bill.purchaseOrder.requisition.number,
-                      status: payment.bill.purchaseOrder.requisition.status,
-                      total: Number(payment.bill.purchaseOrder.requisition.total),
-                      createdAt: payment.bill.purchaseOrder.requisition.createdAt.toISOString(),
+                      id: primaryBill.purchaseOrder.requisition.id,
+                      number: primaryBill.purchaseOrder.requisition.number,
+                      status: primaryBill.purchaseOrder.requisition.status,
+                      total: Number(primaryBill.purchaseOrder.requisition.total),
+                      createdAt: primaryBill.purchaseOrder.requisition.createdAt.toISOString(),
                     },
                   ]
                 : []
             }
             purchaseOrders={
-              payment.bill.purchaseOrder
+              primaryBill.purchaseOrder
                 ? [
                     {
-                      id: payment.bill.purchaseOrder.id,
-                      number: payment.bill.purchaseOrder.number,
-                      status: payment.bill.purchaseOrder.status,
-                      total: Number(payment.bill.purchaseOrder.total),
-                      createdAt: payment.bill.purchaseOrder.createdAt.toISOString(),
+                      id: primaryBill.purchaseOrder.id,
+                      number: primaryBill.purchaseOrder.number,
+                      status: primaryBill.purchaseOrder.status,
+                      total: Number(primaryBill.purchaseOrder.total),
+                      createdAt: primaryBill.purchaseOrder.createdAt.toISOString(),
                     },
                   ]
                 : []
             }
             receipts={
-              payment.bill.purchaseOrder?.receipts.map((receipt) => ({
+              primaryBill.purchaseOrder?.receipts.map((receipt) => ({
                 id: receipt.id,
                 number: receipt.id,
                 date: receipt.date.toISOString(),
@@ -551,27 +839,36 @@ export default async function BillPaymentDetailPage({
             }
             bills={[
               {
-                id: payment.bill.id,
-                number: payment.bill.number,
-                status: payment.bill.status,
-                total: Number(payment.bill.total),
-                date: payment.bill.date.toISOString(),
-                dueDate: payment.bill.dueDate ? payment.bill.dueDate.toISOString() : null,
-                notes: payment.bill.notes ?? null,
+                id: primaryBill.id,
+                number: primaryBill.number,
+                status: primaryBill.status,
+                total: Number(primaryBill.total),
+                date: primaryBill.date.toISOString(),
+                dueDate: primaryBill.dueDate ? primaryBill.dueDate.toISOString() : null,
+                notes: primaryBill.notes ?? null,
               },
             ]}
             moneySettings={moneySettings}
           />
         )}
-        supplementarySections={null}
+        relatedDocumentsCount={
+          primaryBill
+            ? (primaryBill.purchaseOrder?.requisition ? 1 : 0) +
+              (primaryBill.purchaseOrder ? 1 : 0) +
+              (primaryBill.purchaseOrder?.receipts.length ?? 0) +
+              1
+            : 0
+        }
         communications={isCustomizing ? null : (
           <CommunicationsSection
+            embedded
+            showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
               recordId: payment.id,
               number: payment.number,
-              counterpartyName: payment.bill.vendor.name,
-              counterpartyEmail: payment.bill.vendor.email ?? null,
+              counterpartyName: payment.vendor?.name ?? primaryBill?.vendor?.name ?? 'Vendor',
+              counterpartyEmail: payment.vendor?.email ?? primaryBill?.vendor?.email ?? null,
               status: formattedStatus,
               total: fmtCurrency(payment.amount, undefined, moneySettings),
               lineItems: [],
@@ -581,7 +878,28 @@ export default async function BillPaymentDetailPage({
             })}
           />
         )}
-        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
+        communicationsCount={communications.length}
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        systemNotesCount={systemNotes.length}
+        supplementarySections={
+          isCustomizing ? null : (
+            <>
+              {!isEditing ? (
+                <BillPaymentApplicationsSection
+                  bills={applicationBills}
+                  selectedVendorId={payment.vendorId ?? primaryBill?.vendorId ?? ''}
+                  applications={paymentApplications}
+                  moneySettings={moneySettings}
+                />
+              ) : null}
+              <BillPaymentGlImpactSection
+                rows={glImpactRows}
+                settings={customization.glImpactSettings}
+                columnCustomization={customization.glImpactColumns}
+              />
+            </>
+          )
+        }
       />
     </RecordDetailPageShell>
   )

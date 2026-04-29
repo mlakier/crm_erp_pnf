@@ -145,7 +145,12 @@ export default async function BillPaymentsPage({
         className="overflow-hidden rounded-2xl border"
         style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}
       >
-        <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
+        <form
+          className="border-b px-6 py-4"
+          method="get"
+          data-disable-live-search="true"
+          style={{ borderColor: 'var(--border-muted)' }}
+        >
           <input type="hidden" name="page" value="1" />
           <input type="hidden" name="status" value={statusFilter} />
           <div className="flex gap-3 items-center flex-nowrap">
@@ -158,12 +163,12 @@ export default async function BillPaymentsPage({
               style={{ borderColor: 'var(--border-muted)' }}
             />
             <ExportButton tableId="bill-payments-list" fileName="bill-payments" exportAllUrl={exportAllUrl} />
-            <ColumnSelector tableId="bill-payments-list" columns={BP_COLUMNS} />
+            <ColumnSelector tableId="bill-payments-list" columns={BP_COLUMNS} enableReordering={false} />
           </div>
         </form>
 
         <div className="record-list-scroll-region overflow-x-auto" data-column-selector-table="bill-payments-list">
-          <table className="min-w-full" id="bill-payments-list">
+          <table className="min-w-full" id="bill-payments-list" data-disable-filter-sort="true">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
                 {BP_COLUMNS.map((column) => (

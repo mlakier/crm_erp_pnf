@@ -1,20 +1,15 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import DeleteButton from '@/components/DeleteButton'
-import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
-import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
-import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
-import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSection'
+import type { InlineRecordSection } from '@/components/InlineRecordDetails'
+import MasterDataHeaderDetails from '@/components/MasterDataHeaderDetails'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
+import RecordDetailActionBar from '@/components/RecordDetailActionBar'
+import { buildMasterDataSystemInformationItems } from '@/components/RecordSystemInformationSection'
 import EmployeeDetailCustomizeMode from '@/components/EmployeeDetailCustomizeMode'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import CommunicationsSection from '@/components/CommunicationsSection'
+import RelatedRecordsSection from '@/components/RelatedRecordsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
-import {
-  RecordDetailCell,
-  RecordDetailEmptyState,
-  RecordDetailHeaderCell,
-  RecordDetailSection,
-} from '@/components/RecordDetailPanels'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
 import { loadEmployeeFormCustomization } from '@/lib/employee-form-customization-store'
@@ -23,6 +18,7 @@ import { loadFormRequirements } from '@/lib/form-requirements-store'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { loadMasterDataSystemInfo } from '@/lib/master-data-system-info'
 import { loadMasterDataSystemNotes } from '@/lib/master-data-system-notes'
+import type { TransactionStatDefinition, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 export default async function EmployeeDetailPage({
   params,
@@ -73,7 +69,7 @@ export default async function EmployeeDetailPage({
 
   const linkedUserIdSet = new Set(linkedUsers.map((entry) => entry.userId).filter((value): value is string => Boolean(value)))
   const users = allUsers.filter((user) => user.id === employee.userId || !linkedUserIdSet.has(user.id))
-  const employeeStatus = employee.inactive ? 'Inactive' : 'Active'
+  const employeeStatus = employee.active ? 'Active' : 'Inactive'
 
   const detailHref = `/employees/${employee.id}`
   const sectionDescriptions: Record<string, string> = {
@@ -216,17 +212,27 @@ export default async function EmployeeDetailPage({
   }
 
   const customizeFields = buildCustomizePreviewFields(EMPLOYEE_FORM_FIELDS, fieldDefinitions)
-  const statPreviewCards = [
-    { id: 'directReports', label: 'Direct Reports', value: employee.directReports.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+  const statPreviewCards: Array<{
+    id: string
+    label: string
+    value: string | number
+    href?: string | null
+    accent?: true | 'teal' | 'yellow'
+    cardTone?: TransactionVisualTone
+    valueTone?: TransactionVisualTone
+    supportsColorized: boolean
+    supportsLink: boolean
+  }> = [
+    { id: 'directReports', label: 'Direct Reports', value: employee.directReports.length, cardTone: 'accent', valueTone: 'accent', supportsColorized: true, supportsLink: false },
     { id: 'subsidiaries', label: 'Subsidiaries', value: employee.employeeSubsidiaries.length, accent: 'teal', cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
     { id: 'linkedUser', label: 'Linked User', value: employee.user ? (employee.user.name ?? employee.user.userId ?? 'Linked') : 'Not Linked', href: employee.user ? `/users/${employee.user.id}` : null, accent: 'yellow', cardTone: employee.user ? 'yellow' : 'default', valueTone: employee.user ? 'yellow' : 'default', supportsColorized: true, supportsLink: true },
-    { id: 'status', label: 'Status', value: employeeStatus, cardTone: employee.inactive ? 'red' : 'green', valueTone: employee.inactive ? 'red' : 'green', supportsColorized: true, supportsLink: false },
+    { id: 'status', label: 'Status', value: employeeStatus, cardTone: employee.active ? 'green' : 'red', valueTone: employee.active ? 'green' : 'red', supportsColorized: true, supportsLink: false },
   ]
-  const statDefinitions = [
-    { id: 'directReports', label: 'Direct Reports', getValue: () => employee.directReports.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
-    { id: 'subsidiaries', label: 'Subsidiaries', getValue: () => employee.employeeSubsidiaries.length, accent: 'teal' as const, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
-    { id: 'linkedUser', label: 'Linked User', getValue: () => (employee.user ? (employee.user.name ?? employee.user.userId ?? 'Linked') : 'Not Linked'), getHref: () => (employee.user ? `/users/${employee.user.id}` : null), accent: 'yellow' as const, getCardTone: () => (employee.user ? 'yellow' : 'default') as const, getValueTone: () => (employee.user ? 'yellow' : 'default') as const },
-    { id: 'status', label: 'Status', getValue: () => employeeStatus, getCardTone: () => (employee.inactive ? 'red' : 'green') as const, getValueTone: () => (employee.inactive ? 'red' : 'green') as const },
+  const statDefinitions: Array<TransactionStatDefinition<typeof employee>> = [
+    { id: 'directReports', label: 'Direct Reports', getValue: () => employee.directReports.length, getCardTone: () => 'accent', getValueTone: () => 'accent' },
+    { id: 'subsidiaries', label: 'Subsidiaries', getValue: () => employee.employeeSubsidiaries.length, accent: 'teal', getCardTone: () => 'teal', getValueTone: () => 'teal' },
+    { id: 'linkedUser', label: 'Linked User', getValue: () => (employee.user ? (employee.user.name ?? employee.user.userId ?? 'Linked') : 'Not Linked'), getHref: () => (employee.user ? `/users/${employee.user.id}` : null), accent: 'yellow', getCardTone: () => (employee.user ? 'yellow' : 'default'), getValueTone: () => (employee.user ? 'yellow' : 'default') },
+    { id: 'status', label: 'Status', getValue: () => employeeStatus, getCardTone: () => (employee.active ? 'green' : 'red'), getValueTone: () => (employee.active ? 'green' : 'red') },
   ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: EMPLOYEE_FORM_FIELDS,
@@ -241,6 +247,60 @@ export default async function EmployeeDetailPage({
     updatedAt: employee.updatedAt,
   })
   const systemNotes = await loadMasterDataSystemNotes({ entityType: 'employee', entityId: employee.id })
+  const relatedRecordsTabs = [
+    {
+      key: 'direct-reports',
+      label: 'Direct Reports',
+      count: employee.directReports.length,
+      emptyMessage: 'No direct reports are linked to this employee yet.',
+      rows: employee.directReports.map((report) => ({
+        id: report.id,
+        type: 'Employee',
+        reference: report.employeeId ?? 'Pending',
+        name: `${report.firstName} ${report.lastName}`.trim(),
+        details: [report.title, report.email].filter(Boolean).join(' | ') || '-',
+        href: `/employees/${report.id}`,
+      })),
+    },
+    {
+      key: 'linked-records',
+      label: 'Linked Records',
+      count: [employee.user, employee.manager, ...employee.employeeSubsidiaries].filter(Boolean).length,
+      emptyMessage: 'No linked records are set for this employee yet.',
+      rows: [
+        ...(employee.user
+          ? [{
+              id: employee.user.id,
+              type: 'User',
+              reference: employee.user.userId ?? 'Pending',
+              name: employee.user.name ?? employee.user.email,
+              details: employee.user.email,
+              href: `/users/${employee.user.id}`,
+            }]
+          : []),
+        ...(employee.manager
+          ? [{
+              id: employee.manager.id,
+              type: 'Employee',
+              reference: employee.manager.employeeId ?? 'Pending',
+              name: `${employee.manager.firstName} ${employee.manager.lastName}`.trim(),
+              details: `Manager${employee.manager.title ? ` | ${employee.manager.title}` : ''}`,
+              href: `/employees/${employee.manager.id}`,
+            }]
+          : []),
+        ...employee.employeeSubsidiaries.map((assignment) => ({
+          id: assignment.subsidiary.id,
+          type: 'Subsidiary',
+          reference: assignment.subsidiary.subsidiaryId,
+          name: assignment.subsidiary.name,
+          details: 'Employee Availability',
+          href: `/subsidiaries/${assignment.subsidiary.id}`,
+        })),
+      ],
+    },
+  ]
+  const communicationsToolbarTargetId = 'employee-communications-toolbar'
+  const systemNotesToolbarTargetId = 'employee-system-notes-toolbar'
 
   return (
     <RecordDetailPageShell
@@ -259,40 +319,22 @@ export default async function EmployeeDetailPage({
         ) : null
       }
       actions={
-        <>
-          {isEditing && !isCustomizing ? (
-            <>
-              <Link href={detailHref} className="rounded-md border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-                Cancel
-              </Link>
-              <button
-                type="submit"
-                form={`inline-record-form-${employee.id}`}
-                className="rounded-md px-3 py-1.5 text-xs font-semibold text-white"
-                style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-              >
-                Save
-              </button>
-            </>
-          ) : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailCreateMenu newHref="/employees/new" duplicateHref={`/employees/new?duplicateFrom=${employee.id}`} /> : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailExportMenu title={`${employee.firstName} ${employee.lastName}`} fileName={`employee-${employee.employeeId ?? employee.id}`} sections={detailSections} /> : null}
-          {!isEditing && !isCustomizing ? (
-            <Link href={`${detailHref}?customize=1`} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-              Customize
-            </Link>
-          ) : null}
-          {!isEditing && !isCustomizing ? (
-            <Link
-              href={`${detailHref}?edit=1`}
-              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
-              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-            >
-              Edit
-            </Link>
-          ) : null}
-          {!isCustomizing ? <DeleteButton resource="employees" id={employee.id} /> : null}
-        </>
+        isCustomizing ? null : (
+          <RecordDetailActionBar
+            mode={isEditing ? 'edit' : 'detail'}
+            detailHref={detailHref}
+            formId={`inline-record-form-${employee.id}`}
+            newHref="/employees/new"
+            duplicateHref={`/employees/new?duplicateFrom=${employee.id}`}
+            exportTitle={`${employee.firstName} ${employee.lastName}`}
+            exportFileName={`employee-${employee.employeeId ?? employee.id}`}
+            exportSections={detailSections}
+            customizeHref={`${detailHref}?customize=1`}
+            editHref={`${detailHref}?edit=1`}
+            deleteResource="employees"
+            deleteId={employee.id}
+          />
+        )
       }
     >
         {!isCustomizing ? (
@@ -315,86 +357,60 @@ export default async function EmployeeDetailPage({
             statPreviewCards={statPreviewCards}
           />
         ) : (
-          <InlineRecordDetails
+          <MasterDataHeaderDetails
             resource="employees"
             id={employee.id}
-            title="Employee details"
+            title="Employee Details"
             sections={detailSections}
             editing={isEditing}
             columns={formCustomization.formColumns}
-            showInternalActions={false}
+            systemInformationItems={buildMasterDataSystemInformationItems(systemInfo, employee.id)}
           />
         )}
 
-        {!isCustomizing ? <MasterDataSystemInfoSection info={systemInfo} internalId={employee.id} /> : null}
-
         {!isCustomizing ? (
-        <RecordDetailSection title="Direct Reports" count={employee.directReports.length}>
-          {employee.directReports.length === 0 ? (
-            <RecordDetailEmptyState message="No direct reports" />
-          ) : (
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <RecordDetailHeaderCell>Employee ID</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Title</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Email</RecordDetailHeaderCell>
-                </tr>
-              </thead>
-              <tbody>
-                {employee.directReports.map((report) => (
-                  <tr key={report.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                    <RecordDetailCell>
-                      <Link href={`/employees/${report.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {report.employeeId ?? 'Pending'}
-                      </Link>
-                    </RecordDetailCell>
-                    <RecordDetailCell>{report.firstName} {report.lastName}</RecordDetailCell>
-                    <RecordDetailCell>{report.title ?? '-'}</RecordDetailCell>
-                    <RecordDetailCell>{report.email ?? '-'}</RecordDetailCell>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </RecordDetailSection>
+          <RecordBottomTabsSection
+            defaultActiveKey="related-records"
+            tabs={[
+              {
+                key: 'related-records',
+                label: 'Related Records',
+                count: relatedRecordsTabs.reduce((sum, tab) => sum + tab.count, 0),
+                content: <RelatedRecordsSection embedded tabs={relatedRecordsTabs} showDisplayControl={false} />,
+              },
+              {
+                key: 'communications',
+                label: 'Communications',
+                count: 0,
+                toolbarTargetId: communicationsToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <CommunicationsSection
+                    embedded
+                    toolbarTargetId={communicationsToolbarTargetId}
+                    rows={[]}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+              {
+                key: 'system-notes',
+                label: 'System Notes',
+                count: systemNotes.length,
+                toolbarTargetId: systemNotesToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <SystemNotesSection
+                    embedded
+                    toolbarTargetId={systemNotesToolbarTargetId}
+                    notes={systemNotes}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+            ]}
+          />
         ) : null}
-
-        {!isCustomizing ? (
-        <RecordDetailSection title="Linked User" count={employee.user ? 1 : 0}>
-          {employee.user ? (
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <RecordDetailHeaderCell>User ID</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Email</RecordDetailHeaderCell>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <RecordDetailCell><Link href={`/users/${employee.user.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>{employee.user.userId ?? 'Pending'}</Link></RecordDetailCell>
-                  <RecordDetailCell>{employee.user.name ?? '-'}</RecordDetailCell>
-                  <RecordDetailCell>{employee.user.email}</RecordDetailCell>
-                </tr>
-              </tbody>
-            </table>
-          ) : (
-            <div className="flex items-center justify-between gap-3 px-5 py-4">
-              <RecordDetailEmptyState message="No linked user" />
-              <Link
-                href={`/users/new?employeeId=${employee.id}`}
-                className="rounded-md px-3 py-2 text-sm font-medium text-white"
-                style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-              >
-                Add User
-              </Link>
-            </div>
-          )}
-        </RecordDetailSection>
-        ) : null}
-        {!isCustomizing ? <SystemNotesSection notes={systemNotes} /> : null}
     </RecordDetailPageShell>
   )
 }

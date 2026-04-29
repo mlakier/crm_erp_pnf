@@ -291,7 +291,7 @@ function mergeWithDefaults(overrides: Partial<JournalDetailCustomizationConfig>)
               linked: (card as { linked?: unknown }).linked !== false,
             }
           })
-          .filter((card): card is JournalDetailCustomizationConfig['statCards'][number] => Boolean(card))
+          .filter((card): card is NonNullable<typeof card> => card !== null)
           .sort((left, right) => left.order - right.order)
           .map((card, index) => ({ ...card, order: index }))
       : merged.statCards
@@ -300,7 +300,7 @@ function mergeWithDefaults(overrides: Partial<JournalDetailCustomizationConfig>)
     normalizedStatCards.length > 0
       ? normalizedStatCards
       : fallbackMetric
-        ? [{ id: 'slot-1', metric: fallbackMetric, visible: true, order: 0, size: 'md', colorized: true, linked: true }]
+        ? [{ id: 'slot-1', metric: fallbackMetric, visible: true, order: 0, size: 'md' as const, colorized: true, linked: true }]
         : []
 
   return normalizeFieldPlacements(merged)

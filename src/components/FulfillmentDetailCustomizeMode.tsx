@@ -2,7 +2,6 @@
 
 import type {
   FulfillmentDetailCustomizationConfig,
-  FulfillmentDetailFieldKey,
   FulfillmentLineColumnKey,
 } from '@/lib/fulfillment-detail-customization'
 import TransactionRecordDetailCustomizeMode from '@/components/TransactionRecordDetailCustomizeMode'
@@ -26,7 +25,7 @@ const FULFILLMENT_LINE_SETTING_AVAILABILITY = Object.fromEntries(
 ) as Record<FulfillmentLineColumnKey, string[]>
 
 type CustomizeField = {
-  id: FulfillmentDetailFieldKey
+  id: string
   label: string
   fieldType: string
   source?: string

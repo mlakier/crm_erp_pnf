@@ -1,5 +1,5 @@
 {
-  "formColumns": 2,
+  "formColumns": 3,
   "sections": [
     "Core",
     "Contact",
@@ -7,10 +7,10 @@
     "Status"
   ],
   "sectionRows": {
-    "Core": 2,
-    "Contact": 2,
-    "Relationship": 2,
-    "Status": 1
+    "Core": 3,
+    "Contact": 3,
+    "Relationship": 3,
+    "Status": 2
   },
   "fields": {
     "contactNumber": {
@@ -46,8 +46,8 @@
     "address": {
       "visible": true,
       "section": "Contact",
-      "order": 1,
-      "column": 1
+      "order": 0,
+      "column": 3
     },
     "position": {
       "visible": true,
@@ -66,6 +66,30 @@
       "section": "Relationship",
       "order": 1,
       "column": 1
+    },
+    "isPrimaryForCustomer": {
+      "visible": true,
+      "section": "Relationship",
+      "order": 1,
+      "column": 2
+    },
+    "receivesQuotesSalesOrders": {
+      "visible": true,
+      "section": "Contact",
+      "order": 1,
+      "column": 1
+    },
+    "receivesInvoices": {
+      "visible": true,
+      "section": "Contact",
+      "order": 1,
+      "column": 2
+    },
+    "receivesInvoiceCc": {
+      "visible": true,
+      "section": "Contact",
+      "order": 1,
+      "column": 3
     },
     "inactive": {
       "visible": true,

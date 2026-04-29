@@ -4,6 +4,13 @@ import {
   type TransactionReferenceLayout,
 } from '@/lib/transaction-reference-layouts'
 import {
+  defaultTransactionGlImpactColumns,
+  defaultTransactionGlImpactSettings,
+  type TransactionGlImpactColumnCustomization,
+  type TransactionGlImpactColumnKey,
+  type TransactionGlImpactSettings,
+} from '@/lib/transaction-gl-impact'
+import {
   type LinkedRecordReferenceSource,
   PURCHASE_ORDER_FULL_REFERENCE_FIELDS,
   SUBSIDIARY_FULL_REFERENCE_FIELDS,
@@ -83,6 +90,8 @@ export type BillDetailCustomizationConfig = {
   referenceLayouts: TransactionReferenceLayout[]
   lineSettings: BillLineSettings
   lineColumns: Record<BillLineColumnKey, BillLineColumnCustomization>
+  glImpactSettings: TransactionGlImpactSettings
+  glImpactColumns: Record<TransactionGlImpactColumnKey, TransactionGlImpactColumnCustomization>
   statCards?: Array<TransactionStatCardSlot<BillStatCardKey>>
 }
 
@@ -209,6 +218,8 @@ export function defaultBillDetailCustomization(): BillDetailCustomizationConfig 
       ]),
     ) as Record<BillLineColumnKey, BillLineColumnCustomization>,
     referenceLayouts: [buildDefaultTransactionReferenceLayout(BILL_REFERENCE_SOURCES, 'purchaseOrder')],
+    glImpactSettings: defaultTransactionGlImpactSettings(),
+    glImpactColumns: defaultTransactionGlImpactColumns(),
     statCards: [
       { id: 'bill-total', metric: 'total', visible: true, order: 0 },
       { id: 'bill-status', metric: 'status', visible: true, order: 1 },

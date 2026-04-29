@@ -9,9 +9,11 @@ import RecordStatusButton from '@/components/RecordStatusButton'
 import SalesOrderCreateInvoiceButton from '@/components/SalesOrderCreateInvoiceButton'
 import SalesOrderDetailCustomizeMode from '@/components/SalesOrderDetailCustomizeMode'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import CommunicationsSection from '@/components/CommunicationsSection'
+import RelatedRecordsSection from '@/components/RelatedRecordsSection'
 import SalesOrderRelatedDocuments from '@/components/SalesOrderRelatedDocuments'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
@@ -97,7 +99,7 @@ function formatStatusTone(
 
 type SalesOrderHeaderField = {
   key: SalesOrderDetailFieldKey | SalesOrderReferenceFieldKey
-} & TransactionHeaderField
+} & RecordHeaderField
 
 type SalesOrderLineRow = {
   id: string
@@ -135,6 +137,22 @@ export default async function SalesOrderDetailPage({
           include: {
             subsidiary: { select: { id: true, subsidiaryId: true, name: true } },
             currency: { select: { id: true, currencyId: true, code: true, name: true } },
+            contacts: {
+              orderBy: [{ isPrimaryForCustomer: 'desc' }, { createdAt: 'desc' }],
+              select: {
+                id: true,
+                contactNumber: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+                position: true,
+                isPrimaryForCustomer: true,
+                receivesQuotesSalesOrders: true,
+                receivesInvoices: true,
+                receivesInvoiceCc: true,
+              },
+            },
           },
         },
         quote: {
@@ -237,6 +255,7 @@ export default async function SalesOrderDetailPage({
               orderBy: { date: 'desc' },
               select: {
                 id: true,
+                number: true,
                 amount: true,
                 date: true,
                 method: true,
@@ -683,9 +702,9 @@ export default async function SalesOrderDetailPage({
     opportunityExpectedValue: {
       key: 'opportunityExpectedValue',
       label: 'Expected Value',
-      value: salesOrder.quote?.opportunity ? String(toNumericValue(salesOrder.quote.opportunity.expectedValue, 0)) : '',
+      value: salesOrder.quote?.opportunity ? String(toNumericValue(salesOrder.quote.opportunity.amount, 0)) : '',
       displayValue: salesOrder.quote?.opportunity
-        ? fmtCurrency(toNumericValue(salesOrder.quote.opportunity.expectedValue, 0), undefined, moneySettings)
+        ? fmtCurrency(toNumericValue(salesOrder.quote.opportunity.amount, 0), undefined, moneySettings)
         : '-',
       helpText: 'Expected value captured on the linked opportunity.',
       fieldType: 'currency',
@@ -1499,7 +1518,7 @@ export default async function SalesOrderDetailPage({
           fields,
         }
       })
-    .filter((section): section is { id: string; title: string; description: string; columns: number; rows: number; fields: SalesOrderHeaderField[] } => Boolean(section))
+    .filter((section): section is NonNullable<typeof section> => Boolean(section))
   const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
 
   const visibleLineColumnOrder = getOrderedVisibleTransactionLineColumns(
@@ -1565,6 +1584,90 @@ export default async function SalesOrderDetailPage({
   }))
   const salesOrderStatusActions = getAvailableWorkflowStatusActions(workflow, 'sales-order', salesOrder.status)
   const createInvoiceAction = getWorkflowDocumentAction(workflow, 'sales-order', 'invoice', salesOrder.status)
+  const relatedDocumentsCount =
+    (salesOrder.quote?.opportunity ? 1 : 0) +
+    (salesOrder.quote ? 1 : 0) +
+    salesOrder.fulfillments.length +
+    salesOrder.invoices.length +
+    salesOrder.invoices.reduce((sum, invoice) => sum + invoice.cashReceipts.length, 0)
+  const communicationsToolbarTargetId = 'sales-order-communications-toolbar'
+  const systemNotesToolbarTargetId = 'sales-order-system-notes-toolbar'
+  const relatedRecordTabs = [
+    {
+      key: 'contacts',
+      label: 'Contacts',
+      count: salesOrder.customer.contacts.length,
+      emptyMessage: 'No customer contacts are linked to this sales order yet.',
+      rows: salesOrder.customer.contacts.map((contact) => ({
+        id: contact.id,
+        type: contact.isPrimaryForCustomer ? 'Primary Contact' : 'Contact',
+        reference: contact.contactNumber ?? contact.id,
+        name: `${contact.firstName} ${contact.lastName}`.trim(),
+        details:
+          [
+            contact.position,
+            contact.email,
+            contact.phone,
+            contact.receivesQuotesSalesOrders ? 'Receives Quote/SO' : null,
+            contact.receivesInvoices ? 'Receives Invoices' : null,
+            contact.receivesInvoiceCc ? 'Invoice CC' : null,
+          ]
+            .filter(Boolean)
+            .join(' | ') || '-',
+        href: `/contacts/${contact.id}`,
+      })),
+    },
+    {
+      key: 'core-links',
+      label: 'Core Links',
+      count:
+        1 +
+        (salesOrder.user ? 1 : 0) +
+        (salesOrder.subsidiary ? 1 : 0) +
+        (salesOrder.currency ? 1 : 0),
+      emptyMessage: 'No core linked records are available for this sales order.',
+      rows: [
+        {
+          id: `customer-${salesOrder.customer.id}`,
+          type: 'Customer',
+          reference: salesOrder.customer.customerId ?? salesOrder.customer.id,
+          name: salesOrder.customer.name,
+          details: [salesOrder.customer.email, salesOrder.customer.phone].filter(Boolean).join(' | ') || '-',
+          href: customerHref,
+        },
+        salesOrder.user
+          ? {
+              id: `user-${salesOrder.user.id}`,
+              type: 'Owner',
+              reference: salesOrder.user.userId ?? salesOrder.user.id,
+              name: salesOrder.user.name ?? salesOrder.user.email ?? '-',
+              details: salesOrder.user.email ?? '-',
+              href: ownerHref,
+            }
+          : null,
+        salesOrder.subsidiary
+          ? {
+              id: `subsidiary-${salesOrder.subsidiary.id}`,
+              type: 'Subsidiary',
+              reference: salesOrder.subsidiary.subsidiaryId,
+              name: salesOrder.subsidiary.name,
+              details: salesOrder.subsidiary.country ?? salesOrder.subsidiary.entityType ?? '-',
+              href: subsidiaryHref,
+            }
+          : null,
+        salesOrder.currency
+          ? {
+              id: `currency-${salesOrder.currency.id}`,
+              type: 'Currency',
+              reference: salesOrder.currency.currencyId ?? salesOrder.currency.code ?? salesOrder.currency.id,
+              name: salesOrder.currency.name,
+              details: salesOrder.currency.symbol ?? salesOrder.currency.code ?? '-',
+              href: currencyHref,
+            }
+          : null,
+      ].filter((row): row is NonNullable<typeof row> => Boolean(row)),
+    },
+  ]
 
   return (
     <RecordDetailPageShell
@@ -1689,7 +1792,7 @@ export default async function SalesOrderDetailPage({
           ) : (
             <div className="space-y-6">
               {referenceSections.length > 0 ? (
-                <TransactionHeaderSections
+                <RecordHeaderDetails
                   editing={false}
                   sections={referenceSections.map((section) => ({
                       title: section.title,
@@ -1703,7 +1806,7 @@ export default async function SalesOrderDetailPage({
                   showSubsections={false}
                 />
               ) : null}
-              <TransactionHeaderSections
+              <RecordHeaderDetails
                 purchaseOrderId={salesOrder.id}
                 editing={isEditing}
                 sections={headerSections}
@@ -1748,88 +1851,134 @@ export default async function SalesOrderDetailPage({
           />
         )}
         relatedDocuments={isCustomizing ? null : (
-          <SalesOrderRelatedDocuments
-            opportunities={
-              salesOrder.quote?.opportunity
-                ? [
-                    {
-                      id: salesOrder.quote.opportunity.id,
-                      number: salesOrder.quote.opportunity.opportunityNumber ?? salesOrder.quote.opportunity.name,
-                      name: salesOrder.quote.opportunity.name,
-                      status: salesOrder.quote.opportunity.stage,
-                      total: toNumericValue(salesOrder.quote.opportunity.amount, 0),
-                    },
-                  ]
-                : []
-            }
-            quotes={
-              salesOrder.quote
-                ? [
-                    {
-                      id: salesOrder.quote.id,
-                      number: salesOrder.quote.number,
-                      status: salesOrder.quote.status,
-                      total: toNumericValue(salesOrder.quote.total, 0),
-                      validUntil: salesOrder.quote.validUntil?.toISOString() ?? null,
-                      opportunityName: salesOrder.quote.opportunity?.name ?? null,
-                    },
-                  ]
-                : []
-            }
-            fulfillments={salesOrder.fulfillments.map((fulfillment) => ({
-              id: fulfillment.id,
-              number: fulfillment.number,
-              status: fulfillment.status,
-              date: fulfillment.date.toISOString(),
-              notes: fulfillment.notes ?? null,
-            }))}
-            invoices={salesOrder.invoices.map((invoice) => ({
-              id: invoice.id,
-              number: invoice.number,
-              status: invoice.status,
-              total: toNumericValue(invoice.total, 0),
-              dueDate: invoice.dueDate?.toISOString() ?? null,
-              createdAt: invoice.createdAt.toISOString(),
-            }))}
-            cashReceipts={salesOrder.invoices.flatMap((invoice) =>
-              invoice.cashReceipts.map((receipt) => ({
-                id: receipt.id,
-                amount: toNumericValue(receipt.amount, 0),
-                date: receipt.date.toISOString(),
-                method: receipt.method ?? null,
-                reference: receipt.reference ?? null,
-                invoiceNumber: invoice.number,
-              }))
-            )}
+          <RecordBottomTabsSection
+            defaultActiveKey="related-documents"
+            tabs={[
+              {
+                key: 'related-records',
+                label: 'Related Records',
+                count: relatedRecordTabs.reduce((sum, tab) => sum + tab.count, 0),
+                content: (
+                  <RelatedRecordsSection
+                    embedded
+                    tabs={relatedRecordTabs}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+              {
+                key: 'related-documents',
+                label: 'Related Documents',
+                count: relatedDocumentsCount,
+                content: (
+                  <SalesOrderRelatedDocuments
+                    embedded
+                    showDisplayControl={false}
+                    opportunities={
+                      salesOrder.quote?.opportunity
+                        ? [
+                            {
+                              id: salesOrder.quote.opportunity.id,
+                              number: salesOrder.quote.opportunity.opportunityNumber ?? salesOrder.quote.opportunity.name,
+                              name: salesOrder.quote.opportunity.name,
+                              status: salesOrder.quote.opportunity.stage,
+                              total: toNumericValue(salesOrder.quote.opportunity.amount, 0),
+                            },
+                          ]
+                        : []
+                    }
+                    quotes={
+                      salesOrder.quote
+                        ? [
+                            {
+                              id: salesOrder.quote.id,
+                              number: salesOrder.quote.number,
+                              status: salesOrder.quote.status,
+                              total: toNumericValue(salesOrder.quote.total, 0),
+                              validUntil: salesOrder.quote.validUntil?.toISOString() ?? null,
+                              opportunityName: salesOrder.quote.opportunity?.name ?? null,
+                            },
+                          ]
+                        : []
+                    }
+                    fulfillments={salesOrder.fulfillments.map((fulfillment) => ({
+                      id: fulfillment.id,
+                      number: fulfillment.number,
+                      status: fulfillment.status,
+                      date: fulfillment.date.toISOString(),
+                      notes: fulfillment.notes ?? null,
+                    }))}
+                    invoices={salesOrder.invoices.map((invoice) => ({
+                      id: invoice.id,
+                      number: invoice.number,
+                      status: invoice.status,
+                      total: toNumericValue(invoice.total, 0),
+                      dueDate: invoice.dueDate?.toISOString() ?? null,
+                      createdAt: invoice.createdAt.toISOString(),
+                    }))}
+                    cashReceipts={salesOrder.invoices.flatMap((invoice) =>
+                      invoice.cashReceipts.map((receipt) => ({
+                        id: receipt.id,
+                        number: receipt.number ?? null,
+                        amount: toNumericValue(receipt.amount, 0),
+                        date: receipt.date.toISOString(),
+                        method: receipt.method ?? null,
+                        reference: receipt.reference ?? null,
+                        invoiceNumber: invoice.number,
+                      }))
+                    )}
+                  />
+                ),
+              },
+              {
+                key: 'communications',
+                label: 'Communications',
+                count: communications.length,
+                toolbarTargetId: communicationsToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <CommunicationsSection
+                    embedded
+                    toolbarTargetId={communicationsToolbarTargetId}
+                    showDisplayControl={false}
+                    rows={communications}
+                    compose={buildTransactionCommunicationComposePayload({
+                      recordId: salesOrder.id,
+                      userId: salesOrder.userId,
+                      number: salesOrder.number,
+                      counterpartyName: salesOrder.customer.name,
+                      counterpartyEmail: salesOrder.customer.email ?? null,
+                      fromEmail: salesOrder.user?.email ?? null,
+                      status: formatSalesOrderStatus(salesOrder.status),
+                      total: fmtCurrency(computedTotal, undefined, moneySettings),
+                      lineItems: lineRows.map((row) => ({
+                        line: row.lineNumber,
+                        itemId: row.itemId ?? '-',
+                        description: row.description,
+                        quantity: row.quantity,
+                        receivedQuantity: row.fulfilledQuantity,
+                        openQuantity: row.openQuantity,
+                        billedQuantity: 0,
+                        unitPrice: row.unitPrice,
+                        lineTotal: row.lineTotal,
+                      })),
+                    })}
+                  />
+                ),
+              },
+                {
+                  key: 'system-notes',
+                  label: 'System Notes',
+                  count: systemNotes.length,
+                  toolbarTargetId: systemNotesToolbarTargetId,
+                  toolbarPlacement: 'tab-bar',
+                  content: <SystemNotesSection embedded toolbarTargetId={systemNotesToolbarTargetId} notes={systemNotes} showDisplayControl={false} />,
+                },
+            ]}
           />
         )}
-        communications={isCustomizing ? null : (
-          <CommunicationsSection
-            rows={communications}
-            compose={buildTransactionCommunicationComposePayload({
-              recordId: salesOrder.id,
-              userId: salesOrder.userId,
-              number: salesOrder.number,
-              counterpartyName: salesOrder.customer.name,
-              counterpartyEmail: salesOrder.customer.email ?? null,
-              fromEmail: salesOrder.user?.email ?? null,
-              status: formatSalesOrderStatus(salesOrder.status),
-              total: fmtCurrency(computedTotal, undefined, moneySettings),
-              lineItems: lineRows.map((row) => ({
-                line: row.lineNumber,
-                itemId: row.itemId ?? '-',
-                description: row.description,
-                quantity: row.quantity,
-                receivedQuantity: row.fulfilledQuantity,
-                openQuantity: row.openQuantity,
-                billedQuantity: 0,
-                unitPrice: row.unitPrice,
-                lineTotal: row.lineTotal,
-              })),
-            })}
-          />
-        )}
-        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
+        communications={null}
+        systemNotes={null}
       />
     </RecordDetailPageShell>
   )

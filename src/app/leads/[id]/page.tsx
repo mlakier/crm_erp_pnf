@@ -9,13 +9,14 @@ import DeleteButton from '@/components/DeleteButton'
 import LeadDetailCustomizeMode from '@/components/LeadDetailCustomizeMode'
 import ConvertLeadButton from '@/components/ConvertLeadButton'
 import RecordStatusButton from '@/components/RecordStatusButton'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
+import RelatedRecordsSection from '@/components/RelatedRecordsSection'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import CommunicationsSection from '@/components/CommunicationsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
-import LeadRelatedRecordsSection from '@/components/LeadRelatedRecordsSection'
 import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
 import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
 import TransactionActionStack from '@/components/TransactionActionStack'
@@ -102,7 +103,7 @@ function getLeadStatusToneKey(
   return configuredTones[key] ?? 'default'
 }
 
-type LeadHeaderField = TransactionHeaderField & { key: LeadDetailFieldKey }
+type LeadHeaderField = RecordHeaderField & { key: LeadDetailFieldKey }
 
 export default async function LeadDetailPage({
   params,
@@ -465,7 +466,7 @@ export default async function LeadDetailPage({
       label: 'Inactive',
       value: lead.inactive ? 'Yes' : 'No',
       helpText: 'Whether the lead is inactive.',
-      fieldType: 'boolean',
+      fieldType: 'checkbox',
       subsectionTitle: 'Record State',
       subsectionDescription: 'System-managed state and lifecycle flags for this lead.',
     },
@@ -527,7 +528,7 @@ export default async function LeadDetailPage({
     currency: currencyHref,
   })
 
-  const allFieldDefinitions = {
+  const allFieldDefinitions: Record<string, RecordHeaderField> = {
     ...headerFieldDefinitions,
     ...referenceFieldDefinitions,
   }
@@ -541,7 +542,7 @@ export default async function LeadDetailPage({
 
   const customizeFields = buildTransactionCustomizePreviewFields({
     fields: LEAD_DETAIL_FIELDS,
-    fieldDefinitions: allFieldDefinitions,
+    fieldDefinitions: headerFieldDefinitions,
     previewOverrides: {
       id: lead.id,
       leadNumber: lead.leadNumber ?? '',
@@ -616,8 +617,66 @@ export default async function LeadDetailPage({
         fields,
       }
     })
-    .filter((section): section is { title: string; description: string; columns: number; rows: number; fields: TransactionHeaderField[] } => Boolean(section))
+    .filter((section): section is NonNullable<typeof section> => Boolean(section))
   const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
+  const leadRelatedRecordsTabs = [
+    {
+      key: 'customers',
+      label: 'Customers',
+      count: lead.customer ? 1 : 0,
+      emptyMessage: 'No customer has been linked to this lead yet.',
+      rows: lead.customer
+        ? [
+            {
+              id: lead.customer.id,
+              type: 'Customer',
+              reference: lead.customer.customerId ?? 'Pending',
+              name: lead.customer.name,
+              details: [lead.customer.email, lead.customer.phone].filter(Boolean).join(' | ') || '-',
+              href: `/customers/${lead.customer.id}`,
+            },
+          ]
+        : [],
+    },
+    {
+      key: 'contacts',
+      label: 'Contacts',
+      count: lead.contact ? 1 : 0,
+      emptyMessage: 'No contact has been linked to this lead yet.',
+      rows: lead.contact
+        ? [
+            {
+              id: lead.contact.id,
+              type: 'Contact',
+              reference: lead.contact.contactNumber ?? 'Pending',
+              name: `${lead.contact.firstName ?? ''} ${lead.contact.lastName ?? ''}`.trim() || lead.contact.email || '-',
+              details: lead.contact.email ?? '-',
+              href: `/contacts/${lead.contact.id}`,
+            },
+          ]
+        : [],
+    },
+    {
+      key: 'opportunities',
+      label: 'Opportunities',
+      count: lead.opportunity ? 1 : 0,
+      emptyMessage: 'No opportunity has been linked to this lead yet.',
+      rows: lead.opportunity
+        ? [
+            {
+              id: lead.opportunity.id,
+              type: 'Opportunity',
+              reference: lead.opportunity.opportunityNumber ?? 'Pending',
+              name: lead.opportunity.name,
+              details: '-',
+              href: `/opportunities/${lead.opportunity.id}`,
+            },
+          ]
+        : [],
+    },
+  ]
+  const communicationsToolbarTargetId = 'lead-communications-toolbar'
+  const systemNotesToolbarTargetId = 'lead-system-notes-toolbar'
   const leadStatusActions = getAvailableWorkflowStatusActions(workflow, 'lead', lead.status)
   const leadConvertAction = getWorkflowDocumentAction(workflow, 'lead', 'opportunity', lead.status)
 
@@ -742,7 +801,7 @@ export default async function LeadDetailPage({
           ) : (
             <div className="space-y-6">
               {referenceSections.length > 0 ? (
-                <TransactionHeaderSections
+                <RecordHeaderDetails
                   editing={false}
                   sections={referenceSections.map((section) => ({
                     title: section.title,
@@ -756,7 +815,7 @@ export default async function LeadDetailPage({
                   showSubsections={false}
                 />
               ) : null}
-              <TransactionHeaderSections
+              <RecordHeaderDetails
                 purchaseOrderId={lead.id}
                 editing={isEditing}
                 sections={headerSections}
@@ -772,60 +831,57 @@ export default async function LeadDetailPage({
         }
         lineItems={null}
         relatedDocuments={isCustomizing ? null : (
-          <LeadRelatedRecordsSection
-            customer={
-              lead.customer
-                ? {
-                    id: lead.customer.id,
-                    href: `/customers/${lead.customer.id}`,
-                    reference: lead.customer.customerId ?? 'Pending',
-                    primary: lead.customer.name,
-                  }
-                : null
-            }
-            contact={
-              lead.contact
-                ? {
-                    id: lead.contact.id,
-                    href: `/contacts/${lead.contact.id}`,
-                    reference: lead.contact.contactNumber ?? 'Pending',
-                    primary: `${lead.contact.firstName ?? ''} ${lead.contact.lastName ?? ''}`.trim() || lead.contact.email || '-',
-                    secondary: lead.contact.email ?? null,
-                  }
-                : null
-            }
-            opportunity={
-              lead.opportunity
-                ? {
-                    id: lead.opportunity.id,
-                    href: `/opportunities/${lead.opportunity.id}`,
-                    reference: lead.opportunity.opportunityNumber ?? 'Pending',
-                    primary: lead.opportunity.name,
-                  }
-                : null
-            }
+          <RecordBottomTabsSection
+            defaultActiveKey="related-records"
+            tabs={[
+              {
+                key: 'related-records',
+                label: 'Related Records',
+                count: leadRelatedRecordsTabs.reduce((sum, tab) => sum + tab.count, 0),
+                content: <RelatedRecordsSection embedded tabs={leadRelatedRecordsTabs} showDisplayControl={false} />,
+              },
+              {
+                key: 'communications',
+                label: 'Communications',
+                count: communications.length,
+                toolbarTargetId: communicationsToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <CommunicationsSection
+                    embedded
+                    toolbarTargetId={communicationsToolbarTargetId}
+                    showDisplayControl={false}
+                    rows={communications}
+                    compose={buildTransactionCommunicationComposePayload({
+                      recordId: lead.id,
+                      userId: lead.userId,
+                      number: lead.leadNumber ?? leadName(lead),
+                      counterpartyName: lead.company ?? leadName(lead),
+                      counterpartyEmail: lead.email ?? null,
+                      fromEmail: lead.user?.email ?? null,
+                      status: formatLeadStatus(lead.status),
+                      total: lead.expectedValue != null ? fmtCurrency(lead.expectedValue, undefined, moneySettings) : '-',
+                      lineItems: [],
+                      sendEmailEndpoint: '/api/leads?action=send-email',
+                      recordIdFieldName: 'leadId',
+                      documentLabel: 'Lead',
+                    })}
+                  />
+                ),
+              },
+              {
+                key: 'system-notes',
+                label: 'System Notes',
+                count: systemNotes.length,
+                toolbarTargetId: systemNotesToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: <SystemNotesSection embedded toolbarTargetId={systemNotesToolbarTargetId} showDisplayControl={false} notes={systemNotes} />,
+              },
+            ]}
           />
         )}
-        communications={isCustomizing ? null : (
-          <CommunicationsSection
-            rows={communications}
-            compose={buildTransactionCommunicationComposePayload({
-              recordId: lead.id,
-              userId: lead.userId,
-              number: lead.leadNumber ?? leadName(lead),
-              counterpartyName: lead.company ?? leadName(lead),
-              counterpartyEmail: lead.email ?? null,
-              fromEmail: lead.user?.email ?? null,
-              status: formatLeadStatus(lead.status),
-              total: lead.expectedValue != null ? fmtCurrency(lead.expectedValue, undefined, moneySettings) : '-',
-              lineItems: [],
-              sendEmailEndpoint: '/api/leads?action=send-email',
-              recordIdFieldName: 'leadId',
-              documentLabel: 'Lead',
-            })}
-          />
-        )}
-        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
+        communications={null}
+        systemNotes={null}
       />
     </RecordDetailPageShell>
   )

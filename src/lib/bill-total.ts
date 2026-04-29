@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { calcLineTotal, sumMoney, toDecimal } from '@/lib/money'
+import { calcLineTotal, sumMoney } from '@/lib/money'
 
 export async function syncBillTotal(billId: string) {
   const lineItems = await prisma.billLineItem.findMany({
@@ -22,7 +22,7 @@ export async function syncBillTotal(billId: string) {
 
   return prisma.bill.update({
     where: { id: billId },
-    data: { total: toDecimal(nextTotal) },
+    data: { total: nextTotal },
     include: {
       vendor: true,
       lineItems: {

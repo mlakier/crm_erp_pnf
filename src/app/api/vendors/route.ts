@@ -4,6 +4,8 @@ import { logActivity } from '@/lib/activity'
 import { generateNextVendorNumber } from '@/lib/vendor-number'
 import { normalizePhone } from '@/lib/format'
 import { isFieldRequiredServer } from '@/lib/form-requirements-store'
+import { formatContactNumber } from '@/lib/contact-number'
+import { getNextSequenceFromValues, loadIdSetting } from '@/lib/id-settings'
 
 // GET /api/vendors - Get all vendors
 export async function GET() {
@@ -19,7 +21,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, email, phone, address, taxId, primarySubsidiaryId, primaryCurrencyId, inactive } = body
+    const { name, email, phone, address, taxId, primarySubsidiaryId, primaryCurrencyId, inactive, contacts, userId } = body
 
     const missing: string[] = []
     if ((await isFieldRequiredServer('vendorCreate', 'name')) && !name) missing.push('name')
@@ -32,7 +34,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Missing required fields: ${missing.join(', ')}` }, { status: 400 })
     }
 
+    const normalizedContacts = Array.isArray(contacts)
+      ? contacts
+          .map((contact) => ({
+            firstName: String(contact?.firstName ?? '').trim(),
+            lastName: String(contact?.lastName ?? '').trim(),
+            email: String(contact?.email ?? '').trim(),
+            phone: String(contact?.phone ?? '').trim(),
+            position: String(contact?.position ?? '').trim(),
+            receivesQuotesSalesOrders: String(contact?.receivesQuotesSalesOrders ?? 'false').trim().toLowerCase() === 'true' || contact?.receivesQuotesSalesOrders === true,
+            receivesInvoices: String(contact?.receivesInvoices ?? 'false').trim().toLowerCase() === 'true' || contact?.receivesInvoices === true,
+            receivesInvoiceCc: String(contact?.receivesInvoiceCc ?? 'false').trim().toLowerCase() === 'true' || contact?.receivesInvoiceCc === true,
+          }))
+          .filter((contact) => contact.firstName || contact.lastName || contact.email || contact.phone || contact.position)
+      : []
+
+    if (normalizedContacts.length < 1) {
+      return NextResponse.json({ error: 'At least one contact is required' }, { status: 400 })
+    }
+
+    if (!userId) {
+      return NextResponse.json({ error: 'userId is required' }, { status: 400 })
+    }
+
     const vendorNumber = await generateNextVendorNumber()
+    const contactIdConfig = await loadIdSetting('contact')
+    const latestContacts = await prisma.contact.findMany({
+      where: { contactNumber: { startsWith: contactIdConfig.prefix } },
+      orderBy: { contactNumber: 'desc' },
+      select: { contactNumber: true },
+      take: 200,
+    })
+    const nextContactSequence = getNextSequenceFromValues(latestContacts.map((contact) => contact.contactNumber), contactIdConfig)
 
     const vendor = await prisma.vendor.create({
       data: {
@@ -45,7 +78,22 @@ export async function POST(request: NextRequest) {
         subsidiaryId: primarySubsidiaryId || null,
         currencyId: primaryCurrencyId || null,
         inactive: String(inactive).trim().toLowerCase() === 'true',
+        contacts: {
+          create: normalizedContacts.map((contact, index) => ({
+            contactNumber: formatContactNumber(nextContactSequence + index, contactIdConfig),
+            firstName: contact.firstName,
+            lastName: contact.lastName,
+            email: contact.email || null,
+            phone: normalizePhone(contact.phone),
+            position: contact.position || null,
+            receivesQuotesSalesOrders: contact.receivesQuotesSalesOrders,
+            receivesInvoices: contact.receivesInvoices,
+            receivesInvoiceCc: contact.receivesInvoiceCc,
+            userId,
+          })),
+        },
       },
+      include: { contacts: true },
     })
 
     await logActivity({
@@ -71,6 +119,14 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const { name, email, phone, address, taxId, primarySubsidiaryId, primaryCurrencyId, inactive } = body
     if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+
+    const existingContactCount = await prisma.contact.count({ where: { vendorId: id } })
+    if (existingContactCount < 1) {
+      return NextResponse.json(
+        { error: 'At least one contact is required before saving this vendor. Add a contact in the Contacts section first.' },
+        { status: 400 }
+      )
+    }
 
     const vendor = await prisma.vendor.update({
       where: { id },

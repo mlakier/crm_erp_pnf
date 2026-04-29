@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logActivity, logCommunicationActivity, logFieldChangeActivities } from '@/lib/activity'
 import { generateNextInvoiceNumber } from '@/lib/invoice-number'
+import { generateNextJournalNumber } from '@/lib/journal-number'
 import { calcLineTotal, sumMoney } from '@/lib/money'
 import { toNumericValue } from '@/lib/format'
+import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
 import {
   coerceWorkflowValueForStep,
   getDefaultWorkflowStatus,
@@ -11,6 +13,226 @@ import {
   isWorkflowActionIdAllowed,
   loadOtcWorkflowRuntime,
 } from '@/lib/otc-workflow-runtime'
+
+async function findInvoicePostingAccounts(lineItemIds: string[]) {
+  const companySettings = await loadCompanyInformationSettings()
+  const configuredArAccountId = companySettings.defaultArAccountId.trim() || null
+  const configuredArAccount = configuredArAccountId
+    ? await prisma.chartOfAccounts.findFirst({
+        where: {
+          id: configuredArAccountId,
+          active: true,
+          isPosting: true,
+          accountType: 'Asset',
+        },
+        select: { id: true, name: true },
+      })
+    : null
+
+  const fallbackArAccount =
+    configuredArAccount
+    ?? await prisma.chartOfAccounts.findFirst({
+      where: {
+        active: true,
+        isPosting: true,
+        accountType: 'Asset',
+        OR: [
+          { name: { contains: 'Accounts Receivable', mode: 'insensitive' } },
+          { accountId: '1100' },
+        ],
+      },
+      select: { id: true, name: true },
+    })
+    ?? await prisma.chartOfAccounts.findFirst({
+      where: {
+        active: true,
+        isPosting: true,
+        accountType: 'Asset',
+      },
+      select: { id: true, name: true },
+    })
+
+  const items = lineItemIds.length
+    ? await prisma.item.findMany({
+        where: { id: { in: lineItemIds } },
+        select: {
+          id: true,
+          name: true,
+          directRevenuePosting: true,
+          incomeAccountId: true,
+          deferredRevenueAccountId: true,
+        },
+      })
+    : []
+
+  const incomeAccountIds = Array.from(
+    new Set(items.map((item) => item.incomeAccountId).filter((accountId): accountId is string => Boolean(accountId))),
+  )
+  const deferredRevenueAccountIds = Array.from(
+    new Set(items.map((item) => item.deferredRevenueAccountId).filter((accountId): accountId is string => Boolean(accountId))),
+  )
+  const accountIds = Array.from(new Set([...incomeAccountIds, ...deferredRevenueAccountIds]))
+  const postingAccounts = accountIds.length
+    ? await prisma.chartOfAccounts.findMany({
+        where: { id: { in: accountIds }, active: true, isPosting: true },
+        select: { id: true, name: true },
+      })
+    : []
+
+  const incomeAccountById = new Map(postingAccounts.map((account) => [account.id, account]))
+  const fallbackIncomeAccount =
+    await prisma.chartOfAccounts.findFirst({
+      where: {
+        active: true,
+        isPosting: true,
+        accountType: 'Revenue',
+        OR: [
+          { name: { contains: 'Revenue', mode: 'insensitive' } },
+          { accountId: '4000' },
+        ],
+      },
+      select: { id: true, name: true },
+    })
+    ?? await prisma.chartOfAccounts.findFirst({
+      where: { active: true, isPosting: true, accountType: 'Revenue' },
+      select: { id: true, name: true },
+    })
+
+  const fallbackDeferredRevenueAccount =
+    await prisma.chartOfAccounts.findFirst({
+      where: {
+        active: true,
+        isPosting: true,
+        accountType: 'Liability',
+        OR: [
+          { name: { contains: 'Deferred Revenue', mode: 'insensitive' } },
+          { accountId: '2200' },
+        ],
+      },
+      select: { id: true, name: true },
+    })
+    ?? await prisma.chartOfAccounts.findFirst({
+      where: { active: true, isPosting: true, accountType: 'Liability' },
+      select: { id: true, name: true },
+    })
+
+  return {
+    arAccount: fallbackArAccount,
+    itemsById: new Map(items.map((item) => [item.id, item])),
+    incomeAccountById,
+    fallbackIncomeAccount,
+    fallbackDeferredRevenueAccount,
+  }
+}
+
+async function postInvoiceApprovalJournal(invoiceId: string) {
+  const existingJournal = await prisma.journalEntry.findFirst({
+    where: { sourceType: 'invoice', sourceId: invoiceId },
+    select: { id: true },
+  })
+
+  if (existingJournal) return
+
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    include: {
+      customer: { select: { id: true, customerId: true, name: true } },
+      lineItems: {
+        include: {
+          item: {
+            select: {
+              id: true,
+              itemId: true,
+              name: true,
+              directRevenuePosting: true,
+              incomeAccountId: true,
+              deferredRevenueAccountId: true,
+            },
+          },
+        },
+      },
+    },
+  })
+
+  if (!invoice || !invoice.lineItems.length) return
+
+  const lineItemIds = invoice.lineItems.map((line) => line.itemId).filter(Boolean) as string[]
+  const {
+    arAccount,
+    itemsById,
+    fallbackIncomeAccount,
+    fallbackDeferredRevenueAccount,
+  } = await findInvoicePostingAccounts(lineItemIds)
+
+  if (!arAccount) return
+
+  const revenueLines = invoice.lineItems
+    .map((line, index) => {
+      const lineTotal = Number(line.lineTotal)
+      if (!Number.isFinite(lineTotal) || lineTotal <= 0) return null
+
+      const item = line.itemId ? itemsById.get(line.itemId) ?? line.item : line.item
+      const useDirectRevenue = item?.directRevenuePosting !== false
+      const targetAccountId = useDirectRevenue
+        ? item?.incomeAccountId ?? fallbackIncomeAccount?.id ?? null
+        : item?.deferredRevenueAccountId ?? fallbackDeferredRevenueAccount?.id ?? null
+
+      if (!targetAccountId) return null
+
+      return {
+        displayOrder: index + 2,
+        accountId: targetAccountId,
+        debit: 0,
+        credit: lineTotal,
+        memo: line.description || item?.name || `Revenue for invoice ${invoice.number}`,
+        customerId: invoice.customerId,
+        itemId: line.itemId,
+      }
+    })
+    .filter((line): line is NonNullable<typeof line> => Boolean(line))
+
+  const totalCredit = revenueLines.reduce((sum, line) => sum + Number(line.credit ?? 0), 0)
+  if (!revenueLines.length || totalCredit <= 0) return
+
+  const number = await generateNextJournalNumber()
+
+  await prisma.journalEntry.create({
+    data: {
+      number,
+      description: `Invoice ${invoice.number} posting`,
+      date: new Date(),
+      status: 'approved',
+      journalType: 'standard',
+      total: totalCredit,
+      sourceType: 'invoice',
+      sourceId: invoice.id,
+      subsidiaryId: invoice.subsidiaryId,
+      currencyId: invoice.currencyId,
+      userId: invoice.userId,
+      lineItems: {
+        create: [
+          {
+            displayOrder: 1,
+            accountId: arAccount.id,
+            debit: totalCredit,
+            credit: 0,
+            memo: `AR for invoice ${invoice.number}`,
+            customerId: invoice.customerId,
+          },
+          ...revenueLines,
+        ],
+      },
+    },
+  })
+
+  await logActivity({
+    entityType: 'invoice',
+    entityId: invoice.id,
+    action: 'update',
+    summary: `Posted invoice ${invoice.number} to GL`,
+    userId: invoice.userId,
+  })
+}
 
 export async function GET() {
   try {
@@ -408,6 +630,10 @@ export async function PUT(request: NextRequest) {
       context: 'Header',
       changes,
     })
+
+    if (existing.status !== 'approved' && invoice.status === 'approved') {
+      await postInvoiceApprovalJournal(invoice.id)
+    }
 
     return NextResponse.json(invoice)
   } catch {

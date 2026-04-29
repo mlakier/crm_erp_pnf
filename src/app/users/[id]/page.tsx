@@ -1,17 +1,17 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import DeleteButton from '@/components/DeleteButton'
-import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
-import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
-import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
-import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSection'
+import type { InlineRecordSection } from '@/components/InlineRecordDetails'
+import MasterDataHeaderDetails from '@/components/MasterDataHeaderDetails'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
+import RecordDetailActionBar from '@/components/RecordDetailActionBar'
+import { buildMasterDataSystemInformationItems } from '@/components/RecordSystemInformationSection'
 import UserDetailCustomizeMode from '@/components/UserDetailCustomizeMode'
 import UserSecurityActions from '@/components/UserSecurityActions'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import CommunicationsSection from '@/components/CommunicationsSection'
+import RelatedRecordsSection from '@/components/RelatedRecordsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import {
-  RecordDetailEmptyState,
   RecordDetailField,
   RecordDetailStatCard,
   RecordDetailSection,
@@ -24,6 +24,7 @@ import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/l
 import { loadMasterDataSystemInfo } from '@/lib/master-data-system-info'
 import { loadMasterDataSystemNotes } from '@/lib/master-data-system-notes'
 import { fmtCurrency } from '@/lib/format'
+import type { TransactionVisualTone } from '@/lib/transaction-page-config'
 
 function formatDateInput(value?: Date | null) {
   return value ? value.toISOString().slice(0, 10) : ''
@@ -253,15 +254,25 @@ export default async function UserDetailPage({
     fieldDefinitions,
     sectionDescriptions,
   })
-  const statPreviewCards = [
+  const statPreviewCards: Array<{
+    id: string
+    label: string
+    value: string | number
+    href?: string | null
+    accent?: true | 'teal' | 'yellow'
+    cardTone?: TransactionVisualTone
+    valueTone?: TransactionVisualTone
+    supportsColorized: boolean
+    supportsLink: boolean
+  }> = [
     {
       id: 'role',
       label: 'Role',
       value: user.role?.name ?? '-',
       href: user.roleId ? `/roles/${user.roleId}` : null,
-      accent: 'blue' as const,
-      cardTone: 'blue',
-      valueTone: 'blue',
+      accent: true,
+      cardTone: 'accent',
+      valueTone: 'accent',
       supportsColorized: true,
       supportsLink: true,
     },
@@ -324,6 +335,96 @@ export default async function UserDetailPage({
     updatedAt: user.updatedAt,
   })
   const systemNotes = await loadMasterDataSystemNotes({ entityType: 'user', entityId: user.id })
+  const relatedRecordsTabs = [
+    {
+      key: 'linked-records',
+      label: 'Linked Records',
+      count:
+        (linkedEmployee ? 1 : 0) +
+        (user.role ? 1 : 0) +
+        (user.department ? 1 : 0) +
+        (user.defaultSubsidiary ? 1 : 0) +
+        (user.delegatedApprover ? 1 : 0),
+      emptyMessage: 'No linked records are available for this user.',
+      rows: [
+        linkedEmployee
+          ? {
+              id: `employee-${linkedEmployee.id}`,
+              type: 'Employee',
+              reference: linkedEmployee.employeeId ?? linkedEmployee.id,
+              name: `${linkedEmployee.firstName} ${linkedEmployee.lastName}`.trim(),
+              details: [
+                linkedEmployee.departmentRef
+                  ? `${linkedEmployee.departmentRef.departmentId} - ${linkedEmployee.departmentRef.name}`
+                  : null,
+                linkedEmployee.subsidiary
+                  ? `${linkedEmployee.subsidiary.subsidiaryId} - ${linkedEmployee.subsidiary.name}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' | ') || '-',
+              href: `/employees/${linkedEmployee.id}`,
+            }
+          : null,
+        user.role
+          ? {
+              id: `role-${user.role.id}`,
+              type: 'Role',
+              reference: user.role.roleId,
+              name: user.role.name,
+              details: user.role.description ?? '-',
+              href: `/roles/${user.role.id}`,
+            }
+          : null,
+        user.department
+          ? {
+              id: `department-${user.department.id}`,
+              type: 'Department',
+              reference: user.department.departmentId,
+              name: user.department.name,
+              details: user.department.description ?? '-',
+              href: `/departments/${user.department.id}`,
+            }
+          : null,
+        user.defaultSubsidiary
+          ? {
+              id: `subsidiary-${user.defaultSubsidiary.id}`,
+              type: 'Default Subsidiary',
+              reference: user.defaultSubsidiary.subsidiaryId,
+              name: user.defaultSubsidiary.name,
+              details: user.defaultSubsidiary.country ?? user.defaultSubsidiary.entityType ?? '-',
+              href: `/subsidiaries/${user.defaultSubsidiary.id}`,
+            }
+          : null,
+        user.delegatedApprover
+          ? {
+              id: `delegated-approver-${user.delegatedApprover.id}`,
+              type: 'Delegated Approver',
+              reference: user.delegatedApprover.userId ?? user.delegatedApprover.id,
+              name: user.delegatedApprover.name ?? user.delegatedApprover.email,
+              details: user.delegatedApprover.email,
+              href: `/users/${user.delegatedApprover.id}`,
+            }
+          : null,
+      ].filter((row): row is { id: string; type: string; reference: string; name: string; details: string; href: string } => Boolean(row)),
+    },
+    {
+      key: 'subsidiary-access',
+      label: 'Subsidiary Access',
+      count: user.subsidiaryAssignments.length,
+      emptyMessage: 'No subsidiary access assignments are linked to this user yet.',
+      rows: user.subsidiaryAssignments.map((assignment) => ({
+        id: assignment.subsidiary.id,
+        type: 'Subsidiary',
+        reference: assignment.subsidiary.subsidiaryId,
+        name: assignment.subsidiary.name,
+        details: user.includeChildren ? 'Includes child subsidiaries' : '-',
+        href: `/subsidiaries/${assignment.subsidiary.id}`,
+      })),
+    },
+  ]
+  const communicationsToolbarTargetId = 'user-communications-toolbar'
+  const systemNotesToolbarTargetId = 'user-system-notes-toolbar'
 
   return (
     <RecordDetailPageShell
@@ -339,36 +440,22 @@ export default async function UserDetailPage({
         ) : null
       }
       actions={
-        <>
-          {isEditing && !isCustomizing ? (
-            <>
-              <Link href={detailHref} className="rounded-md border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-                Cancel
-              </Link>
-              <button
-                type="submit"
-                form={`inline-record-form-${user.id}`}
-                className="rounded-md px-3 py-1.5 text-xs font-semibold text-white"
-                style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-              >
-                Save
-              </button>
-            </>
-          ) : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailCreateMenu newHref="/users/new" duplicateHref={`/users/new?duplicateFrom=${user.id}`} /> : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailExportMenu title={user.name ?? user.email} fileName={`user-${user.userId ?? user.id}`} sections={detailSections} /> : null}
-          {!isEditing && !isCustomizing ? (
-            <Link href={`${detailHref}?customize=1`} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-              Customize
-            </Link>
-          ) : null}
-          {!isEditing && !isCustomizing ? (
-            <Link href={`${detailHref}?edit=1`} className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm" style={{ backgroundColor: 'var(--accent-primary-strong)' }}>
-              Edit
-            </Link>
-          ) : null}
-          {!isCustomizing ? <DeleteButton resource="users" id={user.id} /> : null}
-        </>
+        isCustomizing ? null : (
+          <RecordDetailActionBar
+            mode={isEditing ? 'edit' : 'detail'}
+            detailHref={detailHref}
+            formId={`inline-record-form-${user.id}`}
+            newHref="/users/new"
+            duplicateHref={`/users/new?duplicateFrom=${user.id}`}
+            exportTitle={user.name ?? user.email}
+            exportFileName={`user-${user.userId ?? user.id}`}
+            exportSections={detailSections}
+            customizeHref={`${detailHref}?customize=1`}
+            editHref={`${detailHref}?edit=1`}
+            deleteResource="users"
+            deleteId={user.id}
+          />
+        )
       }
     >
         {isCustomizing ? (
@@ -405,22 +492,20 @@ export default async function UserDetailPage({
                   })}
               </div>
             ) : null}
-            <InlineRecordDetails
+            <MasterDataHeaderDetails
               resource="users"
               id={user.id}
-              title="User details"
+              title="User Details"
               sections={detailSections}
               editing={isEditing}
               columns={formCustomization.formColumns}
-              showInternalActions={false}
+              systemInformationItems={buildMasterDataSystemInformationItems(systemInfo, user.id)}
             />
           </div>
         )}
 
         {!isCustomizing ? (
           <>
-            <MasterDataSystemInfoSection info={systemInfo} internalId={user.id} />
-
             <RecordDetailSection title="Security" count={1}>
               <div className="grid gap-4 px-6 py-4 sm:grid-cols-2">
                 <RecordDetailField label="Password">
@@ -429,26 +514,49 @@ export default async function UserDetailPage({
                     <UserSecurityActions locked={user.locked} />
                   </div>
                 </RecordDetailField>
-              </div>
-            </RecordDetailSection>
-
-            <RecordDetailSection title="Linked Employee" count={linkedEmployee ? 1 : 0}>
-              {linkedEmployee ? (
-                <div className="grid gap-x-10 gap-y-4 px-6 py-4 sm:grid-cols-2">
-                  <RecordDetailField label="Employee">
-                    <Link href={`/employees/${linkedEmployee.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                      {linkedEmployee.firstName} {linkedEmployee.lastName}
-                    </Link>
-                  </RecordDetailField>
-                  <RecordDetailField label="Employee ID">{linkedEmployee.employeeId ?? '-'}</RecordDetailField>
-                  <RecordDetailField label="Department">{linkedEmployee.departmentRef ? `${linkedEmployee.departmentRef.departmentId} - ${linkedEmployee.departmentRef.name}` : '-'}</RecordDetailField>
-                  <RecordDetailField label="Subsidiary">{linkedEmployee.subsidiary ? `${linkedEmployee.subsidiary.subsidiaryId} - ${linkedEmployee.subsidiary.name}` : '-'}</RecordDetailField>
                 </div>
-              ) : (
-                <RecordDetailEmptyState message="No employee linked to this user." />
-              )}
-            </RecordDetailSection>
-            <SystemNotesSection notes={systemNotes} />
+              </RecordDetailSection>
+            <RecordBottomTabsSection
+              defaultActiveKey="related-records"
+              tabs={[
+                {
+                  key: 'related-records',
+                  label: 'Related Records',
+                  count: relatedRecordsTabs.reduce((sum, tab) => sum + tab.count, 0),
+                  content: <RelatedRecordsSection embedded tabs={relatedRecordsTabs} showDisplayControl={false} />,
+                },
+                {
+                  key: 'communications',
+                  label: 'Communications',
+                  count: 0,
+                  toolbarTargetId: communicationsToolbarTargetId,
+                  toolbarPlacement: 'tab-bar',
+                  content: (
+                    <CommunicationsSection
+                      embedded
+                      toolbarTargetId={communicationsToolbarTargetId}
+                      rows={[]}
+                      showDisplayControl={false}
+                    />
+                  ),
+                },
+                {
+                  key: 'system-notes',
+                  label: 'System Notes',
+                  count: systemNotes.length,
+                  toolbarTargetId: systemNotesToolbarTargetId,
+                  toolbarPlacement: 'tab-bar',
+                  content: (
+                    <SystemNotesSection
+                      embedded
+                      toolbarTargetId={systemNotesToolbarTargetId}
+                      notes={systemNotes}
+                      showDisplayControl={false}
+                    />
+                  ),
+                },
+              ]}
+            />
           </>
         ) : null}
     </RecordDetailPageShell>

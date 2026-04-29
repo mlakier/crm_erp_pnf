@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { TransactionGlImpactRow } from '@/lib/transaction-gl-impact'
 
 type LayoutFieldConfig = {
   visible: boolean
@@ -35,7 +36,7 @@ type SectionField = {
   fieldType?: TransactionFieldType
   sourceText?: string
   editable?: boolean
-  type?: 'text' | 'number' | 'select' | 'date' | 'email'
+  type?: 'text' | 'number' | 'select' | 'date' | 'email' | 'checkbox' | 'address'
   options?: Array<{ value: string; label: string }>
   column?: number
   order?: number
@@ -146,5 +147,54 @@ export function buildTransactionExportHeaderFields<
       label: field.label,
       value: formatters?.[field.key as TKey]?.(field) ?? String(field.value || field.displayValue || '-'),
     }))
+  )
+}
+
+export function formatTransactionSourceType(value: string | null | undefined) {
+  if (!value) return 'Unknown'
+  return value
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+export function buildTransactionGlImpactRows({
+  entries,
+  sourceNumberByKey,
+  formatDate,
+  toNumericValue,
+}: {
+  entries: Array<{
+    number: string
+    sourceType: string | null
+    sourceId: string | null
+    date: Date
+    description: string | null
+    lineItems: Array<{
+      id: string
+      description: string | null
+      memo: string | null
+      debit: unknown
+      credit: unknown
+      account: { accountId: string; name: string }
+    }>
+  }>
+  sourceNumberByKey: Map<string, string>
+  formatDate: (date: Date) => string
+  toNumericValue: (value: unknown, fallback: number) => number
+}): TransactionGlImpactRow[] {
+  return entries.flatMap((entry) =>
+    entry.lineItems.map((line) => ({
+      id: line.id,
+      journalNumber: entry.number,
+      date: formatDate(entry.date),
+      sourceType: formatTransactionSourceType(entry.sourceType),
+      sourceNumber: sourceNumberByKey.get(`${entry.sourceType ?? ''}:${entry.sourceId ?? ''}`) ?? entry.sourceId ?? '-',
+      account: `${line.account.accountId} - ${line.account.name}`,
+      description: line.description ?? line.memo ?? entry.description ?? '-',
+      debit: toNumericValue(line.debit, 0),
+      credit: toNumericValue(line.credit, 0),
+    })),
   )
 }

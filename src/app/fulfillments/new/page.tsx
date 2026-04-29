@@ -75,7 +75,7 @@ export default async function NewFulfillmentPage({
             itemName: line.item?.name ?? null,
             description: line.description,
             orderedQuantity: line.quantity,
-            alreadyFulfilledQuantity: alreadyFulfilled,
+            alreadyProcessedQuantity: alreadyFulfilled,
             openQuantity,
           }
         })
@@ -101,7 +101,7 @@ export default async function NewFulfillmentPage({
             itemName: matchingOption.itemName,
             description: matchingOption.description,
             orderedQuantity: matchingOption.orderedQuantity,
-            alreadyFulfilledQuantity: matchingOption.alreadyFulfilledQuantity,
+            alreadyFulfilledQuantity: matchingOption.alreadyProcessedQuantity,
             openQuantity: matchingOption.openQuantity,
             fulfillmentQuantity: Math.min(line.quantity, matchingOption.openQuantity),
             notes: line.notes ?? '',

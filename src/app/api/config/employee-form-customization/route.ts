@@ -11,6 +11,7 @@ import {
   loadEmployeeFormCustomization,
   saveEmployeeFormCustomization,
 } from '@/lib/employee-form-customization-store'
+import type { TransactionStatCardSize, TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 function sanitizeInput(input: unknown): EmployeeFormCustomizationConfig {
   const defaults = defaultEmployeeFormCustomization()
@@ -65,21 +66,23 @@ function sanitizeInput(input: unknown): EmployeeFormCustomizationConfig {
       ])
     ),
     fields,
-    statCards: (() => {
-      const normalized = statCardsInput
+    statCards: (() : Array<TransactionStatCardSlot<EmployeeStatCardMetric>> => {
+      const normalized: Array<TransactionStatCardSlot<EmployeeStatCardMetric>> = statCardsInput
         .map((entry, index) => {
           const statRoot = entry && typeof entry === 'object' ? entry as Record<string, unknown> : null
           if (!statRoot) return null
 
           const metric = String(statRoot.metric ?? '').trim() as EmployeeStatCardMetric
           if (!allowedMetrics.has(metric)) return null
+          const size: TransactionStatCardSize =
+            statRoot.size === 'sm' || statRoot.size === 'lg' ? statRoot.size : 'md'
 
           return {
             id: String(statRoot.id ?? `employee-stat-${metric}`),
             metric,
             visible: statRoot.visible === undefined ? true : statRoot.visible === true,
             order: typeof statRoot.order === 'number' && Number.isFinite(statRoot.order) ? statRoot.order : index,
-            size: statRoot.size === 'sm' || statRoot.size === 'lg' ? statRoot.size : 'md',
+            size,
             colorized: statRoot.colorized === undefined ? true : statRoot.colorized === true,
             linked: statRoot.linked === undefined ? true : statRoot.linked === true,
           }

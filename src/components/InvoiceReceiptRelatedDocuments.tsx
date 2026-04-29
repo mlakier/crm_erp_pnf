@@ -12,15 +12,21 @@ export default function InvoiceReceiptRelatedDocuments({
   quote,
   opportunity,
   moneySettings,
+  embedded = false,
+  showDisplayControl = true,
 }: {
   invoice: { id: string; number: string; status: string; total: number } | null
   salesOrder: { id: string; number: string; status: string; total: number } | null
   quote: { id: string; number: string; status: string; total: number } | null
   opportunity: { id: string; number: string; name: string; status: string; total: number } | null
   moneySettings?: Parameters<typeof import('@/lib/format').fmtCurrency>[2]
+  embedded?: boolean
+  showDisplayControl?: boolean
 }) {
   return (
     <TransactionRelatedDocumentsTabs
+      embedded={embedded}
+      showDisplayControl={showDisplayControl}
       defaultActiveKey="opportunities"
       tabs={[
         {
@@ -45,6 +51,12 @@ export default function InvoiceReceiptRelatedDocuments({
                     </Link>,
                     opportunity.name,
                     <RelatedDocumentsStatusBadge key="status" status={opportunity.status} />,
+                    fmtCurrency(opportunity.total, undefined, moneySettings),
+                  ],
+                  filterValues: [
+                    opportunity.number,
+                    opportunity.name,
+                    opportunity.status,
                     fmtCurrency(opportunity.total, undefined, moneySettings),
                   ],
                 },
@@ -74,6 +86,11 @@ export default function InvoiceReceiptRelatedDocuments({
                     <RelatedDocumentsStatusBadge key="status" status={quote.status} />,
                     fmtCurrency(quote.total, undefined, moneySettings),
                   ],
+                  filterValues: [
+                    quote.number,
+                    quote.status,
+                    fmtCurrency(quote.total, undefined, moneySettings),
+                  ],
                 },
               ]
             : [],
@@ -101,6 +118,11 @@ export default function InvoiceReceiptRelatedDocuments({
                     <RelatedDocumentsStatusBadge key="status" status={salesOrder.status} />,
                     fmtCurrency(salesOrder.total, undefined, moneySettings),
                   ],
+                  filterValues: [
+                    salesOrder.number,
+                    salesOrder.status,
+                    fmtCurrency(salesOrder.total, undefined, moneySettings),
+                  ],
                 },
               ]
             : [],
@@ -126,6 +148,11 @@ export default function InvoiceReceiptRelatedDocuments({
                       {invoice.number}
                     </Link>,
                     <RelatedDocumentsStatusBadge key="status" status={invoice.status} />,
+                    fmtCurrency(invoice.total, undefined, moneySettings),
+                  ],
+                  filterValues: [
+                    invoice.number,
+                    invoice.status,
                     fmtCurrency(invoice.total, undefined, moneySettings),
                   ],
                 },

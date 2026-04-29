@@ -8,6 +8,11 @@ import {
   type BillLineColumnKey,
 } from '@/lib/bill-detail-customization'
 import { mergeTransactionReferenceLayouts } from '@/lib/transaction-reference-layouts'
+import {
+  defaultTransactionGlImpactSettings,
+  TRANSACTION_GL_IMPACT_COLUMNS,
+  type TransactionGlImpactColumnKey,
+} from '@/lib/transaction-gl-impact'
 
 const STORE_PATH = path.join(process.cwd(), 'config', 'bill-detail-customization.json')
 
@@ -159,6 +164,64 @@ function mergeWithDefaults(overrides: Partial<BillDetailCustomizationConfig>): B
         },
       ]),
   ) as Record<BillLineColumnKey, BillDetailCustomizationConfig['lineColumns'][BillLineColumnKey]>
+
+  if (overrides.glImpactSettings && typeof overrides.glImpactSettings === 'object') {
+    merged.glImpactSettings = {
+      ...merged.glImpactSettings,
+      ...(overrides.glImpactSettings.fontSize === 'xs' || overrides.glImpactSettings.fontSize === 'sm'
+        ? { fontSize: overrides.glImpactSettings.fontSize }
+        : {}),
+    }
+  } else {
+    merged.glImpactSettings = defaultTransactionGlImpactSettings()
+  }
+
+  const glImpactColumnOverrides =
+    overrides.glImpactColumns && typeof overrides.glImpactColumns === 'object'
+      ? (overrides.glImpactColumns as Partial<
+          Record<
+            TransactionGlImpactColumnKey,
+            Partial<BillDetailCustomizationConfig['glImpactColumns'][TransactionGlImpactColumnKey]>
+          >
+        >)
+      : {}
+
+  for (const column of TRANSACTION_GL_IMPACT_COLUMNS) {
+    const override = glImpactColumnOverrides[column.id]
+    if (!override || typeof override !== 'object') continue
+    merged.glImpactColumns[column.id] = {
+      visible: override.visible === undefined ? merged.glImpactColumns[column.id].visible : override.visible === true,
+      order:
+        typeof override.order === 'number' && Number.isFinite(override.order)
+          ? Math.max(0, Math.trunc(override.order))
+          : merged.glImpactColumns[column.id].order,
+      widthMode:
+        override.widthMode === 'auto' ||
+        override.widthMode === 'compact' ||
+        override.widthMode === 'normal' ||
+        override.widthMode === 'wide'
+          ? override.widthMode
+          : merged.glImpactColumns[column.id].widthMode,
+    }
+  }
+
+  merged.glImpactColumns = Object.fromEntries(
+    [...TRANSACTION_GL_IMPACT_COLUMNS]
+      .map((column) => ({
+        id: column.id,
+        visible: merged.glImpactColumns[column.id].visible !== false,
+        order: merged.glImpactColumns[column.id].order,
+      }))
+      .sort((left, right) => left.order - right.order)
+      .map((column, index) => [
+        column.id,
+        {
+          visible: column.visible,
+          order: index,
+          widthMode: merged.glImpactColumns[column.id].widthMode,
+        },
+      ]),
+  ) as Record<TransactionGlImpactColumnKey, BillDetailCustomizationConfig['glImpactColumns'][TransactionGlImpactColumnKey]>
 
   return merged
 }

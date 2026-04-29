@@ -1,10 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionActionStack from '@/components/TransactionActionStack'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
+import ReceiptLineItemsSection, { type ReceiptLineRow } from '@/components/ReceiptLineItemsSection'
 import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
 import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/lib/form-requirements-client'
 import {
@@ -16,13 +17,25 @@ import {
 type PurchaseOrderOption = {
   id: string
   number: string
+  userId?: string | null
+  lineOptions: Array<{
+    id: string
+    lineNumber: number
+    itemId: string | null
+    itemName: string | null
+    description: string
+    orderedQuantity: number
+    alreadyReceivedQuantity: number
+    openQuantity: number
+    receivable: boolean
+  }>
 }
 
 type Option = { value: string; label: string }
 
 type ReceiptHeaderField = {
   key: ReceiptDetailFieldKey
-} & TransactionHeaderField
+  } & RecordHeaderField
 
 const sectionDescriptions: Record<string, string> = {
   'Document Identity': 'Receipt numbering and source purchase-order context for this receipt.',
@@ -31,16 +44,80 @@ const sectionDescriptions: Record<string, string> = {
   'System Dates': 'System-managed timestamps for this receipt.',
 }
 
+function buildReceiptDraftRows(
+  purchaseOrder: PurchaseOrderOption | null,
+  initialLineItems: Array<{
+    id: string
+    purchaseOrderLineItemId: string | null
+    receiptQuantity: number
+    notes: string
+  }>,
+) {
+  if (!purchaseOrder) return []
+  const receivableOptions = purchaseOrder.lineOptions.filter((line) => line.receivable)
+  return initialLineItems
+    .map((line) => {
+      const option = receivableOptions.find((candidate) => candidate.id === line.purchaseOrderLineItemId)
+      if (!option) return null
+      return {
+        id: line.id,
+        purchaseOrderLineItemId: option.id,
+        lineNumber: option.lineNumber,
+        itemId: option.itemId,
+        itemName: option.itemName,
+        description: option.description,
+        orderedQuantity: option.orderedQuantity,
+        alreadyReceivedQuantity: option.alreadyReceivedQuantity,
+        openQuantity: option.openQuantity,
+        receiptQuantity: Math.max(0, Math.min(line.receiptQuantity, option.openQuantity)),
+        notes: line.notes,
+      } satisfies ReceiptLineRow
+    })
+    .filter((line): line is NonNullable<typeof line> => line !== null)
+}
+
+function syncReceiptDraftRows(
+  currentRows: ReceiptLineRow[],
+  purchaseOrder: PurchaseOrderOption | null,
+) {
+  if (!purchaseOrder) return []
+  const receivableOptions = purchaseOrder.lineOptions.filter((line) => line.receivable)
+  return currentRows
+    .map((row) => {
+      const option = receivableOptions.find((candidate) => candidate.id === row.purchaseOrderLineItemId)
+      if (!option) return null
+      return {
+        ...row,
+        lineNumber: option.lineNumber,
+        itemId: option.itemId,
+        itemName: option.itemName,
+        description: option.description,
+        orderedQuantity: option.orderedQuantity,
+        alreadyReceivedQuantity: option.alreadyReceivedQuantity,
+        openQuantity: option.openQuantity,
+        receiptQuantity: Math.max(0, Math.min(row.receiptQuantity, option.openQuantity)),
+      }
+    })
+    .filter((line): line is NonNullable<typeof line> => line !== null)
+}
+
 export default function ReceiptCreatePageClient({
   purchaseOrders,
   statusOptions,
   customization,
   initialHeaderValues,
+  initialLineItems = [],
 }: {
   purchaseOrders: PurchaseOrderOption[]
   statusOptions: Option[]
   customization: ReceiptDetailCustomizationConfig
   initialHeaderValues?: Partial<Record<string, string>>
+  initialLineItems?: Array<{
+    id: string
+    purchaseOrderLineItemId: string | null
+    receiptQuantity: number
+    notes: string
+  }>
 }) {
   const router = useRouter()
   const { req, isLocked } = useFormRequirementsState('receiptCreate')
@@ -48,7 +125,7 @@ export default function ReceiptCreatePageClient({
   const [error, setError] = useState('')
   const [headerValues, setHeaderValues] = useState<Record<string, string>>({
     purchaseOrderId: initialHeaderValues?.purchaseOrderId ?? purchaseOrders[0]?.id ?? '',
-    quantity: initialHeaderValues?.quantity ?? '1',
+    quantity: initialHeaderValues?.quantity ?? '0',
     date: initialHeaderValues?.date ?? new Date().toISOString().slice(0, 10),
     status: initialHeaderValues?.status ?? statusOptions[0]?.value ?? '',
     notes: initialHeaderValues?.notes ?? '',
@@ -58,6 +135,52 @@ export default function ReceiptCreatePageClient({
     () => purchaseOrders.find((purchaseOrder) => purchaseOrder.id === (headerValues.purchaseOrderId ?? '')) ?? null,
     [headerValues.purchaseOrderId, purchaseOrders],
   )
+  const initialSelectedPurchaseOrderId = initialHeaderValues?.purchaseOrderId ?? purchaseOrders[0]?.id ?? ''
+  const purchaseOrderIdRef = useRef(initialSelectedPurchaseOrderId)
+  const [lineItems, setLineItems] = useState<ReceiptLineRow[]>(() =>
+    buildReceiptDraftRows(
+      purchaseOrders.find((purchaseOrder) => purchaseOrder.id === initialSelectedPurchaseOrderId) ?? null,
+      initialLineItems,
+    ),
+  )
+  const availableLineOptions = useMemo(
+    () =>
+      (selectedPurchaseOrder?.lineOptions ?? [])
+        .filter((line) => line.receivable)
+        .map((line) => ({
+          id: line.id,
+          lineNumber: line.lineNumber,
+          itemId: line.itemId,
+          itemName: line.itemName,
+          description: line.description,
+          orderedQuantity: line.orderedQuantity,
+          alreadyProcessedQuantity: line.alreadyReceivedQuantity,
+          openQuantity: line.openQuantity,
+        })),
+    [selectedPurchaseOrder],
+  )
+  const totalReceiptQuantity = useMemo(
+    () => lineItems.reduce((sum, line) => sum + line.receiptQuantity, 0),
+    [lineItems],
+  )
+
+  useEffect(() => {
+    setHeaderValues((current) => ({
+      ...current,
+      quantity: String(totalReceiptQuantity),
+    }))
+  }, [totalReceiptQuantity])
+
+  useEffect(() => {
+    const selectedId = selectedPurchaseOrder?.id ?? ''
+    if (selectedId !== purchaseOrderIdRef.current) {
+      purchaseOrderIdRef.current = selectedId
+      setLineItems([])
+      return
+    }
+
+    setLineItems((current) => syncReceiptDraftRows(current, selectedPurchaseOrder))
+  }, [selectedPurchaseOrder])
 
   const purchaseOrderOptions = purchaseOrders.map((purchaseOrder) => ({
     value: purchaseOrder.id,
@@ -103,10 +226,9 @@ export default function ReceiptCreatePageClient({
       key: 'quantity',
       label: 'Quantity',
       value: headerValues.quantity ?? '',
-      displayValue: headerValues.quantity || '-',
-      editable: true,
-      type: 'number',
-      helpText: 'Total quantity received on this receipt.',
+      displayValue: headerValues.quantity || '0',
+      editable: false,
+      helpText: 'Derived from the receipt line quantities below.',
       fieldType: 'number',
       subsectionTitle: 'Receipt Terms',
       subsectionDescription: 'Core receipt quantity, date, status, and operational notes.',
@@ -194,6 +316,8 @@ export default function ReceiptCreatePageClient({
           date: values.date,
           status: values.status,
           notes: values.notes || null,
+          userId: selectedPurchaseOrder?.userId ?? null,
+          lineItems,
         }),
       })
 
@@ -223,7 +347,7 @@ export default function ReceiptCreatePageClient({
       widthClassName="w-full max-w-none"
       actions={<TransactionActionStack mode="create" cancelHref="/receipts" formId="create-receipt-form" />}
     >
-      <TransactionHeaderSections
+      <RecordHeaderDetails
         editing
         sections={headerSections}
         columns={customization.formColumns}
@@ -234,6 +358,13 @@ export default function ReceiptCreatePageClient({
         submitMode="controlled"
         onSubmit={handleSubmit}
         onValuesChange={setHeaderValues}
+      />
+      <ReceiptLineItemsSection
+        rows={lineItems}
+        editing
+        lineOptions={availableLineOptions}
+        onChange={setLineItems}
+        allowAddLines={Boolean(selectedPurchaseOrder)}
       />
       {error ? (
         <p className="mt-4 text-sm" style={{ color: 'var(--danger)' }}>

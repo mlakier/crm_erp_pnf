@@ -3,6 +3,8 @@ import { loadListValues } from '@/lib/load-list-values'
 import InvoiceReceiptCreatePageClient from '@/components/InvoiceReceiptCreatePageClient'
 import { loadInvoiceReceiptDetailCustomization } from '@/lib/invoice-receipt-detail-customization-store'
 
+export const runtime = 'nodejs'
+
 export default async function NewInvoiceReceiptPage({
   searchParams,
 }: {
@@ -10,7 +12,7 @@ export default async function NewInvoiceReceiptPage({
 }) {
   const duplicateFrom = (await searchParams)?.duplicateFrom?.trim()
 
-  const [invoices, paymentMethodValues, customization, duplicateSource] = await Promise.all([
+  const [invoices, paymentMethodValues, customization, cashAccounts, duplicateSource] = await Promise.all([
     prisma.invoice.findMany({
       include: {
         customer: {
@@ -22,6 +24,19 @@ export default async function NewInvoiceReceiptPage({
     }),
     loadListValues('PAYMENT-METHOD'),
     loadInvoiceReceiptDetailCustomization(),
+    prisma.chartOfAccounts.findMany({
+      where: {
+        active: true,
+        isPosting: true,
+        accountType: 'Asset',
+        OR: [
+          { name: { contains: 'Cash', mode: 'insensitive' } },
+          { name: { contains: 'Bank', mode: 'insensitive' } },
+          { accountId: { in: ['1000', '1010'] } },
+        ],
+      },
+      orderBy: [{ accountId: 'asc' }],
+    }),
     duplicateFrom
       ? prisma.cashReceipt.findUnique({
           where: { id: duplicateFrom },
@@ -44,11 +59,16 @@ export default async function NewInvoiceReceiptPage({
         value: value.toLowerCase(),
         label: value,
       }))}
+      bankAccountOptions={cashAccounts.map((account) => ({
+        value: account.id,
+        label: `${account.accountId} - ${account.name}`,
+      }))}
       customization={customization}
       initialHeaderValues={
         duplicateSource
           ? {
               invoiceId: duplicateSource.invoiceId,
+              bankAccountId: duplicateSource.bankAccountId ?? '',
               amount: String(duplicateSource.amount),
               date: duplicateSource.date.toISOString().slice(0, 10),
               method: duplicateSource.method,

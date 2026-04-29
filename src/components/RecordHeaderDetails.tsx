@@ -5,9 +5,12 @@ import { usePathname, useRouter } from 'next/navigation'
 import { isValidElement, type ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import AddressModal, { parseAddress } from '@/components/AddressModal'
+import MultiSelectDropdown from '@/components/MultiSelectDropdown'
 import { RecordDetailSection } from '@/components/RecordDetailPanels'
+import SearchableSelect from '@/components/SearchableSelect'
 
-export type TransactionHeaderField = {
+export type RecordHeaderField = {
   key: string
   label: string
   value: string
@@ -16,7 +19,9 @@ export type TransactionHeaderField = {
   required?: boolean
   requiredLocked?: boolean
   disabled?: boolean
-  type?: 'text' | 'number' | 'select' | 'date' | 'email'
+  readOnly?: boolean
+  type?: 'text' | 'number' | 'select' | 'date' | 'email' | 'checkbox' | 'address'
+  multiple?: boolean
   options?: Array<{ value: string; label: string }>
   column?: number
   order?: number
@@ -26,16 +31,17 @@ export type TransactionHeaderField = {
   href?: string | null
   subsectionTitle?: string
   subsectionDescription?: string
+  placeholder?: string
 }
 
-export type TransactionHeaderSection = {
+export type RecordHeaderSection = {
   title: string
   description?: string
   rows?: number
-  fields: TransactionHeaderField[]
+  fields: RecordHeaderField[]
 }
 
-export default function TransactionHeaderSections({
+export default function RecordHeaderDetails({
   purchaseOrderId,
   editing,
   sections,
@@ -44,6 +50,7 @@ export default function TransactionHeaderSections({
   containerDescription,
   showSubsections = true,
   showSectionDescriptions = true,
+  containerSectionMode = 'stacked',
   formId,
   submitMode = 'update',
   updateUrl,
@@ -52,12 +59,13 @@ export default function TransactionHeaderSections({
 }: {
   purchaseOrderId?: string
   editing: boolean
-  sections: TransactionHeaderSection[]
+  sections: RecordHeaderSection[]
   columns: number
   containerTitle?: string
   containerDescription?: string
   showSubsections?: boolean
   showSectionDescriptions?: boolean
+  containerSectionMode?: 'stacked' | 'tabs'
   formId?: string
   submitMode?: 'update' | 'controlled'
   updateUrl?: string
@@ -77,10 +85,12 @@ export default function TransactionHeaderSections({
   const [values, setValues] = useState<Record<string, string>>(() => incomingValues)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [activeSectionTitle, setActiveSectionTitle] = useState<string | null>(sections[0]?.title ?? null)
   const [openDateFieldKey, setOpenDateFieldKey] = useState<string | null>(null)
   const [visibleMonthByField, setVisibleMonthByField] = useState<Record<string, string>>({})
   const [showMonthYearPickerByField, setShowMonthYearPickerByField] = useState<Record<string, boolean>>({})
   const [datePopoverStyle, setDatePopoverStyle] = useState<{ top: number; left: number } | null>(null)
+  const [addressFieldBeingEdited, setAddressFieldBeingEdited] = useState<string | null>(null)
   const datePopoverRef = useRef<HTMLDivElement | null>(null)
   const dateTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
@@ -99,10 +109,17 @@ export default function TransactionHeaderSections({
   }, [incomingValues])
 
   useEffect(() => {
+    if (!sections.some((section) => section.title === activeSectionTitle)) {
+      setActiveSectionTitle(sections[0]?.title ?? null)
+    }
+  }, [activeSectionTitle, sections])
+
+  useEffect(() => {
     if (!openDateFieldKey) return
+    const activeDateFieldKey = openDateFieldKey
 
     function updatePopoverPosition() {
-      const trigger = dateTriggerRefs.current[openDateFieldKey]
+      const trigger = dateTriggerRefs.current[activeDateFieldKey]
       if (!trigger) return
 
       const rect = trigger.getBoundingClientRect()
@@ -123,7 +140,7 @@ export default function TransactionHeaderSections({
 
     function handlePointerDown(event: MouseEvent) {
       const target = event.target as Node
-      const trigger = dateTriggerRefs.current[openDateFieldKey]
+      const trigger = dateTriggerRefs.current[activeDateFieldKey]
       if (!datePopoverRef.current?.contains(target) && !trigger?.contains(target)) {
         setOpenDateFieldKey(null)
       }
@@ -154,7 +171,7 @@ export default function TransactionHeaderSections({
     onValuesChange?.(nextValues)
   }
 
-  function renderPlacedFieldGrid(sectionFields: TransactionHeaderField[], rowCount: number) {
+  function renderPlacedFieldGrid(sectionFields: RecordHeaderField[], rowCount: number) {
     const normalizedColumns = Math.min(4, Math.max(1, columns))
     const normalizedRows = Math.max(
       1,
@@ -164,7 +181,7 @@ export default function TransactionHeaderSections({
       ),
     )
 
-    const fieldByCell = new Map<string, TransactionHeaderField>()
+    const fieldByCell = new Map<string, RecordHeaderField>()
     for (const field of sectionFields) {
       const column = Math.min(normalizedColumns, Math.max(1, field.column ?? 1))
       const row = Math.max(1, (field.order ?? 0) + 1)
@@ -196,12 +213,16 @@ export default function TransactionHeaderSections({
     )
   }
 
-  const renderField = (field: TransactionHeaderField, useExplicitPlacement = true) => {
+  const renderField = (field: RecordHeaderField, useExplicitPlacement = true) => {
     const column = Math.min(4, Math.max(1, field.column ?? 1))
     const row = Math.max(1, (field.order ?? 0) + 1)
     const isSelect = field.type === 'select'
     const isDate = field.type === 'date'
+    const isCheckbox = field.type === 'checkbox'
+    const isAddress = field.type === 'address'
     const isDisabled = Boolean(field.disabled)
+    const isReadOnly = Boolean(field.readOnly)
+    const isUnavailable = isDisabled || isReadOnly
     const currentValue = values[field.key] ?? ''
 
     return (
@@ -222,7 +243,33 @@ export default function TransactionHeaderSections({
         </dt>
         <dd className="mt-1">
           {editing && field.editable ? (
-            isDate ? (
+            isCheckbox ? (
+              <label className="flex items-center gap-2 text-sm text-white">
+                <input
+                  type="checkbox"
+                  checked={currentValue === 'true'}
+                  disabled={isUnavailable}
+                  onChange={(event) => updateValue(field.key, event.target.checked ? 'true' : 'false')}
+                  className="h-4 w-4 rounded disabled:opacity-50"
+                />
+                {field.placeholder ?? field.label}
+              </label>
+            ) : isAddress ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isUnavailable}
+                  onClick={() => setAddressFieldBeingEdited(field.key)}
+                  className="rounded-md border px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+                >
+                  {currentValue ? 'Edit Address' : 'Enter Address'}
+                </button>
+                <p className="text-xs" style={{ color: currentValue ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                  {currentValue || 'No address saved yet'}
+                </p>
+              </div>
+            ) : isDate ? (
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -230,9 +277,9 @@ export default function TransactionHeaderSections({
                   onChange={(event) => updateValue(field.key, event.target.value)}
                   placeholder="YYYY-MM-DD"
                   required={field.required}
-                  disabled={isDisabled}
+                  disabled={isUnavailable}
                   className="block min-w-0 flex-1 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                  style={{ borderColor: 'var(--border-muted)', opacity: isDisabled ? 0.7 : 1, cursor: isDisabled ? 'not-allowed' : 'text' }}
+                  style={{ borderColor: 'var(--border-muted)', opacity: isUnavailable ? 0.7 : 1, cursor: isUnavailable ? 'not-allowed' : 'text' }}
                 />
                 <button
                   type="button"
@@ -251,8 +298,8 @@ export default function TransactionHeaderSections({
                     setOpenDateFieldKey((current) => (current === field.key ? null : field.key))
                   }}
                   className="shrink-0 rounded-md border px-2.5 py-2 text-xs font-medium"
-                  style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)', opacity: isDisabled ? 0.7 : 1, cursor: isDisabled ? 'not-allowed' : 'pointer' }}
-                  disabled={isDisabled}
+                  style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)', opacity: isUnavailable ? 0.7 : 1, cursor: isUnavailable ? 'not-allowed' : 'pointer' }}
+                  disabled={isUnavailable}
                   aria-label={`Open ${field.label} calendar`}
                   title={`Open ${field.label} calendar`}
                 >
@@ -276,7 +323,15 @@ export default function TransactionHeaderSections({
                   </svg>
                 </button>
               </div>
-            ) : isSelect && isDisabled ? (
+            ) : isSelect && field.multiple ? (
+              <MultiSelectDropdown
+                value={splitMultiValue(currentValue)}
+                options={field.options ?? []}
+                disabled={isUnavailable}
+                placeholder={field.placeholder ?? 'Select options'}
+                onChange={(next) => updateValue(field.key, next.join(','))}
+              />
+            ) : isSelect && isUnavailable ? (
               <input
                 type="text"
                 value={formatDisplayValue(field, currentValue)}
@@ -286,38 +341,35 @@ export default function TransactionHeaderSections({
                 style={{ borderColor: 'var(--border-muted)', opacity: 0.7, cursor: 'default' }}
               />
             ) : isSelect ? (
-              <select
-                value={currentValue}
-                onChange={(event) => updateValue(field.key, event.target.value)}
-                required={field.required}
-                disabled={isDisabled}
-                className="block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                style={{ borderColor: 'var(--border-muted)', opacity: isDisabled ? 0.7 : 1, cursor: isDisabled ? 'not-allowed' : 'default' }}
-              >
-                <option value="" style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                  Select option
-                </option>
-                {(field.options ?? []).map((option) => (
-                  <option
-                    key={`${field.key}-${option.value}`}
-                    value={option.value}
-                    style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}
-                  >
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type={field.type ?? 'text'}
-                value={currentValue}
-                onChange={(event) => updateValue(field.key, event.target.value)}
-                required={field.required}
-                disabled={isDisabled}
-                className="block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-                style={{ borderColor: 'var(--border-muted)', opacity: isDisabled ? 0.7 : 1, cursor: isDisabled ? 'not-allowed' : 'text' }}
+              <SearchableSelect
+                selectedValue={currentValue}
+                options={(field.options ?? []).map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                  searchText: `${option.value} ${option.label}`,
+                  sortIdText: option.value,
+                  sortLabelText: option.label,
+                }))}
+                placeholder={field.placeholder ?? 'Select option'}
+                searchPlaceholder={`Search ${field.label}`}
+                sortMode="label"
+                disabled={isUnavailable}
+                textClassName="text-sm"
+                onSelect={(value) => updateValue(field.key, value)}
               />
-            )
+            ) : (
+                <input
+                  type={field.type ?? 'text'}
+                  value={currentValue}
+                  onChange={(event) => updateValue(field.key, event.target.value)}
+                  required={field.required}
+                  disabled={isUnavailable}
+                  readOnly={isReadOnly}
+                  placeholder={field.placeholder}
+                  className="block w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
+                  style={{ borderColor: 'var(--border-muted)', opacity: isUnavailable ? 0.7 : 1, cursor: isUnavailable ? 'not-allowed' : 'text' }}
+                />
+              )
           ) : (
             <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
               {renderReadOnlyValue(field, currentValue)}
@@ -380,7 +432,7 @@ export default function TransactionHeaderSections({
     }
   }
 
-  function renderSectionBody(section: TransactionHeaderSection, embedded = false) {
+  function renderSectionBody(section: RecordHeaderSection, embedded = false) {
     const wrapperClassName = embedded ? 'pt-3' : 'px-6 py-6'
     if (!showSubsections) {
       return (
@@ -419,7 +471,7 @@ export default function TransactionHeaderSections({
           </p>
         ) : null}
         {Object.entries(
-          section.fields.reduce<Record<string, TransactionHeaderField[]>>((groups, field) => {
+          section.fields.reduce<Record<string, RecordHeaderField[]>>((groups, field) => {
             const key = field.subsectionTitle ?? '__default__'
             if (!groups[key]) groups[key] = []
             groups[key].push(field)
@@ -466,7 +518,7 @@ export default function TransactionHeaderSections({
     )
   }
 
-  function renderFlatSectionGrid(section: TransactionHeaderSection, embedded = false) {
+  function renderFlatSectionGrid(section: RecordHeaderSection, embedded = false) {
     return (
       <>
         {showSectionDescriptions && section.description ? (
@@ -497,8 +549,16 @@ export default function TransactionHeaderSections({
     )
   }
 
+  const normalizedContainerSectionMode =
+    containerSectionMode === 'tabs' && sections.length > 1 ? 'tabs' : 'stacked'
+  const activeTabbedSection =
+    normalizedContainerSectionMode === 'tabs'
+      ? sections.find((section) => section.title === activeSectionTitle) ?? sections[0] ?? null
+      : null
+
   return (
-    <form id={formId ?? `inline-record-form-${purchaseOrderId ?? 'draft'}`} onSubmit={handleSubmit} className="space-y-6">
+    <>
+      <form id={formId ?? `inline-record-form-${purchaseOrderId ?? 'draft'}`} onSubmit={handleSubmit} className="space-y-6">
       {containerTitle ? (
         <RecordDetailSection title={containerTitle} count={allFields.length}>
           {containerDescription ? (
@@ -508,19 +568,54 @@ export default function TransactionHeaderSections({
               </p>
             </div>
           ) : null}
-          <div className="space-y-5 px-6 py-5">
-            {sections.map((section, index) => (
-              <div
-                key={`${section.title}-${index}`}
-                className={index > 0 ? 'border-t pt-4' : ''}
-                style={index > 0 ? { borderColor: 'var(--border-muted)' } : undefined}
-              >
-                <div>
-                  <h2 className="text-base font-semibold text-white">{section.title}</h2>
+          <div className="px-6 py-5">
+            {normalizedContainerSectionMode === 'tabs' && activeTabbedSection ? (
+              <div className="space-y-5">
+                <div className="flex flex-wrap gap-2">
+                  {sections.map((section) => {
+                    const isActive = section.title === activeTabbedSection.title
+                    return (
+                      <button
+                        key={section.title}
+                        type="button"
+                        onClick={() => setActiveSectionTitle(section.title)}
+                        className="rounded-full border px-3 py-1.5 text-sm font-medium transition-colors"
+                        style={{
+                          borderColor: isActive ? 'rgba(59,130,246,0.45)' : 'var(--border-muted)',
+                          backgroundColor: isActive ? 'rgba(59,130,246,0.18)' : 'transparent',
+                          color: isActive ? 'var(--accent-primary-strong)' : 'var(--text-secondary)',
+                        }}
+                      >
+                        {activeTabbedSection.title === section.title
+                          ? `${section.title} (${section.fields.length})`
+                          : section.title}
+                      </button>
+                    )
+                  })}
                 </div>
-                {showSubsections ? renderSectionBody(section, true) : renderFlatSectionGrid(section, true)}
+                <div>
+                  <h2 className="text-base font-semibold text-white">{activeTabbedSection.title}</h2>
+                  {showSubsections
+                    ? renderSectionBody(activeTabbedSection, true)
+                    : renderFlatSectionGrid(activeTabbedSection, true)}
+                </div>
               </div>
-            ))}
+            ) : (
+              <div className="space-y-5">
+                {sections.map((section, index) => (
+                  <div
+                    key={`${section.title}-${index}`}
+                    className={index > 0 ? 'border-t pt-4' : ''}
+                    style={index > 0 ? { borderColor: 'var(--border-muted)' } : undefined}
+                  >
+                    <div>
+                      <h2 className="text-base font-semibold text-white">{section.title}</h2>
+                    </div>
+                    {showSubsections ? renderSectionBody(section, true) : renderFlatSectionGrid(section, true)}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </RecordDetailSection>
       ) : (
@@ -612,26 +707,37 @@ export default function TransactionHeaderSections({
                     <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
                       Year
                     </label>
-                    <select
-                      value={getYearPart(visibleMonthByField[openDateFieldKey] ?? getMonthStart(values[openDateFieldKey] || new Date().toISOString().slice(0, 10)))}
-                      onChange={(event) =>
+                    <SearchableSelect
+                      selectedValue={String(
+                        getYearPart(
+                          visibleMonthByField[openDateFieldKey] ??
+                            getMonthStart(values[openDateFieldKey] || new Date().toISOString().slice(0, 10)),
+                        ),
+                      )}
+                      onSelect={(value) =>
                         setVisibleMonthByField((prev) => ({
                           ...prev,
                           [openDateFieldKey]: setMonthStartYear(
-                            visibleMonthByField[openDateFieldKey] ?? getMonthStart(values[openDateFieldKey] || new Date().toISOString().slice(0, 10)),
-                            Number(event.target.value),
+                            visibleMonthByField[openDateFieldKey] ??
+                              getMonthStart(values[openDateFieldKey] || new Date().toISOString().slice(0, 10)),
+                            Number(value),
                           ),
                         }))
                       }
-                      className="block w-full rounded-md border bg-transparent px-2 py-1.5 text-xs text-white"
-                      style={{ borderColor: 'var(--border-muted)' }}
-                    >
-                      {buildYearOptions(visibleMonthByField[openDateFieldKey] ?? getMonthStart(values[openDateFieldKey] || new Date().toISOString().slice(0, 10))).map((year) => (
-                        <option key={`${openDateFieldKey}-year-${year}`} value={year} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                          {year}
-                        </option>
-                      ))}
-                    </select>
+                      options={buildYearOptions(
+                        visibleMonthByField[openDateFieldKey] ??
+                          getMonthStart(values[openDateFieldKey] || new Date().toISOString().slice(0, 10)),
+                      ).map((year) => ({
+                        value: String(year),
+                        label: String(year),
+                        searchText: String(year),
+                        sortIdText: String(year),
+                        sortLabelText: String(year),
+                      }))}
+                      placeholder="Select year"
+                      searchPlaceholder="Search year"
+                      textClassName="text-xs"
+                    />
                   </div>
                   <div>
                     <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
@@ -703,18 +809,55 @@ export default function TransactionHeaderSections({
             document.body,
           )
         : null}
-    </form>
+      <AddressModal
+        open={addressFieldBeingEdited !== null}
+        onClose={() => setAddressFieldBeingEdited(null)}
+        onSave={(formattedAddress) => {
+          const fieldKey = addressFieldBeingEdited
+          if (!fieldKey) return
+
+          const parsed = parseAddress(formattedAddress)
+          setValues((prev) => {
+            const next = { ...prev, [fieldKey]: formattedAddress }
+            if (Object.prototype.hasOwnProperty.call(next, 'country')) {
+              next.country = parsed.country
+            }
+            return next
+          })
+          setAddressFieldBeingEdited(null)
+        }}
+        initialFields={parseAddress(addressFieldBeingEdited ? values[addressFieldBeingEdited] ?? '' : '')}
+        zIndex={130}
+      />
+      </form>
+    </>
   )
 }
 
-function formatDisplayValue(field: TransactionHeaderField, value: string) {
+function formatDisplayValue(field: RecordHeaderField, value: string) {
+  if (field.type === 'checkbox') {
+    return value === 'true' ? 'Yes' : 'No'
+  }
   if (field.type === 'select') {
+    if (field.multiple) {
+      const labels = splitMultiValue(value)
+        .map((entry) => field.options?.find((option) => option.value === entry)?.label ?? entry)
+        .filter(Boolean)
+      return labels.length > 0 ? labels.join(', ') : '-'
+    }
     return field.options?.find((option) => option.value === value)?.label ?? value ?? '-'
   }
   return value || '-'
 }
 
-function renderReadOnlyValue(field: TransactionHeaderField, value: string) {
+function splitMultiValue(value: string) {
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+function renderReadOnlyValue(field: RecordHeaderField, value: string) {
   const content = field.displayValue ?? formatDisplayValue(field, value)
   if (!field.href) return content
   if (isValidElement(content)) return content
@@ -730,7 +873,7 @@ function renderReadOnlyValue(field: TransactionHeaderField, value: string) {
   )
 }
 
-function buildTooltipContent(field: TransactionHeaderField) {
+function buildTooltipContent(field: RecordHeaderField) {
   const fieldType = field.fieldType ?? 'text'
   const sourceLine = fieldType === 'list' && field.sourceText ? `\nField Source: ${field.sourceText}` : ''
   return `${field.helpText}\n\nField ID: ${field.key}\nField Type: ${fieldType}${sourceLine}`

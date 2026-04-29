@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import SearchableSelect from '@/components/SearchableSelect'
 
 type CurrencyOption = {
   id: string
@@ -76,35 +77,27 @@ export default function ExchangeRateCreateForm({
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
           <span>Base Currency *</span>
-          <select
-            value={baseCurrencyId}
-            onChange={(event) => setBaseCurrencyId(event.target.value)}
-            required
-            className="w-full rounded-md border bg-transparent px-3 py-2 text-white"
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            {currencies.map((currency) => (
-              <option key={currency.id} value={currency.id} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                {currency.code ?? currency.currencyId} - {currency.name}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            selectedValue={baseCurrencyId}
+            options={currencies.map((currency) => ({
+              value: currency.id,
+              label: `${currency.code ?? currency.currencyId} - ${currency.name}`,
+            }))}
+            placeholder="Select base currency"
+            onSelect={setBaseCurrencyId}
+          />
         </label>
         <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
           <span>Quote Currency *</span>
-          <select
-            value={quoteCurrencyId}
-            onChange={(event) => setQuoteCurrencyId(event.target.value)}
-            required
-            className="w-full rounded-md border bg-transparent px-3 py-2 text-white"
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            {currencies.map((currency) => (
-              <option key={currency.id} value={currency.id} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>
-                {currency.code ?? currency.currencyId} - {currency.name}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            selectedValue={quoteCurrencyId}
+            options={currencies.map((currency) => ({
+              value: currency.id,
+              label: `${currency.code ?? currency.currencyId} - ${currency.name}`,
+            }))}
+            placeholder="Select quote currency"
+            onSelect={setQuoteCurrencyId}
+          />
         </label>
       </div>
 
@@ -135,16 +128,15 @@ export default function ExchangeRateCreateForm({
         </label>
         <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
           <span>Rate Type</span>
-          <select
-            value={rateType}
-            onChange={(event) => setRateType(event.target.value)}
-            className="w-full rounded-md border bg-transparent px-3 py-2 text-white"
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            {rateTypeOptions.map((option) => (
-              <option key={option.value} value={option.value} style={{ backgroundColor: 'var(--card-elevated)', color: '#ffffff' }}>{option.label}</option>
-            ))}
-          </select>
+          <SearchableSelect
+            selectedValue={rateType}
+            options={rateTypeOptions.map((option) => ({
+              value: option.value,
+              label: option.label,
+            }))}
+            placeholder="Select rate type"
+            onSelect={setRateType}
+          />
         </label>
       </div>
 

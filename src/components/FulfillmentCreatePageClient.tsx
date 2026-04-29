@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionActionStack from '@/components/TransactionActionStack'
-import TransactionHeaderSections, { type TransactionHeaderField } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import FulfillmentLineItemsSection, {
   type FulfillmentLineOption,
   type FulfillmentLineRow,
@@ -40,7 +40,7 @@ type SalesOrderOption = {
 
 type FulfillmentHeaderField = {
   key: FulfillmentDetailFieldKey
-} & TransactionHeaderField
+} & RecordHeaderField
 
 function draftRow(option: FulfillmentLineOption): FulfillmentLineRow {
   return {
@@ -51,7 +51,7 @@ function draftRow(option: FulfillmentLineOption): FulfillmentLineRow {
     itemName: option.itemName,
     description: option.description,
     orderedQuantity: option.orderedQuantity,
-    alreadyFulfilledQuantity: option.alreadyFulfilledQuantity,
+    alreadyFulfilledQuantity: option.alreadyProcessedQuantity,
     openQuantity: option.openQuantity,
     fulfillmentQuantity: 0,
     notes: '',
@@ -347,10 +347,13 @@ export default function FulfillmentCreatePageClient({
       widthClassName="w-full max-w-none"
       actions={<TransactionActionStack mode="create" cancelHref="/fulfillments" formId="create-fulfillment-form" />}
     >
-      <TransactionHeaderSections
+      <RecordHeaderDetails
         editing
         sections={headerSections}
         columns={customization.formColumns}
+        containerTitle="Fulfillment Details"
+        containerDescription="Core fulfillment fields organized into configurable sections."
+        showSubsections={false}
         formId="create-fulfillment-form"
         submitMode="controlled"
         onSubmit={handleSubmit}

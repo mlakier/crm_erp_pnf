@@ -4,10 +4,9 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
-import TransactionHeaderSections, {
-  type TransactionHeaderField,
-  type TransactionHeaderSection,
-} from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, {
+  type RecordHeaderSection,
+} from '@/components/RecordHeaderDetails'
 import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import { RecordDetailEmptyState, RecordDetailSection } from '@/components/RecordDetailPanels'
 import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
@@ -15,7 +14,6 @@ import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/l
 import {
   INVOICE_DETAIL_FIELDS,
   type InvoiceDetailCustomizationConfig,
-  type InvoiceDetailFieldKey,
 } from '@/lib/invoice-detail-customization'
 import { fmtCurrency, fmtDocumentDate } from '@/lib/format'
 
@@ -191,10 +189,7 @@ export default function InvoiceCreatePageClient({
     label: `${currency.code ?? currency.currencyId} - ${currency.name}`,
   }))
 
-  const headerFieldDefinitions: Record<
-    InvoiceDetailFieldKey,
-    TransactionHeaderField & { key: InvoiceDetailFieldKey }
-  > = {
+  const headerFieldDefinitions: Record<string, RecordHeaderSection['fields'][number]> = {
     customerName: {
       key: 'customerName',
       label: 'Customer Name',
@@ -482,7 +477,7 @@ export default function InvoiceCreatePageClient({
   applyRequirementsToEditableFields(headerFieldDefinitions, req, isLocked)
 
 
-  const headerSections: TransactionHeaderSection[] = buildConfiguredTransactionSections({
+  const headerSections: RecordHeaderSection[] = buildConfiguredTransactionSections({
     fields: INVOICE_DETAIL_FIELDS,
     layout: customization,
     fieldDefinitions: headerFieldDefinitions,
@@ -595,10 +590,13 @@ export default function InvoiceCreatePageClient({
         </>
       }
     >
-      <TransactionHeaderSections
+      <RecordHeaderDetails
         editing
         sections={headerSections}
         columns={customization.formColumns}
+        containerTitle="Invoice Details"
+        containerDescription="Core invoice fields organized into configurable sections."
+        showSubsections={false}
         formId="new-invoice-form"
         submitMode="controlled"
         onSubmit={handleCreate}

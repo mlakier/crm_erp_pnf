@@ -13,6 +13,8 @@ export default function ReceiptRelatedDocuments({
   bills,
   billPayments,
   moneySettings,
+  embedded = false,
+  showDisplayControl = true,
 }: {
   purchaseRequisitions: Array<{
     id: string
@@ -47,6 +49,8 @@ export default function ReceiptRelatedDocuments({
     billNumber: string
   }>
   moneySettings?: Parameters<typeof fmtCurrency>[2]
+  embedded?: boolean
+  showDisplayControl?: boolean
 }) {
   const tabs: TransactionRelatedDocumentsTab[] = [
     {
@@ -63,6 +67,12 @@ export default function ReceiptRelatedDocuments({
             {req.number}
           </Link>,
           <RelatedDocumentsStatusBadge key={`${req.id}-status`} status={req.status} />,
+          fmtCurrency(req.total, undefined, moneySettings),
+          fmtDocumentDate(req.createdAt, moneySettings),
+        ],
+        filterValues: [
+          req.number,
+          req.status,
           fmtCurrency(req.total, undefined, moneySettings),
           fmtDocumentDate(req.createdAt, moneySettings),
         ],
@@ -85,6 +95,12 @@ export default function ReceiptRelatedDocuments({
           fmtCurrency(po.total, undefined, moneySettings),
           fmtDocumentDate(po.createdAt, moneySettings),
         ],
+        filterValues: [
+          po.number,
+          po.status,
+          fmtCurrency(po.total, undefined, moneySettings),
+          fmtDocumentDate(po.createdAt, moneySettings),
+        ],
       })),
     },
     {
@@ -93,17 +109,25 @@ export default function ReceiptRelatedDocuments({
       count: bills.length,
       tone: 'downstream',
       emptyMessage: 'No related bills yet.',
-      headers: ['TXN ID', 'BILL DATE', 'DUE DATE', 'STATUS', 'TOTAL', 'NOTES'],
+      headers: ['TXN ID', 'STATUS', 'TOTAL', 'BILL DATE', 'DUE DATE', 'NOTES'],
       rows: bills.map((bill) => ({
         id: bill.id,
         cells: [
           <Link key={`${bill.id}-number`} href={`/bills/${bill.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
             {bill.number}
           </Link>,
-          fmtDocumentDate(bill.date, moneySettings),
-          bill.dueDate ? fmtDocumentDate(bill.dueDate, moneySettings) : '-',
           <RelatedDocumentsStatusBadge key={`${bill.id}-status`} status={bill.status} />,
           fmtCurrency(bill.total, undefined, moneySettings),
+          fmtDocumentDate(bill.date, moneySettings),
+          bill.dueDate ? fmtDocumentDate(bill.dueDate, moneySettings) : '-',
+          bill.notes ?? '-',
+        ],
+        filterValues: [
+          bill.number,
+          bill.status,
+          fmtCurrency(bill.total, undefined, moneySettings),
+          fmtDocumentDate(bill.date, moneySettings),
+          bill.dueDate ? fmtDocumentDate(bill.dueDate, moneySettings) : '-',
           bill.notes ?? '-',
         ],
       })),
@@ -114,22 +138,30 @@ export default function ReceiptRelatedDocuments({
       count: billPayments.length,
       tone: 'downstream',
       emptyMessage: 'No related bill payments yet.',
-      headers: ['TXN ID', 'DATE', 'STATUS', 'AMOUNT', 'REFERENCE', 'BILL'],
+      headers: ['TXN ID', 'STATUS', 'AMOUNT', 'DATE', 'BILL', 'REFERENCE'],
       rows: billPayments.map((payment) => ({
         id: payment.id,
         cells: [
           <Link key={`${payment.id}-number`} href={`/bill-payments/${payment.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
             {payment.number}
           </Link>,
-          fmtDocumentDate(payment.date, moneySettings),
           <RelatedDocumentsStatusBadge key={`${payment.id}-status`} status={payment.status} />,
           fmtCurrency(payment.amount, undefined, moneySettings),
-          payment.reference ?? '-',
+          fmtDocumentDate(payment.date, moneySettings),
           payment.billNumber,
+          payment.reference ?? '-',
+        ],
+        filterValues: [
+          payment.number,
+          payment.status,
+          fmtCurrency(payment.amount, undefined, moneySettings),
+          fmtDocumentDate(payment.date, moneySettings),
+          payment.billNumber,
+          payment.reference ?? '-',
         ],
       })),
     },
   ]
 
-  return <TransactionRelatedDocumentsTabs tabs={tabs} />
+  return <TransactionRelatedDocumentsTabs tabs={tabs} embedded={embedded} showDisplayControl={showDisplayControl} />
 }

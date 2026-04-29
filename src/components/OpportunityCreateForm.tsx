@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import SearchableSelect from '@/components/SearchableSelect'
 import { isFieldRequired } from '@/lib/form-requirements'
 import { fmtCurrency, roundMoney } from '@/lib/format'
 import type { SelectOption } from '@/lib/list-source'
@@ -116,7 +117,6 @@ export default function OpportunityCreateForm({
     )
   }
 
-  /* -------- Line item helpers -------- */
   const addLine = () => {
     setLineItems((prev) => {
       const nextLines = [...prev, emptyLine(nextKey)]
@@ -124,7 +124,7 @@ export default function OpportunityCreateForm({
       setAmount(nextTotal ? formatMoneyInput(nextTotal) : '')
       return nextLines
     })
-    setNextKey((k) => k + 1)
+    setNextKey((key) => key + 1)
   }
 
   const removeLine = (key: number) => {
@@ -137,29 +137,25 @@ export default function OpportunityCreateForm({
   }
 
   const updateLine = (key: number, field: keyof LineItemDraft, value: string) => {
-    setLineItems((prev) =>
-      {
-        const nextLines = prev.map((l) => {
-          if (l.key !== key) return l
-          const updated = { ...l, [field]: value }
-          // Auto-fill from item catalog
-          if (field === 'itemId' && value) {
-            const item = items.find((i) => i.id === value)
-            if (item) {
-              if (!l.description) updated.description = item.name
-              updated.unitPrice = formatMoneyInput(item.listPrice)
-            }
+    setLineItems((prev) => {
+      const nextLines = prev.map((line) => {
+        if (line.key !== key) return line
+        const updated = { ...line, [field]: value }
+        if (field === 'itemId' && value) {
+          const item = items.find((candidate) => candidate.id === value)
+          if (item) {
+            if (!line.description) updated.description = item.name
+            updated.unitPrice = formatMoneyInput(item.listPrice)
           }
-          return updated
-        })
-        const nextTotal = calculateLinesTotal(nextLines)
-        setAmount(nextTotal ? formatMoneyInput(nextTotal) : '')
-        return nextLines
-      },
-    )
+        }
+        return updated
+      })
+      const nextTotal = calculateLinesTotal(nextLines)
+      setAmount(nextTotal ? formatMoneyInput(nextTotal) : '')
+      return nextLines
+    })
   }
 
-  // Recalc amount from line items whenever they change
   const linesTotal = calculateLinesTotal(lineItems)
 
   const handleSubmit = async (event: FormEvent) => {
@@ -186,12 +182,12 @@ export default function OpportunityCreateForm({
           closeDate: closeDate || null,
           customerId,
           userId,
-          lineItems: lineItems.map((l) => ({
-            itemId: l.itemId || null,
-            description: l.description,
-            quantity: parseQuantity(l.quantity),
-            unitPrice: parseMoneyValue(l.unitPrice),
-            notes: l.notes || null,
+          lineItems: lineItems.map((line) => ({
+            itemId: line.itemId || null,
+            description: line.description,
+            quantity: parseQuantity(line.quantity),
+            unitPrice: parseMoneyValue(line.unitPrice),
+            notes: line.notes || null,
           })),
         }),
       })
@@ -229,22 +225,17 @@ export default function OpportunityCreateForm({
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div>
           <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Customer', req('customerId'))}</label>
-          <select
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            required={req('customerId')}
-            className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm text-white"
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            <option value="" disabled>
-              Select customer
-            </option>
-            {customers.map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.name}
-              </option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <SearchableSelect
+              selectedValue={customerId}
+              options={customers.map((customer) => ({
+                value: customer.id,
+                label: customer.name,
+              }))}
+              placeholder="Select customer"
+              onSelect={setCustomerId}
+            />
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Opportunity name', req('name'))}</label>
@@ -259,16 +250,17 @@ export default function OpportunityCreateForm({
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Stage</label>
-            <select
-              value={stage}
-              onChange={(e) => setStage(e.target.value)}
-              className="mt-1 block w-full rounded-md border bg-transparent py-2 px-3 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              {stageOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <SearchableSelect
+                selectedValue={stage}
+                options={stageOptions.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
+                placeholder="Select stage"
+                onSelect={setStage}
+              />
+            </div>
           </div>
           <div className="text-right">
             <label className="block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{requiredLabel('Total Amount', req('amount'))}</label>
@@ -303,7 +295,6 @@ export default function OpportunityCreateForm({
           />
         </div>
 
-        {/* ----- Line Items Section ----- */}
         <div className="rounded-lg border p-4" style={{ borderColor: 'var(--border-muted)', backgroundColor: 'var(--card)' }}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Line Items</h3>
@@ -340,19 +331,16 @@ export default function OpportunityCreateForm({
                       <tr key={line.key} style={{ borderBottom: '1px solid var(--border-muted)' }}>
                         {items.length > 0 && (
                           <td className="px-2 py-1.5">
-                            <select
-                              value={line.itemId}
-                              onChange={(e) => updateLine(line.key, 'itemId', e.target.value)}
-                              className="w-full min-w-[140px] rounded-md border bg-transparent px-2 py-1.5 text-sm text-white"
-                              style={{ borderColor: 'var(--border-muted)' }}
-                            >
-                              <option value="" style={{ backgroundColor: 'var(--card-elevated)' }}>—</option>
-                              {items.map((item) => (
-                                <option key={item.id} value={item.id} style={{ backgroundColor: 'var(--card-elevated)' }}>
-                                  {item.itemId ? `${item.itemId} - ${item.name}` : item.name}
-                                </option>
-                              ))}
-                            </select>
+                            <SearchableSelect
+                              selectedValue={line.itemId}
+                              options={items.map((item) => ({
+                                value: item.id,
+                                label: item.itemId ? `${item.itemId} - ${item.name}` : item.name,
+                              }))}
+                              placeholder="Select item"
+                              textClassName="text-sm"
+                              onSelect={(value) => updateLine(line.key, 'itemId', value)}
+                            />
                           </td>
                         )}
                         <td className="px-2 py-1.5">
@@ -384,12 +372,10 @@ export default function OpportunityCreateForm({
                               required
                               value={line.unitPrice}
                               onFocus={(e) => {
-                                // Strip formatting on focus so user can type freely
                                 const raw = e.target.value.replace(/[^0-9.]/g, '')
                                 updateLine(line.key, 'unitPrice', raw)
                               }}
                               onBlur={() => {
-                                // Format on blur
                                 const num = parseMoneyValue(line.unitPrice)
                                 updateLine(line.key, 'unitPrice', formatMoneyInput(num))
                               }}
@@ -417,7 +403,7 @@ export default function OpportunityCreateForm({
                             className="text-xs rounded px-1.5 py-0.5"
                             style={{ color: 'var(--danger)' }}
                           >
-                            ✕
+                            x
                           </button>
                         </td>
                       </tr>

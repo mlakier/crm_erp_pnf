@@ -3,6 +3,13 @@ import {
   type TransactionReferenceLayout,
 } from '@/lib/transaction-reference-layouts'
 import {
+  defaultTransactionGlImpactColumns,
+  defaultTransactionGlImpactSettings,
+  type TransactionGlImpactColumnCustomization,
+  type TransactionGlImpactColumnKey,
+  type TransactionGlImpactSettings,
+} from '@/lib/transaction-gl-impact'
+import {
   type LinkedRecordReferenceSource,
   BILL_FULL_REFERENCE_FIELDS,
 } from '@/lib/linked-record-reference-catalogs'
@@ -10,7 +17,9 @@ import {
 export type BillPaymentDetailFieldKey =
   | 'id'
   | 'number'
+  | 'vendorId'
   | 'billId'
+  | 'bankAccountId'
   | 'amount'
   | 'date'
   | 'method'
@@ -41,6 +50,8 @@ export type BillPaymentDetailCustomizationConfig = {
   sectionRows: Record<string, number>
   fields: Record<BillPaymentDetailFieldKey, BillPaymentDetailFieldCustomization>
   referenceLayouts: TransactionReferenceLayout[]
+  glImpactSettings: TransactionGlImpactSettings
+  glImpactColumns: Record<TransactionGlImpactColumnKey, TransactionGlImpactColumnCustomization>
   statCards?: Array<TransactionStatCardSlot<BillPaymentStatCardKey>>
 }
 
@@ -50,13 +61,15 @@ export const BILL_PAYMENT_STAT_CARDS: Array<{ id: BillPaymentStatCardKey; label:
   { id: 'amount', label: 'Payment Amount' },
   { id: 'status', label: 'Status' },
   { id: 'date', label: 'Date' },
-  { id: 'bill', label: 'Bill' },
+  { id: 'bill', label: 'Vendor' },
 ]
 
 export const BILL_PAYMENT_DETAIL_FIELDS: BillPaymentDetailFieldMeta[] = [
   { id: 'id', label: 'DB Id', fieldType: 'text', description: 'Internal database identifier for this bill payment.' },
   { id: 'number', label: 'Bill Payment Id', fieldType: 'text', description: 'Identifier for this bill payment.' },
+  { id: 'vendorId', label: 'Vendor', fieldType: 'list', source: 'Vendor record', description: 'Vendor this payment is being applied against.' },
   { id: 'billId', label: 'Bill', fieldType: 'text', source: 'Bill transaction', description: 'Linked bill for this payment.' },
+  { id: 'bankAccountId', label: 'Bank Account', fieldType: 'list', source: 'Chart of accounts', description: 'Cash or bank GL account used to fund this payment.' },
   { id: 'amount', label: 'Amount', fieldType: 'currency', description: 'Payment amount applied to the bill.' },
   { id: 'date', label: 'Date', fieldType: 'date', description: 'Date the bill payment was recorded.' },
   { id: 'method', label: 'Method', fieldType: 'list', source: 'Payment method list', description: 'Payment method used for this bill payment.' },
@@ -85,25 +98,29 @@ export function defaultBillPaymentDetailCustomization(): BillPaymentDetailCustom
     formColumns: 2,
     sections: ['Document Identity', 'Payment Terms', 'Record Keys', 'System Dates'],
     sectionRows: {
-      'Document Identity': 1,
-      'Payment Terms': 3,
+      'Document Identity': 2,
+      'Payment Terms': 4,
       'Record Keys': 1,
       'System Dates': 1,
     },
     fields: {
       number: { visible: true, section: 'Document Identity', order: 0, column: 1 },
-      billId: { visible: true, section: 'Document Identity', order: 0, column: 2 },
-      amount: { visible: true, section: 'Payment Terms', order: 0, column: 1 },
-      date: { visible: true, section: 'Payment Terms', order: 0, column: 2 },
-      method: { visible: true, section: 'Payment Terms', order: 1, column: 1 },
-      status: { visible: true, section: 'Payment Terms', order: 1, column: 2 },
-      reference: { visible: true, section: 'Payment Terms', order: 2, column: 1 },
-      notes: { visible: true, section: 'Payment Terms', order: 2, column: 2 },
+      vendorId: { visible: true, section: 'Document Identity', order: 0, column: 2 },
+      billId: { visible: false, section: 'Document Identity', order: 1, column: 1 },
+      bankAccountId: { visible: true, section: 'Payment Terms', order: 0, column: 1 },
+      amount: { visible: true, section: 'Payment Terms', order: 0, column: 2 },
+      date: { visible: true, section: 'Payment Terms', order: 1, column: 1 },
+      method: { visible: true, section: 'Payment Terms', order: 1, column: 2 },
+      status: { visible: true, section: 'Payment Terms', order: 2, column: 1 },
+      reference: { visible: true, section: 'Payment Terms', order: 2, column: 2 },
+      notes: { visible: true, section: 'Payment Terms', order: 3, column: 1 },
       id: { visible: true, section: 'Record Keys', order: 0, column: 1 },
       createdAt: { visible: true, section: 'System Dates', order: 0, column: 1 },
       updatedAt: { visible: true, section: 'System Dates', order: 0, column: 2 },
     },
     referenceLayouts: [],
+    glImpactSettings: defaultTransactionGlImpactSettings(),
+    glImpactColumns: defaultTransactionGlImpactColumns(),
     statCards: [
       { id: 'bp-amount', metric: 'amount', visible: true, order: 0 },
       { id: 'bp-status', metric: 'status', visible: true, order: 1 },

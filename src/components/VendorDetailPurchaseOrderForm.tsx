@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { parseMoneyValue } from '@/lib/money'
+import SearchableSelect from '@/components/SearchableSelect'
 
 export default function VendorDetailPurchaseOrderForm({
   vendorId,
@@ -94,18 +95,18 @@ export default function VendorDetailPurchaseOrderForm({
             style={{ borderColor: 'var(--border-muted)' }}
           />
         </div>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="block w-full rounded-md border bg-transparent px-3 py-1.5 text-sm text-white"
-          style={{ borderColor: 'var(--border-muted)' }}
-        >
-          <option value="draft">Draft</option>
-          <option value="pending approval">Pending approval</option>
-          <option value="approved">Approved</option>
-          <option value="sent">Sent</option>
-          <option value="received">Received</option>
-        </select>
+        <SearchableSelect
+          selectedValue={status}
+          options={[
+            { value: 'draft', label: 'Draft' },
+            { value: 'pending approval', label: 'Pending approval' },
+            { value: 'approved', label: 'Approved' },
+            { value: 'sent', label: 'Sent' },
+            { value: 'received', label: 'Received' },
+          ]}
+          placeholder="Select status"
+          onSelect={(value) => setStatus(value || 'draft')}
+        />
         {error ? <p className="text-xs" style={{ color: 'var(--danger)' }}>{error}</p> : null}
         <div className={onCancel ? 'grid grid-cols-2 gap-3' : ''}>
           {onCancel ? (

@@ -11,6 +11,7 @@ import {
   loadDepartmentFormCustomization,
   saveDepartmentFormCustomization,
 } from '@/lib/department-form-customization-store'
+import type { TransactionStatCardSize, TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 function sanitizeInput(input: unknown): DepartmentFormCustomizationConfig {
   const defaults = defaultDepartmentFormCustomization()
@@ -65,21 +66,23 @@ function sanitizeInput(input: unknown): DepartmentFormCustomizationConfig {
       ])
     ),
     fields,
-    statCards: (() => {
-      const normalized = statCardsInput
+    statCards: (() : Array<TransactionStatCardSlot<DepartmentStatCardMetric>> => {
+      const normalized: Array<TransactionStatCardSlot<DepartmentStatCardMetric>> = statCardsInput
         .map((entry, index) => {
           const statRoot = entry && typeof entry === 'object' ? entry as Record<string, unknown> : null
           if (!statRoot) return null
 
           const metric = String(statRoot.metric ?? '').trim() as DepartmentStatCardMetric
           if (!allowedMetrics.has(metric)) return null
+          const size: TransactionStatCardSize =
+            statRoot.size === 'sm' || statRoot.size === 'lg' ? statRoot.size : 'md'
 
           return {
             id: String(statRoot.id ?? `department-stat-${metric}`),
             metric,
             visible: statRoot.visible === undefined ? true : statRoot.visible === true,
             order: typeof statRoot.order === 'number' && Number.isFinite(statRoot.order) ? statRoot.order : index,
-            size: statRoot.size === 'sm' || statRoot.size === 'lg' ? statRoot.size : 'md',
+            size,
             colorized: statRoot.colorized === undefined ? true : statRoot.colorized === true,
             linked: statRoot.linked === undefined ? true : statRoot.linked === true,
           }

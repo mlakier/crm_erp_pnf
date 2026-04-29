@@ -319,7 +319,7 @@ export default function CustomerRelatedDocs({ opportunities, quotes, salesOrders
                 {invoiceReceipts.map((receipt) => (
                   <tr key={receipt.id}>
                     <Td>
-                      <Link href="/invoice-receipts" className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                      <Link href={`/invoice-receipts/${receipt.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                         {receipt.number ?? receipt.id}
                       </Link>
                     </Td>

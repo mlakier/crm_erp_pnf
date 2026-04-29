@@ -183,6 +183,42 @@ export default async function ContactsPage({
                               options: [{ value: '', label: 'None' }, ...vendors.map((vendor) => ({ value: vendor.id, label: vendor.name }))],
                             }]
                           : []),
+                        ...(formCustomization.fields.isPrimaryForCustomer.visible
+                          ? [{
+                              name: 'isPrimaryForCustomer',
+                              label: 'Primary',
+                              value: contact.isPrimaryForCustomer ? 'true' : 'false',
+                              type: 'checkbox' as const,
+                              placeholder: 'Primary',
+                            }]
+                          : []),
+                        ...(formCustomization.fields.receivesQuotesSalesOrders.visible
+                          ? [{
+                              name: 'receivesQuotesSalesOrders',
+                              label: 'Send Quote / SO',
+                              value: contact.receivesQuotesSalesOrders ? 'true' : 'false',
+                              type: 'checkbox' as const,
+                              placeholder: 'Send Quote / SO',
+                            }]
+                          : []),
+                        ...(formCustomization.fields.receivesInvoices.visible
+                          ? [{
+                              name: 'receivesInvoices',
+                              label: 'Send Invoice',
+                              value: contact.receivesInvoices ? 'true' : 'false',
+                              type: 'checkbox' as const,
+                              placeholder: 'Send Invoice',
+                            }]
+                          : []),
+                        ...(formCustomization.fields.receivesInvoiceCc.visible
+                          ? [{
+                              name: 'receivesInvoiceCc',
+                              label: 'CC Invoice',
+                              value: contact.receivesInvoiceCc ? 'true' : 'false',
+                              type: 'checkbox' as const,
+                              placeholder: 'CC Invoice',
+                            }]
+                          : []),
                         ...(formCustomization.fields.inactive.visible
                           ? [{
                               name: 'inactive',

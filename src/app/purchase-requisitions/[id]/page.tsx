@@ -3,9 +3,9 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { fmtCurrency, fmtDocumentDate, toNumericValue } from '@/lib/format'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
-import TransactionHeaderSections, {
-  type TransactionHeaderField,
-} from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, {
+  type RecordHeaderField,
+} from '@/components/RecordHeaderDetails'
 import PurchaseRequisitionDetailCustomizeMode from '@/components/PurchaseRequisitionDetailCustomizeMode'
 import PurchaseRequisitionLineItemsSection from '@/components/PurchaseRequisitionLineItemsSection'
 import PurchaseRequisitionRelatedDocuments from '@/components/PurchaseRequisitionRelatedDocuments'
@@ -41,7 +41,7 @@ import {
 import { buildReceiptDisplayNumberMap } from '@/lib/receipt-display-number'
 import { buildTransactionCommunicationComposePayload } from '@/lib/transaction-communications'
 
-type PurchaseRequisitionHeaderField = TransactionHeaderField & { key: PurchaseRequisitionDetailFieldKey }
+type PurchaseRequisitionHeaderField = RecordHeaderField & { key: PurchaseRequisitionDetailFieldKey }
 
 const REQUISITION_STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
@@ -608,7 +608,7 @@ export default async function PurchaseRequisitionDetailPage({
       currency: req.currency ? `/currencies/${req.currency.id}` : null,
     },
   )
-  const allFieldDefinitions = {
+  const allFieldDefinitions: Record<string, RecordHeaderField> = {
     ...headerFieldDefinitions,
     ...referenceFieldDefinitions,
   }
@@ -651,7 +651,7 @@ export default async function PurchaseRequisitionDetailPage({
         fields,
       }
     })
-    .filter((section): section is { title: string; description: string; columns: number; rows: number; fields: TransactionHeaderField[] } => Boolean(section))
+    .filter((section): section is NonNullable<typeof section> => Boolean(section))
   const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
 
   const exportHeaderFields = buildTransactionExportHeaderFields<
@@ -769,7 +769,7 @@ export default async function PurchaseRequisitionDetailPage({
           ) : (
             <div className="space-y-6">
               {referenceSections.length > 0 ? (
-                <TransactionHeaderSections
+                <RecordHeaderDetails
                   editing={false}
                   sections={referenceSections.map((section) => ({
                     title: section.title,
@@ -783,7 +783,7 @@ export default async function PurchaseRequisitionDetailPage({
                   showSubsections={false}
                 />
               ) : null}
-              <TransactionHeaderSections
+              <RecordHeaderDetails
                 purchaseOrderId={req.id}
                 editing={isEditing}
                 sections={headerSections}
@@ -840,10 +840,12 @@ export default async function PurchaseRequisitionDetailPage({
           ) : (
             <PurchaseRequisitionLineItemsSection
               requisitionId={req.id}
-              items={items.map((item) => ({
-                ...item,
-                listPrice: toNumericValue(item.listPrice, 0),
-              }))}
+              items={items
+                .filter((item): item is typeof item & { itemId: string } => Boolean(item.itemId))
+                .map((item) => ({
+                  ...item,
+                  listPrice: toNumericValue(item.listPrice, 0),
+                }))}
               lineRows={lineRows}
               moneySettings={moneySettings}
               lineSettings={customization.lineSettings}
@@ -853,6 +855,8 @@ export default async function PurchaseRequisitionDetailPage({
         }
         relatedDocuments={isCustomizing ? null : (
           <PurchaseRequisitionRelatedDocuments
+            embedded
+            showDisplayControl={false}
             purchaseOrders={
               req.purchaseOrder
                 ? [
@@ -903,8 +907,16 @@ export default async function PurchaseRequisitionDetailPage({
             moneySettings={moneySettings}
           />
         )}
+        relatedDocumentsCount={
+          (req.purchaseOrder ? 1 : 0) +
+          (req.purchaseOrder?.receipts.length ?? 0) +
+          (req.purchaseOrder?.bills.length ?? 0) +
+          (req.purchaseOrder?.bills.reduce((sum, bill) => sum + bill.billPayments.length, 0) ?? 0)
+        }
         communications={isCustomizing ? null : (
           <CommunicationsSection
+            embedded
+            showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
               recordId: req.id,
@@ -932,7 +944,9 @@ export default async function PurchaseRequisitionDetailPage({
             })}
           />
         )}
-        systemNotes={isCustomizing ? null : <SystemNotesSection notes={systemNotes} />}
+        communicationsCount={communications.length}
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        systemNotesCount={systemNotes.length}
       />
     </RecordDetailPageShell>
   )

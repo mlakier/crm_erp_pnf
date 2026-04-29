@@ -380,6 +380,7 @@ function clearColumnFilters(form: HTMLFormElement) {
 
 function enhanceLiveSearchForm(form: HTMLFormElement, navigate: (url: string, options?: { force?: boolean }) => void) {
   if (form.dataset.liveSearchEnhanced === 'true') return
+  if (form.closest('[data-disable-live-search="true"]')) return
 
   const searchInput = form.querySelector<HTMLInputElement>('input[name="q"]')
   if (!searchInput) return
@@ -511,8 +512,12 @@ export default function TableFilterSortEnhancer() {
 
   useEffect(() => {
     const navigate = (url: string, options?: { force?: boolean }) => {
-      if (options?.force) {
-        router.refresh()
+      const currentUrl = `${window.location.pathname}${window.location.search}`
+      if (url === currentUrl && !options?.force) {
+        return
+      }
+
+      if (url === currentUrl && options?.force) {
         return
       }
       router.replace(url, { scroll: false })
@@ -542,13 +547,25 @@ export default function TableFilterSortEnhancer() {
       })
     }
 
-    run()
+    let frameId: number | null = null
+    const scheduleRun = () => {
+      if (frameId !== null) return
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null
+        run()
+      })
+    }
 
-    const observer = new MutationObserver(() => run())
+    scheduleRun()
+
+    const observer = new MutationObserver(() => scheduleRun())
     observer.observe(document.body, { childList: true, subtree: true })
 
     return () => {
       observer.disconnect()
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId)
+      }
     }
   }, [router])
 

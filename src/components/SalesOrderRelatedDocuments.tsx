@@ -40,6 +40,7 @@ type InvoiceDoc = {
 
 type CashReceiptDoc = {
   id: string
+  number: string | null
   amount: number
   date: string
   method: string | null
@@ -54,6 +55,8 @@ export default function SalesOrderRelatedDocuments({
   invoices,
   cashReceipts,
   showFulfillments = true,
+  embedded = false,
+  showDisplayControl = true,
 }: {
   opportunities: OpportunityDoc[]
   quotes: QuoteDoc[]
@@ -61,6 +64,8 @@ export default function SalesOrderRelatedDocuments({
   invoices: InvoiceDoc[]
   cashReceipts: CashReceiptDoc[]
   showFulfillments?: boolean
+  embedded?: boolean
+  showDisplayControl?: boolean
 }) {
   const fulfillmentTab = {
     key: 'fulfillments',
@@ -68,15 +73,21 @@ export default function SalesOrderRelatedDocuments({
     count: fulfillments.length,
     tone: 'downstream' as const,
     emptyMessage: 'No fulfillments are linked to this sales order yet.',
-    headers: ['Txn ID', 'Date', 'Status', 'Notes'],
+    headers: ['Txn ID', 'Status', 'Date', 'Notes'],
     rows: fulfillments.map((fulfillment) => ({
       id: fulfillment.id,
       cells: [
         <Link key="link" href={`/fulfillments/${fulfillment.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
           {fulfillment.number}
         </Link>,
-        fmtDocumentDate(fulfillment.date),
         <RelatedDocumentsStatusBadge key="status" status={fulfillment.status} />,
+        fmtDocumentDate(fulfillment.date),
+        fulfillment.notes ?? '-',
+      ],
+      filterValues: [
+        fulfillment.number,
+        fulfillment.status,
+        fmtDocumentDate(fulfillment.date),
         fulfillment.notes ?? '-',
       ],
     })),
@@ -84,6 +95,8 @@ export default function SalesOrderRelatedDocuments({
 
   return (
     <TransactionRelatedDocumentsTabs
+      embedded={embedded}
+      showDisplayControl={showDisplayControl}
       defaultActiveKey="opportunities"
       tabs={[
         {
@@ -101,6 +114,12 @@ export default function SalesOrderRelatedDocuments({
               </Link>,
               opportunity.name,
               <RelatedDocumentsStatusBadge key="status" status={opportunity.status} />,
+              fmtCurrency(opportunity.total),
+            ],
+            filterValues: [
+              opportunity.number,
+              opportunity.name,
+              opportunity.status,
               fmtCurrency(opportunity.total),
             ],
           })),
@@ -123,6 +142,13 @@ export default function SalesOrderRelatedDocuments({
               quote.validUntil ? fmtDocumentDate(quote.validUntil) : '-',
               quote.opportunityName ?? '-',
             ],
+            filterValues: [
+              quote.number,
+              quote.status,
+              fmtCurrency(quote.total),
+              quote.validUntil ? fmtDocumentDate(quote.validUntil) : '-',
+              quote.opportunityName ?? '-',
+            ],
           })),
         },
         ...(showFulfillments ? [fulfillmentTab] : []),
@@ -132,30 +158,48 @@ export default function SalesOrderRelatedDocuments({
           count: invoices.length,
           tone: 'downstream',
           emptyMessage: 'No invoices are linked to this sales order yet.',
-          headers: ['Txn ID', 'Created', 'Due Date', 'Status', 'Total'],
+          headers: ['Txn ID', 'Status', 'Total', 'Created', 'Due Date'],
           rows: invoices.map((invoice) => ({
             id: invoice.id,
             cells: [
               <Link key="link" href={`/invoices/${invoice.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
                 {invoice.number}
               </Link>,
-              fmtDocumentDate(invoice.createdAt),
-              invoice.dueDate ? fmtDocumentDate(invoice.dueDate) : '-',
               <RelatedDocumentsStatusBadge key="status" status={invoice.status} />,
               fmtCurrency(invoice.total),
+              fmtDocumentDate(invoice.createdAt),
+              invoice.dueDate ? fmtDocumentDate(invoice.dueDate) : '-',
+            ],
+            filterValues: [
+              invoice.number,
+              invoice.status,
+              fmtCurrency(invoice.total),
+              fmtDocumentDate(invoice.createdAt),
+              invoice.dueDate ? fmtDocumentDate(invoice.dueDate) : '-',
             ],
           })),
         },
         {
           key: 'cash-receipts',
-          label: 'Customer Receipts',
+          label: 'Invoice Receipts',
           count: cashReceipts.length,
           tone: 'downstream',
-          emptyMessage: 'No customer receipts are linked to invoices for this sales order yet.',
-          headers: ['Amount', 'Date', 'Method', 'Reference', 'Invoice'],
+          emptyMessage: 'No invoice receipts are linked to invoices for this sales order yet.',
+          headers: ['Txn ID', 'Amount', 'Date', 'Method', 'Reference', 'Invoice'],
           rows: cashReceipts.map((receipt) => ({
             id: receipt.id,
             cells: [
+              <Link key="link" href={`/invoice-receipts/${receipt.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                {receipt.number ?? receipt.id}
+              </Link>,
+              fmtCurrency(receipt.amount),
+              fmtDocumentDate(receipt.date),
+              receipt.method ?? '-',
+              receipt.reference ?? '-',
+              receipt.invoiceNumber,
+            ],
+            filterValues: [
+              receipt.number ?? receipt.id,
               fmtCurrency(receipt.amount),
               fmtDocumentDate(receipt.date),
               receipt.method ?? '-',

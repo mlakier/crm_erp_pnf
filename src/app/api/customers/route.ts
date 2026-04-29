@@ -41,8 +41,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Missing required fields: ${missing.join(', ')}` }, { status: 400 })
     }
 
-    const requiresPrimaryContact = await isFieldRequiredServer('customerCreate', 'primaryContact')
-    if (requiresPrimaryContact && (!Array.isArray(contacts) || contacts.length < 1)) {
+    if (!Array.isArray(contacts) || contacts.length < 1) {
       return NextResponse.json({ error: 'At least one contact is required' }, { status: 400 })
     }
 
@@ -79,7 +78,6 @@ export async function POST(request: NextRequest) {
 
     const primaryContact = normalizedContacts.find((contact) => contact.isPrimaryForCustomer) ?? normalizedContacts[0] ?? null
     if (
-      requiresPrimaryContact &&
       (((await isFieldRequiredServer('customerCreate', 'contactFirstName')) && !primaryContact?.firstName) ||
         ((await isFieldRequiredServer('customerCreate', 'contactLastName')) && !primaryContact?.lastName))
     ) {
@@ -159,6 +157,14 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const { name, email, phone, address, industry, primarySubsidiaryId, primaryCurrencyId, inactive } = body
     if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+
+    const existingContactCount = await prisma.contact.count({ where: { customerId: id } })
+    if (existingContactCount < 1) {
+      return NextResponse.json(
+        { error: 'At least one contact is required before saving this customer. Add a contact in the Contacts section first.' },
+        { status: 400 }
+      )
+    }
 
     const customer = await prisma.customer.update({
       where: { id },

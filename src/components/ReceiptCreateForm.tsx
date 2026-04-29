@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import SearchableSelect from '@/components/SearchableSelect'
 
 type PO = { id: string; label: string }
 
@@ -79,20 +80,15 @@ export default function ReceiptCreateForm({
           <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
             Purchase Order *
           </label>
-          <select
-            required
-            value={purchaseOrderId}
-            onChange={(e) => setPurchaseOrderId(e.target.value)}
-            className="w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            <option value="">- Select -</option>
-            {purchaseOrders.map((po) => (
-              <option key={po.id} value={po.id}>
-                {po.label}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            selectedValue={purchaseOrderId}
+            options={purchaseOrders.map((po) => ({
+              value: po.id,
+              label: po.label,
+            }))}
+            placeholder="- Select -"
+            onSelect={setPurchaseOrderId}
+          />
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>

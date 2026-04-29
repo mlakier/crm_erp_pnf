@@ -1,20 +1,15 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import DeleteButton from '@/components/DeleteButton'
-import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
-import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
-import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
-import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSection'
+import type { InlineRecordSection } from '@/components/InlineRecordDetails'
+import MasterDataHeaderDetails from '@/components/MasterDataHeaderDetails'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
+import RecordDetailActionBar from '@/components/RecordDetailActionBar'
+import { buildMasterDataSystemInformationItems } from '@/components/RecordSystemInformationSection'
 import RoleDetailCustomizeMode from '@/components/RoleDetailCustomizeMode'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import CommunicationsSection from '@/components/CommunicationsSection'
+import RelatedRecordsSection from '@/components/RelatedRecordsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
-import {
-  RecordDetailCell,
-  RecordDetailEmptyState,
-  RecordDetailHeaderCell,
-  RecordDetailSection,
-} from '@/components/RecordDetailPanels'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
@@ -23,6 +18,7 @@ import { ROLE_FORM_FIELDS, type RoleFormFieldKey } from '@/lib/role-form-customi
 import { loadFormRequirements } from '@/lib/form-requirements-store'
 import { loadMasterDataSystemInfo } from '@/lib/master-data-system-info'
 import { loadMasterDataSystemNotes } from '@/lib/master-data-system-notes'
+import type { TransactionStatDefinition, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 export default async function RoleDetailPage({
   params,
@@ -94,17 +90,26 @@ export default async function RoleDetailPage({
   }
 
   const customizeFields = buildCustomizePreviewFields(ROLE_FORM_FIELDS, fieldDefinitions)
-  const statPreviewCards = [
-    { id: 'users', label: 'Users', value: role.users.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+  const statPreviewCards: Array<{
+    id: string
+    label: string
+    value: string | number
+    accent?: true | 'teal' | 'yellow'
+    cardTone?: TransactionVisualTone
+    valueTone?: TransactionVisualTone
+    supportsColorized: boolean
+    supportsLink: boolean
+  }> = [
+    { id: 'users', label: 'Users', value: role.users.length, cardTone: 'accent', valueTone: 'accent', supportsColorized: true, supportsLink: false },
     { id: 'activeUsers', label: 'Active Users', value: activeUsers.length, accent: 'teal', cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
     { id: 'inactiveUsers', label: 'Inactive Users', value: inactiveUsers.length, accent: 'yellow', cardTone: 'yellow', valueTone: 'yellow', supportsColorized: true, supportsLink: false },
     { id: 'status', label: 'Status', value: role.active ? 'Active' : 'Inactive', cardTone: role.active ? 'green' : 'red', valueTone: role.active ? 'green' : 'red', supportsColorized: true, supportsLink: false },
   ]
-  const statDefinitions = [
-    { id: 'users', label: 'Users', getValue: () => role.users.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
-    { id: 'activeUsers', label: 'Active Users', getValue: () => activeUsers.length, accent: 'teal' as const, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
-    { id: 'inactiveUsers', label: 'Inactive Users', getValue: () => inactiveUsers.length, accent: 'yellow' as const, getCardTone: () => 'yellow' as const, getValueTone: () => 'yellow' as const },
-    { id: 'status', label: 'Status', getValue: () => (role.active ? 'Active' : 'Inactive'), getCardTone: () => (role.active ? 'green' : 'red') as const, getValueTone: () => (role.active ? 'green' : 'red') as const },
+  const statDefinitions: Array<TransactionStatDefinition<typeof role>> = [
+    { id: 'users', label: 'Users', getValue: () => role.users.length, getCardTone: () => 'accent', getValueTone: () => 'accent' },
+    { id: 'activeUsers', label: 'Active Users', getValue: () => activeUsers.length, accent: 'teal', getCardTone: () => 'teal', getValueTone: () => 'teal' },
+    { id: 'inactiveUsers', label: 'Inactive Users', getValue: () => inactiveUsers.length, accent: 'yellow', getCardTone: () => 'yellow', getValueTone: () => 'yellow' },
+    { id: 'status', label: 'Status', getValue: () => (role.active ? 'Active' : 'Inactive'), getCardTone: () => (role.active ? 'green' : 'red'), getValueTone: () => (role.active ? 'green' : 'red') },
   ]
   const detailSections: InlineRecordSection[] = buildConfiguredInlineSections({
     fields: ROLE_FORM_FIELDS,
@@ -119,6 +124,24 @@ export default async function RoleDetailPage({
     updatedAt: role.updatedAt,
   })
   const systemNotes = await loadMasterDataSystemNotes({ entityType: 'role', entityId: role.id })
+  const relatedRecordsTabs = [
+    {
+      key: 'users',
+      label: 'Users',
+      count: role.users.length,
+      emptyMessage: 'No users are assigned to this role yet.',
+      rows: role.users.map((user) => ({
+        id: user.id,
+        type: user.inactive ? 'Inactive User' : 'User',
+        reference: user.userId ?? 'Pending',
+        name: user.name ?? '-',
+        details: user.email,
+        href: `/users/${user.id}`,
+      })),
+    },
+  ]
+  const communicationsToolbarTargetId = 'role-communications-toolbar'
+  const systemNotesToolbarTargetId = 'role-system-notes-toolbar'
 
   return (
     <RecordDetailPageShell
@@ -134,40 +157,22 @@ export default async function RoleDetailPage({
         ) : null
       }
       actions={
-        <>
-          {isEditing && !isCustomizing ? (
-            <>
-              <Link href={detailHref} className="rounded-md border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-                Cancel
-              </Link>
-              <button
-                type="submit"
-                form={`inline-record-form-${role.id}`}
-                className="rounded-md px-3 py-1.5 text-xs font-semibold text-white"
-                style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-              >
-                Save
-              </button>
-            </>
-          ) : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailCreateMenu newHref="/roles/new" duplicateHref={`/roles/new?duplicateFrom=${role.id}`} /> : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailExportMenu title={role.name} fileName={`role-${role.roleId}`} sections={detailSections} /> : null}
-          {!isEditing && !isCustomizing ? (
-            <Link href={`${detailHref}?customize=1`} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
-              Customize
-            </Link>
-          ) : null}
-          {!isEditing && !isCustomizing ? (
-            <Link
-              href={`${detailHref}?edit=1`}
-              className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
-              style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-            >
-              Edit
-            </Link>
-          ) : null}
-          {!isCustomizing ? <DeleteButton resource="roles" id={role.id} /> : null}
-        </>
+        isCustomizing ? null : (
+          <RecordDetailActionBar
+            mode={isEditing ? 'edit' : 'detail'}
+            detailHref={detailHref}
+            formId={`inline-record-form-${role.id}`}
+            newHref="/roles/new"
+            duplicateHref={`/roles/new?duplicateFrom=${role.id}`}
+            exportTitle={role.name}
+            exportFileName={`role-${role.roleId}`}
+            exportSections={detailSections}
+            customizeHref={`${detailHref}?customize=1`}
+            editHref={`${detailHref}?edit=1`}
+            deleteResource="roles"
+            deleteId={role.id}
+          />
+        )
       }
     >
         {!isCustomizing ? (
@@ -190,59 +195,60 @@ export default async function RoleDetailPage({
             statPreviewCards={statPreviewCards}
           />
         ) : (
-          <InlineRecordDetails
+          <MasterDataHeaderDetails
             resource="roles"
             id={role.id}
-            title="Role details"
+            title="Role Details"
             sections={detailSections}
             editing={isEditing}
             columns={formCustomization.formColumns}
-            showInternalActions={false}
+            systemInformationItems={buildMasterDataSystemInformationItems(systemInfo, role.id)}
           />
         )}
 
         {!isCustomizing ? (
           <>
-        <MasterDataSystemInfoSection info={systemInfo} internalId={role.id} />
-
-        <RecordDetailSection title="Users" count={role.users.length}>
-          <div className="px-6 pt-6">
-            {inactiveUsers.length > 0 ? (
-              <p className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>
-                {activeUsers.length} active, {inactiveUsers.length} inactive
-              </p>
-            ) : null}
-          </div>
-          {role.users.length === 0 ? (
-            <RecordDetailEmptyState message="No users assigned to this role." />
-          ) : (
-            <table className="min-w-full">
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                  <RecordDetailHeaderCell>User ID</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Name</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Email</RecordDetailHeaderCell>
-                  <RecordDetailHeaderCell>Status</RecordDetailHeaderCell>
-                </tr>
-              </thead>
-              <tbody>
-                {role.users.map((user, index) => (
-                  <tr key={user.id} style={index < role.users.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
-                    <RecordDetailCell>
-                      <Link href={`/users/${user.id}`} className="font-medium hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                        {user.userId ?? 'Pending'}
-                      </Link>
-                    </RecordDetailCell>
-                    <RecordDetailCell>{user.name ?? '-'}</RecordDetailCell>
-                    <RecordDetailCell>{user.email}</RecordDetailCell>
-                    <RecordDetailCell>{user.inactive ? 'Inactive' : 'Active'}</RecordDetailCell>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </RecordDetailSection>
-        <SystemNotesSection notes={systemNotes} />
+            <RecordBottomTabsSection
+              defaultActiveKey="related-records"
+              tabs={[
+                {
+                  key: 'related-records',
+                  label: 'Related Records',
+                  count: relatedRecordsTabs.reduce((sum, tab) => sum + tab.count, 0),
+                  content: <RelatedRecordsSection embedded tabs={relatedRecordsTabs} showDisplayControl={false} />,
+                },
+                {
+                  key: 'communications',
+                  label: 'Communications',
+                  count: 0,
+                  toolbarTargetId: communicationsToolbarTargetId,
+                  toolbarPlacement: 'tab-bar',
+                  content: (
+                    <CommunicationsSection
+                      embedded
+                      toolbarTargetId={communicationsToolbarTargetId}
+                      rows={[]}
+                      showDisplayControl={false}
+                    />
+                  ),
+                },
+                {
+                  key: 'system-notes',
+                  label: 'System Notes',
+                  count: systemNotes.length,
+                  toolbarTargetId: systemNotesToolbarTargetId,
+                  toolbarPlacement: 'tab-bar',
+                  content: (
+                    <SystemNotesSection
+                      embedded
+                      toolbarTargetId={systemNotesToolbarTargetId}
+                      notes={systemNotes}
+                      showDisplayControl={false}
+                    />
+                  ),
+                },
+              ]}
+            />
           </>
         ) : null}
     </RecordDetailPageShell>

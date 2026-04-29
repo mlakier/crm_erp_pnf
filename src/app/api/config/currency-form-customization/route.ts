@@ -8,6 +8,7 @@ import {
   type CurrencyStatCardMetric,
 } from '@/lib/currency-form-customization'
 import { loadCurrencyFormCustomization, saveCurrencyFormCustomization } from '@/lib/currency-form-customization-store'
+import type { TransactionStatCardSize, TransactionStatCardSlot } from '@/lib/transaction-page-config'
 
 function sanitizeInput(input: unknown): CurrencyFormCustomizationConfig {
   const defaults = defaultCurrencyFormCustomization()
@@ -63,21 +64,23 @@ function sanitizeInput(input: unknown): CurrencyFormCustomizationConfig {
       ])
     ),
     fields,
-    statCards: (() => {
-      const normalized = statCardsInput
+    statCards: (() : Array<TransactionStatCardSlot<CurrencyStatCardMetric>> => {
+      const normalized: Array<TransactionStatCardSlot<CurrencyStatCardMetric>> = statCardsInput
         .map((entry, index) => {
           const statRoot = entry && typeof entry === 'object' ? entry as Record<string, unknown> : null
           if (!statRoot) return null
 
           const metric = String(statRoot.metric ?? '').trim() as CurrencyStatCardMetric
           if (!allowedMetrics.has(metric)) return null
+          const size: TransactionStatCardSize =
+            statRoot.size === 'sm' || statRoot.size === 'lg' ? statRoot.size : 'md'
 
           return {
             id: String(statRoot.id ?? `currency-stat-${metric}`),
             metric,
             visible: statRoot.visible === undefined ? true : statRoot.visible === true,
             order: typeof statRoot.order === 'number' && Number.isFinite(statRoot.order) ? statRoot.order : index,
-            size: statRoot.size === 'sm' || statRoot.size === 'lg' ? statRoot.size : 'md',
+            size,
             colorized: statRoot.colorized === undefined ? true : statRoot.colorized === true,
             linked: statRoot.linked === undefined ? true : statRoot.linked === true,
           }

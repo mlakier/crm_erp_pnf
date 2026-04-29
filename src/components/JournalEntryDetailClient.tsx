@@ -1,15 +1,16 @@
 'use client'
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import CommunicationsSection, { type CommunicationRow } from '@/components/CommunicationsSection'
-import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
-import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
+import RecordDetailActionBar from '@/components/RecordDetailActionBar'
+import RecordGlImpactSection from '@/components/RecordGlImpactSection'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
-import TransactionHeaderSections, { type TransactionHeaderSection } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderSection } from '@/components/RecordHeaderDetails'
+import SharedSearchableSelect, { type SearchableSelectOption as SharedSearchableSelectOption } from '@/components/SearchableSelect'
 import SystemNotesSection, { type SystemNoteRow } from '@/components/SystemNotesSection'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import {
@@ -335,7 +336,7 @@ export default function JournalEntryDetailClient({
     'Source And Approval': 'Reference source and approval ownership for the journal entry.',
   }
 
-  const headerSections: TransactionHeaderSection[] = activeCustomization
+  const headerSections: RecordHeaderSection[] = activeCustomization
     ? buildConfiguredTransactionSections({
         fields: JOURNAL_DETAIL_FIELDS,
         layout: activeCustomization,
@@ -515,80 +516,22 @@ export default function JournalEntryDetailClient({
       badge={badge}
       widthClassName="w-full max-w-none"
       actions={
-        <div className="flex flex-col items-end gap-1">
-          <div className="flex flex-wrap items-center gap-2">
-            {!isNew ? (
-              <>
-                <MasterDataDetailCreateMenu
-                  newHref={isIntercompany ? '/journals/intercompany/new' : '/journals/new'}
-                  duplicateHref={entryId ? `${isIntercompany ? '/journals/intercompany/new' : '/journals/new'}?duplicateFrom=${entryId}` : undefined}
-                />
-                <MasterDataDetailExportMenu
-                  title={title}
-                  fileName={headerValues.number || initialNumber}
-                  sections={exportSections}
-                />
-                {customizeHref ? (
-                  <Link
-                    href={customizeHref}
-                    className="rounded-md border px-3 py-1.5 text-xs font-medium"
-                    style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-                  >
-                    Customize
-                  </Link>
-                ) : null}
-              </>
-            ) : null}
-            {editing || isNew ? (
-              <>
-                <Link
-                  href={isNew ? detailHref : detailHref}
-                  className="rounded-md border px-3 py-1.5 text-xs font-medium"
-                  style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
-                >
-                  Cancel
-                </Link>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                  style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-                >
-                  {saving ? 'Saving...' : 'Save'}
-                </button>
-                {!isNew ? (
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    className="inline-flex items-center rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <Link
-                  href={`${detailHref}?edit=1`}
-                  className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
-                  style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-                >
-                  Edit
-                </Link>
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  className="inline-flex items-center rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-red-700"
-                >
-                  Delete
-                </button>
-              </>
-            )}
-          </div>
-          {saveError ? <p className="text-xs" style={{ color: 'var(--danger)' }}>{saveError}</p> : null}
-          {deleteError ? <p className="text-xs" style={{ color: 'var(--danger)' }}>{deleteError}</p> : null}
-        </div>
+        <RecordDetailActionBar
+          mode={editing || isNew ? (isNew ? 'create' : 'edit') : 'detail'}
+          detailHref={detailHref}
+          newHref={!isNew ? (isIntercompany ? '/journals/intercompany/new' : '/journals/new') : undefined}
+          duplicateHref={!isNew && entryId ? `${isIntercompany ? '/journals/intercompany/new' : '/journals/new'}?duplicateFrom=${entryId}` : undefined}
+          exportTitle={!isNew ? title : undefined}
+          exportFileName={!isNew ? (headerValues.number || initialNumber) : undefined}
+          exportSections={!isNew ? exportSections : undefined}
+          customizeHref={!isNew ? customizeHref : undefined}
+          editHref={!editing && !isNew ? `${detailHref}?edit=1` : undefined}
+          onSave={editing || isNew ? handleSave : undefined}
+          saving={saving}
+          saveError={saveError || deleteError}
+          onDelete={!isNew ? handleDelete : undefined}
+          showDeleteInEdit={!isNew}
+        />
       }
     >
       <div className="mb-8">
@@ -609,11 +552,18 @@ export default function JournalEntryDetailClient({
           glImpactColumnDefinitions={glImpactColumnDefinitions}
         />
       ) : (
-        <TransactionHeaderSections
+        <RecordHeaderDetails
           purchaseOrderId={entryId}
           editing={editing || isNew}
           sections={headerSections}
           columns={activeCustomization?.formColumns ?? 4}
+          containerTitle={isIntercompany ? 'Intercompany Journal Details' : 'Journal Details'}
+          containerDescription={
+            isIntercompany
+              ? 'Core intercompany journal fields organized into configurable sections.'
+              : 'Core journal fields organized into configurable sections.'
+          }
+          showSubsections={false}
           formId="journal-entry-detail-form"
           submitMode="controlled"
           onSubmit={handleSave}
@@ -951,85 +901,138 @@ export default function JournalEntryDetailClient({
       ) : null}
 
       {!customizing ? (
-      <RecordDetailSection
-        title="GL Impact"
-        count={glImpactRows.length}
-        summary={glImpactRows.length ? `${fmtCurrency(totalDebits, effectiveCurrencyCode, moneySettings)} debits | ${fmtCurrency(totalCredits, effectiveCurrencyCode, moneySettings)} credits` : undefined}
-        collapsible
-      >
-        {glImpactRows.length === 0 ? (
-          <RecordDetailEmptyState message="No journal lines yet, so there is no GL impact to preview." />
-        ) : (
-          <table className={`min-w-full ${glImpactFontSize === 'sm' ? 'text-sm' : 'text-xs'}`}>
-            <thead>
-              <tr>
-                {visibleGlImpactColumns.map((column) => (
-                  <RecordDetailHeaderCell
-                    key={column.id}
-                    className={column.id === 'debit' || column.id === 'credit' ? 'text-right' : undefined}
-                  >
-                    {column.label}
-                  </RecordDetailHeaderCell>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {lineItems.map((line, index) => (
-                <tr key={line.key} style={index < lineItems.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : undefined}>
-                  {visibleGlImpactColumns.map((column) => {
-                    switch (column.id as JournalGlImpactColumnKey) {
-                      case 'line':
-                        return <RecordDetailCell key={column.id} className={glImpactTextClass}>{line.displayOrder + 1}</RecordDetailCell>
-                      case 'accountId':
-                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderAccountValue(accounts, line.accountId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
-                      case 'description':
-                        return <RecordDetailCell key={column.id} className={`max-w-[260px] whitespace-pre-wrap break-words ${glImpactTextClass}`}>{line.description || line.memo || '-'}</RecordDetailCell>
-                      case 'subsidiaryId':
-                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderSubsidiaryValue(entities, (isIntercompany ? line.subsidiaryId : '') || headerValues.subsidiaryId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
-                      case 'departmentId':
-                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderDepartmentValue(departments, line.departmentId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
-                      case 'locationId':
-                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderLocationValue(locations, line.locationId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
-                      case 'projectId':
-                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderProjectValue(projects, line.projectId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
-                      case 'customerId':
-                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderCustomerValue(customers, line.customerId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
-                      case 'vendorId':
-                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderVendorValue(vendors, line.vendorId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
-                      case 'itemId':
-                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderItemValue(items, line.itemId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
-                      case 'employeeId':
-                        return <RecordDetailCell key={column.id} className={`${getGlImpactColumnClass(column.id, activeCustomization?.glImpactColumns?.[column.id])} ${glImpactTextClass}`}>{renderEmployeeValue(employees, line.employeeId, getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[column.id]))}</RecordDetailCell>
-                      case 'debit':
-                        return <RecordDetailCell key={column.id} className={`text-right ${glImpactTextClass}`}>{line.debit ? fmtCurrency(Number(line.debit), effectiveCurrencyCode, moneySettings) : '-'}</RecordDetailCell>
-                      case 'credit':
-                        return <RecordDetailCell key={column.id} className={`text-right ${glImpactTextClass}`}>{line.credit ? fmtCurrency(Number(line.credit), effectiveCurrencyCode, moneySettings) : '-'}</RecordDetailCell>
-                      default:
-                        return null
-                    }
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </RecordDetailSection>
-      ) : null}
-
-      {!isNew && !customizing ? (
-        <JournalRelatedDocumentsSection
-          count={relatedDocumentsCount}
-          sourceType={(sourceTypeOptions.find((option) => option.value === headerValues.sourceType)?.label ?? headerValues.sourceType) || '-'}
-          sourceId={headerValues.sourceId}
-          description={headerValues.description || '-'}
+        <RecordGlImpactSection
+          count={glImpactRows.length}
+          summary={
+            glImpactRows.length
+              ? `${fmtCurrency(totalDebits, effectiveCurrencyCode, moneySettings)} debits | ${fmtCurrency(totalCredits, effectiveCurrencyCode, moneySettings)} credits`
+              : undefined
+          }
+          emptyMessage="No journal lines yet, so there is no GL impact to preview."
+          rows={lineItems}
+          columns={visibleGlImpactColumns}
+          fontSize={glImpactFontSize}
+          getRowKey={(row) => row.key}
+          getHeaderClassName={(columnId) =>
+            columnId === 'debit' || columnId === 'credit'
+              ? 'text-right'
+              : undefined
+          }
+          getCellClassName={(columnId) => {
+            const widthClass =
+              columnId === 'description'
+                ? 'max-w-[260px] whitespace-pre-wrap break-words'
+                : getGlImpactColumnClass(
+                    columnId as JournalGlImpactColumnKey,
+                    activeCustomization?.glImpactColumns?.[columnId as JournalGlImpactColumnKey],
+                  )
+            const alignment = columnId === 'debit' || columnId === 'credit' ? 'text-right' : ''
+            return [widthClass, alignment, glImpactTextClass].filter(Boolean).join(' ')
+          }}
+          renderCell={(line, columnId) => {
+            switch (columnId as JournalGlImpactColumnKey) {
+              case 'line':
+                return line.displayOrder + 1
+              case 'accountId':
+                return renderAccountValue(
+                  accounts,
+                  line.accountId,
+                  getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[columnId]),
+                )
+              case 'description':
+                return line.description || line.memo || '-'
+              case 'subsidiaryId':
+                return renderSubsidiaryValue(
+                  entities,
+                  (isIntercompany ? line.subsidiaryId : '') || headerValues.subsidiaryId,
+                  getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[columnId]),
+                )
+              case 'departmentId':
+                return renderDepartmentValue(
+                  departments,
+                  line.departmentId,
+                  getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[columnId]),
+                )
+              case 'locationId':
+                return renderLocationValue(
+                  locations,
+                  line.locationId,
+                  getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[columnId]),
+                )
+              case 'projectId':
+                return renderProjectValue(
+                  projects,
+                  line.projectId,
+                  getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[columnId]),
+                )
+              case 'customerId':
+                return renderCustomerValue(
+                  customers,
+                  line.customerId,
+                  getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[columnId]),
+                )
+              case 'vendorId':
+                return renderVendorValue(
+                  vendors,
+                  line.vendorId,
+                  getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[columnId]),
+                )
+              case 'itemId':
+                return renderItemValue(
+                  items,
+                  line.itemId,
+                  getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[columnId]),
+                )
+              case 'employeeId':
+                return renderEmployeeValue(
+                  employees,
+                  line.employeeId,
+                  getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[columnId]),
+                )
+              case 'debit':
+                return line.debit ? fmtCurrency(Number(line.debit), effectiveCurrencyCode, moneySettings) : '-'
+              case 'credit':
+                return line.credit ? fmtCurrency(Number(line.credit), effectiveCurrencyCode, moneySettings) : '-'
+              default:
+                return '-'
+            }
+          }}
         />
       ) : null}
 
       {!isNew && !customizing ? (
-        <CommunicationsSection rows={communicationRows} compose={composePayload} />
+        <RecordBottomTabsSection
+          defaultActiveKey="related-documents"
+          tabs={[
+            {
+              key: 'related-documents',
+              label: 'Related Documents',
+              count: relatedDocumentsCount,
+              content: (
+                <JournalRelatedDocumentsSection
+                  embedded
+                  count={relatedDocumentsCount}
+                  sourceType={(sourceTypeOptions.find((option) => option.value === headerValues.sourceType)?.label ?? headerValues.sourceType) || '-'}
+                  sourceId={headerValues.sourceId}
+                  description={headerValues.description || '-'}
+                />
+              ),
+            },
+            {
+              key: 'communications',
+              label: 'Communications',
+              count: communicationRows.length,
+              content: <CommunicationsSection embedded showDisplayControl={false} rows={communicationRows} compose={composePayload} />,
+            },
+            {
+              key: 'system-notes',
+              label: 'System Notes',
+              count: systemNotes.length,
+              content: <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />,
+            },
+          ]}
+        />
       ) : null}
-
-      {!isNew && !customizing ? <SystemNotesSection notes={systemNotes} /> : null}
     </RecordDetailPageShell>
   )
 }
@@ -1564,15 +1567,7 @@ function AccountLookupInput({
   )
 }
 
-type SearchableSelectOption = {
-  value: string
-  label: string
-  displayLabel?: string
-  menuLabel?: string
-  searchText?: string
-  sortIdText?: string
-  sortLabelText?: string
-}
+type SearchableSelectOption = SharedSearchableSelectOption
 
 function SearchableSelectInput({
   selectedValue,
@@ -1591,211 +1586,60 @@ function SearchableSelectInput({
   textClassName: string
   onSelect: (value: string) => void
 }) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  const inputRef = useRef<HTMLInputElement | null>(null)
-  const dropdownRef = useRef<HTMLDivElement | null>(null)
-  const [dropdownStyle, setDropdownStyle] = useState<{ bottom: number; left: number; minWidth: number; maxWidth: number } | null>(null)
-  const selectedOption = options.find((option) => option.value === selectedValue) ?? null
-  const selectedLabel = selectedOption?.label ?? ''
-  const selectedDisplayLabel = selectedOption?.displayLabel ?? selectedLabel
-
-  useEffect(() => {
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target as Node
-      if (!containerRef.current?.contains(target) && !dropdownRef.current?.contains(target)) {
-        setOpen(false)
-        setQuery(selectedLabel)
-      }
-    }
-
-    document.addEventListener('mousedown', handlePointerDown)
-    return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [selectedLabel])
-
-  useEffect(() => {
-    if (!open || !inputRef.current) return
-
-    function updatePosition() {
-      if (!inputRef.current) return
-      const rect = inputRef.current.getBoundingClientRect()
-      const maxWidth = window.innerWidth - 32
-      setDropdownStyle({
-        bottom: Math.max(window.innerHeight - rect.top + 4, 8),
-        left: Math.max(16, rect.left),
-        minWidth: rect.width + 96,
-        maxWidth,
-      })
-    }
-
-    updatePosition()
-    window.addEventListener('resize', updatePosition)
-    window.addEventListener('scroll', updatePosition, true)
-    return () => {
-      window.removeEventListener('resize', updatePosition)
-      window.removeEventListener('scroll', updatePosition, true)
-    }
-  }, [open, options, placeholder, query])
-
-  const filteredOptions = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-    const sortedOptions = [...options].sort((left, right) =>
-      (dropdownSort === 'label' ? left.sortLabelText ?? left.displayLabel ?? left.label : left.sortIdText ?? left.label).localeCompare(
-        dropdownSort === 'label' ? right.sortLabelText ?? right.displayLabel ?? right.label : right.sortIdText ?? right.label,
-        undefined,
-        {
-        sensitivity: 'base',
-        numeric: true,
-        },
-      ),
-    )
-    if (!normalizedQuery) return sortedOptions
-    return sortedOptions.filter((option) => (option.searchText ?? option.label).toLowerCase().includes(normalizedQuery))
-  }, [dropdownSort, options, query])
-
   return (
-    <div ref={containerRef} className="relative z-50">
-      <div className="relative">
-        <input
-          ref={inputRef}
-          value={open ? query : selectedDisplayLabel}
-          onFocus={() => {
-            setOpen(true)
-            setQuery(selectedLabel)
-          }}
-          onChange={(event) => {
-            const nextQuery = event.target.value
-            setQuery(nextQuery)
-            setOpen(true)
-            if (selectedValue && nextQuery !== selectedLabel) {
-              onSelect('')
-            }
-          }}
-          placeholder={selectedDisplayLabel ? searchPlaceholder : placeholder}
-          title={selectedLabel || placeholder}
-          className={`w-full rounded-md border bg-transparent px-2.5 py-1.5 pr-8 text-white ${textClassName}`}
-          style={{
-            ...inputStyle,
-            backgroundColor: 'var(--card-elevated)',
-            colorScheme: 'dark',
-            WebkitTextFillColor: 'white',
-          }}
-        />
-        <button
-          type="button"
-          onMouseDown={(event) => {
-            event.preventDefault()
-            const nextOpen = !open
-            setOpen(nextOpen)
-            if (nextOpen) {
-              setQuery(selectedLabel)
-              inputRef.current?.focus()
-            }
-          }}
-          className="absolute inset-y-0 right-0 flex w-8 items-center justify-center rounded-r-md"
-          style={{ color: 'var(--text-muted)' }}
-          aria-label="Toggle options"
-        >
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 20 20"
-            className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m5 7 5 5 5-5" />
-          </svg>
-        </button>
-      </div>
-      {open && dropdownStyle
-        ? createPortal(
-            <div
-              ref={dropdownRef}
-              className="fixed z-[210] max-h-60 overflow-y-auto rounded-md border shadow-2xl"
-              style={{
-                bottom: dropdownStyle.bottom,
-                left: dropdownStyle.left,
-                minWidth: dropdownStyle.minWidth,
-                width: 'max-content',
-                maxWidth: dropdownStyle.maxWidth,
-                borderColor: 'var(--border-muted)',
-                backgroundColor: 'var(--card-elevated)',
-              }}
-            >
-              <button
-                type="button"
-                onMouseDown={(event) => {
-                  event.preventDefault()
-                  onSelect('')
-                  setQuery('')
-                  setOpen(false)
-                }}
-                className={`block w-full whitespace-nowrap px-2.5 py-1.5 text-left hover:bg-white/5 ${textClassName}`}
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                {placeholder}
-              </button>
-              {filteredOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onMouseDown={(event) => {
-                    event.preventDefault()
-                    onSelect(option.value)
-                    setQuery(option.label)
-                    setOpen(false)
-                  }}
-                  className={`block w-full whitespace-nowrap px-2.5 py-1.5 text-left hover:bg-white/5 ${textClassName}`}
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {option.menuLabel ?? option.label}
-                </button>
-              ))}
-            </div>,
-            document.body,
-          )
-        : null}
-    </div>
+    <SharedSearchableSelect
+      selectedValue={selectedValue}
+      options={options}
+      placeholder={placeholder}
+      searchPlaceholder={searchPlaceholder}
+      sortMode={dropdownSort}
+      textClassName={textClassName}
+      onSelect={onSelect}
+    />
   )
 }
 
 function JournalRelatedDocumentsSection({
+  embedded = false,
   count,
   sourceType,
   sourceId,
   description,
 }: {
+  embedded?: boolean
   count: number
   sourceType: string
   sourceId: string
   description: string
 }) {
+  const content = sourceId ? (
+    <table className="min-w-full">
+      <thead>
+        <tr>
+          <RecordDetailHeaderCell>Source Type</RecordDetailHeaderCell>
+          <RecordDetailHeaderCell>Source Id</RecordDetailHeaderCell>
+          <RecordDetailHeaderCell>Description</RecordDetailHeaderCell>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <RecordDetailCell>{sourceType}</RecordDetailCell>
+          <RecordDetailCell>{sourceId}</RecordDetailCell>
+          <RecordDetailCell>{description}</RecordDetailCell>
+        </tr>
+      </tbody>
+    </table>
+  ) : (
+    <RecordDetailEmptyState message="No related source document is linked to this journal yet." />
+  )
+
+  if (embedded) {
+    return content
+  }
+
   return (
     <RecordDetailSection title="Related Documents" count={count} summary={sourceId ? sourceType : undefined} collapsible>
-      {sourceId ? (
-        <table className="min-w-full">
-          <thead>
-            <tr>
-              <RecordDetailHeaderCell>Source Type</RecordDetailHeaderCell>
-              <RecordDetailHeaderCell>Source Id</RecordDetailHeaderCell>
-              <RecordDetailHeaderCell>Description</RecordDetailHeaderCell>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <RecordDetailCell>{sourceType}</RecordDetailCell>
-              <RecordDetailCell>{sourceId}</RecordDetailCell>
-              <RecordDetailCell>{description}</RecordDetailCell>
-            </tr>
-          </tbody>
-        </table>
-      ) : (
-        <RecordDetailEmptyState message="No related source document is linked to this journal yet." />
-      )}
+      {content}
     </RecordDetailSection>
   )
 }

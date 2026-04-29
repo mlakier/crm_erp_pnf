@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import DepartmentCustomFieldForm from '@/components/DepartmentCustomFieldForm'
+import SearchableSelect from '@/components/SearchableSelect'
 import { DepartmentCustomizationConfig } from '@/lib/department-customization'
 import {
   CustomFieldDefinitionSummary,
@@ -220,10 +221,15 @@ export default function DepartmentCustomizeForm({
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
             <span>Division Source</span>
-            <select
-              value={config.listBindings.divisionCustomListId ?? ''}
-              onChange={(event) => {
-                const next = event.target.value.trim()
+            <SearchableSelect
+              selectedValue={config.listBindings.divisionCustomListId ?? ''}
+              options={customLists.map((list) => ({
+                value: list.id,
+                label: list.label,
+              }))}
+              placeholder="Free text"
+              onSelect={(value) => {
+                const next = value.trim()
                 const nextOptions = next ? (customListRows[next] ?? []).map((row) => row.value).filter(Boolean) : []
                 setConfig((prev) => ({
                   ...prev,
@@ -236,25 +242,21 @@ export default function DepartmentCustomizeForm({
                   },
                 }))
               }}
-              className="w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              <option value="">Free text</option>
-              {customLists.map((list) => (
-                <option key={list.id} value={list.id}>
-                  {list.label}
-                </option>
-              ))}
-            </select>
+            />
           </label>
 
           <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
             <span>Division Default Value</span>
-            <select
-              value={config.listBindings.divisionDefaultValue ?? ''}
+            <SearchableSelect
+              selectedValue={config.listBindings.divisionDefaultValue ?? ''}
               disabled={!config.listBindings.divisionCustomListId}
-              onChange={(event) => {
-                const next = event.target.value.trim()
+              options={divisionDefaultOptions.map((option) => ({
+                value: option,
+                label: option,
+              }))}
+              placeholder="None"
+              onSelect={(value) => {
+                const next = value.trim()
                 setConfig((prev) => ({
                   ...prev,
                   listBindings: {
@@ -263,16 +265,7 @@ export default function DepartmentCustomizeForm({
                   },
                 }))
               }}
-              className="w-full rounded-md border bg-transparent px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
-              <option value="">None</option>
-              {divisionDefaultOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+            />
           </label>
         </div>
       </section>

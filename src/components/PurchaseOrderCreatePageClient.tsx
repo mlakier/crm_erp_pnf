@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
-import TransactionHeaderSections, { type TransactionHeaderSection } from '@/components/TransactionHeaderSections'
+import RecordHeaderDetails, { type RecordHeaderSection } from '@/components/RecordHeaderDetails'
 import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import { fmtCurrency, fmtPhone } from '@/lib/format'
 import { calcLineTotal, sumMoney } from '@/lib/money'
@@ -11,7 +11,6 @@ import {
   PURCHASE_ORDER_DETAIL_FIELDS,
   PURCHASE_ORDER_LINE_COLUMNS,
   type PurchaseOrderDetailCustomizationConfig,
-  type PurchaseOrderDetailFieldKey,
 } from '@/lib/purchase-order-detail-customization'
 import {
   buildConfiguredTransactionSections,
@@ -129,7 +128,7 @@ export default function PurchaseOrderCreatePageClient({
     [subsidiaries]
   )
 
-  const headerFieldDefinitions: Record<PurchaseOrderDetailFieldKey, TransactionHeaderSection['fields'][number]> = useMemo(
+  const headerFieldDefinitions: Record<string, RecordHeaderSection['fields'][number]> = useMemo(
     () => ({
       vendorName: {
         key: 'vendorName',
@@ -389,7 +388,7 @@ export default function PurchaseOrderCreatePageClient({
   applyRequirementsToEditableFields(headerFieldDefinitions, req, isLocked)
 
 
-  const headerSections: TransactionHeaderSection[] = useMemo(
+  const headerSections: RecordHeaderSection[] = useMemo(
     () =>
       buildConfiguredTransactionSections({
         fields: PURCHASE_ORDER_DETAIL_FIELDS,
@@ -504,7 +503,7 @@ export default function PurchaseOrderCreatePageClient({
         </>
       }
     >
-      <TransactionHeaderSections
+      <RecordHeaderDetails
         editing
         sections={headerSections}
         columns={customization.formColumns}

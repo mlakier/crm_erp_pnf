@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { createFieldChangeSummary, logActivity, logCommunicationActivity } from '@/lib/activity'
 import { generateNextBillNumber } from '@/lib/bill-number'
 import { calcLineTotal, parseMoneyValue, sumMoney } from '@/lib/money'
 import { resolveVendorTransactionSnapshot } from '@/lib/transaction-snapshot-defaults'
+import { generateNextJournalNumber } from '@/lib/journal-number'
+import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
 
 const INCLUDE = {
   vendor: true,
@@ -12,9 +15,152 @@ const INCLUDE = {
   currency: true,
   lineItems: {
     include: { item: true },
-    orderBy: [{ createdAt: 'asc' as const }],
+    orderBy: [{ createdAt: 'asc' }],
   },
-} as const
+} satisfies Prisma.BillInclude
+
+async function findBillPostingAccounts(lineItemIds: string[]) {
+  const companySettings = await loadCompanyInformationSettings()
+  const items = lineItemIds.length
+    ? await prisma.item.findMany({
+        where: { id: { in: lineItemIds } },
+        select: { id: true, cogsExpenseAccountId: true },
+      })
+    : []
+
+  const expenseAccountIds = Array.from(
+    new Set(items.map((item) => item.cogsExpenseAccountId).filter(Boolean)),
+  ) as string[]
+
+  let apAccount = companySettings.defaultApAccountId
+    ? await prisma.chartOfAccounts.findFirst({
+        where: {
+          id: companySettings.defaultApAccountId,
+          active: true,
+          isPosting: true,
+        },
+        select: { id: true },
+      })
+    : null
+
+  if (!apAccount) {
+    apAccount = await prisma.chartOfAccounts.findFirst({
+      where: {
+        active: true,
+        isPosting: true,
+        accountType: { contains: 'liability', mode: 'insensitive' },
+        OR: [
+          { name: { contains: 'accounts payable', mode: 'insensitive' } },
+          { name: { contains: 'a/p', mode: 'insensitive' } },
+          { accountId: { contains: 'accounts payable', mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    })
+  }
+
+  if (!apAccount) {
+    apAccount = await prisma.chartOfAccounts.findFirst({
+      where: {
+        active: true,
+        isPosting: true,
+        accountType: { contains: 'liability', mode: 'insensitive' },
+      },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    })
+  }
+
+  return {
+    apAccountId: apAccount?.id ?? null,
+    expenseAccountIds,
+  }
+}
+
+async function postBillApprovalJournal(billId: string) {
+  const existingJournal = await prisma.journalEntry.findFirst({
+    where: { sourceId: billId },
+    select: { id: true },
+  })
+  if (existingJournal) return
+
+  const bill = await prisma.bill.findUnique({
+    where: { id: billId },
+    include: INCLUDE,
+  })
+  if (!bill) return
+
+  const { apAccountId, expenseAccountIds } = await findBillPostingAccounts(
+    bill.lineItems.map((line) => line.itemId).filter(Boolean) as string[],
+  )
+
+  if (!apAccountId || expenseAccountIds.length === 0) return
+
+  const fallbackExpenseAccountId = expenseAccountIds[0]
+  const totalDebit = sumMoney(
+    bill.lineItems.map((line) => {
+      const quantity = Number(line.quantity ?? 0)
+      const unitPrice = Number(line.unitPrice ?? 0)
+      return calcLineTotal(quantity, unitPrice)
+    }),
+  )
+
+  if (totalDebit <= 0) return
+
+  const lineCreates = bill.lineItems.map((line, index) => ({
+    displayOrder: index,
+    description: line.description || bill.number,
+    memo: line.notes ?? null,
+    debit: calcLineTotal(Number(line.quantity ?? 0), Number(line.unitPrice ?? 0)),
+    credit: 0,
+    accountId: line.item?.cogsExpenseAccountId ?? fallbackExpenseAccountId,
+    subsidiaryId: bill.subsidiaryId,
+    vendorId: bill.vendorId,
+    itemId: line.itemId,
+  }))
+
+  lineCreates.push({
+    displayOrder: lineCreates.length,
+    description: `${bill.number} accounts payable`,
+    memo: bill.notes ?? null,
+    debit: 0,
+    credit: totalDebit,
+    accountId: apAccountId,
+    subsidiaryId: bill.subsidiaryId,
+    vendorId: bill.vendorId,
+    itemId: null,
+  })
+
+  const journalNumber = await generateNextJournalNumber()
+
+  await prisma.journalEntry.create({
+    data: {
+      number: journalNumber,
+      date: bill.date,
+      description: `Bill posting for ${bill.number}`,
+      journalType: 'standard',
+      status: 'approved',
+      total: totalDebit,
+      sourceType: 'bill',
+      sourceId: bill.id,
+      subsidiaryId: bill.subsidiaryId,
+      currencyId: bill.currencyId,
+      userId: bill.userId,
+      lineItems: {
+        create: lineCreates,
+      },
+    },
+  })
+
+  await logActivity({
+    entityType: 'bill',
+    entityId: bill.id,
+    action: 'post',
+    summary: `Posted bill ${bill.number} to GL`,
+    userId: bill.userId,
+  })
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -222,6 +368,10 @@ export async function PUT(request: NextRequest) {
       },
       include: INCLUDE,
     })
+
+    if (before.status !== 'approved' && bill.status === 'approved') {
+      await postBillApprovalJournal(bill.id)
+    }
 
     await logActivity({
       entityType: 'bill',

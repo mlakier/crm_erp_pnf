@@ -1,16 +1,16 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import DeleteButton from '@/components/DeleteButton'
-import InlineRecordDetails, { type InlineRecordSection } from '@/components/InlineRecordDetails'
+import type { InlineRecordSection } from '@/components/InlineRecordDetails'
+import MasterDataHeaderDetails from '@/components/MasterDataHeaderDetails'
+import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
 import LocationDetailCustomizeMode from '@/components/LocationDetailCustomizeMode'
-import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
-import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
-import MasterDataSystemInfoSection from '@/components/MasterDataSystemInfoSection'
+import RecordDetailActionBar from '@/components/RecordDetailActionBar'
+import { buildMasterDataSystemInformationItems } from '@/components/RecordSystemInformationSection'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
+import CommunicationsSection from '@/components/CommunicationsSection'
+import RelatedRecordsSection from '@/components/RelatedRecordsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
-import { RecordDetailCell, RecordDetailEmptyState, RecordDetailHeaderCell, RecordDetailSection, RecordDetailStatCard } from '@/components/RecordDetailPanels'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { buildConfiguredInlineSections, buildCustomizePreviewFields } from '@/lib/detail-page-helpers'
 import { loadFormRequirements } from '@/lib/form-requirements-store'
@@ -18,6 +18,7 @@ import { LOCATION_FORM_FIELDS, type LocationFormFieldKey } from '@/lib/location-
 import { loadLocationFormCustomization } from '@/lib/location-form-customization-store'
 import { loadMasterDataSystemInfo } from '@/lib/master-data-system-info'
 import { loadMasterDataSystemNotes } from '@/lib/master-data-system-notes'
+import type { TransactionStatDefinition, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 function boolValue(value: boolean) {
   return value ? 'true' : 'false'
@@ -98,15 +99,23 @@ export default async function LocationDetailPage({
     sectionDescriptions,
   })
   const customizeFields = buildCustomizePreviewFields(LOCATION_FORM_FIELDS, fieldDefinitions)
-  const statPreviewCards = [
-    { id: 'childLocations', label: 'Child Locations', value: locationRecord.childLocations.length, cardTone: 'blue', valueTone: 'blue', supportsColorized: true, supportsLink: false },
+  const statPreviewCards: Array<{
+    id: string
+    label: string
+    value: string | number
+    cardTone?: TransactionVisualTone
+    valueTone?: TransactionVisualTone
+    supportsColorized: boolean
+    supportsLink: boolean
+  }> = [
+    { id: 'childLocations', label: 'Child Locations', value: locationRecord.childLocations.length, cardTone: 'accent', valueTone: 'accent', supportsColorized: true, supportsLink: false },
     { id: 'employees', label: 'Employees', value: locationRecord.employees.length, cardTone: 'teal', valueTone: 'teal', supportsColorized: true, supportsLink: false },
     { id: 'items', label: 'Items', value: locationRecord.items.length, cardTone: 'yellow', valueTone: 'yellow', supportsColorized: true, supportsLink: false },
   ]
-  const statDefinitions = [
-    { id: 'childLocations', label: 'Child Locations', getValue: () => locationRecord.childLocations.length, getCardTone: () => 'blue' as const, getValueTone: () => 'blue' as const },
-    { id: 'employees', label: 'Employees', getValue: () => locationRecord.employees.length, getCardTone: () => 'teal' as const, getValueTone: () => 'teal' as const },
-    { id: 'items', label: 'Items', getValue: () => locationRecord.items.length, getCardTone: () => 'yellow' as const, getValueTone: () => 'yellow' as const },
+  const statDefinitions: Array<TransactionStatDefinition<typeof locationRecord>> = [
+    { id: 'childLocations', label: 'Child Locations', getValue: () => locationRecord.childLocations.length, getCardTone: () => 'accent', getValueTone: () => 'accent' },
+    { id: 'employees', label: 'Employees', getValue: () => locationRecord.employees.length, getCardTone: () => 'teal', getValueTone: () => 'teal' },
+    { id: 'items', label: 'Items', getValue: () => locationRecord.items.length, getCardTone: () => 'yellow', getValueTone: () => 'yellow' },
   ]
   const systemInfo = await loadMasterDataSystemInfo({
     entityType: 'location',
@@ -115,6 +124,52 @@ export default async function LocationDetailPage({
     updatedAt: location.updatedAt,
   })
   const systemNotes = await loadMasterDataSystemNotes({ entityType: 'location', entityId: location.id })
+  const relatedRecordsTabs = [
+    {
+      key: 'child-locations',
+      label: 'Child Locations',
+      count: locationRecord.childLocations.length,
+      emptyMessage: 'No child locations are linked to this location yet.',
+      rows: locationRecord.childLocations.map((child) => ({
+        id: child.id,
+        type: 'Location',
+        reference: child.locationId,
+        name: child.name,
+        details: 'Child Location',
+        href: `/locations/${child.id}`,
+      })),
+    },
+    {
+      key: 'employees',
+      label: 'Employees',
+      count: locationRecord.employees.length,
+      emptyMessage: 'No employees are assigned to this location yet.',
+      rows: locationRecord.employees.map((employee) => ({
+        id: employee.id,
+        type: 'Employee',
+        reference: employee.employeeId ?? 'Pending',
+        name: `${employee.firstName} ${employee.lastName}`.trim(),
+        details: '-',
+        href: `/employees/${employee.id}`,
+      })),
+    },
+    {
+      key: 'items',
+      label: 'Items',
+      count: locationRecord.items.length,
+      emptyMessage: 'No items are assigned to this location yet.',
+      rows: locationRecord.items.map((item) => ({
+        id: item.id,
+        type: 'Item',
+        reference: item.itemId ?? 'Pending',
+        name: item.name,
+        details: '-',
+        href: `/items/${item.id}`,
+      })),
+    },
+  ]
+  const communicationsToolbarTargetId = 'location-communications-toolbar'
+  const systemNotesToolbarTargetId = 'location-system-notes-toolbar'
 
   return (
     <RecordDetailPageShell
@@ -124,19 +179,22 @@ export default async function LocationDetailPage({
       title={location.name}
       badge={<span className="inline-block rounded-full px-3 py-0.5 text-sm" style={{ backgroundColor: 'rgba(59,130,246,0.18)', color: 'var(--accent-primary-strong)' }}>{location.code}</span>}
       actions={
-        <>
-          {isEditing && !isCustomizing ? (
-            <>
-              <Link href={detailHref} className="rounded-md border px-3 py-1.5 text-xs font-medium" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>Cancel</Link>
-              <button type="submit" form={`inline-record-form-${location.id}`} className="rounded-md px-3 py-1.5 text-xs font-semibold text-white" style={{ backgroundColor: 'var(--accent-primary-strong)' }}>Save</button>
-            </>
-          ) : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailCreateMenu newHref="/locations/new" duplicateHref={`/locations/new?duplicateFrom=${location.id}`} /> : null}
-          {!isEditing && !isCustomizing ? <MasterDataDetailExportMenu title={location.name} fileName={`location-${location.locationId}`} sections={detailSections} /> : null}
-          {!isEditing && !isCustomizing ? <Link href={`${detailHref}?customize=1`} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>Customize</Link> : null}
-          {!isEditing && !isCustomizing ? <Link href={`${detailHref}?edit=1`} className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm" style={{ backgroundColor: 'var(--accent-primary-strong)' }}>Edit</Link> : null}
-          {!isCustomizing ? <DeleteButton resource="locations" id={location.id} /> : null}
-        </>
+        isCustomizing ? null : (
+          <RecordDetailActionBar
+            mode={isEditing ? 'edit' : 'detail'}
+            detailHref={detailHref}
+            formId={`inline-record-form-${location.id}`}
+            newHref="/locations/new"
+            duplicateHref={`/locations/new?duplicateFrom=${location.id}`}
+            exportTitle={location.name}
+            exportFileName={`location-${location.locationId}`}
+            exportSections={detailSections}
+            customizeHref={`${detailHref}?customize=1`}
+            editHref={`${detailHref}?edit=1`}
+            deleteResource="locations"
+            deleteId={location.id}
+          />
+        )
       }
     >
       {!isCustomizing ? (
@@ -159,63 +217,60 @@ export default async function LocationDetailPage({
           statPreviewCards={statPreviewCards}
         />
       ) : (
-        <InlineRecordDetails
+        <MasterDataHeaderDetails
           resource="locations"
           id={location.id}
-          title="Location details"
+          title="Location Details"
           sections={detailSections}
           editing={isEditing}
           columns={layout.formColumns}
-          showInternalActions={false}
+          systemInformationItems={buildMasterDataSystemInformationItems(systemInfo, location.id)}
         />
       )}
 
       {!isCustomizing ? (
         <>
-          <MasterDataSystemInfoSection info={systemInfo} internalId={location.id} />
-
-          <RecordDetailSection title="Child Locations" count={locationRecord.childLocations.length}>
-            {locationRecord.childLocations.length === 0 ? <RecordDetailEmptyState message="No child locations yet." /> : (
-              <table className="min-w-full"><tbody>{locationRecord.childLocations.map((child) => (
-                <tr key={child.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                  <RecordDetailCell><Link href={`/locations/${child.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>{child.locationId}</Link></RecordDetailCell>
-                  <RecordDetailCell>{child.name}</RecordDetailCell>
-                </tr>
-              ))}</tbody></table>
-            )}
-          </RecordDetailSection>
-
-          <RecordDetailSection title="Employees" count={locationRecord.employees.length}>
-            {locationRecord.employees.length === 0 ? <RecordDetailEmptyState message="No employees assigned to this location." /> : (
-              <table className="min-w-full"><thead><tr><RecordDetailHeaderCell>Employee Id</RecordDetailHeaderCell><RecordDetailHeaderCell>Name</RecordDetailHeaderCell></tr></thead><tbody>{locationRecord.employees.map((employee) => (
-                <tr key={employee.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                  <RecordDetailCell><Link href={`/employees/${employee.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>{employee.employeeId ?? 'Pending'}</Link></RecordDetailCell>
-                  <RecordDetailCell>{employee.firstName} {employee.lastName}</RecordDetailCell>
-                </tr>
-              ))}</tbody></table>
-            )}
-          </RecordDetailSection>
-
-          <RecordDetailSection title="Items" count={locationRecord.items.length}>
-            {locationRecord.items.length === 0 ? <RecordDetailEmptyState message="No items assigned to this location." /> : (
-              <table className="min-w-full"><thead><tr><RecordDetailHeaderCell>Item Id</RecordDetailHeaderCell><RecordDetailHeaderCell>Name</RecordDetailHeaderCell></tr></thead><tbody>{locationRecord.items.map((item) => (
-                <tr key={item.id} style={{ borderBottom: '1px solid var(--border-muted)' }}>
-                  <RecordDetailCell><Link href={`/items/${item.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>{item.itemId ?? 'Pending'}</Link></RecordDetailCell>
-                  <RecordDetailCell>{item.name}</RecordDetailCell>
-                </tr>
-              ))}</tbody></table>
-            )}
-          </RecordDetailSection>
-
-          <RecordDetailSection title="Transaction Lines" count={locationRecord.invoiceLineItems.length + locationRecord.billLineItems.length + locationRecord.journalEntryLineItems.length}>
-            <div className="grid gap-3 md:grid-cols-3">
-              <RecordDetailStatCard label="Invoice Lines" value={locationRecord.invoiceLineItems.length} />
-              <RecordDetailStatCard label="Bill Lines" value={locationRecord.billLineItems.length} />
-              <RecordDetailStatCard label="Journal Lines" value={locationRecord.journalEntryLineItems.length} />
-            </div>
-          </RecordDetailSection>
-
-          <SystemNotesSection notes={systemNotes} />
+          <RecordBottomTabsSection
+            defaultActiveKey="related-records"
+            tabs={[
+              {
+                key: 'related-records',
+                label: 'Related Records',
+                count: relatedRecordsTabs.reduce((sum, tab) => sum + tab.count, 0),
+                content: <RelatedRecordsSection embedded tabs={relatedRecordsTabs} showDisplayControl={false} />,
+              },
+              {
+                key: 'communications',
+                label: 'Communications',
+                count: 0,
+                toolbarTargetId: communicationsToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <CommunicationsSection
+                    embedded
+                    toolbarTargetId={communicationsToolbarTargetId}
+                    rows={[]}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+              {
+                key: 'system-notes',
+                label: 'System Notes',
+                count: systemNotes.length,
+                toolbarTargetId: systemNotesToolbarTargetId,
+                toolbarPlacement: 'tab-bar',
+                content: (
+                  <SystemNotesSection
+                    embedded
+                    toolbarTargetId={systemNotesToolbarTargetId}
+                    notes={systemNotes}
+                    showDisplayControl={false}
+                  />
+                ),
+              },
+            ]}
+          />
         </>
       ) : null}
     </RecordDetailPageShell>

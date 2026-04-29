@@ -7,6 +7,7 @@ import {
   CustomFieldType,
   normalizeCustomFieldName,
 } from '@/lib/custom-fields'
+import SearchableSelect from '@/components/SearchableSelect'
 
 const RESERVED_FIELD_NAMES = new Set([
   'departmentid',
@@ -142,18 +143,15 @@ export default function DepartmentCustomFieldForm({
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
           <span>Field Type *</span>
-          <select
-            value={type}
-            onChange={(event) => setType(event.target.value as CustomFieldType)}
-            className="w-full rounded-md border bg-transparent px-3 py-2 text-white"
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            {CUSTOM_FIELD_TYPES.map((fieldType) => (
-              <option key={fieldType} value={fieldType}>
-                {fieldType.charAt(0).toUpperCase() + fieldType.slice(1)}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            selectedValue={type}
+            options={CUSTOM_FIELD_TYPES.map((fieldType) => ({
+              value: fieldType,
+              label: fieldType.charAt(0).toUpperCase() + fieldType.slice(1),
+            }))}
+            placeholder="Select field type"
+            onSelect={(value) => setType((value || 'text') as CustomFieldType)}
+          />
         </label>
         <label className="inline-flex items-center gap-2 pt-7 text-sm" style={{ color: 'var(--text-secondary)' }}>
           <input type="checkbox" checked={required} onChange={(event) => setRequired(event.target.checked)} />
@@ -179,15 +177,15 @@ export default function DepartmentCustomFieldForm({
       {type === 'checkbox' ? (
         <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
           <span>Default Value</span>
-          <select
-            value={defaultValue || 'false'}
-            onChange={(event) => setDefaultValue(event.target.value)}
-            className="w-full rounded-md border bg-transparent px-3 py-2 text-white"
-            style={{ borderColor: 'var(--border-muted)' }}
-          >
-            <option value="false">No</option>
-            <option value="true">Yes</option>
-          </select>
+          <SearchableSelect
+            selectedValue={defaultValue || 'false'}
+            options={[
+              { value: 'false', label: 'No' },
+              { value: 'true', label: 'Yes' },
+            ]}
+            placeholder="Select default value"
+            onSelect={(value) => setDefaultValue(value || 'false')}
+          />
         </label>
       ) : (
         <label className="space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>

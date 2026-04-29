@@ -1,12 +1,16 @@
 'use client'
 
-import type { ReceiptDetailCustomizationConfig, ReceiptDetailFieldKey } from '@/lib/receipt-detail-customization'
+import type { ReceiptDetailCustomizationConfig } from '@/lib/receipt-detail-customization'
 import TransactionRecordDetailCustomizeMode from '@/components/TransactionRecordDetailCustomizeMode'
 import { RECEIPT_REFERENCE_SOURCES, RECEIPT_STAT_CARDS } from '@/lib/receipt-detail-customization'
+import {
+  TRANSACTION_GL_IMPACT_COLUMNS,
+  TRANSACTION_GL_IMPACT_SETTING_AVAILABILITY,
+} from '@/lib/transaction-gl-impact'
 import type { TransactionVisualTone } from '@/lib/transaction-page-config'
 
 type CustomizeField = {
-  id: ReceiptDetailFieldKey
+  id: string
   label: string
   fieldType: string
   source?: string
@@ -48,10 +52,16 @@ export default function ReceiptDetailCustomizeMode({
     supportsLink?: boolean
   }>
 }) {
+  const customizeLayout = {
+    ...initialLayout,
+    secondarySettings: initialLayout.glImpactSettings,
+    secondaryColumns: initialLayout.glImpactColumns,
+  }
+
   return (
     <TransactionRecordDetailCustomizeMode
       detailHref={detailHref}
-      initialLayout={initialLayout}
+      initialLayout={customizeLayout}
       fields={fields}
       formKey="receiptCreate"
       saveEndpoint="/api/config/receipt-detail-customization"
@@ -60,6 +70,9 @@ export default function ReceiptDetailCustomizeMode({
       referenceSourceDefinitions={referenceSourceDefinitions ?? RECEIPT_REFERENCE_SOURCES}
       statCardDefinitions={RECEIPT_STAT_CARDS}
       statPreviewCards={statPreviewCards}
+      secondaryColumnsLabel="GL Impact"
+      secondaryColumnDefinitions={TRANSACTION_GL_IMPACT_COLUMNS}
+      secondaryColumnSettingAvailability={TRANSACTION_GL_IMPACT_SETTING_AVAILABILITY}
     />
   )
 }

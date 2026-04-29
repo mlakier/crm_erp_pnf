@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { loadListValues } from '@/lib/load-list-values'
 import ReceiptCreatePageClient from '@/components/ReceiptCreatePageClient'
 import { loadReceiptDetailCustomization } from '@/lib/receipt-detail-customization-store'
+import { canReceivePurchaseOrderLine } from '@/lib/item-business-rules'
 
 export default async function NewReceiptPage({
   searchParams,
@@ -12,7 +13,31 @@ export default async function NewReceiptPage({
 
   const [purchaseOrders, statusValues, customization, duplicateSource] = await Promise.all([
     prisma.purchaseOrder.findMany({
-      select: { id: true, number: true },
+      select: {
+        id: true,
+        number: true,
+        userId: true,
+        lineItems: {
+          orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+          select: {
+            id: true,
+            description: true,
+            quantity: true,
+            item: {
+              select: {
+                id: true,
+                itemId: true,
+                name: true,
+                dropShipItem: true,
+                specialOrderItem: true,
+              },
+            },
+            receiptLines: {
+              select: { id: true, quantity: true },
+            },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
       take: 200,
     }),
@@ -21,6 +46,9 @@ export default async function NewReceiptPage({
     duplicateFrom
       ? prisma.receipt.findUnique({
           where: { id: duplicateFrom },
+          include: {
+            lines: true,
+          },
         })
       : Promise.resolve(null),
   ])
@@ -30,6 +58,18 @@ export default async function NewReceiptPage({
       purchaseOrders={purchaseOrders.map((purchaseOrder) => ({
         id: purchaseOrder.id,
         number: purchaseOrder.number,
+        userId: purchaseOrder.userId,
+        lineOptions: purchaseOrder.lineItems.map((line, index) => ({
+          id: line.id,
+          lineNumber: index + 1,
+          itemId: line.item?.itemId ?? null,
+          itemName: line.item?.name ?? null,
+          description: line.description,
+          orderedQuantity: line.quantity,
+          alreadyReceivedQuantity: line.receiptLines.reduce((sum, receiptLine) => sum + receiptLine.quantity, 0),
+          openQuantity: Math.max(0, line.quantity - line.receiptLines.reduce((sum, receiptLine) => sum + receiptLine.quantity, 0)),
+          receivable: canReceivePurchaseOrderLine(line.item),
+        })),
       }))}
       statusOptions={statusValues.map((value) => ({
         value: value.toLowerCase(),
@@ -46,6 +86,14 @@ export default async function NewReceiptPage({
               notes: duplicateSource.notes ?? '',
             }
           : undefined
+      }
+      initialLineItems={
+        duplicateSource?.lines.map((line) => ({
+          id: line.id,
+          purchaseOrderLineItemId: line.purchaseOrderLineItemId,
+          receiptQuantity: line.quantity,
+          notes: line.notes ?? '',
+        })) ?? []
       }
     />
   )

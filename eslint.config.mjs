@@ -27,6 +27,19 @@ const eslintConfig = defineConfig([
       "@next/next/no-img-element": "off",
     },
   },
+  {
+    files: ["src/**/*.{js,jsx,ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "JSXOpeningElement[name.name='select']",
+          message:
+            "Use the shared dropdown components instead of a native <select>: SearchableSelect for single-select and MultiSelectDropdown for multi-select.",
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

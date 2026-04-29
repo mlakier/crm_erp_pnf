@@ -153,30 +153,20 @@ export default async function ExchangeRatesPage({
               className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white"
               style={{ borderColor: 'var(--border-muted)' }}
             />
-            <select
-              name="rateType"
-              defaultValue={rateTypeFilter}
-              className="rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
+            <input name="rateType" list="exchange-rate-type-options" defaultValue={rateTypeFilter} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+            <datalist id="exchange-rate-type-options">
               <option value="all">All Types</option>
               {rateTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
+                <option key={option.value} value={option.value}>{option.label}</option>
               ))}
-            </select>
-            <select
-              name="sort"
-              defaultValue={sort}
-              className="rounded-md border bg-transparent px-3 py-2 text-sm text-white"
-              style={{ borderColor: 'var(--border-muted)' }}
-            >
+            </datalist>
+            <input name="sort" list="exchange-rate-sort-options" defaultValue={sort} className="rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+            <datalist id="exchange-rate-sort-options">
               <option value="effective-desc">Newest Effective Date</option>
               <option value="effective-asc">Oldest Effective Date</option>
               <option value="pair">Currency Pair</option>
               <option value="rate-desc">Highest Rate</option>
-            </select>
+            </datalist>
             <ExportButton tableId="exchange-rates-list" fileName="exchange-rates" />
             <ColumnSelector tableId="exchange-rates-list" columns={COLS} />
           </div>

@@ -16,7 +16,8 @@ export async function loadOpportunityDetailCustomization(): Promise<OpportunityD
     const raw = await fs.readFile(STORE_PATH, 'utf8')
     const parsed = JSON.parse(raw) as Partial<OpportunityDetailCustomizationConfig>
     const defaults = defaultOpportunityDetailCustomization()
-    const parsedStatCards = Array.isArray(parsed.statCards) ? parsed.statCards : []
+    const hasParsedStatCards = Array.isArray(parsed.statCards)
+    const parsedStatCards: OpportunityStatCardSlot[] = hasParsedStatCards ? (parsed.statCards as OpportunityStatCardSlot[]) : []
 
     return {
       ...defaults,
@@ -47,10 +48,7 @@ export async function loadOpportunityDetailCustomization(): Promise<OpportunityD
         ...defaults.sectionRows,
         ...(parsed.sectionRows ?? {}),
       },
-      statCards:
-        parsedStatCards.length > 0
-          ? normalizeStatCards(parsedStatCards, defaults.statCards)
-          : defaults.statCards,
+      statCards: hasParsedStatCards ? normalizeStatCards(parsedStatCards) : defaults.statCards,
     }
   } catch {
     return defaultOpportunityDetailCustomization()
@@ -90,7 +88,7 @@ export async function saveOpportunityDetailCustomization(
       ...defaults.sectionRows,
       ...(config.sectionRows ?? {}),
     },
-    statCards: normalizeStatCards(config.statCards ?? defaults.statCards, defaults.statCards),
+    statCards: normalizeStatCards(Array.isArray(config.statCards) ? config.statCards : defaults.statCards),
   }
 
   await fs.mkdir(path.dirname(STORE_PATH), { recursive: true })
@@ -100,7 +98,6 @@ export async function saveOpportunityDetailCustomization(
 
 function normalizeStatCards(
   statCards: OpportunityStatCardSlot[],
-  fallback: OpportunityStatCardSlot[],
 ): OpportunityStatCardSlot[] {
   const legacyMetricMap: Record<string, OpportunityStatCardSlot['metric']> = {
     'close-date': 'closeDate',
@@ -129,18 +126,7 @@ function normalizeStatCards(
       order: index,
     }))
 
-  if (sanitized.length === 0) {
-    return fallback
-  }
-
-  const missingFallbackCards = fallback
-    .filter((slot) => !sanitized.some((existing) => existing.metric === slot.metric))
-    .map((slot) => ({
-      ...slot,
-      visible: true,
-    }))
-
-  return [...sanitized, ...missingFallbackCards].map((slot, index) => ({
+  return sanitized.map((slot, index) => ({
     ...slot,
     id: String(slot.id ?? '').trim() || `slot-${index + 1}`,
     order: index,
