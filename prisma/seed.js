@@ -95,6 +95,195 @@ async function main() {
   })
   const currencyByCode = new Map(currencyRecords.map((currency) => [currency.currencyId, currency]))
 
+  const activityTypeSeeds = [
+    {
+      code: 'opening_balance',
+      name: 'Opening Balance',
+      category: 'opening',
+      defaultRollForwardGroup: 'opening_balance',
+    },
+    {
+      code: 'closing_carryforward',
+      name: 'Closing Carryforward',
+      category: 'close',
+      defaultRollForwardGroup: 'closing_balance',
+    },
+    {
+      code: 'operational_movement',
+      name: 'Operational Movement',
+      category: 'operational',
+      defaultRollForwardGroup: 'operational_movement',
+    },
+    {
+      code: 'settlement_application',
+      name: 'Settlement Application',
+      category: 'settlement',
+      defaultRollForwardGroup: 'settlement',
+      isOpenItemRelevant: true,
+      isClearingRelevant: true,
+    },
+    {
+      code: 'refund_settlement',
+      name: 'Refund Settlement',
+      category: 'settlement',
+      defaultRollForwardGroup: 'settlement',
+      isOpenItemRelevant: true,
+      isClearingRelevant: true,
+    },
+    {
+      code: 'writeoff',
+      name: 'Write-Off',
+      category: 'settlement',
+      defaultRollForwardGroup: 'writeoff',
+      isOpenItemRelevant: true,
+      isClearingRelevant: true,
+    },
+    {
+      code: 'reopen',
+      name: 'Reopen',
+      category: 'settlement',
+      defaultRollForwardGroup: 'reopen',
+      isOpenItemRelevant: true,
+    },
+    {
+      code: 'accrual',
+      name: 'Accrual',
+      category: 'accrual_deferral',
+      defaultRollForwardGroup: 'accrual',
+    },
+    {
+      code: 'reversal',
+      name: 'Reversal',
+      category: 'accrual_deferral',
+      defaultRollForwardGroup: 'reversal',
+      isOpenItemRelevant: true,
+    },
+    {
+      code: 'deferral',
+      name: 'Deferral',
+      category: 'accrual_deferral',
+      defaultRollForwardGroup: 'deferral',
+    },
+    {
+      code: 'revenue_recognition',
+      name: 'Revenue Recognition',
+      category: 'schedule_based',
+      defaultRollForwardGroup: 'revenue_recognition',
+    },
+    {
+      code: 'amortization',
+      name: 'Amortization',
+      category: 'schedule_based',
+      defaultRollForwardGroup: 'amortization',
+    },
+    {
+      code: 'realized_fx',
+      name: 'Realized FX',
+      category: 'fx',
+      defaultRollForwardGroup: 'realized_fx',
+      isFxRelevant: true,
+      isClearingRelevant: true,
+    },
+    {
+      code: 'unrealized_fx',
+      name: 'Unrealized FX',
+      category: 'fx',
+      defaultRollForwardGroup: 'unrealized_fx',
+      isFxRelevant: true,
+    },
+    {
+      code: 'translation',
+      name: 'Translation',
+      category: 'fx',
+      defaultRollForwardGroup: 'translation',
+      isFxRelevant: true,
+    },
+    {
+      code: 'cta',
+      name: 'Cumulative Translation Adjustment',
+      category: 'fx',
+      defaultRollForwardGroup: 'cta',
+      isFxRelevant: true,
+    },
+    {
+      code: 'intercompany_settlement',
+      name: 'Intercompany Settlement',
+      category: 'intercompany',
+      defaultRollForwardGroup: 'intercompany_settlement',
+      isIntercompanyRelevant: true,
+      isOpenItemRelevant: true,
+      isClearingRelevant: true,
+    },
+    {
+      code: 'intercompany_reclass',
+      name: 'Intercompany Reclass',
+      category: 'intercompany',
+      defaultRollForwardGroup: 'intercompany_reclass',
+      isIntercompanyRelevant: true,
+    },
+    {
+      code: 'elimination',
+      name: 'Elimination',
+      category: 'intercompany',
+      defaultRollForwardGroup: 'elimination',
+      isIntercompanyRelevant: true,
+    },
+    {
+      code: 'manual_adjustment',
+      name: 'Manual Adjustment',
+      category: 'adjustment',
+      defaultRollForwardGroup: 'manual_adjustment',
+    },
+    {
+      code: 'reclassification',
+      name: 'Reclassification',
+      category: 'adjustment',
+      defaultRollForwardGroup: 'reclassification',
+    },
+    {
+      code: 'allocation',
+      name: 'Allocation',
+      category: 'adjustment',
+      defaultRollForwardGroup: 'allocation',
+    },
+    {
+      code: 'fmv_allocation',
+      name: 'FMV Allocation',
+      category: 'adjustment',
+      defaultRollForwardGroup: 'fmv_allocation',
+    },
+  ]
+
+  for (const activityType of activityTypeSeeds) {
+    await prisma.activityTypeDefinition.upsert({
+      where: { code: activityType.code },
+      update: {
+        name: activityType.name,
+        category: activityType.category,
+        status: 'active',
+        defaultRollForwardGroup: activityType.defaultRollForwardGroup ?? null,
+        isSystemDefined: true,
+        isOpenItemRelevant: Boolean(activityType.isOpenItemRelevant),
+        isClearingRelevant: Boolean(activityType.isClearingRelevant),
+        isFxRelevant: Boolean(activityType.isFxRelevant),
+        isIntercompanyRelevant: Boolean(activityType.isIntercompanyRelevant),
+      },
+      create: {
+        code: activityType.code,
+        name: activityType.name,
+        category: activityType.category,
+        status: 'active',
+        description: null,
+        defaultRollForwardGroup: activityType.defaultRollForwardGroup ?? null,
+        isSystemDefined: true,
+        isOpenItemRelevant: Boolean(activityType.isOpenItemRelevant),
+        isClearingRelevant: Boolean(activityType.isClearingRelevant),
+        isFxRelevant: Boolean(activityType.isFxRelevant),
+        isIntercompanyRelevant: Boolean(activityType.isIntercompanyRelevant),
+      },
+    })
+  }
+
   const subsidiarySeeds = [
     {
       subsidiaryId: 'SUB-001',
