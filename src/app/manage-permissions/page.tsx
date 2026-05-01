@@ -24,6 +24,7 @@ const ALL_PAGES = [
   { key: 'fulfillments', label: 'Fulfillments', group: 'OTC' },
   { key: 'invoices', label: 'Invoices', group: 'OTC', statusKey: 'INV-STATUS' },
   { key: 'invoice-receipts', label: 'Invoice Receipts', group: 'OTC' },
+  { key: 'customer-refunds', label: 'Customer Refunds', group: 'OTC' },
   // PTP
   { key: 'purchase-requisitions', label: 'Purchase Requisitions', group: 'PTP', statusKey: 'REQ-STATUS' },
   { key: 'purchase-orders', label: 'Purchase Orders', group: 'PTP', statusKey: 'PO-STATUS' },

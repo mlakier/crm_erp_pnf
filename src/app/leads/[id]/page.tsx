@@ -11,7 +11,6 @@ import ConvertLeadButton from '@/components/ConvertLeadButton'
 import RecordStatusButton from '@/components/RecordStatusButton'
 import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
-import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
 import RelatedRecordsSection from '@/components/RelatedRecordsSection'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
@@ -830,58 +829,45 @@ export default async function LeadDetailPage({
           )
         }
         lineItems={null}
+        relatedRecords={isCustomizing ? null : (
+          <RelatedRecordsSection embedded tabs={leadRelatedRecordsTabs} showDisplayControl={false} />
+        )}
+        relatedRecordsCount={leadRelatedRecordsTabs.reduce((sum, tab) => sum + tab.count, 0)}
         relatedDocuments={isCustomizing ? null : (
-          <RecordBottomTabsSection
-            defaultActiveKey="related-records"
-            tabs={[
-              {
-                key: 'related-records',
-                label: 'Related Records',
-                count: leadRelatedRecordsTabs.reduce((sum, tab) => sum + tab.count, 0),
-                content: <RelatedRecordsSection embedded tabs={leadRelatedRecordsTabs} showDisplayControl={false} />,
-              },
-              {
-                key: 'communications',
-                label: 'Communications',
-                count: communications.length,
-                toolbarTargetId: communicationsToolbarTargetId,
-                toolbarPlacement: 'tab-bar',
-                content: (
-                  <CommunicationsSection
-                    embedded
-                    toolbarTargetId={communicationsToolbarTargetId}
-                    showDisplayControl={false}
-                    rows={communications}
-                    compose={buildTransactionCommunicationComposePayload({
-                      recordId: lead.id,
-                      userId: lead.userId,
-                      number: lead.leadNumber ?? leadName(lead),
-                      counterpartyName: lead.company ?? leadName(lead),
-                      counterpartyEmail: lead.email ?? null,
-                      fromEmail: lead.user?.email ?? null,
-                      status: formatLeadStatus(lead.status),
-                      total: lead.expectedValue != null ? fmtCurrency(lead.expectedValue, undefined, moneySettings) : '-',
-                      lineItems: [],
-                      sendEmailEndpoint: '/api/leads?action=send-email',
-                      recordIdFieldName: 'leadId',
-                      documentLabel: 'Lead',
-                    })}
-                  />
-                ),
-              },
-              {
-                key: 'system-notes',
-                label: 'System Notes',
-                count: systemNotes.length,
-                toolbarTargetId: systemNotesToolbarTargetId,
-                toolbarPlacement: 'tab-bar',
-                content: <SystemNotesSection embedded toolbarTargetId={systemNotesToolbarTargetId} showDisplayControl={false} notes={systemNotes} />,
-              },
-            ]}
+          <div className="px-6 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>
+            No related documents are attached to this lead yet.
+          </div>
+        )}
+        relatedDocumentsCount={0}
+        communications={isCustomizing ? null : (
+          <CommunicationsSection
+            embedded
+            toolbarTargetId={communicationsToolbarTargetId}
+            showDisplayControl={false}
+            rows={communications}
+            compose={buildTransactionCommunicationComposePayload({
+              recordId: lead.id,
+              userId: lead.userId,
+              number: lead.leadNumber ?? leadName(lead),
+              counterpartyName: lead.company ?? leadName(lead),
+              counterpartyEmail: lead.email ?? null,
+              fromEmail: lead.user?.email ?? null,
+              status: formatLeadStatus(lead.status),
+              total: lead.expectedValue != null ? fmtCurrency(lead.expectedValue, undefined, moneySettings) : '-',
+              lineItems: [],
+              sendEmailEndpoint: '/api/leads?action=send-email',
+              recordIdFieldName: 'leadId',
+              documentLabel: 'Lead',
+            })}
           />
         )}
-        communications={null}
-        systemNotes={null}
+        communicationsCount={communications.length}
+        communicationsToolbarTargetId={communicationsToolbarTargetId}
+        communicationsToolbarPlacement="tab-bar"
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded toolbarTargetId={systemNotesToolbarTargetId} showDisplayControl={false} notes={systemNotes} />}
+        systemNotesCount={systemNotes.length}
+        systemNotesToolbarTargetId={systemNotesToolbarTargetId}
+        systemNotesToolbarPlacement="tab-bar"
       />
     </RecordDetailPageShell>
   )

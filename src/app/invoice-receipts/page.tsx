@@ -13,6 +13,7 @@ import { loadCompanyInformationSettings } from '@/lib/company-information-settin
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
 import { loadListValues } from '@/lib/load-list-values'
 import { buildMasterDataExportUrl } from '@/lib/master-data-export-url'
+import { createRecordLabelMapFromValues, formatRecordLabel } from '@/lib/record-status-label'
 
 const IR_COLUMNS = [
   { id: 'invoice-receipt-id', label: 'Invoice Receipt Id' },
@@ -20,6 +21,7 @@ const IR_COLUMNS = [
   { id: 'customer', label: 'Customer' },
   { id: 'amount', label: 'Amount' },
   { id: 'date', label: 'Date' },
+  { id: 'status', label: 'Status' },
   { id: 'method', label: 'Method' },
   { id: 'reference', label: 'Reference' },
   { id: 'db-id', label: 'DB Id' },
@@ -41,6 +43,7 @@ export default async function InvoiceReceiptsPage({ searchParams }: { searchPara
             { number: { contains: query } },
             { id: { contains: query } },
             { invoiceId: { contains: query } },
+            { status: { contains: query } },
             { method: { contains: query } },
             { reference: { contains: query } },
             { invoice: { number: { contains: query } } },
@@ -51,13 +54,15 @@ export default async function InvoiceReceiptsPage({ searchParams }: { searchPara
   }
   const orderBy = [{ createdAt: 'desc' as const }]
 
-  const [totalRows, companySettings, cabinetFiles, paymentMethodValues] = await Promise.all([
+  const [totalRows, companySettings, cabinetFiles, paymentMethodValues, statusValues] = await Promise.all([
     prisma.cashReceipt.count({ where }),
     loadCompanyInformationSettings(),
     loadCompanyCabinetFiles(),
     loadListValues('PAYMENT-METHOD'),
+    loadListValues('INV-RECEIPT-STATUS'),
   ])
   const methodOptions = ['all', ...paymentMethodValues.map((value) => value.toLowerCase())]
+  const statusLabelMap = createRecordLabelMapFromValues(statusValues)
 
   const pagination = getPagination(totalRows, params.page)
   const rows = await prisma.cashReceipt.findMany({ where, include: { invoice: { include: { customer: true } } }, orderBy, skip: pagination.skip, take: pagination.pageSize })
@@ -120,7 +125,7 @@ export default async function InvoiceReceiptsPage({ searchParams }: { searchPara
           <input type="hidden" name="page" value="1" />
           <input type="hidden" name="method" value={methodFilter} />
           <div className="flex gap-3 items-center flex-nowrap">
-            <input type="text" name="q" defaultValue={params.q ?? ''} placeholder="Search invoice receipt id, invoice id, method, reference" className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
+            <input type="text" name="q" defaultValue={params.q ?? ''} placeholder="Search invoice receipt id, invoice id, status, method, reference" className="flex-1 min-w-0 rounded-md border bg-transparent px-3 py-2 text-sm text-white" style={{ borderColor: 'var(--border-muted)' }} />
             <ExportButton
               tableId="invoice-receipts-list"
               fileName="invoice-receipts"
@@ -140,7 +145,7 @@ export default async function InvoiceReceiptsPage({ searchParams }: { searchPara
             </tr></thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No invoice receipts yet.</td></tr>
+                <tr><td colSpan={12} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No invoice receipts yet.</td></tr>
               ) : rows.map((row, i) => (
                 <tr key={row.id} style={i < rows.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
                   <td data-column="invoice-receipt-id" className="px-4 py-2 text-sm font-medium">
@@ -168,6 +173,7 @@ export default async function InvoiceReceiptsPage({ searchParams }: { searchPara
                   </td>
                   <td data-column="amount" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtCurrency(row.amount, undefined, moneySettings)}</td>
                   <td data-column="date" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtDocumentDate(row.date, moneySettings)}</td>
+                  <td data-column="status" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{formatRecordLabel(row.status, statusLabelMap)}</td>
                   <td data-column="method" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.method}</td>
                   <td data-column="reference" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.reference ?? '\u2014'}</td>
                   <td data-column="db-id" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.id}</td>

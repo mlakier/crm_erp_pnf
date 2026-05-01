@@ -383,7 +383,7 @@
       "fromStatus": "Prospecting",
       "toStatus": "Qualified",
       "actionLabel": "Qualify",
-      "triggerType": "auto_create",
+      "triggerType": "manual_action",
       "actionType": "status_change",
       "integrationKey": "",
       "templateKey": "",
@@ -396,7 +396,7 @@
       "lockRecordWhilePending": false,
       "systemProvided": true,
       "conditions": [],
-      "autoCreateNextRecord": true,
+      "autoCreateNextRecord": false,
       "autoCreateToStep": "",
       "autoCreateResultStatus": ""
     },

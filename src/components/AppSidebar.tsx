@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 
 type NavItem = {
@@ -25,11 +25,11 @@ function isNavSubgroup(item: NavItem | NavSubgroup): item is NavSubgroup {
 
 const NAV: NavGroup[] = [
   {
-    section: 'DASHBOARD',
+    section: 'Dashboard',
     items: [{ label: 'Dashboard', href: '/dashboard' }],
   },
   {
-    section: 'COMPANY',
+    section: 'Company',
     items: [
       { label: 'Company Information', href: '/company-information' },
       { label: 'Company Prefs', href: '/company-preferences' },
@@ -37,11 +37,11 @@ const NAV: NavGroup[] = [
     ],
   },
   {
-    section: 'CONFIGURATION',
+    section: 'Configuration',
     items: [],
   },
   {
-    section: 'UTILITIES',
+    section: 'Utilities',
     items: [
       { label: 'Exchange Rates', href: '/exchange-rates' },
       { label: 'Manage Lists', href: '/lists' },
@@ -51,7 +51,7 @@ const NAV: NavGroup[] = [
     ],
   },
   {
-    section: 'MASTER DATA',
+    section: 'Master Data',
     items: [
       { label: 'Users', href: '/users' },
       { label: 'Roles', href: '/roles' },
@@ -69,18 +69,18 @@ const NAV: NavGroup[] = [
     ],
   },
   {
-    section: 'TREASURY',
+    section: 'Treasury',
     items: [],
   },
   {
-    section: 'WORKFLOWS',
+    section: 'Workflows',
     items: [
       { label: 'LTC Workflow', href: '/otc-workflow' },
       { label: 'PTP Workflow', href: '/ptp-workflow' },
     ],
   },
   {
-    section: 'LEAD TO CASH',
+    section: 'Lead To Cash',
     items: [
       { label: 'Leads', href: '/leads' },
       { label: 'Opportunities', href: '/opportunities' },
@@ -89,10 +89,11 @@ const NAV: NavGroup[] = [
       { label: 'Fulfillments', href: '/fulfillments' },
       { label: 'Invoices', href: '/invoices' },
       { label: 'Invoice Receipts', href: '/invoice-receipts' },
+      { label: 'Customer Refunds', href: '/customer-refunds' },
     ],
   },
   {
-    section: 'PROCURE TO PAY',
+    section: 'Procure To Pay',
     items: [
       { label: 'AP Portal', href: '/ap' },
       { label: 'Purchase Requisitions', href: '/purchase-requisitions' },
@@ -103,7 +104,7 @@ const NAV: NavGroup[] = [
     ],
   },
   {
-    section: 'RECORD TO REPORT',
+    section: 'Record To Report',
     items: [
       { label: 'Journals', href: '/journals' },
       { label: 'Intercompany Journals', href: '/intercompany-journals' },
@@ -114,6 +115,7 @@ const NAV: NavGroup[] = [
 export default function AppSidebar() {
   const pathname = usePathname()
   const [openSection, setOpenSection] = useState<string | null>(null)
+  const navRef = useRef<HTMLDivElement | null>(null)
 
   function isActive(href: string) {
     if (href === '/dashboard') return pathname === href
@@ -127,94 +129,133 @@ export default function AppSidebar() {
           return item.items.some((subItem) => isActive(subItem.href))
         }
         return isActive(item.href)
-      })
+      }),
     )
 
     return activeGroup?.section ?? null
   })()
 
-  function toggleSection(section: string) {
-    setOpenSection((prev) => (prev === section ? null : section))
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!navRef.current?.contains(event.target as Node)) {
+        setOpenSection(null)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [])
+
+  function handleLinkClick() {
+    setOpenSection(null)
   }
 
   return (
-    <aside
-      className="relative z-40 flex h-screen w-52 flex-shrink-0 flex-col overflow-y-auto"
-      style={{ backgroundColor: 'var(--sidebar-background)' }}
+    <div
+      ref={navRef}
+      className="relative z-30 border-b"
+      style={{ backgroundColor: 'var(--sidebar-background)', borderColor: 'var(--border-muted)' }}
     >
-      <div className="px-5 py-5">
-        <p className="text-sm font-semibold tracking-wide text-white">CRM/ERP</p>
-        <p className="text-[10px] font-medium tracking-widest uppercase" style={{ color: 'var(--text-muted)' }}>Platform</p>
-      </div>
+      <div className="flex items-center gap-6 px-5 py-3">
+        <div className="min-w-fit">
+          <p className="text-sm font-semibold tracking-wide text-white">CRM/ERP</p>
+          <p className="text-[10px] font-medium uppercase tracking-[0.28em]" style={{ color: 'var(--text-muted)' }}>
+            Platform
+          </p>
+        </div>
 
-      <div className="mx-4 border-t" style={{ borderColor: 'var(--border-muted)' }} />
+        <nav className="min-w-0 flex-1 overflow-visible">
+          <div className="flex flex-wrap items-center gap-2">
+            {NAV.map((group) => {
+              const hasItems = group.items.length > 0
+              const expanded = openSection === group.section
+              const isCurrentSection = activeSection === group.section
 
-      <nav className="mt-2 flex-1 px-2 pb-4">
-        {NAV.map((group) => {
-          const sectionId = `sidebar-section-${group.section.toLowerCase().replace(/\s+/g, '-')}`
-          const expanded = openSection ? openSection === group.section : activeSection === group.section
+              return (
+                <div key={group.section} className="relative">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+                    style={
+                      isCurrentSection || expanded
+                        ? { backgroundColor: 'rgba(59, 130, 246, 0.16)', color: '#ffffff' }
+                        : { color: 'var(--text-secondary)' }
+                    }
+                    onClick={() => setOpenSection((current) => (current === group.section ? null : group.section))}
+                    disabled={!hasItems}
+                    aria-expanded={hasItems && expanded ? 'true' : 'false'}
+                  >
+                    <span>{group.section}</span>
+                    {hasItems ? <span aria-hidden="true" className="text-[10px]">{expanded ? '▲' : '▼'}</span> : null}
+                  </button>
 
-          return (
-            <div key={group.section} className="mt-5">
-              <button
-                type="button"
-                onClick={() => toggleSection(group.section)}
-                className="mb-1 flex w-full items-center justify-between rounded-md px-3 py-1 text-left text-[10px] font-semibold uppercase tracking-widest transition-colors hover:bg-white/5"
-                style={{ color: 'var(--text-muted)' }}
-                aria-expanded={expanded ? 'true' : 'false'}
-                aria-controls={sectionId}
-              >
-                <span>{group.section}</span>
-                <span className="text-xs" aria-hidden="true">
-                  {expanded ? '▾' : '▸'}
-                </span>
-              </button>
-              <div id={sectionId}>
-                {expanded && group.items.map((item) => {
-                  if (isNavSubgroup(item)) {
-                    return (
-                      <div key={`${group.section}-${item.label}`} className="mt-2">
-                        <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
-                          {item.label}
-                        </p>
-                        {item.items.map((subItem) => {
-                          const active = isActive(subItem.href)
-                          return (
-                            <Link
-                              key={subItem.href}
-                              href={subItem.href}
-                              className={`ml-2 flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
-                                active ? 'border-l-2 pl-[10px] font-medium text-white' : 'hover:text-white'
-                              }`}
-                              style={active ? { borderColor: 'var(--accent-primary)', backgroundColor: 'rgba(59, 130, 246, 0.14)' } : { color: 'var(--text-secondary)' }}
-                            >
-                              {subItem.label}
-                            </Link>
-                          )
-                        })}
-                      </div>
-                    )
-                  }
-
-                  const active = isActive(item.href)
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
-                        active ? 'border-l-2 pl-[10px] font-medium text-white' : 'hover:text-white'
-                      }`}
-                      style={active ? { borderColor: 'var(--accent-primary)', backgroundColor: 'rgba(59, 130, 246, 0.14)' } : { color: 'var(--text-secondary)' }}
+                  {hasItems && expanded ? (
+                    <div
+                      className="absolute left-0 top-full mt-2 min-w-[17rem] rounded-xl border p-2 shadow-2xl"
+                      style={{
+                        backgroundColor: 'var(--card)',
+                        borderColor: 'var(--border-muted)',
+                      }}
                     >
-                      {item.label}
-                    </Link>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })}
-      </nav>
-    </aside>
+                      {group.items.map((item) => {
+                        if (isNavSubgroup(item)) {
+                          return (
+                            <div key={`${group.section}-${item.label}`} className="mb-2 last:mb-0">
+                              <p
+                                className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.22em]"
+                                style={{ color: 'var(--text-muted)' }}
+                              >
+                                {item.label}
+                              </p>
+                              <div className="space-y-1">
+                                {item.items.map((subItem) => {
+                                  const active = isActive(subItem.href)
+                                  return (
+                                    <Link
+                                      key={subItem.href}
+                                      href={subItem.href}
+                                      onClick={handleLinkClick}
+                                      className="block rounded-lg px-3 py-2 text-sm transition-colors"
+                                      style={
+                                        active
+                                          ? { backgroundColor: 'rgba(59, 130, 246, 0.16)', color: '#ffffff' }
+                                          : { color: 'var(--text-secondary)' }
+                                      }
+                                    >
+                                      {subItem.label}
+                                    </Link>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        }
+
+                        const active = isActive(item.href)
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={handleLinkClick}
+                            className="block rounded-lg px-3 py-2 text-sm transition-colors"
+                            style={
+                              active
+                                ? { backgroundColor: 'rgba(59, 130, 246, 0.16)', color: '#ffffff' }
+                                : { color: 'var(--text-secondary)' }
+                            }
+                          >
+                            {item.label}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        </nav>
+      </div>
+    </div>
   )
 }

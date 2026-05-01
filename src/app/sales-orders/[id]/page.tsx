@@ -9,7 +9,6 @@ import RecordStatusButton from '@/components/RecordStatusButton'
 import SalesOrderCreateInvoiceButton from '@/components/SalesOrderCreateInvoiceButton'
 import SalesOrderDetailCustomizeMode from '@/components/SalesOrderDetailCustomizeMode'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
-import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
 import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import CommunicationsSection from '@/components/CommunicationsSection'
@@ -1850,30 +1849,18 @@ export default async function SalesOrderDetailPage({
             allowAddLines={isEditing}
           />
         )}
+        relatedRecords={isCustomizing ? null : (
+          <RelatedRecordsSection
+            embedded
+            tabs={relatedRecordTabs}
+            showDisplayControl={false}
+          />
+        )}
+        relatedRecordsCount={relatedRecordTabs.reduce((sum, tab) => sum + tab.count, 0)}
         relatedDocuments={isCustomizing ? null : (
-          <RecordBottomTabsSection
-            defaultActiveKey="related-documents"
-            tabs={[
-              {
-                key: 'related-records',
-                label: 'Related Records',
-                count: relatedRecordTabs.reduce((sum, tab) => sum + tab.count, 0),
-                content: (
-                  <RelatedRecordsSection
-                    embedded
-                    tabs={relatedRecordTabs}
-                    showDisplayControl={false}
-                  />
-                ),
-              },
-              {
-                key: 'related-documents',
-                label: 'Related Documents',
-                count: relatedDocumentsCount,
-                content: (
-                  <SalesOrderRelatedDocuments
-                    embedded
-                    showDisplayControl={false}
+          <SalesOrderRelatedDocuments
+            embedded
+            showDisplayControl={false}
                     opportunities={
                       salesOrder.quote?.opportunity
                         ? [
@@ -1927,58 +1914,45 @@ export default async function SalesOrderDetailPage({
                         invoiceNumber: invoice.number,
                       }))
                     )}
-                  />
-                ),
-              },
-              {
-                key: 'communications',
-                label: 'Communications',
-                count: communications.length,
-                toolbarTargetId: communicationsToolbarTargetId,
-                toolbarPlacement: 'tab-bar',
-                content: (
-                  <CommunicationsSection
-                    embedded
-                    toolbarTargetId={communicationsToolbarTargetId}
-                    showDisplayControl={false}
-                    rows={communications}
-                    compose={buildTransactionCommunicationComposePayload({
-                      recordId: salesOrder.id,
-                      userId: salesOrder.userId,
-                      number: salesOrder.number,
-                      counterpartyName: salesOrder.customer.name,
-                      counterpartyEmail: salesOrder.customer.email ?? null,
-                      fromEmail: salesOrder.user?.email ?? null,
-                      status: formatSalesOrderStatus(salesOrder.status),
-                      total: fmtCurrency(computedTotal, undefined, moneySettings),
-                      lineItems: lineRows.map((row) => ({
-                        line: row.lineNumber,
-                        itemId: row.itemId ?? '-',
-                        description: row.description,
-                        quantity: row.quantity,
-                        receivedQuantity: row.fulfilledQuantity,
-                        openQuantity: row.openQuantity,
-                        billedQuantity: 0,
-                        unitPrice: row.unitPrice,
-                        lineTotal: row.lineTotal,
-                      })),
-                    })}
-                  />
-                ),
-              },
-                {
-                  key: 'system-notes',
-                  label: 'System Notes',
-                  count: systemNotes.length,
-                  toolbarTargetId: systemNotesToolbarTargetId,
-                  toolbarPlacement: 'tab-bar',
-                  content: <SystemNotesSection embedded toolbarTargetId={systemNotesToolbarTargetId} notes={systemNotes} showDisplayControl={false} />,
-                },
-            ]}
           />
         )}
-        communications={null}
-        systemNotes={null}
+        relatedDocumentsCount={relatedDocumentsCount}
+        communications={isCustomizing ? null : (
+          <CommunicationsSection
+            embedded
+            toolbarTargetId={communicationsToolbarTargetId}
+            showDisplayControl={false}
+            rows={communications}
+            compose={buildTransactionCommunicationComposePayload({
+              recordId: salesOrder.id,
+              userId: salesOrder.userId,
+              number: salesOrder.number,
+              counterpartyName: salesOrder.customer.name,
+              counterpartyEmail: salesOrder.customer.email ?? null,
+              fromEmail: salesOrder.user?.email ?? null,
+              status: formatSalesOrderStatus(salesOrder.status),
+              total: fmtCurrency(computedTotal, undefined, moneySettings),
+              lineItems: lineRows.map((row) => ({
+                line: row.lineNumber,
+                itemId: row.itemId ?? '-',
+                description: row.description,
+                quantity: row.quantity,
+                receivedQuantity: row.fulfilledQuantity,
+                openQuantity: row.openQuantity,
+                billedQuantity: 0,
+                unitPrice: row.unitPrice,
+                lineTotal: row.lineTotal,
+              })),
+            })}
+          />
+        )}
+        communicationsCount={communications.length}
+        communicationsToolbarTargetId={communicationsToolbarTargetId}
+        communicationsToolbarPlacement="tab-bar"
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded toolbarTargetId={systemNotesToolbarTargetId} notes={systemNotes} showDisplayControl={false} />}
+        systemNotesCount={systemNotes.length}
+        systemNotesToolbarTargetId={systemNotesToolbarTargetId}
+        systemNotesToolbarPlacement="tab-bar"
       />
     </RecordDetailPageShell>
   )

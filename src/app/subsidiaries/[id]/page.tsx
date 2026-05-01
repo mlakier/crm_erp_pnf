@@ -73,6 +73,7 @@ export default async function SubsidiaryDetailPage({
   if (!Subsidiary) notFound()
 
   const detailHref = `/subsidiaries/${Subsidiary.id}`
+  const formId = `inline-record-form-${Subsidiary.id}`
   const sectionDescriptions: Record<string, string> = {
     Core: 'Primary identity and operating name for the subsidiary.',
     Registration: 'Legal registration, country, and statutory identifiers.',
@@ -317,7 +318,7 @@ export default async function SubsidiaryDetailPage({
           <RecordDetailActionBar
             mode={isEditing ? 'edit' : 'detail'}
             detailHref={detailHref}
-            formId={`inline-record-form-${Subsidiary.id}`}
+            formId={formId}
             newHref="/subsidiaries/new"
             duplicateHref={`/subsidiaries/new?duplicateFrom=${Subsidiary.id}`}
             exportTitle={Subsidiary.name}
@@ -358,6 +359,7 @@ export default async function SubsidiaryDetailPage({
             sections={detailSections}
             editing={isEditing}
             columns={formCustomization.formColumns}
+            formId={formId}
             systemInformationItems={buildMasterDataSystemInformationItems(systemInfo, Subsidiary.id)}
           />
         )}

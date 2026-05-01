@@ -22,6 +22,8 @@ export type InvoiceReceiptDetailFieldKey =
   | 'number'
   | 'invoiceId'
   | 'bankAccountId'
+  | 'status'
+  | 'overpaymentHandling'
   | 'amount'
   | 'date'
   | 'method'
@@ -71,6 +73,8 @@ export const INVOICE_RECEIPT_DETAIL_FIELDS: InvoiceReceiptDetailFieldMeta[] = [
   { id: 'number', label: 'Invoice Receipt Id', fieldType: 'text', description: 'Unique identifier for this invoice receipt.' },
   { id: 'invoiceId', label: 'Invoice', fieldType: 'text', source: 'Invoice transaction', description: 'Linked invoice identifier for this cash receipt.' },
   { id: 'bankAccountId', label: 'Bank Account', fieldType: 'list', source: 'Chart of accounts', description: 'Cash or bank GL account that receives this receipt.' },
+  { id: 'status', label: 'Status', fieldType: 'list', source: 'Invoice receipt status list', description: 'Current lifecycle stage of this invoice receipt.' },
+  { id: 'overpaymentHandling', label: 'Overpayment Handling', fieldType: 'list', source: 'Invoice receipt overpayment policy', description: 'How unapplied cash should be handled when the receipt exceeds current invoice applications.' },
   { id: 'amount', label: 'Amount', fieldType: 'currency', description: 'Cash receipt amount applied to the invoice.' },
   { id: 'date', label: 'Receipt Date', fieldType: 'date', description: 'Date the receipt was recorded.' },
   { id: 'method', label: 'Method', fieldType: 'list', source: 'Payment method list', description: 'Method used to receive payment.' },
@@ -115,10 +119,12 @@ export function defaultInvoiceReceiptDetailCustomization(): InvoiceReceiptDetail
       customerNumber: { visible: true, section: 'Customer Snapshot', order: 0, column: 1 },
       customerName: { visible: true, section: 'Customer Snapshot', order: 0, column: 2 },
       bankAccountId: { visible: true, section: 'Receipt Terms', order: 0, column: 1 },
-      amount: { visible: true, section: 'Receipt Terms', order: 0, column: 2 },
-      date: { visible: true, section: 'Receipt Terms', order: 0, column: 3 },
-      method: { visible: true, section: 'Receipt Terms', order: 1, column: 1 },
-      reference: { visible: true, section: 'Receipt Terms', order: 1, column: 2 },
+      status: { visible: true, section: 'Receipt Terms', order: 0, column: 2 },
+      amount: { visible: true, section: 'Receipt Terms', order: 0, column: 3 },
+      overpaymentHandling: { visible: true, section: 'Receipt Terms', order: 1, column: 1 },
+      date: { visible: true, section: 'Receipt Terms', order: 1, column: 2 },
+      method: { visible: true, section: 'Receipt Terms', order: 1, column: 3 },
+      reference: { visible: true, section: 'Receipt Terms', order: 2, column: 1 },
       id: { visible: true, section: 'Record Keys', order: 0, column: 1 },
       createdAt: { visible: true, section: 'System Dates', order: 0, column: 1 },
       updatedAt: { visible: true, section: 'System Dates', order: 0, column: 2 },

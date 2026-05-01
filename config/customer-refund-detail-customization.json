@@ -1,0 +1,373 @@
+{
+  "formColumns": 3,
+  "sections": [
+    "Document Identity",
+    "Customer Snapshot",
+    "Refund Terms",
+    "Record Keys",
+    "System Dates"
+  ],
+  "sectionRows": {
+    "Document Identity": 2,
+    "Customer Snapshot": 2,
+    "Refund Terms": 4,
+    "Record Keys": 2,
+    "System Dates": 2
+  },
+  "fields": {
+    "number": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 1
+    },
+    "customerId": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 2
+    },
+    "cashReceiptId": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 3
+    },
+    "customerNumber": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 0,
+      "column": 1
+    },
+    "customerName": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 0,
+      "column": 2
+    },
+    "bankAccountId": {
+      "visible": true,
+      "section": "Refund Terms",
+      "order": 0,
+      "column": 1
+    },
+    "amount": {
+      "visible": true,
+      "section": "Refund Terms",
+      "order": 0,
+      "column": 2
+    },
+    "date": {
+      "visible": true,
+      "section": "Refund Terms",
+      "order": 0,
+      "column": 3
+    },
+    "method": {
+      "visible": true,
+      "section": "Refund Terms",
+      "order": 1,
+      "column": 1
+    },
+    "status": {
+      "visible": true,
+      "section": "Refund Terms",
+      "order": 1,
+      "column": 2
+    },
+    "reference": {
+      "visible": true,
+      "section": "Refund Terms",
+      "order": 1,
+      "column": 3
+    },
+    "notes": {
+      "visible": true,
+      "section": "Refund Terms",
+      "order": 2,
+      "column": 1
+    },
+    "id": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
+      "column": 1
+    },
+    "createdAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 1
+    },
+    "updatedAt": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 2
+    },
+    "journalEntry": {
+      "visible": true,
+      "section": "System Dates",
+      "order": 0,
+      "column": 3
+    }
+  },
+  "referenceLayouts": [
+    {
+      "id": "reference-customer-1",
+      "referenceId": "customer",
+      "formColumns": 3,
+      "rows": 3,
+      "fields": {
+        "customerDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 0
+        },
+        "customerNumber": {
+          "visible": true,
+          "column": 2,
+          "order": 0
+        },
+        "customerName": {
+          "visible": true,
+          "column": 1,
+          "order": 0
+        },
+        "customerEmail": {
+          "visible": true,
+          "column": 1,
+          "order": 1
+        },
+        "customerPhone": {
+          "visible": false,
+          "column": 1,
+          "order": 2
+        },
+        "customerAddress": {
+          "visible": true,
+          "column": 2,
+          "order": 1
+        },
+        "customerIndustry": {
+          "visible": false,
+          "column": 1,
+          "order": 3
+        },
+        "customerUserDbId": {
+          "visible": false,
+          "column": 2,
+          "order": 3
+        },
+        "customerSubsidiaryDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 4
+        },
+        "customerCurrencyDbId": {
+          "visible": false,
+          "column": 2,
+          "order": 4
+        },
+        "customerInactive": {
+          "visible": false,
+          "column": 1,
+          "order": 5
+        },
+        "customerCreatedAt": {
+          "visible": false,
+          "column": 2,
+          "order": 5
+        },
+        "customerUpdatedAt": {
+          "visible": false,
+          "column": 1,
+          "order": 6
+        }
+      }
+    },
+    {
+      "id": "reference-receipt-1",
+      "referenceId": "receipt",
+      "formColumns": 3,
+      "rows": 3,
+      "fields": {
+        "receiptDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 0
+        },
+        "receiptNumber": {
+          "visible": true,
+          "column": 1,
+          "order": 0
+        },
+        "receiptStatus": {
+          "visible": true,
+          "column": 1,
+          "order": 1
+        },
+        "receiptAmount": {
+          "visible": true,
+          "column": 2,
+          "order": 1
+        },
+        "receiptDate": {
+          "visible": false,
+          "column": 1,
+          "order": 2
+        },
+        "receiptMethod": {
+          "visible": false,
+          "column": 2,
+          "order": 2
+        },
+        "receiptReference": {
+          "visible": true,
+          "column": 2,
+          "order": 0
+        },
+        "receiptBankAccountDbId": {
+          "visible": false,
+          "column": 2,
+          "order": 3
+        },
+        "receiptInvoiceDbId": {
+          "visible": false,
+          "column": 1,
+          "order": 4
+        },
+        "receiptCreatedAt": {
+          "visible": false,
+          "column": 2,
+          "order": 4
+        },
+        "receiptUpdatedAt": {
+          "visible": false,
+          "column": 1,
+          "order": 5
+        }
+      }
+    }
+  ],
+  "glImpactSettings": {
+    "fontSize": "xs"
+  },
+  "glImpactColumns": {
+    "date": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "normal"
+    },
+    "journalNumber": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "normal"
+    },
+    "sourceType": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "normal"
+    },
+    "sourceNumber": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "normal"
+    },
+    "account": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "wide"
+    },
+    "description": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "wide"
+    },
+    "debit": {
+      "visible": true,
+      "order": 6,
+      "widthMode": "normal"
+    },
+    "credit": {
+      "visible": true,
+      "order": 7,
+      "widthMode": "normal"
+    }
+  },
+  "statCards": [
+    {
+      "id": "refund-customer",
+      "metric": "customer",
+      "visible": true,
+      "order": 0,
+      "size": "sm"
+    },
+    {
+      "id": "refund-method",
+      "metric": "method",
+      "visible": true,
+      "order": 1,
+      "size": "sm"
+    },
+    {
+      "id": "refund-status",
+      "metric": "status",
+      "visible": true,
+      "order": 2,
+      "size": "sm"
+    },
+    {
+      "id": "refund-amount",
+      "metric": "amount",
+      "visible": true,
+      "order": 3,
+      "size": "md"
+    }
+  ],
+  "secondarySettings": {
+    "fontSize": "xs"
+  },
+  "secondaryColumns": {
+    "date": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "normal"
+    },
+    "journalNumber": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "normal"
+    },
+    "sourceType": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "normal"
+    },
+    "sourceNumber": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "normal"
+    },
+    "account": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "wide"
+    },
+    "description": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "wide"
+    },
+    "debit": {
+      "visible": true,
+      "order": 6,
+      "widthMode": "normal"
+    },
+    "credit": {
+      "visible": true,
+      "order": 7,
+      "widthMode": "normal"
+    }
+  }
+}

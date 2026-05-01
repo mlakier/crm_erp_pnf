@@ -10,9 +10,9 @@
   "sectionRows": {
     "Document Identity": 2,
     "Workflow & Timing": 2,
-    "Sourcing & Financials": 2,
-    "Record Keys": 1,
-    "System Dates": 1
+    "Sourcing & Financials": 3,
+    "Record Keys": 2,
+    "System Dates": 2
   },
   "fields": {
     "id": {
@@ -84,7 +84,7 @@
     "notes": {
       "visible": true,
       "section": "Sourcing & Financials",
-      "order": 2,
+      "order": 1,
       "column": 1
     },
     "createdAt": {
@@ -233,6 +233,51 @@
       }
     }
   ],
+  "glImpactSettings": {
+    "fontSize": "xs"
+  },
+  "glImpactColumns": {
+    "date": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "normal"
+    },
+    "journalNumber": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "normal"
+    },
+    "sourceType": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "normal"
+    },
+    "sourceNumber": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "normal"
+    },
+    "account": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "wide"
+    },
+    "description": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "wide"
+    },
+    "debit": {
+      "visible": true,
+      "order": 6,
+      "widthMode": "normal"
+    },
+    "credit": {
+      "visible": true,
+      "order": 7,
+      "widthMode": "normal"
+    }
+  },
   "statCards": [
     {
       "id": "bill-total",

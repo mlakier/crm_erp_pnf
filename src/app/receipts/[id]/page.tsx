@@ -658,7 +658,7 @@ export default async function ReceiptDetailPage({
             />
           )
         }
-        relatedDocuments={isCustomizing ? null : (
+        relatedRecords={isCustomizing ? null : (
           <ReceiptRelatedDocuments
             embedded
             showDisplayControl={false}
@@ -707,12 +707,18 @@ export default async function ReceiptDetailPage({
             moneySettings={moneySettings}
           />
         )}
-        relatedDocumentsCount={
+        relatedRecordsCount={
           (receipt.purchaseOrder.requisition ? 1 : 0) +
           1 +
           receipt.purchaseOrder.bills.length +
           receipt.purchaseOrder.bills.reduce((sum, bill) => sum + bill.billPayments.length, 0)
         }
+        relatedDocuments={isCustomizing ? null : (
+          <div className="px-6 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>
+            No related documents are attached to this receipt yet.
+          </div>
+        )}
+        relatedDocumentsCount={0}
         supplementarySections={
           isCustomizing ? null : (
             <ReceiptGlImpactSection
@@ -725,6 +731,7 @@ export default async function ReceiptDetailPage({
         communications={isCustomizing ? null : (
           <CommunicationsSection
             embedded
+            toolbarTargetId="receipt-communications-toolbar"
             showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
@@ -744,8 +751,12 @@ export default async function ReceiptDetailPage({
           />
         )}
         communicationsCount={communications.length}
-        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        communicationsToolbarTargetId="receipt-communications-toolbar"
+        communicationsToolbarPlacement="tab-bar"
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded toolbarTargetId="receipt-system-notes-toolbar" showDisplayControl={false} notes={systemNotes} />}
         systemNotesCount={systemNotes.length}
+        systemNotesToolbarTargetId="receipt-system-notes-toolbar"
+        systemNotesToolbarPlacement="tab-bar"
       />
     </RecordDetailPageShell>
   )

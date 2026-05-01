@@ -12,7 +12,6 @@ import OpportunityRelatedDocumentsSection from '@/components/OpportunityRelatedD
 import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import TransactionLineItemsSection from '@/components/TransactionLineItemsSection'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
-import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
@@ -777,18 +776,10 @@ export default async function OpportunityDetailPage({
             </div>
           )
         }
-        relatedDocuments={isCustomizing ? null : (
-          <RecordBottomTabsSection
-            defaultActiveKey="related-documents"
-            tabs={[
-              {
-                key: 'related-documents',
-                label: 'Related Documents',
-                count: relatedDocumentsCount,
-                content: (
-                  <OpportunityRelatedDocumentsSection
-                    embedded
-                    showDisplayControl={false}
+        relatedRecords={isCustomizing ? null : (
+          <OpportunityRelatedDocumentsSection
+            embedded
+            showDisplayControl={false}
             quote={
               opportunity.quote
                 ? {
@@ -855,59 +846,52 @@ export default async function OpportunityDetailPage({
               email: contact.email ?? '-',
               position: contact.position ?? '-',
             }))}
-                  />
-                ),
-              },
-              {
-                key: 'communications',
-                label: 'Communications',
-                count: communications.length,
-                toolbarTargetId: communicationsToolbarTargetId,
-                toolbarPlacement: 'tab-bar',
-                content: (
-                  <CommunicationsSection
-                    embedded
-                    toolbarTargetId={communicationsToolbarTargetId}
-                    showDisplayControl={false}
-                    rows={communications}
-                    compose={buildTransactionCommunicationComposePayload({
-                      recordId: opportunity.id,
-                      userId: opportunity.userId,
-                      number: opportunity.opportunityNumber ?? opportunity.name,
-                      counterpartyName: opportunity.customer.name,
-                      counterpartyEmail: opportunity.customer.email ?? null,
-                      fromEmail: opportunity.user?.email ?? null,
-                      status: formatStage(opportunity.stage),
-                      total: fmtCurrency(opportunity.amount, undefined, moneySettings),
-                      lineItems: lineRows.map((row) => ({
-                        line: row.lineNumber,
-                        itemId: row.itemId ?? '-',
-                        description: row.description,
-                        quantity: row.quantity,
-                        receivedQuantity: 0,
-                        openQuantity: row.quantity,
-                        billedQuantity: 0,
-                        unitPrice: row.unitPrice,
-                        lineTotal: row.lineTotal,
-                      })),
-                    })}
-                  />
-                ),
-              },
-              {
-                key: 'system-notes',
-                label: 'System Notes',
-                count: systemNotes.length,
-                toolbarTargetId: systemNotesToolbarTargetId,
-                toolbarPlacement: 'tab-bar',
-                content: <SystemNotesSection embedded toolbarTargetId={systemNotesToolbarTargetId} showDisplayControl={false} notes={systemNotes} />,
-              },
-            ]}
           />
         )}
+        relatedRecordsCount={relatedDocumentsCount}
+        relatedDocuments={isCustomizing ? null : (
+          <div className="px-6 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>
+            No related documents are attached to this opportunity yet.
+          </div>
+        )}
+        relatedDocumentsCount={0}
         supplementarySections={isCustomizing ? null : []}
-        communications={null}
-        systemNotes={null}
+        communications={isCustomizing ? null : (
+          <CommunicationsSection
+            embedded
+            toolbarTargetId={communicationsToolbarTargetId}
+            showDisplayControl={false}
+            rows={communications}
+            compose={buildTransactionCommunicationComposePayload({
+              recordId: opportunity.id,
+              userId: opportunity.userId,
+              number: opportunity.opportunityNumber ?? opportunity.name,
+              counterpartyName: opportunity.customer.name,
+              counterpartyEmail: opportunity.customer.email ?? null,
+              fromEmail: opportunity.user?.email ?? null,
+              status: formatStage(opportunity.stage),
+              total: fmtCurrency(opportunity.amount, undefined, moneySettings),
+              lineItems: lineRows.map((row) => ({
+                line: row.lineNumber,
+                itemId: row.itemId ?? '-',
+                description: row.description,
+                quantity: row.quantity,
+                receivedQuantity: 0,
+                openQuantity: row.quantity,
+                billedQuantity: 0,
+                unitPrice: row.unitPrice,
+                lineTotal: row.lineTotal,
+              })),
+            })}
+          />
+        )}
+        communicationsCount={communications.length}
+        communicationsToolbarTargetId={communicationsToolbarTargetId}
+        communicationsToolbarPlacement="tab-bar"
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded toolbarTargetId={systemNotesToolbarTargetId} showDisplayControl={false} notes={systemNotes} />}
+        systemNotesCount={systemNotes.length}
+        systemNotesToolbarTargetId={systemNotesToolbarTargetId}
+        systemNotesToolbarPlacement="tab-bar"
       />
     </RecordDetailPageShell>
   )

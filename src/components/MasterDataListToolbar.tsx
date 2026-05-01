@@ -2,6 +2,8 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import ColumnSelector from '@/components/ColumnSelector'
 import ExportButton from '@/components/ExportButton'
+import SavedSearchViewSelector from '@/components/SavedSearchViewSelector'
+import type { SavedSearchFieldOption, SavedSearchFilterDefinition } from '@/lib/saved-search-metadata'
 
 export type MasterDataListColumn = {
   id: string
@@ -27,6 +29,11 @@ export type MasterDataListToolbarProps = {
   resetHref?: string
   compactExport?: boolean
   extraControls?: ReactNode
+  listTitle?: string
+  basePath?: string
+  filterDefinitions?: SavedSearchFilterDefinition[]
+  criteriaFields?: SavedSearchFieldOption[]
+  resultFields?: SavedSearchFieldOption[]
 }
 
 export default function MasterDataListToolbar({
@@ -39,6 +46,11 @@ export default function MasterDataListToolbar({
   resetHref,
   compactExport = false,
   extraControls,
+  listTitle,
+  basePath,
+  filterDefinitions,
+  criteriaFields,
+  resultFields,
 }: MasterDataListToolbarProps) {
   return (
     <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
@@ -62,8 +74,17 @@ export default function MasterDataListToolbar({
           </Link>
         ) : null}
         {extraControls}
+        <SavedSearchViewSelector tableId={tableId} />
         <ExportButton tableId={tableId} fileName={exportFileName} compact={compactExport} exportAllUrl={exportAllUrl} />
-        <ColumnSelector tableId={tableId} columns={columns} />
+        <ColumnSelector
+          tableId={tableId}
+          columns={columns}
+          title={listTitle}
+          basePath={basePath}
+          filterDefinitions={filterDefinitions}
+          criteriaFields={criteriaFields}
+          resultFields={resultFields}
+        />
       </div>
     </form>
   )

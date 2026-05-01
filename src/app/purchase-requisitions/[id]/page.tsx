@@ -853,7 +853,7 @@ export default async function PurchaseRequisitionDetailPage({
             />
           )
         }
-        relatedDocuments={isCustomizing ? null : (
+        relatedRecords={isCustomizing ? null : (
           <PurchaseRequisitionRelatedDocuments
             embedded
             showDisplayControl={false}
@@ -907,15 +907,22 @@ export default async function PurchaseRequisitionDetailPage({
             moneySettings={moneySettings}
           />
         )}
-        relatedDocumentsCount={
+        relatedRecordsCount={
           (req.purchaseOrder ? 1 : 0) +
           (req.purchaseOrder?.receipts.length ?? 0) +
           (req.purchaseOrder?.bills.length ?? 0) +
           (req.purchaseOrder?.bills.reduce((sum, bill) => sum + bill.billPayments.length, 0) ?? 0)
         }
+        relatedDocuments={isCustomizing ? null : (
+          <div className="px-6 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>
+            No related documents are attached to this purchase requisition yet.
+          </div>
+        )}
+        relatedDocumentsCount={0}
         communications={isCustomizing ? null : (
           <CommunicationsSection
             embedded
+            toolbarTargetId="purchase-requisition-communications-toolbar"
             showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
@@ -945,8 +952,12 @@ export default async function PurchaseRequisitionDetailPage({
           />
         )}
         communicationsCount={communications.length}
-        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        communicationsToolbarTargetId="purchase-requisition-communications-toolbar"
+        communicationsToolbarPlacement="tab-bar"
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded toolbarTargetId="purchase-requisition-system-notes-toolbar" showDisplayControl={false} notes={systemNotes} />}
         systemNotesCount={systemNotes.length}
+        systemNotesToolbarTargetId="purchase-requisition-system-notes-toolbar"
+        systemNotesToolbarPlacement="tab-bar"
       />
     </RecordDetailPageShell>
   )

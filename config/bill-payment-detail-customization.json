@@ -7,10 +7,10 @@
     "System Dates"
   ],
   "sectionRows": {
-    "Document Identity": 1,
-    "Payment Terms": 3,
-    "Record Keys": 1,
-    "System Dates": 1
+    "Document Identity": 2,
+    "Payment Terms": 4,
+    "Record Keys": 2,
+    "System Dates": 2
   },
   "fields": {
     "id": {
@@ -25,11 +25,23 @@
       "order": 0,
       "column": 1
     },
+    "vendorId": {
+      "visible": true,
+      "section": "Document Identity",
+      "order": 0,
+      "column": 3
+    },
     "billId": {
       "visible": true,
       "section": "Document Identity",
       "order": 0,
       "column": 2
+    },
+    "bankAccountId": {
+      "visible": true,
+      "section": "Payment Terms",
+      "order": 0,
+      "column": 1
     },
     "amount": {
       "visible": true,
@@ -46,8 +58,8 @@
     "method": {
       "visible": true,
       "section": "Payment Terms",
-      "order": 1,
-      "column": 1
+      "order": 0,
+      "column": 3
     },
     "reference": {
       "visible": true,
@@ -58,25 +70,13 @@
     "status": {
       "visible": true,
       "section": "Payment Terms",
-      "order": 0,
+      "order": 1,
       "column": 3
     },
     "notes": {
       "visible": true,
       "section": "Payment Terms",
       "order": 2,
-      "column": 1
-    },
-    "vendorId": {
-      "visible": true,
-      "section": "Document Identity",
-      "order": 0,
-      "column": 3
-    },
-    "bankAccountId": {
-      "visible": true,
-      "section": "Payment Terms",
-      "order": 0,
       "column": 1
     },
     "createdAt": {
@@ -93,34 +93,75 @@
     }
   },
   "referenceLayouts": [],
-  "statCards": [
-    {
-      "id": "bp-bill",
-      "metric": "bill",
+  "glImpactSettings": {
+    "fontSize": "xs"
+  },
+  "glImpactColumns": {
+    "date": {
       "visible": true,
       "order": 0,
-      "size": "sm"
+      "widthMode": "normal"
     },
-    {
-      "id": "bp-date",
-      "metric": "date",
+    "journalNumber": {
       "visible": true,
       "order": 1,
-      "size": "sm"
+      "widthMode": "normal"
+    },
+    "sourceType": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "normal"
+    },
+    "sourceNumber": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "normal"
+    },
+    "account": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "wide"
+    },
+    "description": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "wide"
+    },
+    "debit": {
+      "visible": true,
+      "order": 6,
+      "widthMode": "normal"
+    },
+    "credit": {
+      "visible": true,
+      "order": 7,
+      "widthMode": "normal"
+    }
+  },
+  "statCards": [
+    {
+      "id": "bp-amount",
+      "metric": "amount",
+      "visible": true,
+      "order": 0
     },
     {
       "id": "bp-status",
       "metric": "status",
       "visible": true,
-      "order": 2,
-      "size": "sm"
+      "order": 1
     },
     {
-      "id": "bp-amount",
-      "metric": "amount",
+      "id": "bp-date",
+      "metric": "date",
       "visible": true,
-      "order": 3,
-      "size": "lg"
+      "order": 2
+    },
+    {
+      "id": "bp-bill",
+      "metric": "bill",
+      "visible": true,
+      "order": 3
     }
   ]
 }

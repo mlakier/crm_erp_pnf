@@ -21,6 +21,8 @@ export default function SearchableSelect({
   sortMode = 'label',
   disabled = false,
   textClassName = 'text-sm',
+  dropdownWidthMode = 'content',
+  clearSelectionOnQueryChange = true,
   onSelect,
 }: {
   selectedValue: string
@@ -30,10 +32,13 @@ export default function SearchableSelect({
   sortMode?: 'id' | 'label'
   disabled?: boolean
   textClassName?: string
+  dropdownWidthMode?: 'content' | 'trigger'
+  clearSelectionOnQueryChange?: boolean
   onSelect: (value: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [blurRequest, setBlurRequest] = useState(0)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const dropdownRef = useRef<HTMLDivElement | null>(null)
@@ -66,7 +71,7 @@ export default function SearchableSelect({
       setDropdownStyle({
         bottom: Math.max(window.innerHeight - rect.top + 4, 8),
         left: Math.max(16, rect.left),
-        minWidth: rect.width + 96,
+        minWidth: dropdownWidthMode === 'trigger' ? rect.width : rect.width + 96,
         maxWidth,
       })
     }
@@ -78,7 +83,12 @@ export default function SearchableSelect({
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
     }
-  }, [disabled, open, options, placeholder, query])
+  }, [disabled, dropdownWidthMode, open, options, placeholder, query])
+
+  useEffect(() => {
+    if (blurRequest === 0) return
+    inputRef.current?.blur()
+  }, [blurRequest])
 
   const filteredOptions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -105,21 +115,21 @@ export default function SearchableSelect({
           onFocus={() => {
             if (disabled) return
             setOpen(true)
-            setQuery(selectedLabel)
+            setQuery('')
           }}
           onChange={(event) => {
             if (disabled) return
             const nextQuery = event.target.value
             setQuery(nextQuery)
             setOpen(true)
-            if (selectedValue && nextQuery !== selectedLabel) {
+            if (clearSelectionOnQueryChange && selectedValue && nextQuery !== selectedLabel) {
               onSelect('')
             }
           }}
           placeholder={selectedDisplayLabel ? searchPlaceholder ?? `Search ${selectedLabel}` : placeholder}
           title={selectedLabel || placeholder}
           disabled={disabled}
-          className={`w-full rounded-md border bg-transparent px-3 py-2 pr-8 text-white ${textClassName}`}
+          className={`w-full rounded-md border bg-transparent px-3 py-2 pr-8 text-white leading-5 ${textClassName}`}
           style={{
             borderColor: 'var(--border-muted)',
             backgroundColor: 'var(--card-elevated)',
@@ -138,7 +148,7 @@ export default function SearchableSelect({
             const nextOpen = !open
             setOpen(nextOpen)
             if (nextOpen) {
-              setQuery(selectedLabel)
+              setQuery('')
               inputRef.current?.focus()
             }
           }}
@@ -169,11 +179,12 @@ export default function SearchableSelect({
                 bottom: dropdownStyle.bottom,
                 left: dropdownStyle.left,
                 minWidth: dropdownStyle.minWidth,
-                width: 'max-content',
+                width: dropdownWidthMode === 'trigger' ? dropdownStyle.minWidth : 'max-content',
                 maxWidth: dropdownStyle.maxWidth,
                 borderColor: 'var(--border-muted)',
                 backgroundColor: 'var(--card-elevated)',
               }}
+              onMouseDown={(event) => event.stopPropagation()}
             >
               <button
                 type="button"
@@ -182,6 +193,7 @@ export default function SearchableSelect({
                   onSelect('')
                   setQuery('')
                   setOpen(false)
+                  setBlurRequest((current) => current + 1)
                 }}
                 className={`block w-full whitespace-nowrap px-3 py-2 text-left hover:bg-white/5 ${textClassName}`}
                 style={{ color: 'var(--text-secondary)' }}
@@ -197,6 +209,7 @@ export default function SearchableSelect({
                     onSelect(option.value)
                     setQuery(option.label)
                     setOpen(false)
+                    setBlurRequest((current) => current + 1)
                   }}
                   className={`block w-full whitespace-nowrap px-3 py-2 text-left hover:bg-white/5 ${textClassName}`}
                   style={{ color: 'var(--text-secondary)' }}

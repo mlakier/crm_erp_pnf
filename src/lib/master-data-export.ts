@@ -53,6 +53,41 @@ export type MasterDataExportPayload = {
   rows: string[][]
 }
 
+function parseStoredList(value: string | null | undefined): string[] {
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function orderColumnsForExport<T extends { id: string }>(
+  columns: T[],
+  visibleIds?: string[],
+  orderedIds?: string[],
+) {
+  const allowedIds = new Set((visibleIds?.length ? visibleIds : columns.map((column) => column.id)).filter((id) => id !== 'actions'))
+  const byId = new Map(columns.map((column) => [column.id, column]))
+  const ordered: T[] = []
+
+  for (const id of orderedIds ?? []) {
+    const column = byId.get(id)
+    if (!column || !allowedIds.has(id)) continue
+    ordered.push(column)
+    allowedIds.delete(id)
+  }
+
+  for (const column of columns) {
+    if (!allowedIds.has(column.id) || column.id === 'actions') continue
+    ordered.push(column)
+    allowedIds.delete(column.id)
+  }
+
+  return ordered
+}
+
 const INSENSITIVE = 'insensitive' as const
 
 function text(value: unknown) {
@@ -88,6 +123,7 @@ export async function buildMasterDataExportPayload(
   sort: string,
   filters?: {
     status?: string
+    viewId?: string
   },
 ): Promise<MasterDataExportPayload> {
   switch (resource) {
@@ -583,6 +619,12 @@ export async function buildMasterDataExportPayload(
       }
     }
     case 'users': {
+      const exportView = filters?.viewId
+        ? await prisma.savedListView.findUnique({
+            where: { id: filters.viewId },
+            select: { columnIds: true, columnOrder: true },
+          })
+        : null
       const users = await prisma.user.findMany({
         where: query
           ? {
@@ -597,13 +639,13 @@ export async function buildMasterDataExportPayload(
             }
           : {},
         include: {
-          department: { select: { departmentId: true, name: true } },
+          department: { select: { departmentId: true, departmentNumber: true, name: true } },
           role: { select: { name: true } },
-          defaultSubsidiary: { select: { subsidiaryId: true } },
+          defaultSubsidiary: { select: { subsidiaryId: true, name: true } },
           approvalCurrency: { select: { code: true } },
           delegatedApprover: { select: { userId: true, name: true, email: true } },
           subsidiaryAssignments: {
-            include: { subsidiary: { select: { subsidiaryId: true } } },
+            include: { subsidiary: { select: { subsidiaryId: true, name: true } } },
             orderBy: { subsidiary: { subsidiaryId: 'asc' } },
           },
         },
@@ -623,27 +665,72 @@ export async function buildMasterDataExportPayload(
       const employeeByUserId = new Map(
         employees.filter((employee) => employee.userId).map((employee) => [employee.userId as string, employee]),
       )
+      const exportColumns = orderColumnsForExport(
+        userListDefinition.columns,
+        parseStoredList(exportView?.columnIds),
+        parseStoredList(exportView?.columnOrder),
+      )
       return {
-        headers: buildHeaders(userListDefinition.columns),
+        headers: exportColumns.map((column) => column.label),
         rows: users.map((user) => {
           const linkedEmployee = employeeByUserId.get(user.id)
-          return [
-            text(user.userId ?? 'Pending'),
-            text(user.name),
-            text(user.email),
-            text(user.role?.name),
-            user.department ? `${user.department.departmentId} - ${user.department.name}` : '-',
-            text(user.defaultSubsidiary?.subsidiaryId),
-            user.subsidiaryAssignments.length > 0 ? user.subsidiaryAssignments.map((assignment) => assignment.subsidiary.subsidiaryId).join(', ') : '-',
-            yesNo(user.includeChildren),
-            user.approvalLimit === null || user.approvalLimit === undefined ? '-' : `${user.approvalLimit}${user.approvalCurrency ? ` ${user.approvalCurrency.code}` : ''}`,
-            user.delegatedApprover ? text(user.delegatedApprover.userId ?? user.delegatedApprover.name ?? user.delegatedApprover.email) : '-',
-            yesNo(user.locked),
-            linkedEmployee ? `${linkedEmployee.firstName} ${linkedEmployee.lastName}${linkedEmployee.employeeId ? ` (${linkedEmployee.employeeId})` : ''}` : '-',
-            yesNo(user.inactive),
-            formatMasterDataDate(user.createdAt),
-            formatMasterDataDate(user.updatedAt),
-          ]
+          return exportColumns.map((column) => {
+            switch (column.id) {
+              case 'id':
+                return text(user.userId ?? 'Pending')
+              case 'name':
+                return text(user.name)
+              case 'email':
+                return text(user.email)
+              case 'role':
+              case 'role.name':
+                return text(user.role?.name)
+              case 'department':
+                return user.department ? `${user.department.departmentNumber ?? user.department.departmentId} - ${user.department.name}` : '-'
+              case 'department.name':
+                return text(user.department?.name)
+              case 'department.departmentId':
+                return text(user.department?.departmentId)
+              case 'default-subsidiary':
+                return user.defaultSubsidiary ? `${user.defaultSubsidiary.subsidiaryId} - ${user.defaultSubsidiary.name}` : '-'
+              case 'defaultSubsidiary.subsidiaryId':
+                return text(user.defaultSubsidiary?.subsidiaryId)
+              case 'subsidiaries':
+                return user.subsidiaryAssignments.length > 0
+                  ? user.subsidiaryAssignments
+                      .map((assignment) => `${assignment.subsidiary.subsidiaryId} - ${assignment.subsidiary.name}`)
+                      .join(', ')
+                  : '-'
+              case 'include-children':
+                return yesNo(user.includeChildren)
+              case 'approval-limit':
+                return user.approvalLimit === null || user.approvalLimit === undefined ? '-' : `${user.approvalLimit}${user.approvalCurrency ? ` ${user.approvalCurrency.code}` : ''}`
+              case 'approvalCurrency.code':
+                return text(user.approvalCurrency?.code)
+              case 'delegated-approver':
+                return user.delegatedApprover ? text(user.delegatedApprover.userId ?? user.delegatedApprover.name ?? user.delegatedApprover.email) : '-'
+              case 'delegatedApprover.name':
+                return text(user.delegatedApprover?.name)
+              case 'delegatedApprover.email':
+                return text(user.delegatedApprover?.email)
+              case 'locked':
+                return yesNo(user.locked)
+              case 'employee':
+                return linkedEmployee ? `${linkedEmployee.firstName} ${linkedEmployee.lastName}${linkedEmployee.employeeId ? ` (${linkedEmployee.employeeId})` : ''}` : '-'
+              case 'linkedEmployee.employeeId':
+                return text(linkedEmployee?.employeeId)
+              case 'linkedEmployee.lastName':
+                return text(linkedEmployee?.lastName)
+              case 'inactive':
+                return yesNo(user.inactive)
+              case 'created':
+                return formatMasterDataDate(user.createdAt)
+              case 'last-modified':
+                return formatMasterDataDate(user.updatedAt)
+              default:
+                return '-'
+            }
+          })
         }),
       }
     }

@@ -113,6 +113,17 @@
     "method": true,
     "reference": false
   },
+  "customerRefundCreate": {
+    "customerId": true,
+    "cashReceiptId": false,
+    "bankAccountId": false,
+    "amount": true,
+    "date": true,
+    "method": true,
+    "reference": false,
+    "notes": false,
+    "status": true
+  },
   "purchaseRequisitionCreate": {
     "number": false,
     "status": true,

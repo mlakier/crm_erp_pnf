@@ -14,7 +14,6 @@ import TransactionDetailFrame from '@/components/TransactionDetailFrame'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import CommunicationsSection from '@/components/CommunicationsSection'
 import QuoteRelatedDocuments from '@/components/QuoteRelatedDocuments'
-import RecordBottomTabsSection from '@/components/RecordBottomTabsSection'
 import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
 import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
 import TransactionActionStack from '@/components/TransactionActionStack'
@@ -854,18 +853,10 @@ export default async function QuoteDetailPage({
             />
           )
         }
-        relatedDocuments={isCustomizing ? null : (
-          <RecordBottomTabsSection
-            defaultActiveKey="related-documents"
-            tabs={[
-              {
-                key: 'related-documents',
-                label: 'Related Documents',
-                count: relatedDocumentsCount,
-                content: (
-                  <QuoteRelatedDocuments
-                    embedded
-                    showDisplayControl={false}
+        relatedRecords={isCustomizing ? null : (
+          <QuoteRelatedDocuments
+            embedded
+            showDisplayControl={false}
             opportunities={
               quote.opportunity
                 ? [
@@ -916,59 +907,52 @@ export default async function QuoteDetailPage({
                 reference: receipt.reference,
               })),
             )}
-                  />
-                ),
-              },
-              {
-                key: 'communications',
-                label: 'Communications',
-                count: communications.length,
-                toolbarTargetId: communicationsToolbarTargetId,
-                toolbarPlacement: 'tab-bar',
-                content: (
-                  <CommunicationsSection
-                    embedded
-                    toolbarTargetId={communicationsToolbarTargetId}
-                    showDisplayControl={false}
-                    rows={communications}
-                    compose={buildTransactionCommunicationComposePayload({
-                      recordId: quote.id,
-                      userId: quote.userId,
-                      number: quote.number,
-                      counterpartyName: quote.customer.name,
-                      counterpartyEmail: quote.customer.email ?? null,
-                      fromEmail: quote.user?.email ?? null,
-                      status: formatQuoteStatus(quote.status),
-                      total: fmtCurrency(quote.total, undefined, moneySettings),
-                      lineItems: lineRows.map((row, index) => ({
-                        line: index + 1,
-                        itemId: row.itemId ?? '-',
-                        description: row.description,
-                        quantity: row.quantity,
-                        receivedQuantity: 0,
-                        openQuantity: row.quantity,
-                        billedQuantity: 0,
-                        unitPrice: row.unitPrice,
-                        lineTotal: row.lineTotal,
-                      })),
-                    })}
-                  />
-                ),
-              },
-              {
-                key: 'system-notes',
-                label: 'System Notes',
-                count: systemNotes.length,
-                toolbarTargetId: systemNotesToolbarTargetId,
-                toolbarPlacement: 'tab-bar',
-                content: <SystemNotesSection embedded toolbarTargetId={systemNotesToolbarTargetId} showDisplayControl={false} notes={systemNotes} />,
-              },
-            ]}
           />
         )}
+        relatedRecordsCount={relatedDocumentsCount}
+        relatedDocuments={isCustomizing ? null : (
+          <div className="px-6 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>
+            No related documents are attached to this quote yet.
+          </div>
+        )}
+        relatedDocumentsCount={0}
         supplementarySections={null}
-        communications={null}
-        systemNotes={null}
+        communications={isCustomizing ? null : (
+          <CommunicationsSection
+            embedded
+            toolbarTargetId={communicationsToolbarTargetId}
+            showDisplayControl={false}
+            rows={communications}
+            compose={buildTransactionCommunicationComposePayload({
+              recordId: quote.id,
+              userId: quote.userId,
+              number: quote.number,
+              counterpartyName: quote.customer.name,
+              counterpartyEmail: quote.customer.email ?? null,
+              fromEmail: quote.user?.email ?? null,
+              status: formatQuoteStatus(quote.status),
+              total: fmtCurrency(quote.total, undefined, moneySettings),
+              lineItems: lineRows.map((row, index) => ({
+                line: index + 1,
+                itemId: row.itemId ?? '-',
+                description: row.description,
+                quantity: row.quantity,
+                receivedQuantity: 0,
+                openQuantity: row.quantity,
+                billedQuantity: 0,
+                unitPrice: row.unitPrice,
+                lineTotal: row.lineTotal,
+              })),
+            })}
+          />
+        )}
+        communicationsCount={communications.length}
+        communicationsToolbarTargetId={communicationsToolbarTargetId}
+        communicationsToolbarPlacement="tab-bar"
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded toolbarTargetId={systemNotesToolbarTargetId} showDisplayControl={false} notes={systemNotes} />}
+        systemNotesCount={systemNotes.length}
+        systemNotesToolbarTargetId={systemNotesToolbarTargetId}
+        systemNotesToolbarPlacement="tab-bar"
       />
     </RecordDetailPageShell>
   )

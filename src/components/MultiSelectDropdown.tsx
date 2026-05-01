@@ -12,6 +12,7 @@ type Position = {
   top: number
   left: number
   width: number
+  maxHeight: number
 }
 
 export default function MultiSelectDropdown({
@@ -44,8 +45,14 @@ export default function MultiSelectDropdown({
       const left = Math.min(Math.max(16, rect.left), Math.max(16, viewportWidth - width - 16))
       const estimatedHeight = 320
       const placeAbove = rect.bottom + estimatedHeight > viewportHeight - 16 && rect.top > estimatedHeight
-      const top = placeAbove ? Math.max(16, rect.top - estimatedHeight - 8) : Math.min(viewportHeight - 16, rect.bottom + 8)
-      setPosition({ top, left, width })
+      const availableHeight = placeAbove
+        ? Math.max(180, rect.top - 24)
+        : Math.max(180, viewportHeight - rect.bottom - 24)
+      const maxHeight = Math.min(availableHeight, estimatedHeight)
+      const top = placeAbove
+        ? Math.max(16, rect.top - maxHeight - 8)
+        : Math.min(viewportHeight - maxHeight - 16, rect.bottom + 8)
+      setPosition({ top, left, width, maxHeight })
     }
 
     function handlePointerDown(event: MouseEvent) {
@@ -110,7 +117,7 @@ export default function MultiSelectDropdown({
                 borderColor: 'var(--border-muted)',
               }}
             >
-              <div className="max-h-72 overflow-y-auto pr-1">
+              <div className="overflow-y-auto pr-1" style={{ maxHeight: position.maxHeight }}>
                 {options.length === 0 ? (
                   <p className="px-1 py-2 text-sm" style={{ color: 'var(--text-muted)' }}>
                     No options available.

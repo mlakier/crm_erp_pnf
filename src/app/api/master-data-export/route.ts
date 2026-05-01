@@ -6,13 +6,14 @@ export async function GET(request: NextRequest) {
   const query = (request.nextUrl.searchParams.get('q') ?? '').trim()
   const sort = request.nextUrl.searchParams.get('sort') ?? 'id'
   const status = (request.nextUrl.searchParams.get('status') ?? '').trim()
+  const viewId = (request.nextUrl.searchParams.get('view') ?? '').trim()
 
   if (!resource) {
     return Response.json({ error: 'resource is required' }, { status: 400 })
   }
 
   try {
-    const payload = await buildMasterDataExportPayload(resource, query, sort, { status })
+    const payload = await buildMasterDataExportPayload(resource, query, sort, { status, viewId })
     return Response.json(payload)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to export master data list'

@@ -9,10 +9,10 @@
   ],
   "sectionRows": {
     "Document Identity": 2,
-    "Workflow & Approval": 1,
-    "Sourcing & Financials": 2,
-    "Record Keys": 2,
-    "System Dates": 1
+    "Workflow & Approval": 2,
+    "Sourcing & Financials": 3,
+    "Record Keys": 3,
+    "System Dates": 2
   },
   "lineSettings": {
     "fontSize": "sm"
@@ -272,6 +272,51 @@
       "viewDisplay": "label",
       "dropdownDisplay": "label",
       "dropdownSort": "id"
+    }
+  },
+  "glImpactSettings": {
+    "fontSize": "xs"
+  },
+  "glImpactColumns": {
+    "date": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "normal"
+    },
+    "journalNumber": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "normal"
+    },
+    "sourceType": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "normal"
+    },
+    "sourceNumber": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "normal"
+    },
+    "account": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "wide"
+    },
+    "description": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "wide"
+    },
+    "debit": {
+      "visible": true,
+      "order": 6,
+      "widthMode": "normal"
+    },
+    "credit": {
+      "visible": true,
+      "order": 7,
+      "widthMode": "normal"
     }
   },
   "statCards": [

@@ -8,31 +8,13 @@
     "System Dates"
   ],
   "sectionRows": {
-    "Document Identity": 1,
-    "Customer Snapshot": 1,
-    "Receipt Terms": 2,
-    "Record Keys": 1,
-    "System Dates": 1
+    "Document Identity": 3,
+    "Customer Snapshot": 3,
+    "Receipt Terms": 4,
+    "Record Keys": 2,
+    "System Dates": 2
   },
   "fields": {
-    "customerName": {
-      "visible": true,
-      "section": "Customer Snapshot",
-      "order": 0,
-      "column": 2
-    },
-    "customerNumber": {
-      "visible": true,
-      "section": "Customer Snapshot",
-      "order": 0,
-      "column": 1
-    },
-    "id": {
-      "visible": true,
-      "section": "Record Keys",
-      "order": 0,
-      "column": 1
-    },
     "number": {
       "visible": true,
       "section": "Document Identity",
@@ -45,28 +27,64 @@
       "order": 0,
       "column": 2
     },
-    "amount": {
+    "customerNumber": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 0,
+      "column": 1
+    },
+    "customerName": {
+      "visible": true,
+      "section": "Customer Snapshot",
+      "order": 0,
+      "column": 2
+    },
+    "bankAccountId": {
       "visible": true,
       "section": "Receipt Terms",
       "order": 0,
       "column": 1
     },
-    "date": {
+    "status": {
       "visible": true,
       "section": "Receipt Terms",
       "order": 0,
       "column": 2
     },
-    "method": {
+    "amount": {
       "visible": true,
       "section": "Receipt Terms",
       "order": 0,
       "column": 3
     },
-    "reference": {
+    "overpaymentHandling": {
       "visible": true,
       "section": "Receipt Terms",
       "order": 1,
+      "column": 1
+    },
+    "date": {
+      "visible": true,
+      "section": "Receipt Terms",
+      "order": 1,
+      "column": 2
+    },
+    "method": {
+      "visible": true,
+      "section": "Receipt Terms",
+      "order": 1,
+      "column": 3
+    },
+    "reference": {
+      "visible": true,
+      "section": "Receipt Terms",
+      "order": 2,
+      "column": 1
+    },
+    "id": {
+      "visible": true,
+      "section": "Record Keys",
+      "order": 0,
       "column": 1
     },
     "createdAt": {
@@ -157,6 +175,51 @@
       }
     }
   ],
+  "glImpactSettings": {
+    "fontSize": "xs"
+  },
+  "glImpactColumns": {
+    "date": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "normal"
+    },
+    "journalNumber": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "normal"
+    },
+    "sourceType": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "normal"
+    },
+    "sourceNumber": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "normal"
+    },
+    "account": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "wide"
+    },
+    "description": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "wide"
+    },
+    "debit": {
+      "visible": true,
+      "order": 6,
+      "widthMode": "normal"
+    },
+    "credit": {
+      "visible": true,
+      "order": 7,
+      "widthMode": "normal"
+    }
+  },
   "statCards": [
     {
       "id": "receipt-date",
@@ -186,5 +249,50 @@
       "order": 3,
       "size": "sm"
     }
-  ]
+  ],
+  "secondarySettings": {
+    "fontSize": "xs"
+  },
+  "secondaryColumns": {
+    "date": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "normal"
+    },
+    "journalNumber": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "normal"
+    },
+    "sourceType": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "normal"
+    },
+    "sourceNumber": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "normal"
+    },
+    "account": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "wide"
+    },
+    "description": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "wide"
+    },
+    "debit": {
+      "visible": true,
+      "order": 6,
+      "widthMode": "normal"
+    },
+    "credit": {
+      "visible": true,
+      "order": 7,
+      "widthMode": "normal"
+    }
+  }
 }

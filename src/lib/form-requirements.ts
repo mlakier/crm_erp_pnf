@@ -9,6 +9,7 @@ export type FormKey =
   | 'fulfillmentCreate'
   | 'invoiceCreate'
   | 'invoiceReceiptCreate'
+  | 'customerRefundCreate'
   | 'purchaseRequisitionCreate'
   | 'purchaseOrderCreate'
   | 'receiptCreate'
@@ -147,6 +148,17 @@ export const FORM_REQUIREMENTS: FormRequirementsMap = {
     date: true,
     method: true,
     reference: false,
+  },
+  customerRefundCreate: {
+    customerId: true,
+    cashReceiptId: false,
+    bankAccountId: false,
+    amount: true,
+    date: true,
+    method: true,
+    reference: false,
+    notes: false,
+    status: true,
   },
   purchaseRequisitionCreate: {
     number: false,
@@ -405,6 +417,7 @@ export const FORM_LABELS: Record<FormKey, string> = {
   fulfillmentCreate: 'Fulfillment',
   invoiceCreate: 'Invoice',
   invoiceReceiptCreate: 'Invoice Receipt',
+  customerRefundCreate: 'Customer Refund',
   purchaseRequisitionCreate: 'Purchase Requisition',
   purchaseOrderCreate: 'Purchase Order',
   receiptCreate: 'Receipt',
@@ -537,6 +550,17 @@ export const FORM_FIELD_LABELS: Record<FormKey, Record<string, string>> = {
     date: 'Receipt date',
     method: 'Method',
     reference: 'Reference',
+  },
+  customerRefundCreate: {
+    customerId: 'Customer',
+    cashReceiptId: 'Refund source',
+    bankAccountId: 'Bank account',
+    amount: 'Amount',
+    date: 'Refund date',
+    method: 'Method',
+    reference: 'Reference',
+    notes: 'Notes',
+    status: 'Status',
   },
   purchaseRequisitionCreate: {
     number: 'Purchase requisition ID',
@@ -803,6 +827,13 @@ export const LOCKED_FORM_REQUIREMENTS: Partial<FormRequirementsMap> = {
     amount: true,
     date: true,
     method: true,
+  },
+  customerRefundCreate: {
+    customerId: true,
+    amount: true,
+    date: true,
+    method: true,
+    status: true,
   },
   purchaseOrderCreate: {
     vendorId: true,

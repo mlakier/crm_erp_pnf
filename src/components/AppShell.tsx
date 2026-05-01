@@ -14,12 +14,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   if (isAuthPage) return <>{children}</>
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--background)' }}>
+    <div className="flex h-screen flex-col overflow-hidden" style={{ backgroundColor: 'var(--background)' }}>
       <TableFilterSortEnhancer />
       <AppSidebar />
       <div className="relative z-0 flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Top header bar */}
-        <header className="relative z-10 flex items-center justify-between border-b px-6 py-2" style={{ borderColor: 'var(--border-primary)', backgroundColor: 'var(--card-background)' }}>
+        <header
+          className="relative z-10 flex items-center justify-between border-b px-6 py-2"
+          style={{ borderColor: 'var(--border-muted)', backgroundColor: 'var(--card)' }}
+        >
           <div className="flex-1" />
           <GlobalSearch />
           <div className="flex-1" />

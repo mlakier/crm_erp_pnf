@@ -742,7 +742,7 @@ export default async function FulfillmentDetailPage({
             />
           )
         }
-        relatedDocuments={isCustomizing ? null : (
+        relatedRecords={isCustomizing ? null : (
           <FulfillmentRelatedDocuments
             embedded
             showDisplayControl={false}
@@ -805,17 +805,24 @@ export default async function FulfillmentDetailPage({
             )}
           />
         )}
-        relatedDocumentsCount={
+        relatedRecordsCount={
           (fulfillment.salesOrder?.quote?.opportunity ? 1 : 0) +
           (fulfillment.salesOrder?.quote ? 1 : 0) +
           (fulfillment.salesOrder?.fulfillments.filter((row) => row.id !== fulfillment.id).length ?? 0) +
           (fulfillment.salesOrder?.invoices.length ?? 0) +
           (fulfillment.salesOrder?.invoices.reduce((sum, invoice) => sum + invoice.cashReceipts.length, 0) ?? 0)
         }
+        relatedDocuments={isCustomizing ? null : (
+          <div className="px-6 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>
+            No related documents are attached to this fulfillment yet.
+          </div>
+        )}
+        relatedDocumentsCount={0}
         supplementarySections={null}
         communications={isCustomizing ? null : (
           <CommunicationsSection
             embedded
+            toolbarTargetId="fulfillment-communications-toolbar"
             showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
@@ -845,8 +852,12 @@ export default async function FulfillmentDetailPage({
           />
         )}
         communicationsCount={communications.length}
-        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        communicationsToolbarTargetId="fulfillment-communications-toolbar"
+        communicationsToolbarPlacement="tab-bar"
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded toolbarTargetId="fulfillment-system-notes-toolbar" showDisplayControl={false} notes={systemNotes} />}
         systemNotesCount={systemNotes.length}
+        systemNotesToolbarTargetId="fulfillment-system-notes-toolbar"
+        systemNotesToolbarPlacement="tab-bar"
       />
     </RecordDetailPageShell>
   )

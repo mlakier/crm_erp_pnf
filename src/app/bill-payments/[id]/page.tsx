@@ -797,7 +797,7 @@ export default async function BillPaymentDetailPage({
           )
         }
         lineItems={null}
-        relatedDocuments={isCustomizing || !primaryBill ? null : (
+        relatedRecords={isCustomizing || !primaryBill ? null : (
           <BillPaymentRelatedDocuments
             embedded
             showDisplayControl={false}
@@ -851,7 +851,7 @@ export default async function BillPaymentDetailPage({
             moneySettings={moneySettings}
           />
         )}
-        relatedDocumentsCount={
+        relatedRecordsCount={
           primaryBill
             ? (primaryBill.purchaseOrder?.requisition ? 1 : 0) +
               (primaryBill.purchaseOrder ? 1 : 0) +
@@ -859,9 +859,16 @@ export default async function BillPaymentDetailPage({
               1
             : 0
         }
+        relatedDocuments={isCustomizing ? null : (
+          <div className="px-6 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>
+            No related documents are attached to this bill payment yet.
+          </div>
+        )}
+        relatedDocumentsCount={0}
         communications={isCustomizing ? null : (
           <CommunicationsSection
             embedded
+            toolbarTargetId="bill-payment-communications-toolbar"
             showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
@@ -879,8 +886,12 @@ export default async function BillPaymentDetailPage({
           />
         )}
         communicationsCount={communications.length}
-        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        communicationsToolbarTargetId="bill-payment-communications-toolbar"
+        communicationsToolbarPlacement="tab-bar"
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded toolbarTargetId="bill-payment-system-notes-toolbar" showDisplayControl={false} notes={systemNotes} />}
         systemNotesCount={systemNotes.length}
+        systemNotesToolbarTargetId="bill-payment-system-notes-toolbar"
+        systemNotesToolbarPlacement="tab-bar"
         supplementarySections={
           isCustomizing ? null : (
             <>

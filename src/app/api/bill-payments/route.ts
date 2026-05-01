@@ -68,11 +68,16 @@ async function loadBillApplicationContext(
 
 async function validateBillPaymentApplications(
   vendorId: string | null | undefined,
+  paymentAmount: number,
   applications: BillPaymentApplicationInput[],
   currentPaymentId?: string,
+  requireFullyApplied = false,
 ) {
   if (!vendorId) {
     throw new Error('Vendor is required when applying a bill payment')
+  }
+  if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+    throw new Error('Payment amount must be greater than zero')
   }
   if (applications.length === 0) {
     throw new Error('At least one bill application is required')
@@ -113,12 +118,21 @@ async function validateBillPaymentApplications(
     throw new Error('Applied bills must share the same posting context')
   }
 
+  const totalApplied = roundMoney(sumBillPaymentApplications(applications))
+  if (totalApplied > paymentAmount + 0.005) {
+    throw new Error('Applied bill amounts cannot exceed the entered payment amount')
+  }
+  if (requireFullyApplied && roundMoney(paymentAmount - totalApplied) > 0.005) {
+    throw new Error('Posted bill payments must be fully applied before they can post to GL')
+  }
+
   return {
     firstBill,
     subsidiaryId,
     currencyId,
     userId,
-    totalAmount: roundMoney(sumBillPaymentApplications(applications)),
+    totalApplied,
+    unappliedAmount: roundMoney(paymentAmount - totalApplied),
   }
 }
 
@@ -329,203 +343,247 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const action = req.nextUrl.searchParams.get('action')
-  const body = await req.json()
-  if (action === 'send-email') {
-    const {
-      billPaymentId,
-      userId,
-      to,
-      from,
-      subject,
-      preview,
-      attachPdf,
-    } = body as {
-      billPaymentId?: string
-      userId?: string | null
-      to?: string
-      from?: string
-      subject?: string
-      preview?: string
-      attachPdf?: boolean
+  try {
+    const action = req.nextUrl.searchParams.get('action')
+    const body = await req.json()
+    if (action === 'send-email') {
+      const {
+        billPaymentId,
+        userId,
+        to,
+        from,
+        subject,
+        preview,
+        attachPdf,
+      } = body as {
+        billPaymentId?: string
+        userId?: string | null
+        to?: string
+        from?: string
+        subject?: string
+        preview?: string
+        attachPdf?: boolean
+      }
+
+      if (!billPaymentId || !to?.trim() || !subject?.trim()) {
+        return NextResponse.json({ error: 'Missing required email fields' }, { status: 400 })
+      }
+
+      const payment = await prisma.billPayment.findUnique({
+        where: { id: billPaymentId },
+        select: { id: true },
+      })
+
+      if (!payment) {
+        return NextResponse.json({ error: 'Bill payment not found' }, { status: 404 })
+      }
+
+      await logCommunicationActivity({
+        entityType: 'bill-payment',
+        entityId: billPaymentId,
+        userId: userId ?? null,
+        context: 'UI',
+        channel: 'Email',
+        direction: 'Outbound',
+        subject: subject.trim(),
+        from: from?.trim() || '-',
+        to: to.trim(),
+        status: attachPdf ? 'Prepared (PDF)' : 'Prepared',
+        preview: preview?.trim() || '',
+      })
+
+      return NextResponse.json({ success: true })
     }
-
-    if (!billPaymentId || !to?.trim() || !subject?.trim()) {
-      return NextResponse.json({ error: 'Missing required email fields' }, { status: 400 })
-    }
-
-    const payment = await prisma.billPayment.findUnique({
-      where: { id: billPaymentId },
-      select: { id: true },
-    })
-
-    if (!payment) {
-      return NextResponse.json({ error: 'Bill payment not found' }, { status: 404 })
-    }
-
-    await logCommunicationActivity({
-      entityType: 'bill-payment',
-      entityId: billPaymentId,
-      userId: userId ?? null,
-      context: 'UI',
-      channel: 'Email',
-      direction: 'Outbound',
-      subject: subject.trim(),
-      from: from?.trim() || '-',
-      to: to.trim(),
-      status: attachPdf ? 'Prepared (PDF)' : 'Prepared',
-      preview: preview?.trim() || '',
-    })
-
-    return NextResponse.json({ success: true })
-  }
-  const number = await generateBillPaymentNumber()
-  const applications = normalizeBillPaymentApplications(body.applications)
-  if (body.amount !== undefined) body.amount = parseMoneyValue(body.amount)
-  if (body.date) body.date = new Date(body.date)
-  const legacyBillId = typeof body.billId === 'string' && body.billId.trim() ? body.billId.trim() : null
-  const legacyVendorId = legacyBillId
-    ? (
-        await prisma.bill.findUnique({
-          where: { id: legacyBillId },
-          select: { vendorId: true },
-        })
-      )?.vendorId ?? null
-    : null
-  const resolvedVendorId = typeof body.vendorId === 'string' && body.vendorId.trim()
-    ? body.vendorId.trim()
-    : legacyVendorId
-
-  const validatedApplications =
-    applications.length > 0
-      ? await validateBillPaymentApplications(resolvedVendorId, applications)
+    const number = await generateBillPaymentNumber()
+    const applications = normalizeBillPaymentApplications(body.applications)
+    if (body.amount !== undefined) body.amount = parseMoneyValue(body.amount)
+    if (body.date) body.date = new Date(body.date)
+    const normalizedStatus = typeof body.status === 'string' ? body.status.toLowerCase() : 'pending'
+    const legacyBillId = typeof body.billId === 'string' && body.billId.trim() ? body.billId.trim() : null
+    const legacyVendorId = legacyBillId
+      ? (
+          await prisma.bill.findUnique({
+            where: { id: legacyBillId },
+            select: { vendorId: true },
+          })
+        )?.vendorId ?? null
       : null
+    const resolvedVendorId = typeof body.vendorId === 'string' && body.vendorId.trim()
+      ? body.vendorId.trim()
+      : legacyVendorId
 
-  const row = await prisma.billPayment.create({
-    data: {
-      number,
-      date: body.date,
-      method: body.method ?? null,
-      reference: body.reference ?? null,
-      status: body.status ?? 'pending',
-      notes: body.notes ?? null,
-      bankAccountId: body.bankAccountId ?? null,
-      vendorId: resolvedVendorId,
-      billId: applications[0]?.billId ?? legacyBillId,
-      amount: validatedApplications?.totalAmount ?? body.amount ?? 0,
-      applications:
-        applications.length > 0
-          ? {
-              create: applications.map((application) => ({
-                billId: application.billId,
-                appliedAmount: application.appliedAmount,
-              })),
-            }
-          : undefined,
-    },
-  })
-  if (BILL_PAYMENT_POSTING_STATUSES.has((row.status ?? '').toLowerCase())) {
-    await postBillPaymentJournal(row.id)
+    if (applications.length === 0) {
+      return NextResponse.json({ error: 'At least one bill application is required' }, { status: 400 })
+    }
+
+    await validateBillPaymentApplications(
+      resolvedVendorId,
+      body.amount ?? 0,
+      applications,
+      undefined,
+      BILL_PAYMENT_POSTING_STATUSES.has(normalizedStatus),
+    )
+
+    const row = await prisma.billPayment.create({
+      data: {
+        number,
+        date: body.date,
+        method: body.method ?? null,
+        reference: body.reference ?? null,
+        status: body.status ?? 'pending',
+        notes: body.notes ?? null,
+        bankAccountId: body.bankAccountId ?? null,
+        vendorId: resolvedVendorId,
+        billId: applications[0]?.billId ?? legacyBillId,
+        amount: body.amount ?? 0,
+        applications: {
+          create: applications.map((application) => ({
+            billId: application.billId,
+            appliedAmount: application.appliedAmount,
+          })),
+        },
+      },
+    })
+    if (BILL_PAYMENT_POSTING_STATUSES.has((row.status ?? '').toLowerCase())) {
+      await postBillPaymentJournal(row.id)
+    }
+    await logActivity({
+      entityType: 'bill-payment',
+      entityId: row.id,
+      action: 'create',
+      summary: `Created bill payment ${row.number}`,
+    })
+    return NextResponse.json(row, { status: 201 })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to create bill payment'
+    return NextResponse.json({ error: message }, { status: 400 })
   }
-  await logActivity({
-    entityType: 'bill-payment',
-    entityId: row.id,
-    action: 'create',
-    summary: `Created bill payment ${row.number}`,
-  })
-  return NextResponse.json(row, { status: 201 })
 }
 
 export async function PUT(req: NextRequest) {
-  const id = req.nextUrl.searchParams.get('id')
-  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
-  const body = await req.json()
-  const before = await prisma.billPayment.findUnique({ where: { id } })
-  if (!before) return NextResponse.json({ error: 'Bill payment not found' }, { status: 404 })
-  const applications = normalizeBillPaymentApplications(body.applications)
-  if (body.amount !== undefined) body.amount = parseMoneyValue(body.amount)
-  if (body.date) body.date = new Date(body.date)
-  const resolvedVendorId = typeof body.vendorId === 'string' && body.vendorId.trim()
-    ? body.vendorId.trim()
-    : before.vendorId
-  const validatedApplications =
-    applications.length > 0
-      ? await validateBillPaymentApplications(resolvedVendorId, applications, before.id)
-      : null
+  try {
+    const id = req.nextUrl.searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+    const body = await req.json()
+    const before = await prisma.billPayment.findUnique({
+      where: { id },
+      include: {
+        applications: {
+          select: {
+            billId: true,
+            appliedAmount: true,
+          },
+        },
+      },
+    })
+    if (!before) return NextResponse.json({ error: 'Bill payment not found' }, { status: 404 })
+    const applications = normalizeBillPaymentApplications(body.applications)
+    if (body.amount !== undefined) body.amount = parseMoneyValue(body.amount)
+    if (body.date) body.date = new Date(body.date)
+    const normalizedStatus = typeof body.status === 'string' ? body.status.toLowerCase() : before.status.toLowerCase()
+    const resolvedVendorId = typeof body.vendorId === 'string' && body.vendorId.trim()
+      ? body.vendorId.trim()
+      : before.vendorId
 
-  const row = await prisma.billPayment.update({
-    where: { id },
-    data: {
-      ...(body.date !== undefined ? { date: body.date } : {}),
-      ...(body.method !== undefined ? { method: body.method ?? null } : {}),
-      ...(body.reference !== undefined ? { reference: body.reference ?? null } : {}),
-      ...(body.status !== undefined ? { status: body.status } : {}),
-      ...(body.notes !== undefined ? { notes: body.notes ?? null } : {}),
-      ...(body.bankAccountId !== undefined ? { bankAccountId: body.bankAccountId ?? null } : {}),
-      ...(body.vendorId !== undefined ? { vendorId: body.vendorId ?? null } : {}),
-      ...(body.billId !== undefined || applications.length > 0
-        ? { billId: applications[0]?.billId ?? (typeof body.billId === 'string' && body.billId.trim() ? body.billId.trim() : null) }
-        : {}),
-      ...(validatedApplications ? { amount: validatedApplications.totalAmount } : body.amount !== undefined ? { amount: body.amount } : {}),
-      ...(body.applications !== undefined
-        ? {
-            applications: {
-              deleteMany: {},
-              create: applications.map((application) => ({
-                billId: application.billId,
-                appliedAmount: application.appliedAmount,
-              })),
-            },
-          }
-        : {}),
-    },
-  })
-  const changes = [
-    body.vendorId !== undefined && (before.vendorId ?? '') !== (row.vendorId ?? '')
-      ? { fieldName: 'Vendor', oldValue: before.vendorId ?? '-', newValue: row.vendorId ?? '-' }
-      : null,
-    body.billId !== undefined && before.billId !== row.billId
-      ? { fieldName: 'Bill', oldValue: before.billId, newValue: row.billId }
-      : null,
-    body.amount !== undefined && String(before.amount) !== String(row.amount)
-      ? { fieldName: 'Amount', oldValue: String(before.amount), newValue: String(row.amount) }
-      : null,
-    body.date !== undefined && before.date.toISOString() !== row.date.toISOString()
-      ? { fieldName: 'Date', oldValue: before.date.toISOString().slice(0, 10), newValue: row.date.toISOString().slice(0, 10) }
-      : null,
-    body.method !== undefined && (before.method ?? '') !== (row.method ?? '')
-      ? { fieldName: 'Method', oldValue: before.method ?? '-', newValue: row.method ?? '-' }
-      : null,
-    body.bankAccountId !== undefined && (before.bankAccountId ?? '') !== (row.bankAccountId ?? '')
-      ? { fieldName: 'Bank Account', oldValue: before.bankAccountId ?? '-', newValue: row.bankAccountId ?? '-' }
-      : null,
-    body.reference !== undefined && (before.reference ?? '') !== (row.reference ?? '')
-      ? { fieldName: 'Reference', oldValue: before.reference ?? '-', newValue: row.reference ?? '-' }
-      : null,
-    body.status !== undefined && before.status !== row.status
-      ? { fieldName: 'Status', oldValue: before.status, newValue: row.status }
-      : null,
-    body.notes !== undefined && (before.notes ?? '') !== (row.notes ?? '')
-      ? { fieldName: 'Notes', oldValue: before.notes ?? '-', newValue: row.notes ?? '-' }
-      : null,
-  ].filter((change): change is { fieldName: string; oldValue: string; newValue: string } => Boolean(change))
+    if (body.applications !== undefined && applications.length === 0) {
+      return NextResponse.json({ error: 'At least one bill application is required' }, { status: 400 })
+    }
 
-  await logFieldChangeActivities({
-    entityType: 'bill-payment',
-    entityId: row.id,
-    context: 'Bill Payment Details',
-    changes,
-  })
-  await logActivity({
-    entityType: 'bill-payment',
-    entityId: row.id,
-    action: 'update',
-    summary: `Updated bill payment ${row.number}`,
-  })
-  if (BILL_PAYMENT_POSTING_STATUSES.has((row.status ?? '').toLowerCase())) {
-    await postBillPaymentJournal(row.id)
+    await validateBillPaymentApplications(
+      resolvedVendorId,
+      body.amount ?? Number(before.amount),
+      applications.length > 0
+        ? applications
+        : before.applications.length > 0
+          ? before.applications.map((application) => ({
+              billId: application.billId,
+              appliedAmount: Number(application.appliedAmount),
+            }))
+          : before.billId
+            ? [{ billId: before.billId, appliedAmount: Number(before.amount) }]
+            : [],
+      before.id,
+      BILL_PAYMENT_POSTING_STATUSES.has(normalizedStatus),
+    )
+
+    const row = await prisma.billPayment.update({
+      where: { id },
+      data: {
+        ...(body.date !== undefined ? { date: body.date } : {}),
+        ...(body.method !== undefined ? { method: body.method ?? null } : {}),
+        ...(body.reference !== undefined ? { reference: body.reference ?? null } : {}),
+        ...(body.status !== undefined ? { status: body.status } : {}),
+        ...(body.notes !== undefined ? { notes: body.notes ?? null } : {}),
+        ...(body.bankAccountId !== undefined ? { bankAccountId: body.bankAccountId ?? null } : {}),
+        ...(body.vendorId !== undefined ? { vendorId: body.vendorId ?? null } : {}),
+        ...(body.billId !== undefined || applications.length > 0
+          ? { billId: applications[0]?.billId ?? (typeof body.billId === 'string' && body.billId.trim() ? body.billId.trim() : null) }
+          : {}),
+        ...(body.amount !== undefined ? { amount: body.amount } : {}),
+        ...(body.applications !== undefined
+          ? {
+              applications: {
+                deleteMany: {},
+                create: applications.map((application) => ({
+                  billId: application.billId,
+                  appliedAmount: application.appliedAmount,
+                })),
+              },
+            }
+        : {}),
+      },
+    })
+
+    const changes = [
+      body.vendorId !== undefined && (before.vendorId ?? '') !== (row.vendorId ?? '')
+        ? { fieldName: 'Vendor', oldValue: before.vendorId ?? '-', newValue: row.vendorId ?? '-' }
+        : null,
+      body.billId !== undefined && before.billId !== row.billId
+        ? { fieldName: 'Bill', oldValue: before.billId, newValue: row.billId }
+        : null,
+      body.amount !== undefined && String(before.amount) !== String(row.amount)
+        ? { fieldName: 'Amount', oldValue: String(before.amount), newValue: String(row.amount) }
+        : null,
+      body.date !== undefined && before.date.toISOString() !== row.date.toISOString()
+        ? { fieldName: 'Date', oldValue: before.date.toISOString().slice(0, 10), newValue: row.date.toISOString().slice(0, 10) }
+        : null,
+      body.method !== undefined && (before.method ?? '') !== (row.method ?? '')
+        ? { fieldName: 'Method', oldValue: before.method ?? '-', newValue: row.method ?? '-' }
+        : null,
+      body.bankAccountId !== undefined && (before.bankAccountId ?? '') !== (row.bankAccountId ?? '')
+        ? { fieldName: 'Bank Account', oldValue: before.bankAccountId ?? '-', newValue: row.bankAccountId ?? '-' }
+        : null,
+      body.reference !== undefined && (before.reference ?? '') !== (row.reference ?? '')
+        ? { fieldName: 'Reference', oldValue: before.reference ?? '-', newValue: row.reference ?? '-' }
+        : null,
+      body.status !== undefined && before.status !== row.status
+        ? { fieldName: 'Status', oldValue: before.status, newValue: row.status }
+        : null,
+      body.notes !== undefined && (before.notes ?? '') !== (row.notes ?? '')
+        ? { fieldName: 'Notes', oldValue: before.notes ?? '-', newValue: row.notes ?? '-' }
+        : null,
+    ].filter((change): change is { fieldName: string; oldValue: string; newValue: string } => Boolean(change))
+
+    await logFieldChangeActivities({
+      entityType: 'bill-payment',
+      entityId: row.id,
+      context: 'Bill Payment Details',
+      changes,
+    })
+    await logActivity({
+      entityType: 'bill-payment',
+      entityId: row.id,
+      action: 'update',
+      summary: `Updated bill payment ${row.number}`,
+    })
+    if (BILL_PAYMENT_POSTING_STATUSES.has((row.status ?? '').toLowerCase())) {
+      await postBillPaymentJournal(row.id)
+    }
+    return NextResponse.json(row)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to update bill payment'
+    return NextResponse.json({ error: message }, { status: 400 })
   }
-  return NextResponse.json(row)
 }
 
 export async function DELETE(req: NextRequest) {

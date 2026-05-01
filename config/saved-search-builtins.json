@@ -1,0 +1,286 @@
+{
+  "baselines": [
+    {
+      "tableId": "users-list",
+      "columnIds": [
+        "id",
+        "name",
+        "email",
+        "role",
+        "department",
+        "default-subsidiary",
+        "subsidiaries",
+        "include-children"
+      ],
+      "columnOrder": [
+        "email",
+        "role",
+        "department",
+        "default-subsidiary",
+        "subsidiaries",
+        "include-children",
+        "approval-limit",
+        "delegated-approver",
+        "locked",
+        "employee",
+        "inactive",
+        "created",
+        "last-modified",
+        "role.name",
+        "department.name",
+        "department.departmentId",
+        "defaultSubsidiary.subsidiaryId",
+        "approvalCurrency.code",
+        "delegatedApprover.name",
+        "delegatedApprover.email",
+        "linkedEmployee.employeeId",
+        "linkedEmployee.lastName"
+      ],
+      "filterState": {
+        "filterValues": {},
+        "globalFilterIds": [],
+        "criteria": [],
+        "audience": {
+          "visibility": "private",
+          "allowEdit": true,
+          "userIds": [],
+          "internalRoleIds": [
+            "cmoajjkxb0000rgdjv3dqci48"
+          ],
+          "departmentIds": [],
+          "subsidiaryIds": [],
+          "employeeIds": []
+        },
+        "rolePreferences": {
+          "preferredSearchResults": false,
+          "assignments": [
+            {
+              "roleId": "cmoajjkxb0000rgdjv3dqci48",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxs000brgdjxcx9qjwh",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxt000crgdj4unm0sus",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxu000drgdj77c042ts",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkyb000qrgdjvytkhoy6",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxh0003rgdj3vhrqvnm",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxi0004rgdjdw91o3ay",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxk0005rgdjoq6yjmtt",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxm0006rgdjm063e1m3",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxn0007rgdjmyp7bl1w",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjky6000mrgdjf4wsgtob",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjky8000nrgdjulistopj",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjky9000orgdjaea1n51d",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkya000prgdj8l42m4zk",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxy000grgdjk17g0b5l",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjky0000hrgdjwslpnwv2",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxe0001rgdjw8saxogk",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxf0002rgdjlmkw4rsg",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxq0009rgdjhqs2o7v6",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxr000argdj6mwegknt",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxp0008rgdjc0yb67ir",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjky4000krgdjtvepv2qb",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjky5000lrgdjulk1tk4w",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjky1000irgdj4f0m39my",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjky3000jrgdj1n5p5dnv",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxw000ergdj8iyccgc4",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            },
+            {
+              "roleId": "cmoajjkxx000frgdjtesu91vf",
+              "list": true,
+              "form": true,
+              "results": true,
+              "dashboard": true,
+              "sublist": true
+            }
+          ]
+        },
+        "emailSchedules": [],
+        "results": {
+          "columnLabels": {}
+        }
+      },
+      "availableFilterIds": [
+        "keyword",
+        "sort"
+      ]
+    }
+  ]
+}

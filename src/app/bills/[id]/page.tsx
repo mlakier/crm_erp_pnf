@@ -692,7 +692,7 @@ export default async function BillDetailPage({
           />
           )
         }
-        relatedDocuments={isCustomizing ? null : (
+        relatedRecords={isCustomizing ? null : (
           <BillRelatedDocuments
             embedded
             showDisplayControl={false}
@@ -729,12 +729,18 @@ export default async function BillDetailPage({
             moneySettings={moneySettings}
           />
         )}
-        relatedDocumentsCount={
+        relatedRecordsCount={
           (linkedPurchaseOrder?.requisition ? 1 : 0) +
           (bill.purchaseOrder ? 1 : 0) +
           (linkedPurchaseOrder?.receipts.length ?? 0) +
           bill.billPayments.length
         }
+        relatedDocuments={isCustomizing ? null : (
+          <div className="px-6 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>
+            No related documents are attached to this bill yet.
+          </div>
+        )}
+        relatedDocumentsCount={0}
         supplementarySections={
           isCustomizing ? null : (
             <BillGlImpactSection
@@ -747,6 +753,7 @@ export default async function BillDetailPage({
         communications={isCustomizing ? null : (
           <CommunicationsSection
             embedded
+            toolbarTargetId="bill-communications-toolbar"
             showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
@@ -775,8 +782,12 @@ export default async function BillDetailPage({
           />
         )}
         communicationsCount={communications.length}
-        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        communicationsToolbarTargetId="bill-communications-toolbar"
+        communicationsToolbarPlacement="tab-bar"
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded toolbarTargetId="bill-system-notes-toolbar" showDisplayControl={false} notes={systemNotes} />}
         systemNotesCount={systemNotes.length}
+        systemNotesToolbarTargetId="bill-system-notes-toolbar"
+        systemNotesToolbarPlacement="tab-bar"
       />
     </RecordDetailPageShell>
   )

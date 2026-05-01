@@ -4,12 +4,14 @@ import PaginationFooter from '@/components/PaginationFooter'
 
 type MasterDataListSectionProps = MasterDataListToolbarProps & {
   children: ReactNode
+  topContent?: ReactNode
   tableContainerId?: string
   tableContainerClassName?: string
 }
 
 export default function MasterDataListSection({
   children,
+  topContent,
   tableContainerId,
   tableContainerClassName = 'record-list-scroll-region overflow-x-auto',
   ...toolbarProps
@@ -24,6 +26,11 @@ export default function MasterDataListSection({
       className="overflow-hidden rounded-2xl border"
       style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}
     >
+      {topContent ? (
+        <div className="border-b px-6 py-4" style={{ borderColor: 'var(--border-muted)' }}>
+          {topContent}
+        </div>
+      ) : null}
       <MasterDataListToolbar {...toolbarProps} />
       <div
         id={tableContainerId}

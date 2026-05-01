@@ -1,0 +1,3 @@
+ALTER TABLE "saved_list_views"
+  ADD COLUMN IF NOT EXISTS "filterState" TEXT NOT NULL DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS "availableFilterIds" TEXT NOT NULL DEFAULT '[]';

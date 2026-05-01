@@ -69,6 +69,7 @@ model User {
   quotes                Quote[]
   salesOrders           SalesOrder[]
   invoices              Invoice[]
+  customerRefunds       CustomerRefund[]
   requisitions          Requisition[]
   purchaseOrders        PurchaseOrder[]
   creditMemos           CreditMemo[]
@@ -108,6 +109,8 @@ model SavedListView {
   name        String
   columnIds   String
   columnOrder String
+  filterState String   @default("{}")
+  availableFilterIds String @default("[]")
   isDefault   Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -145,6 +148,7 @@ model Customer {
   salesOrders           SalesOrder[]
   invoices              Invoice[]
   creditMemos           CreditMemo[]
+  customerRefunds       CustomerRefund[]
   journalEntryLineItems JournalEntryLineItem[]
   subsidiary            Subsidiary?            @relation(fields: [subsidiaryId], references: [id])
   currency              Currency?              @relation(fields: [currencyId], references: [id])
@@ -400,6 +404,7 @@ model ChartOfAccounts {
   cogsExpenseItems             Item[]                     @relation("ItemCogsExpenseAccount")
   deferredCostItems            Item[]                     @relation("ItemDeferredCostAccount")
   cashReceipts                 CashReceipt[]              @relation("CashReceiptBankAccount")
+  customerRefunds              CustomerRefund[]           @relation("CustomerRefundBankAccount")
   billPayments                 BillPayment[]              @relation("BillPaymentBankAccount")
   retainedEarningsSubsidiaries     Subsidiary[] @relation("SubsidiaryRetainedEarningsAccount")
   ctaSubsidiaries                  Subsidiary[] @relation("SubsidiaryCtaAccount")
@@ -658,6 +663,7 @@ model Invoice {
   userId       String?
   user         User?             @relation(fields: [userId], references: [id])
   cashReceipts CashReceipt[]
+  cashReceiptApplications CashReceiptApplication[]
   lineItems    InvoiceLineItem[]
   creditMemos  CreditMemo[]
   subsidiary   Subsidiary?       @relation(fields: [subsidiaryId], references: [id])
@@ -674,6 +680,8 @@ model Invoice {
 model CashReceipt {
   id        String   @id @default(cuid())
   number    String?  @unique
+  status    String   @default("draft")
+  overpaymentHandling String?
   amount    Decimal   @db.Decimal(18, 2)
   date      DateTime
   method    String // check, wire, etc.
@@ -686,10 +694,64 @@ model CashReceipt {
   invoiceId String
   invoice   Invoice @relation(fields: [invoiceId], references: [id])
   bankAccount ChartOfAccounts? @relation("CashReceiptBankAccount", fields: [bankAccountId], references: [id])
+  applications CashReceiptApplication[]
+  customerRefunds CustomerRefund[]
 
   @@index([invoiceId])
   @@index([bankAccountId])
+  @@index([status])
   @@map("cash_receipts")
+}
+
+model CustomerRefund {
+  id                 String   @id @default(cuid())
+  number             String   @unique
+  status             String   @default("draft")
+  amount             Decimal  @db.Decimal(18, 2)
+  date               DateTime
+  method             String
+  reference          String?
+  notes              String?
+  bankAccountId      String?
+  customerId         String
+  cashReceiptId      String?
+  userId             String?
+  subsidiaryId       String?
+  currencyId         String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  customer           Customer        @relation(fields: [customerId], references: [id])
+  cashReceipt        CashReceipt?    @relation(fields: [cashReceiptId], references: [id])
+  bankAccount        ChartOfAccounts? @relation("CustomerRefundBankAccount", fields: [bankAccountId], references: [id])
+  user               User?           @relation(fields: [userId], references: [id])
+  subsidiary         Subsidiary?     @relation(fields: [subsidiaryId], references: [id])
+  currency           Currency?       @relation(fields: [currencyId], references: [id])
+
+  @@index([status])
+  @@index([customerId])
+  @@index([cashReceiptId])
+  @@index([bankAccountId])
+  @@index([userId])
+  @@index([subsidiaryId])
+  @@index([currencyId])
+  @@map("customer_refunds")
+}
+
+model CashReceiptApplication {
+  id            String   @id @default(cuid())
+  cashReceiptId String
+  invoiceId     String
+  appliedAmount Decimal  @db.Decimal(18, 2)
+  createdAt     DateTime @default(now())
+
+  cashReceipt CashReceipt @relation(fields: [cashReceiptId], references: [id], onDelete: Cascade)
+  invoice     Invoice     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([cashReceiptId, invoiceId])
+  @@index([cashReceiptId])
+  @@index([invoiceId])
+  @@map("cash_receipt_applications")
 }
 
 model Requisition {
@@ -1025,6 +1087,10 @@ model JournalEntryLineItem {
   debit       Decimal  @default(0) @db.Decimal(18, 2)
   credit      Decimal  @default(0) @db.Decimal(18, 2)
   memo        String?
+  activityTypeCode String?
+  reversesJournalEntryLineItemId String?
+  reconciliationGroupKey String?
+  reconciliationInstanceId String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -1058,6 +1124,10 @@ model JournalEntryLineItem {
   @@index([vendorId])
   @@index([itemId])
   @@index([employeeId])
+  @@index([activityTypeCode])
+  @@index([reversesJournalEntryLineItemId])
+  @@index([reconciliationGroupKey])
+  @@index([reconciliationInstanceId])
   @@map("journal_entry_line_items")
 }
 
@@ -1155,6 +1225,9 @@ model JournalEntry {
   accountingPeriodId String?
   sourceType         String?
   sourceId           String?
+  reversesJournalEntryId String?
+  reversalReasonCode String?
+  isOpenItemRelevant Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -1178,6 +1251,8 @@ model JournalEntry {
   @@index([postedByEmployeeId])
   @@index([approvedByEmployeeId])
   @@index([accountingPeriodId])
+  @@index([reversesJournalEntryId])
+  @@index([isOpenItemRelevant])
   @@map("journal_entries")
 }
 
@@ -1196,8 +1271,11 @@ model AccountingPeriod {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  subsidiary     Subsidiary?        @relation(fields: [subsidiaryId], references: [id])
-  journalEntries JournalEntry[]
+  subsidiary        Subsidiary?              @relation(fields: [subsidiaryId], references: [id])
+  journalEntries    JournalEntry[]
+  runHeaders        RunHeader[]
+  openItemEntries   OpenItemEntry[]
+  clearingDocuments ClearingDocumentHeader[]
 
   @@index([subsidiaryId])
   @@map("accounting_periods")
@@ -1298,6 +1376,7 @@ model Currency {
   salesOrders                SalesOrder[]
   invoices                   Invoice[]
   creditMemos                CreditMemo[]
+  customerRefunds            CustomerRefund[]
   purchaseOrders             PurchaseOrder[]
   bills                      Bill[]
   billCredits                BillCredit[]
@@ -1391,6 +1470,7 @@ model Subsidiary {
   salesOrders                 SalesOrder[]
   invoices                    Invoice[]
   creditMemos                 CreditMemo[]
+  customerRefunds             CustomerRefund[]
   purchaseOrders              PurchaseOrder[]
   bills                       Bill[]
   billCredits                 BillCredit[]
@@ -1685,4 +1765,346 @@ model BillPaymentApplication {
   @@index([billId])
   @@unique([billPaymentId, billId])
   @@map("bill_payment_applications")
+}
+
+model ActivityTypeDefinition {
+  id                     String   @id @default(cuid())
+  code                   String   @unique
+  name                   String
+  category               String
+  status                 String   @default("active")
+  description            String?
+  defaultRollForwardGroup String?
+  isSystemDefined        Boolean  @default(true)
+  isOpenItemRelevant     Boolean  @default(false)
+  isClearingRelevant     Boolean  @default(false)
+  isFxRelevant           Boolean  @default(false)
+  isIntercompanyRelevant Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([category])
+  @@index([status])
+  @@map("activity_type_definitions")
+}
+
+model RunHeader {
+  id               String   @id @default(cuid())
+  runNumber        String   @unique
+  runType          String
+  status           String   @default("queued")
+  triggerType      String   @default("manual")
+  scopeType        String?
+  scopeJson        String?
+  requestedAt      DateTime @default(now())
+  startedAt        DateTime?
+  completedAt      DateTime?
+  asOfDate         DateTime?
+  accountingPeriodId String?
+  subsidiaryScope  String?
+  message          String?
+  summaryJson      String?
+  requestedById    String?
+  startedById      String?
+  completedById    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  accountingPeriod AccountingPeriod? @relation(fields: [accountingPeriodId], references: [id])
+  items            RunItem[]
+  outputLinks      RunOutputLink[]
+  exceptions       RunException[]
+
+  @@index([runType])
+  @@index([status])
+  @@index([accountingPeriodId])
+  @@index([requestedAt])
+  @@map("run_headers")
+}
+
+model RunItem {
+  id               String   @id @default(cuid())
+  runHeaderId      String
+  itemNumber       Int
+  itemType         String
+  status           String   @default("pending")
+  sourceRecordType String?
+  sourceRecordId   String?
+  sourceLineId     String?
+  targetRecordType String?
+  targetRecordId   String?
+  targetLineId     String?
+  message          String?
+  requestPayloadJson String?
+  resultPayloadJson String?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  runHeader        RunHeader       @relation(fields: [runHeaderId], references: [id], onDelete: Cascade)
+  outputLinks      RunOutputLink[]
+  exceptions       RunException[]
+
+  @@unique([runHeaderId, itemNumber])
+  @@index([status])
+  @@index([sourceRecordType, sourceRecordId])
+  @@map("run_items")
+}
+
+model RunOutputLink {
+  id               String   @id @default(cuid())
+  runHeaderId      String
+  runItemId        String?
+  outputType       String
+  outputRecordType String?
+  outputRecordId   String?
+  outputLineId     String?
+  glHeaderId       String?
+  glLineId         String?
+  createdAt        DateTime @default(now())
+
+  runHeader        RunHeader @relation(fields: [runHeaderId], references: [id], onDelete: Cascade)
+  runItem          RunItem?  @relation(fields: [runItemId], references: [id], onDelete: SetNull)
+
+  @@index([runItemId])
+  @@index([outputRecordType, outputRecordId])
+  @@index([glHeaderId])
+  @@map("run_output_links")
+}
+
+model RunException {
+  id               String   @id @default(cuid())
+  runHeaderId      String
+  runItemId        String?
+  severity         String
+  exceptionType    String
+  status           String   @default("open")
+  sourceRecordType String?
+  sourceRecordId   String?
+  message          String
+  detailsJson      String?
+  assignedToId     String?
+  resolvedAt       DateTime?
+  resolvedById     String?
+  resolutionNote   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  runHeader        RunHeader @relation(fields: [runHeaderId], references: [id], onDelete: Cascade)
+  runItem          RunItem?  @relation(fields: [runItemId], references: [id], onDelete: SetNull)
+
+  @@index([runItemId])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([sourceRecordType, sourceRecordId])
+  @@map("run_exceptions")
+}
+
+model OpenItem {
+  id                       String   @id @default(cuid())
+  openItemNumber           String   @unique
+  openItemType             String
+  status                   String
+  accountType              String
+  subsidiaryId             String?
+  transactionCurrencyId    String?
+  localCurrencyId          String?
+  functionalCurrencyId     String?
+  sourceTransactionType    String?
+  sourceTransactionId      String?
+  sourceTransactionLineId  String?
+  sourceNumber             String?
+  counterpartyType         String?
+  counterpartyId           String?
+  documentDate             DateTime?
+  postingDate              DateTime?
+  dueDate                  DateTime?
+  originalTransactionAmount Decimal @db.Decimal(18, 2)
+  originalLocalAmount      Decimal? @db.Decimal(18, 2)
+  originalFunctionalAmount Decimal? @db.Decimal(18, 2)
+  openItemEligible         Boolean  @default(true)
+  isOpen                   Boolean  @default(true)
+  closedAt                 DateTime?
+  closedById               String?
+  memo                     String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  entries                  OpenItemEntry[]
+  applicationsFrom         OpenItemApplication[] @relation("OpenItemApplicationFrom")
+  applicationsTo           OpenItemApplication[] @relation("OpenItemApplicationTo")
+  clearingLinesFrom        ClearingDocumentLine[] @relation("ClearingLineFromOpenItem")
+  clearingLinesTo          ClearingDocumentLine[] @relation("ClearingLineToOpenItem")
+
+  @@index([status])
+  @@index([isOpen])
+  @@index([openItemType])
+  @@index([subsidiaryId])
+  @@index([sourceTransactionType, sourceTransactionId])
+  @@index([counterpartyType, counterpartyId])
+  @@index([subsidiaryId, isOpen, postingDate])
+  @@index([counterpartyType, counterpartyId, isOpen])
+  @@map("open_items")
+}
+
+model OpenItemEntry {
+  id                    String   @id @default(cuid())
+  openItemId            String
+  entryNumber           Int
+  entryType             String
+  effectiveDate         DateTime
+  postingDate           DateTime?
+  accountingPeriodId    String?
+  transactionAmount     Decimal  @db.Decimal(18, 2)
+  localAmount           Decimal? @db.Decimal(18, 2)
+  functionalAmount      Decimal? @db.Decimal(18, 2)
+  sourceTransactionType String?
+  sourceTransactionId   String?
+  sourceTransactionLineId String?
+  sourceApplicationId   String?
+  sourceGlLineId        String?
+  sourceRunId           String?
+  memo                  String?
+  createdAt             DateTime @default(now())
+  createdById           String?
+
+  openItem              OpenItem          @relation(fields: [openItemId], references: [id], onDelete: Cascade)
+  accountingPeriod      AccountingPeriod? @relation(fields: [accountingPeriodId], references: [id])
+
+  @@unique([openItemId, entryNumber])
+  @@index([entryType])
+  @@index([postingDate])
+  @@index([sourceApplicationId])
+  @@index([sourceTransactionType, sourceTransactionId])
+  @@index([sourceGlLineId])
+  @@index([openItemId, effectiveDate])
+  @@map("open_item_entries")
+}
+
+model OpenItemApplication {
+  id                    String   @id @default(cuid())
+  applicationNumber     String   @unique
+  applicationType       String
+  status                String
+  fromOpenItemId        String
+  toOpenItemId          String?
+  settlementTransactionType String?
+  settlementTransactionId String?
+  applicationDate       DateTime
+  postingDate           DateTime?
+  transactionAmount     Decimal  @db.Decimal(18, 2)
+  localAmount           Decimal? @db.Decimal(18, 2)
+  functionalAmount      Decimal? @db.Decimal(18, 2)
+  exchangeRateContextId String?
+  reversesApplicationId String?
+  memo                  String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  createdById           String?
+
+  fromOpenItem          OpenItem           @relation("OpenItemApplicationFrom", fields: [fromOpenItemId], references: [id], onDelete: Cascade)
+  toOpenItem            OpenItem?          @relation("OpenItemApplicationTo", fields: [toOpenItemId], references: [id], onDelete: SetNull)
+  clearingLines         ClearingDocumentLine[]
+
+  @@index([fromOpenItemId])
+  @@index([toOpenItemId])
+  @@index([applicationDate])
+  @@index([postingDate])
+  @@index([settlementTransactionType, settlementTransactionId])
+  @@index([reversesApplicationId])
+  @@index([fromOpenItemId, applicationDate])
+  @@index([toOpenItemId, applicationDate])
+  @@map("open_item_applications")
+}
+
+model ClearingDocumentHeader {
+  id                       String   @id @default(cuid())
+  clearingNumber           String   @unique
+  clearingType             String
+  status                   String
+  subsidiaryId             String?
+  transactionCurrencyId    String?
+  localCurrencyId          String?
+  functionalCurrencyId     String?
+  clearingDate             DateTime
+  postingDate              DateTime?
+  accountingPeriodId       String?
+  sourceTransactionType    String?
+  sourceTransactionId      String?
+  sourceRunId              String?
+  counterpartyType         String?
+  counterpartyId           String?
+  transactionAmount        Decimal  @db.Decimal(18, 2)
+  localAmount              Decimal? @db.Decimal(18, 2)
+  functionalAmount         Decimal? @db.Decimal(18, 2)
+  realizedFxLocalAmount    Decimal? @db.Decimal(18, 2)
+  realizedFxFunctionalAmount Decimal? @db.Decimal(18, 2)
+  memo                     String?
+  reversesClearingDocumentId String?
+  reversedByClearingDocumentId String?
+  autoGenerated            Boolean  @default(false)
+  automationSource         String?
+  exceptionStatus          String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  createdById              String?
+  postedById               String?
+  reversedById             String?
+
+  accountingPeriod         AccountingPeriod?     @relation(fields: [accountingPeriodId], references: [id])
+  lines                    ClearingDocumentLine[]
+
+  @@index([status])
+  @@index([clearingType])
+  @@index([clearingDate])
+  @@index([sourceTransactionType, sourceTransactionId])
+  @@index([sourceRunId])
+  @@index([counterpartyType, counterpartyId])
+  @@index([autoGenerated])
+  @@index([exceptionStatus])
+  @@map("clearing_document_headers")
+}
+
+model ClearingDocumentLine {
+  id                         String   @id @default(cuid())
+  clearingDocumentId         String
+  lineNumber                 Int
+  lineRole                   String
+  fromOpenItemId             String?
+  toOpenItemId               String?
+  sourceTransactionType      String?
+  sourceTransactionId        String?
+  sourceTransactionLineId    String?
+  settlementTransactionType  String?
+  settlementTransactionId    String?
+  settlementTransactionLineId String?
+  originalExchangeRateContextId String?
+  settlementExchangeRateContextId String?
+  transactionAmount          Decimal  @db.Decimal(18, 2)
+  localAmount                Decimal? @db.Decimal(18, 2)
+  functionalAmount           Decimal? @db.Decimal(18, 2)
+  realizedFxLocalAmount      Decimal? @db.Decimal(18, 2)
+  realizedFxFunctionalAmount Decimal? @db.Decimal(18, 2)
+  openItemApplicationId      String?
+  sourceGlLineId             String?
+  settlementGlLineId         String?
+  memo                       String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  clearingDocument           ClearingDocumentHeader @relation(fields: [clearingDocumentId], references: [id], onDelete: Cascade)
+  fromOpenItem               OpenItem?              @relation("ClearingLineFromOpenItem", fields: [fromOpenItemId], references: [id], onDelete: SetNull)
+  toOpenItem                 OpenItem?              @relation("ClearingLineToOpenItem", fields: [toOpenItemId], references: [id], onDelete: SetNull)
+  openItemApplication        OpenItemApplication?   @relation(fields: [openItemApplicationId], references: [id], onDelete: SetNull)
+
+  @@unique([clearingDocumentId, lineNumber])
+  @@index([fromOpenItemId])
+  @@index([toOpenItemId])
+  @@index([openItemApplicationId])
+  @@index([sourceTransactionType, sourceTransactionId])
+  @@index([settlementTransactionType, settlementTransactionId])
+  @@index([sourceGlLineId])
+  @@index([settlementGlLineId])
+  @@map("clearing_document_lines")
 }

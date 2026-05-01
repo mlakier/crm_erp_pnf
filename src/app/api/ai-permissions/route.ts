@@ -20,6 +20,7 @@ const ALL_PAGES = [
   { key: 'fulfillments', label: 'Fulfillments', group: 'OTC (Order-to-Cash)' },
   { key: 'invoices', label: 'Invoices', group: 'OTC (Order-to-Cash)', statusKey: 'INV-STATUS' },
   { key: 'invoice-receipts', label: 'Invoice Receipts', group: 'OTC (Order-to-Cash)' },
+  { key: 'customer-refunds', label: 'Customer Refunds', group: 'OTC (Order-to-Cash)' },
   { key: 'purchase-requisitions', label: 'Purchase Requisitions', group: 'PTP (Procure-to-Pay)', statusKey: 'REQ-STATUS' },
   { key: 'purchase-orders', label: 'Purchase Orders', group: 'PTP (Procure-to-Pay)', statusKey: 'PO-STATUS' },
   { key: 'receipts', label: 'Receipts', group: 'PTP (Procure-to-Pay)', statusKey: 'RECEIPT-STATUS' },

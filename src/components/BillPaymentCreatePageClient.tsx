@@ -6,6 +6,7 @@ import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionActionStack from '@/components/TransactionActionStack'
 import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import BillPaymentApplicationsSection from '@/components/BillPaymentApplicationsSection'
+import { fmtCurrency } from '@/lib/format'
 import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
 import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/lib/form-requirements-client'
 import {
@@ -14,10 +15,12 @@ import {
   type BillPaymentDetailFieldKey,
 } from '@/lib/bill-payment-detail-customization'
 import {
+  sumBillPaymentApplications,
   roundMoney,
   type BillApplicationCandidate,
   type BillPaymentApplicationInput,
 } from '@/lib/bill-payment-applications'
+import { parseMoneyValue } from '@/lib/money'
 
 type Option = { value: string; label: string }
 
@@ -59,7 +62,7 @@ export default function BillPaymentCreatePageClient({
   const [headerValues, setHeaderValues] = useState<Record<string, string>>({
     vendorId: initialHeaderValues?.vendorId ?? vendors[0]?.value ?? '',
     bankAccountId: initialHeaderValues?.bankAccountId ?? bankAccountOptions[0]?.value ?? '',
-    amount: initialHeaderValues?.amount ?? '',
+    amount: initialHeaderValues?.amount ?? (initialApplications.length > 0 ? String(roundMoney(sumBillPaymentApplications(initialApplications))) : ''),
     date: initialHeaderValues?.date ?? new Date().toISOString().slice(0, 10),
     method: initialHeaderValues?.method ?? methodOptions[0]?.value ?? '',
     reference: initialHeaderValues?.reference ?? '',
@@ -72,10 +75,23 @@ export default function BillPaymentCreatePageClient({
     [headerValues.vendorId, vendors],
   )
 
+  const paymentAmount = useMemo(
+    () => roundMoney(parseMoneyValue(headerValues.amount, 0)),
+    [headerValues.amount],
+  )
+
   const appliedTotal = useMemo(
-    () => roundMoney(applications.reduce((sum, application) => sum + application.appliedAmount, 0)),
+    () => roundMoney(sumBillPaymentApplications(applications)),
     [applications],
   )
+
+  const allocationError = useMemo(() => {
+    if (paymentAmount <= 0) return 'Payment amount must be greater than zero.'
+    if (appliedTotal > paymentAmount + 0.005) {
+      return 'Applied bill amounts cannot exceed the entered payment amount.'
+    }
+    return ''
+  }, [appliedTotal, paymentAmount])
 
   useEffect(() => {
     setApplications((current) =>
@@ -147,10 +163,11 @@ export default function BillPaymentCreatePageClient({
     amount: {
       key: 'amount',
       label: 'Amount',
-      value: appliedTotal > 0 ? String(appliedTotal) : '',
-      displayValue: appliedTotal > 0 ? String(appliedTotal) : '-',
-      editable: false,
-      helpText: 'Payment amount derived from the bill applications below.',
+      value: headerValues.amount ?? '',
+      displayValue: headerValues.amount || '-',
+      editable: true,
+      type: 'number',
+      helpText: 'Enter the total payment amount, then allocate it across open bills below.',
       fieldType: 'currency',
       subsectionTitle: 'Payment Terms',
       subsectionDescription: 'Monetary amount, date, payment method, and status.',
@@ -251,6 +268,11 @@ export default function BillPaymentCreatePageClient({
   })
 
   async function handleSubmit(values: Record<string, string>) {
+    if (allocationError) {
+      setError(allocationError)
+      return { ok: false, error: allocationError }
+    }
+
     setSaving(true)
     setError('')
 
@@ -261,6 +283,7 @@ export default function BillPaymentCreatePageClient({
         body: JSON.stringify({
           vendorId: values.vendorId,
           bankAccountId: values.bankAccountId || null,
+          amount: values.amount,
           date: values.date,
           method: values.method,
           status: values.status,
@@ -312,11 +335,22 @@ export default function BillPaymentCreatePageClient({
         <BillPaymentApplicationsSection
           bills={bills}
           selectedVendorId={headerValues.vendorId ?? ''}
+          paymentAmount={paymentAmount}
           applications={applications}
           onChange={setApplications}
           editing
         />
       </div>
+      {allocationError ? (
+        <p className="mt-4 text-sm" style={{ color: 'var(--danger)' }}>
+          {allocationError}
+        </p>
+      ) : null}
+      {!allocationError && paymentAmount > appliedTotal ? (
+        <p className="mt-4 text-sm" style={{ color: 'var(--text-muted)' }}>
+          Unapplied amount: {fmtCurrency(roundMoney(paymentAmount - appliedTotal))}
+        </p>
+      ) : null}
       {error ? (
         <p className="mt-4 text-sm" style={{ color: 'var(--danger)' }}>
           {error}

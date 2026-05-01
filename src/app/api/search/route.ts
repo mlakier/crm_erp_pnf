@@ -33,6 +33,7 @@ const PAGES = [
   { label: 'Fulfillments',          href: '/fulfillments' },
   { label: 'Invoices',              href: '/invoices' },
   { label: 'Invoice Receipts',      href: '/invoice-receipts' },
+  { label: 'Customer Refunds',      href: '/customer-refunds' },
   { label: 'AP Portal',             href: '/ap' },
   { label: 'Purchase Requisitions', href: '/purchase-requisitions' },
   { label: 'Purchase Orders',       href: '/purchase-orders' },

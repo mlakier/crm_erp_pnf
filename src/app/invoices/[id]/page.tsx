@@ -560,6 +560,8 @@ export default async function InvoiceDetailPage({
   const opportunityHref = invoice.salesOrder?.quote?.opportunity
     ? `/opportunities/${invoice.salesOrder.quote.opportunity.id}`
     : null
+  const communicationsToolbarTargetId = 'invoice-communications-toolbar'
+  const systemNotesToolbarTargetId = 'invoice-system-notes-toolbar'
   const ownerHref = invoice.user ? `/users/${invoice.user.id}` : null
   const subsidiaryHref = invoice.subsidiary ? `/subsidiaries/${invoice.subsidiary.id}` : null
   const currencyHref = invoice.currency ? `/currencies/${invoice.currency.id}` : null
@@ -914,7 +916,7 @@ export default async function InvoiceDetailPage({
             </RecordDetailSection>
           )
         }
-        relatedDocuments={isCustomizing ? null : (
+        relatedRecords={isCustomizing ? null : (
           <InvoiceRelatedDocuments
             embedded
             showDisplayControl={false}
@@ -966,12 +968,18 @@ export default async function InvoiceDetailPage({
             moneySettings={moneySettings}
           />
         )}
-        relatedDocumentsCount={
+        relatedRecordsCount={
           (invoice.salesOrder ? 1 : 0) +
           (invoice.salesOrder?.quote ? 1 : 0) +
           (invoice.salesOrder?.quote?.opportunity ? 1 : 0) +
           invoice.cashReceipts.length
         }
+        relatedDocuments={isCustomizing ? null : (
+          <div className="px-6 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>
+            No related documents are attached to this invoice yet.
+          </div>
+        )}
+        relatedDocumentsCount={0}
         supplementarySections={
           isCustomizing ? null : (
             <InvoiceGlImpactSection
@@ -984,6 +992,7 @@ export default async function InvoiceDetailPage({
         communications={isCustomizing ? null : (
           <CommunicationsSection
             embedded
+            toolbarTargetId={communicationsToolbarTargetId}
             showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
@@ -1013,8 +1022,12 @@ export default async function InvoiceDetailPage({
           />
         )}
         communicationsCount={communications.length}
-        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        communicationsToolbarTargetId={communicationsToolbarTargetId}
+        communicationsToolbarPlacement="tab-bar"
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded toolbarTargetId={systemNotesToolbarTargetId} showDisplayControl={false} notes={systemNotes} />}
         systemNotesCount={systemNotes.length}
+        systemNotesToolbarTargetId={systemNotesToolbarTargetId}
+        systemNotesToolbarPlacement="tab-bar"
       />
     </RecordDetailPageShell>
   )

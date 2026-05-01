@@ -24,12 +24,19 @@ function removeStyles(element: HTMLElement, properties: string[]) {
   }
 }
 
-function getPinnedColumnIds(table: HTMLTableElement): string[] {
+function getPinnedStartColumnIds(table: HTMLTableElement): string[] {
   const headerCells = Array.from(table.tHead?.rows[0]?.cells ?? [])
   return headerCells
     .map((cell) => cell.getAttribute('data-column') ?? '')
     .filter((columnId) => columnId && columnId !== 'actions')
     .slice(0, 2)
+}
+
+function getPinnedEndColumnIds(table: HTMLTableElement): string[] {
+  const headerCells = Array.from(table.tHead?.rows[0]?.cells ?? [])
+  return headerCells
+    .map((cell) => cell.getAttribute('data-column') ?? '')
+    .filter((columnId) => columnId === 'actions')
 }
 
 function measureColumnWidth(cells: HTMLTableCellElement[]): number {
@@ -46,12 +53,13 @@ function measureColumnWidth(cells: HTMLTableCellElement[]): number {
 function enforcePinnedColumns(table: HTMLTableElement) {
   if (table.dataset.disablePinnedColumns === 'true') return
 
-  const pinnedColumnIds = getPinnedColumnIds(table)
-  if (pinnedColumnIds.length === 0) return
+  const pinnedStartColumnIds = getPinnedStartColumnIds(table)
+  const pinnedEndColumnIds = getPinnedEndColumnIds(table)
+  if (pinnedStartColumnIds.length === 0 && pinnedEndColumnIds.length === 0) return
 
   let leftOffset = 0
 
-  for (const columnId of pinnedColumnIds) {
+  for (const columnId of pinnedStartColumnIds) {
     const headerCell = table.tHead?.rows[0]?.querySelector<HTMLTableCellElement>(`th[data-column="${columnId}"]`)
     if (!headerCell) continue
 
@@ -104,6 +112,63 @@ function enforcePinnedColumns(table: HTMLTableElement) {
     }
 
     leftOffset += columnWidth
+  }
+
+  let rightOffset = 0
+
+  for (const columnId of pinnedEndColumnIds) {
+    const headerCell = table.tHead?.rows[0]?.querySelector<HTMLTableCellElement>(`th[data-column="${columnId}"]`)
+    if (!headerCell) continue
+
+    const filterCell = table.tHead?.querySelector<HTMLTableCellElement>(`tr[data-filter-row] th[data-column="${columnId}"]`)
+    const dataCells = Array.from(table.querySelectorAll<HTMLTableCellElement>(`td[data-column="${columnId}"]`))
+    const columnCells = [headerCell, ...(filterCell ? [filterCell] : []), ...dataCells]
+
+    for (const cell of columnCells) {
+      removeStyles(cell, ['width', 'min-width', 'max-width', 'overflow', 'text-overflow'])
+    }
+
+    const columnWidth = measureColumnWidth(columnCells)
+    const right = `${rightOffset}px`
+
+    setImportantStyles(headerCell, {
+      display: 'table-cell',
+      visibility: 'visible',
+      position: 'sticky',
+      right,
+      width: `${columnWidth}px`,
+      'min-width': `${columnWidth}px`,
+      'z-index': '20',
+      'background-color': 'var(--card)',
+    })
+
+    if (filterCell) {
+      setImportantStyles(filterCell, {
+        display: 'table-cell',
+        visibility: 'visible',
+        position: 'sticky',
+        right,
+        width: `${columnWidth}px`,
+        'min-width': `${columnWidth}px`,
+        'z-index': '20',
+        'background-color': 'var(--card)',
+      })
+    }
+
+    for (const cell of dataCells) {
+      setImportantStyles(cell, {
+        display: 'table-cell',
+        visibility: 'visible',
+        position: 'sticky',
+        right,
+        width: `${columnWidth}px`,
+        'min-width': `${columnWidth}px`,
+        'z-index': '10',
+        'background-color': 'var(--card)',
+      })
+    }
+
+    rightOffset += columnWidth
   }
 }
 
@@ -227,6 +292,7 @@ function enhanceTable(table: HTMLTableElement) {
 
   const headerRow = header.rows[0]
   const headerCells = Array.from(headerRow.cells)
+  const actionsColumnIndex = headerCells.findIndex((cell) => cell.getAttribute('data-column') === 'actions')
   const columnIds = headerCells
     .map((cell) => cell.getAttribute('data-column') ?? '')
     .filter((value) => value.length > 0)
@@ -242,7 +308,7 @@ function enhanceTable(table: HTMLTableElement) {
   const filterRow = document.createElement('tr')
   filterRow.setAttribute('data-filter-row', 'true')
 
-  for (const headerCell of headerCells) {
+  headerCells.forEach((headerCell, index) => {
     const columnId = headerCell.getAttribute('data-column')
     const filterCell = document.createElement('th')
     filterCell.className = 'px-1.5 py-1.5'
@@ -250,9 +316,15 @@ function enhanceTable(table: HTMLTableElement) {
     filterCell.style.minWidth = '0'
     if (columnId) filterCell.setAttribute('data-column', columnId)
 
-    if (!columnId || columnId === 'actions') {
+    const inActionZone = actionsColumnIndex >= 0 && index >= actionsColumnIndex
+
+    if (!columnId || inActionZone) {
+      filterCell.className = 'px-1.5 py-1.5'
+      filterCell.style.backgroundColor = 'var(--card)'
+      filterCell.style.minWidth = '0'
+      filterCell.setAttribute('aria-hidden', 'true')
       filterRow.appendChild(filterCell)
-      continue
+      return
     }
 
     const input = document.createElement('input')
@@ -290,7 +362,7 @@ function enhanceTable(table: HTMLTableElement) {
       updateHeaderSortIndicators(headerCells, state.sortColumn, state.sortDirection)
       applyTableState(table)
     })
-  }
+  })
 
   updateHeaderSortIndicators(headerCells, null, 'asc')
   header.appendChild(filterRow)

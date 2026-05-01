@@ -1,12 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionActionStack from '@/components/TransactionActionStack'
 import RecordHeaderDetails, {
   type RecordHeaderField,
 } from '@/components/RecordHeaderDetails'
+import InvoiceReceiptApplicationsSection from '@/components/InvoiceReceiptApplicationsSection'
 import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
 import { applyRequirementsToEditableFields, useFormRequirementsState } from '@/lib/form-requirements-client'
 import {
@@ -14,18 +15,35 @@ import {
   type InvoiceReceiptDetailCustomizationConfig,
   type InvoiceReceiptDetailFieldKey,
 } from '@/lib/invoice-receipt-detail-customization'
+import {
+  roundMoney,
+  sumInvoiceReceiptApplications,
+  type InvoiceApplicationCandidate,
+  type InvoiceReceiptApplicationInput,
+} from '@/lib/invoice-receipt-applications'
+import { parseMoneyValue } from '@/lib/money'
 
 type InvoiceOption = {
   id: string
   number: string
-  customer: {
-    id: string
-    customerId: string | null
-    name: string
-  }
+  customerId: string
+  customerNumber: string | null
+  customerName: string
+  status: string
+  total: number
+  date: string
+  subsidiaryId: string | null
+  currencyId: string | null
+  userId: string | null
+  openAmount: number
 }
 
 type Option = { value: string; label: string }
+const OVERPAYMENT_OPTIONS: Option[] = [
+  { value: '', label: 'Require Full Application' },
+  { value: 'apply_to_future_invoices', label: 'Leave On Account' },
+  { value: 'refund_pending', label: 'Refund Customer' },
+]
 
 type InvoiceReceiptHeaderField = {
   key: InvoiceReceiptDetailFieldKey
@@ -39,24 +57,31 @@ const sectionDescriptions: Record<string, string> = {
 export default function InvoiceReceiptCreatePageClient({
   invoices,
   methodOptions,
+  statusOptions,
   bankAccountOptions,
   customization,
   initialHeaderValues,
+  initialApplications = [],
 }: {
   invoices: InvoiceOption[]
   methodOptions: Option[]
+  statusOptions: Option[]
   bankAccountOptions: Option[]
   customization: InvoiceReceiptDetailCustomizationConfig
   initialHeaderValues?: Partial<Record<string, string>>
+  initialApplications?: InvoiceReceiptApplicationInput[]
 }) {
   const router = useRouter()
   const { req, isLocked } = useFormRequirementsState('invoiceReceiptCreate')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [applications, setApplications] = useState<InvoiceReceiptApplicationInput[]>(initialApplications)
   const [headerValues, setHeaderValues] = useState<Record<string, string>>({
     invoiceId: initialHeaderValues?.invoiceId ?? invoices[0]?.id ?? '',
     bankAccountId: initialHeaderValues?.bankAccountId ?? bankAccountOptions[0]?.value ?? '',
-    amount: initialHeaderValues?.amount ?? '',
+    status: initialHeaderValues?.status ?? statusOptions.find((option) => option.value === 'draft')?.value ?? statusOptions[0]?.value ?? 'draft',
+    overpaymentHandling: initialHeaderValues?.overpaymentHandling ?? '',
+    amount: initialHeaderValues?.amount ?? (initialApplications.length > 0 ? String(roundMoney(sumInvoiceReceiptApplications(initialApplications))) : ''),
     date: initialHeaderValues?.date ?? new Date().toISOString().slice(0, 10),
     method: initialHeaderValues?.method ?? methodOptions[0]?.value ?? '',
     reference: initialHeaderValues?.reference ?? '',
@@ -66,18 +91,48 @@ export default function InvoiceReceiptCreatePageClient({
     () => invoices.find((invoice) => invoice.id === (headerValues.invoiceId ?? '')) ?? null,
     [headerValues.invoiceId, invoices],
   )
+  const selectedCustomerId = selectedInvoice?.customerId ?? ''
+  const receiptAmount = useMemo(
+    () => roundMoney(parseMoneyValue(headerValues.amount, 0)),
+    [headerValues.amount],
+  )
+  const appliedTotal = useMemo(
+    () => roundMoney(sumInvoiceReceiptApplications(applications)),
+    [applications],
+  )
+  const selectedStatus = (headerValues.status ?? '').toLowerCase()
+  const requiresFullApplication = selectedStatus === 'posted'
+  const overpaymentHandling = headerValues.overpaymentHandling ?? ''
+  const allocationError = useMemo(() => {
+    if (receiptAmount <= 0) return 'Receipt amount must be greater than zero.'
+    if (appliedTotal > receiptAmount + 0.005) return 'Applied invoice amounts cannot exceed the entered receipt amount.'
+    if (requiresFullApplication && roundMoney(receiptAmount - appliedTotal) > 0.005 && !overpaymentHandling) {
+      return 'Choose how to handle the overpayment before posting this receipt.'
+    }
+    return ''
+  }, [appliedTotal, receiptAmount, requiresFullApplication, overpaymentHandling])
+
+  useEffect(() => {
+    if (!selectedCustomerId) {
+      setApplications([])
+      return
+    }
+    setApplications((current) =>
+      current.filter((application) => invoices.some((invoice) => invoice.id === application.invoiceId && invoice.customerId === selectedCustomerId)),
+    )
+  }, [invoices, selectedCustomerId])
 
   const invoiceOptions = invoices.map((invoice) => ({
     value: invoice.id,
-    label: `${invoice.number} - ${invoice.customer.name}`,
+    label: `${invoice.number} - ${invoice.customerName}`,
   }))
 
   const headerFieldDefinitions: Record<InvoiceReceiptDetailFieldKey, InvoiceReceiptHeaderField> = {
     customerName: {
       key: 'customerName',
       label: 'Customer Name',
-      value: selectedInvoice?.customer.name ?? '',
-      displayValue: selectedInvoice?.customer.name ?? '-',
+      value: selectedInvoice?.customerName ?? '',
+      displayValue: selectedInvoice?.customerName ?? '-',
       helpText: 'Display name from the linked invoice customer.',
       fieldType: 'text',
       sourceText: 'Customers master data',
@@ -85,8 +140,8 @@ export default function InvoiceReceiptCreatePageClient({
     customerNumber: {
       key: 'customerNumber',
       label: 'Customer #',
-      value: selectedInvoice?.customer.customerId ?? '',
-      displayValue: selectedInvoice?.customer.customerId ?? '-',
+      value: selectedInvoice?.customerNumber ?? '',
+      displayValue: selectedInvoice?.customerNumber ?? '-',
       helpText: 'Internal customer identifier from the linked invoice customer.',
       fieldType: 'text',
       sourceText: 'Customers master data',
@@ -113,13 +168,13 @@ export default function InvoiceReceiptCreatePageClient({
     },
     invoiceId: {
       key: 'invoiceId',
-      label: 'Invoice',
+      label: 'Anchor Invoice',
       value: headerValues.invoiceId ?? '',
-      displayValue: selectedInvoice?.number ?? '-',
+      displayValue: applications.length > 1 ? `${applications.length} applied invoices` : selectedInvoice?.number ?? '-',
       editable: true,
       type: 'select',
       options: invoiceOptions,
-      helpText: 'Invoice that this receipt is applied to.',
+      helpText: 'Select an invoice to establish customer context for the receipt applications below.',
       fieldType: 'list',
       sourceText: 'Invoice transaction',
       subsectionTitle: 'Record Keys',
@@ -137,7 +192,35 @@ export default function InvoiceReceiptCreatePageClient({
       fieldType: 'list',
       sourceText: 'Chart of accounts',
       subsectionTitle: 'Receipt Terms',
-      subsectionDescription: 'Monetary amount, receipt date, and payment method.',
+      subsectionDescription: 'Status, monetary amount, receipt date, and payment method.',
+    },
+    status: {
+      key: 'status',
+      label: 'Status',
+      value: headerValues.status ?? '',
+      displayValue: statusOptions.find((option) => option.value === (headerValues.status ?? ''))?.label ?? '-',
+      editable: true,
+      type: 'select',
+      options: statusOptions,
+      helpText: 'Draft receipts can remain unapplied; posted receipts must be fully applied before they post to GL.',
+      fieldType: 'list',
+      sourceText: 'Invoice receipt status list',
+      subsectionTitle: 'Receipt Terms',
+      subsectionDescription: 'Status, monetary amount, receipt date, and payment method.',
+    },
+    overpaymentHandling: {
+      key: 'overpaymentHandling',
+      label: 'Overpayment Handling',
+      value: headerValues.overpaymentHandling ?? '',
+      displayValue: OVERPAYMENT_OPTIONS.find((option) => option.value === (headerValues.overpaymentHandling ?? ''))?.label ?? 'Require Full Application',
+      editable: true,
+      type: 'select',
+      options: OVERPAYMENT_OPTIONS,
+      helpText: 'When a posted receipt exceeds current invoice applications, either leave the balance on account or mark it for refund.',
+      fieldType: 'list',
+      sourceText: 'Invoice receipt overpayment policy',
+      subsectionTitle: 'Receipt Terms',
+      subsectionDescription: 'Status, monetary amount, receipt date, and payment method.',
     },
     amount: {
       key: 'amount',
@@ -149,7 +232,7 @@ export default function InvoiceReceiptCreatePageClient({
       helpText: 'Cash receipt amount applied to the invoice.',
       fieldType: 'currency',
       subsectionTitle: 'Receipt Terms',
-      subsectionDescription: 'Monetary amount, receipt date, and payment method.',
+      subsectionDescription: 'Status, monetary amount, receipt date, and payment method.',
     },
     date: {
       key: 'date',
@@ -161,7 +244,7 @@ export default function InvoiceReceiptCreatePageClient({
       helpText: 'Date the receipt was recorded.',
       fieldType: 'date',
       subsectionTitle: 'Receipt Terms',
-      subsectionDescription: 'Monetary amount, receipt date, and payment method.',
+      subsectionDescription: 'Status, monetary amount, receipt date, and payment method.',
     },
     method: {
       key: 'method',
@@ -175,7 +258,7 @@ export default function InvoiceReceiptCreatePageClient({
       fieldType: 'list',
       sourceText: 'Payment method list',
       subsectionTitle: 'Receipt Terms',
-      subsectionDescription: 'Monetary amount, receipt date, and payment method.',
+      subsectionDescription: 'Status, monetary amount, receipt date, and payment method.',
     },
     reference: {
       key: 'reference',
@@ -187,7 +270,7 @@ export default function InvoiceReceiptCreatePageClient({
       helpText: 'Reference number or memo for the receipt.',
       fieldType: 'text',
       subsectionTitle: 'Receipt Terms',
-      subsectionDescription: 'Monetary amount, receipt date, and payment method.',
+      subsectionDescription: 'Status, monetary amount, receipt date, and payment method.',
     },
     createdAt: {
       key: 'createdAt',
@@ -221,6 +304,10 @@ export default function InvoiceReceiptCreatePageClient({
   })
 
   async function handleSubmit(values: Record<string, string>) {
+    if (allocationError) {
+      return { ok: false, error: allocationError }
+    }
+
     setSaving(true)
     setError('')
 
@@ -231,10 +318,13 @@ export default function InvoiceReceiptCreatePageClient({
         body: JSON.stringify({
           invoiceId: values.invoiceId,
           bankAccountId: values.bankAccountId || null,
+          status: values.status,
+          overpaymentHandling: values.overpaymentHandling || null,
           amount: values.amount,
           date: values.date,
           method: values.method,
           reference: values.reference || null,
+          applications,
         }),
       })
 
@@ -276,6 +366,18 @@ export default function InvoiceReceiptCreatePageClient({
         onSubmit={handleSubmit}
         onValuesChange={setHeaderValues}
       />
+      <div className="mt-6">
+        <InvoiceReceiptApplicationsSection
+          invoices={invoices as InvoiceApplicationCandidate[]}
+          selectedCustomerId={selectedCustomerId}
+          receiptAmount={receiptAmount}
+          applications={applications}
+          onChange={setApplications}
+          editing
+          requiresFullApplication={requiresFullApplication}
+          overpaymentHandling={overpaymentHandling}
+        />
+      </div>
       {error ? (
         <p className="mt-4 text-sm" style={{ color: 'var(--danger)' }}>
           {error}

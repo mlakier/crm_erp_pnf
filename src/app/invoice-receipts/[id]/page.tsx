@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { fmtCurrency, fmtDocumentDate } from '@/lib/format'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
 import { loadListValues } from '@/lib/load-list-values'
+import { createRecordLabelMapFromValues, formatRecordLabel } from '@/lib/record-status-label'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import TransactionDetailFrame from '@/components/TransactionDetailFrame'
 import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
@@ -18,6 +19,8 @@ import TransactionActionStack from '@/components/TransactionActionStack'
 import DeleteButton from '@/components/DeleteButton'
 import InvoiceReceiptRelatedDocuments from '@/components/InvoiceReceiptRelatedDocuments'
 import InvoiceReceiptGlImpactSection from '@/components/InvoiceReceiptGlImpactSection'
+import InvoiceReceiptDetailEditor from '@/components/InvoiceReceiptDetailEditor'
+import InvoiceReceiptApplicationsSection from '@/components/InvoiceReceiptApplicationsSection'
 import { parseCommunicationSummary, parseFieldChangeSummary } from '@/lib/activity'
 import {
   buildLinkedReferenceFieldDefinitions,
@@ -30,6 +33,10 @@ import {
   buildTransactionCustomizePreviewFields,
   buildTransactionExportHeaderFields,
 } from '@/lib/transaction-detail-helpers'
+import {
+  roundMoney,
+  type InvoiceReceiptApplicationInput,
+} from '@/lib/invoice-receipt-applications'
 import {
   INVOICE_RECEIPT_DETAIL_FIELDS,
   INVOICE_RECEIPT_REFERENCE_SOURCES,
@@ -59,7 +66,7 @@ export default async function InvoiceReceiptDetailPage({
   const isCustomizing = customize === '1'
   const { moneySettings } = await loadCompanyDisplaySettings()
 
-  const [receipt, customization, invoices, paymentMethodValues, cashAccounts] = await Promise.all([
+  const [receipt, customization, invoices, paymentMethodValues, statusValues, cashAccounts] = await Promise.all([
     prisma.cashReceipt.findUnique({
       where: { id },
       include: {
@@ -81,15 +88,40 @@ export default async function InvoiceReceiptDetailPage({
             },
           },
         },
+        applications: {
+          select: {
+            invoiceId: true,
+            appliedAmount: true,
+            createdAt: true,
+          },
+          orderBy: [{ createdAt: 'asc' }],
+        },
       },
     }),
     loadInvoiceReceiptDetailCustomization(),
     prisma.invoice.findMany({
-      include: { customer: true },
+      include: {
+        customer: true,
+        cashReceiptApplications: {
+          include: {
+            cashReceipt: {
+              select: { id: true },
+            },
+          },
+        },
+        cashReceipts: {
+          select: {
+            id: true,
+            amount: true,
+            applications: { select: { id: true } },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
       take: 200,
     }),
     loadListValues('PAYMENT-METHOD'),
+    loadListValues('INV-RECEIPT-STATUS'),
     prisma.chartOfAccounts.findMany({
       where: {
         active: true,
@@ -135,6 +167,14 @@ export default async function InvoiceReceiptDetailPage({
   })
 
   const detailHref = `/invoice-receipts/${receipt.id}`
+  const postingLocked = receipt.status.toLowerCase() === 'posted'
+  const receiptApplications: InvoiceReceiptApplicationInput[] =
+    receipt.applications.length > 0
+      ? receipt.applications.map((application) => ({
+          invoiceId: application.invoiceId,
+          appliedAmount: Number(application.appliedAmount),
+        }))
+      : [{ invoiceId: receipt.invoiceId, appliedAmount: Number(receipt.amount) }]
   const invoiceOptions = invoices.map((invoice) => ({
     value: invoice.id,
     label: `${invoice.number} - ${invoice.customer.name}`,
@@ -147,14 +187,30 @@ export default async function InvoiceReceiptDetailPage({
     value: value.toLowerCase(),
     label: value,
   }))
+  const statusOptions = statusValues.map((value) => ({
+    value: value.toLowerCase(),
+    label: value,
+  }))
+  const overpaymentHandlingOptions = [
+    { value: '', label: 'Require Full Application' },
+    { value: 'apply_to_future_invoices', label: 'Leave On Account' },
+    { value: 'refund_pending', label: 'Refund Customer' },
+  ]
+  const statusLabelMap = createRecordLabelMapFromValues(statusValues)
+  const formattedStatus = formatRecordLabel(receipt.status, statusLabelMap)
+  const formattedOverpaymentHandling =
+    overpaymentHandlingOptions.find((option) => option.value === (receipt.overpaymentHandling ?? ''))?.label
+    ?? 'Require Full Application'
 
   const sectionDescriptions: Record<string, string> = {
     'Document Identity': 'Primary invoice receipt identifier and linked invoice context.',
     'Customer Snapshot': 'Customer context derived from the linked invoice.',
-    'Receipt Terms': 'Monetary amount, receipt date, payment method, and reference context.',
+    'Receipt Terms': 'Status, monetary amount, receipt date, payment method, and reference context.',
     'Record Keys': 'Internal database identifiers for this receipt.',
     'System Dates': 'System-managed timestamps for this receipt.',
   }
+  const communicationsToolbarTargetId = 'invoice-receipt-communications-toolbar'
+  const systemNotesToolbarTargetId = 'invoice-receipt-system-notes-toolbar'
 
   const receiptStats: TransactionStatDefinition<typeof receipt>[] = [
     {
@@ -173,6 +229,11 @@ export default async function InvoiceReceiptDetailPage({
       id: 'method',
       label: 'Method',
       getValue: (record) => record.method || '-',
+    },
+    {
+      id: 'status',
+      label: 'Status',
+      getValue: () => formattedStatus,
     },
     {
       id: 'invoice',
@@ -251,18 +312,24 @@ export default async function InvoiceReceiptDetailPage({
     },
     invoiceId: {
       key: 'invoiceId',
-      label: 'Invoice',
+      label: 'Anchor Invoice',
       value: receipt.invoiceId,
       displayValue: (
-        <Link href={`/invoices/${receipt.invoice.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-          {receipt.invoice.number}
-        </Link>
+        receiptApplications.length > 1
+          ? `${receiptApplications.length} applied invoices`
+          : (
+            <Link href={`/invoices/${receipt.invoice.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+              {receipt.invoice.number}
+            </Link>
+          )
       ),
-      editable: true,
+      editable: !postingLocked,
       type: 'select',
       options: invoiceOptions,
-      helpText: 'Invoice that this receipt is applied to.',
-      fieldType: 'text',
+      helpText: postingLocked
+        ? 'Invoice applications are locked after this receipt has posted to GL.'
+        : 'Select an invoice to establish customer context for the receipt applications below.',
+      fieldType: 'list',
       sourceText: 'Invoice transaction',
       subsectionTitle: 'Record Keys',
       subsectionDescription: 'Internal and linked transaction identifiers for this receipt.',
@@ -272,63 +339,105 @@ export default async function InvoiceReceiptDetailPage({
       label: 'Bank Account',
       value: receipt.bankAccountId ?? '',
       displayValue: receipt.bankAccount ? `${receipt.bankAccount.accountId} - ${receipt.bankAccount.name}` : '-',
-      editable: true,
+      editable: !postingLocked,
       type: 'select',
       options: bankAccountOptions,
-      helpText: 'Cash or bank GL account that receives this receipt.',
+      helpText: postingLocked
+        ? 'Bank account is locked after this receipt has posted to GL.'
+        : 'Cash or bank GL account that receives this receipt.',
       fieldType: 'list',
       sourceText: 'Chart of accounts',
       subsectionTitle: 'Receipt Terms',
-      subsectionDescription: 'Monetary amount, receipt date, and payment method.',
+      subsectionDescription: 'Status, monetary amount, receipt date, and payment method.',
+    },
+    status: {
+      key: 'status',
+      label: 'Status',
+      value: receipt.status,
+      displayValue: formattedStatus,
+      editable: !postingLocked,
+      type: 'select',
+      options: statusOptions,
+      helpText: postingLocked
+        ? 'Status is locked after this receipt has posted to GL.'
+        : 'Draft receipts can remain unapplied; posted receipts must be fully applied before they post to GL.',
+      fieldType: 'list',
+      sourceText: 'Invoice receipt status list',
+      subsectionTitle: 'Receipt Terms',
+      subsectionDescription: 'Status, monetary amount, receipt date, and payment method.',
+    },
+    overpaymentHandling: {
+      key: 'overpaymentHandling',
+      label: 'Overpayment Handling',
+      value: receipt.overpaymentHandling ?? '',
+      displayValue: formattedOverpaymentHandling,
+      editable: !postingLocked,
+      type: 'select',
+      options: overpaymentHandlingOptions,
+      helpText: postingLocked
+        ? 'Overpayment handling is locked after this receipt has posted to GL.'
+        : 'Choose whether any posted overpayment stays on account or should be refunded.',
+      fieldType: 'list',
+      sourceText: 'Invoice receipt overpayment policy',
+      subsectionTitle: 'Receipt Terms',
+      subsectionDescription: 'Status, monetary amount, receipt date, and payment method.',
     },
     amount: {
       key: 'amount',
       label: 'Amount',
       value: String(receipt.amount),
       displayValue: fmtCurrency(receipt.amount, undefined, moneySettings),
-      editable: true,
+      editable: !postingLocked,
       type: 'number',
-      helpText: 'Cash receipt amount applied to the invoice.',
+      helpText: postingLocked
+        ? 'Receipt amount is locked after this receipt has posted to GL.'
+        : 'Enter the total receipt amount, then allocate it across open invoices below.',
       fieldType: 'currency',
       subsectionTitle: 'Receipt Terms',
-      subsectionDescription: 'Monetary amount, receipt date, and payment method.',
+      subsectionDescription: 'Status, monetary amount, receipt date, and payment method.',
     },
     date: {
       key: 'date',
       label: 'Receipt Date',
       value: receipt.date.toISOString().slice(0, 10),
       displayValue: fmtDocumentDate(receipt.date, moneySettings),
-      editable: true,
+      editable: !postingLocked,
       type: 'date',
-      helpText: 'Date the receipt was recorded.',
+      helpText: postingLocked
+        ? 'Receipt date is locked after this receipt has posted to GL.'
+        : 'Date the receipt was recorded.',
       fieldType: 'date',
       subsectionTitle: 'Receipt Terms',
-      subsectionDescription: 'Monetary amount, receipt date, and payment method.',
+      subsectionDescription: 'Status, monetary amount, receipt date, and payment method.',
     },
     method: {
       key: 'method',
       label: 'Method',
       value: receipt.method,
-      editable: true,
+      editable: !postingLocked,
       type: 'select',
       options: methodOptions,
-      helpText: 'Method used to receive payment.',
+      helpText: postingLocked
+        ? 'Payment method is locked after this receipt has posted to GL.'
+        : 'Method used to receive payment.',
       fieldType: 'list',
       sourceText: 'Payment method list',
       subsectionTitle: 'Receipt Terms',
-      subsectionDescription: 'Monetary amount, receipt date, and payment method.',
+      subsectionDescription: 'Status, monetary amount, receipt date, and payment method.',
     },
     reference: {
       key: 'reference',
       label: 'Reference',
       value: receipt.reference ?? '',
       displayValue: receipt.reference ?? '-',
-      editable: true,
+      editable: !postingLocked,
       type: 'text',
-      helpText: 'Reference number or memo for the receipt.',
+      helpText: postingLocked
+        ? 'Reference is locked after this receipt has posted to GL.'
+        : 'Reference number or memo for the receipt.',
       fieldType: 'text',
       subsectionTitle: 'Receipt Terms',
-      subsectionDescription: 'Monetary amount, receipt date, and payment method.',
+      subsectionDescription: 'Status, monetary amount, receipt date, and payment method.',
     },
     createdAt: {
       key: 'createdAt',
@@ -546,21 +655,69 @@ export default async function InvoiceReceiptDetailPage({
                   showSubsections={false}
                 />
               ) : null}
-              <RecordHeaderDetails
-                purchaseOrderId={receipt.id}
-                editing={isEditing}
-                sections={headerSections}
-                columns={customization.formColumns}
-                containerTitle="Invoice Receipt Details"
-                containerDescription="Core invoice receipt fields organized into configurable sections."
-                showSubsections={false}
-                updateUrl={`/api/invoice-receipts?id=${encodeURIComponent(receipt.id)}`}
-              />
+              {isEditing ? (
+                <InvoiceReceiptDetailEditor
+                  receiptId={receipt.id}
+                  detailHref={detailHref}
+                  customization={customization}
+                  invoices={invoices.map((invoice) => ({
+                    id: invoice.id,
+                    number: invoice.number,
+                    customerId: invoice.customer.id,
+                    customerName: invoice.customer.name,
+                    status: invoice.status,
+                    total: Number(invoice.total),
+                    date: invoice.createdAt,
+                    subsidiaryId: invoice.subsidiaryId ?? null,
+                    currencyId: invoice.currencyId ?? null,
+                    userId: invoice.userId ?? null,
+                    openAmount: roundMoney(Number(invoice.total) - invoice.cashReceiptApplications.reduce((sum, application) => {
+                      if (application.cashReceiptId === receipt.id) return sum
+                      return sum + Number(application.appliedAmount)
+                    }, 0) - invoice.cashReceipts.reduce((sum, cashReceipt) => {
+                      if (cashReceipt.id === receipt.id) return sum
+                      if (cashReceipt.applications.length > 0) return sum
+                      return sum + Number(cashReceipt.amount)
+                    }, 0)),
+                  }))}
+                  methodOptions={methodOptions}
+                  statusOptions={statusOptions}
+                  bankAccountOptions={bankAccountOptions}
+                  initialHeaderValues={{
+                    id: receipt.id,
+                    number: receipt.number ?? '',
+                    invoiceId: receipt.invoiceId,
+                    bankAccountId: receipt.bankAccountId ?? '',
+                    status: receipt.status,
+                    overpaymentHandling: receipt.overpaymentHandling ?? '',
+                    amount: String(receipt.amount),
+                    date: receipt.date.toISOString().slice(0, 10),
+                    method: receipt.method,
+                    reference: receipt.reference ?? '',
+                    createdAt: receipt.createdAt.toISOString(),
+                    createdAtDisplay: fmtDocumentDate(receipt.createdAt, moneySettings),
+                    updatedAt: receipt.updatedAt.toISOString(),
+                    updatedAtDisplay: fmtDocumentDate(receipt.updatedAt, moneySettings),
+                  }}
+                  initialApplications={receiptApplications}
+                  moneySettings={moneySettings}
+                />
+              ) : (
+                <RecordHeaderDetails
+                  purchaseOrderId={receipt.id}
+                  editing={false}
+                  sections={headerSections}
+                  columns={customization.formColumns}
+                  containerTitle="Invoice Receipt Details"
+                  containerDescription="Core invoice receipt fields organized into configurable sections."
+                  showSubsections={false}
+                />
+              )}
             </div>
           )
         }
         lineItems={null}
-        relatedDocuments={isCustomizing ? null : (
+        relatedRecords={isCustomizing ? null : (
           <InvoiceReceiptRelatedDocuments
             embedded
             showDisplayControl={false}
@@ -606,24 +763,63 @@ export default async function InvoiceReceiptDetailPage({
             moneySettings={moneySettings}
           />
         )}
-        relatedDocumentsCount={
+        relatedRecordsCount={
           1 +
           (receipt.invoice.salesOrder ? 1 : 0) +
           (receipt.invoice.salesOrder?.quote ? 1 : 0) +
           (receipt.invoice.salesOrder?.quote?.opportunity ? 1 : 0)
         }
+        relatedDocuments={isCustomizing ? null : (
+          <div className="px-6 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>
+            No related documents are attached to this invoice receipt yet.
+          </div>
+        )}
+        relatedDocumentsCount={0}
         supplementarySections={
           isCustomizing ? null : (
-            <InvoiceReceiptGlImpactSection
-              rows={glImpactRows}
-              settings={customization.glImpactSettings}
-              columnCustomization={customization.glImpactColumns}
-            />
+            <>
+              {!isEditing ? (
+                <InvoiceReceiptApplicationsSection
+                  invoices={invoices.map((invoice) => ({
+                    id: invoice.id,
+                    number: invoice.number,
+                    customerId: invoice.customer.id,
+                    customerName: invoice.customer.name,
+                    status: invoice.status,
+                    total: Number(invoice.total),
+                    date: invoice.createdAt,
+                    subsidiaryId: invoice.subsidiaryId ?? null,
+                    currencyId: invoice.currencyId ?? null,
+                    userId: invoice.userId ?? null,
+                    openAmount: roundMoney(Number(invoice.total) - invoice.cashReceiptApplications.reduce((sum, application) => {
+                      if (application.cashReceiptId === receipt.id) return sum
+                      return sum + Number(application.appliedAmount)
+                    }, 0) - invoice.cashReceipts.reduce((sum, cashReceipt) => {
+                      if (cashReceipt.id === receipt.id) return sum
+                      if (cashReceipt.applications.length > 0) return sum
+                      return sum + Number(cashReceipt.amount)
+                    }, 0)),
+                  }))}
+                  selectedCustomerId={receipt.invoice.customer.id}
+                  receiptAmount={Number(receipt.amount)}
+                  applications={receiptApplications}
+                  requiresFullApplication={receipt.status.toLowerCase() === 'posted'}
+                  overpaymentHandling={receipt.overpaymentHandling ?? ''}
+                  moneySettings={moneySettings}
+                />
+              ) : null}
+              <InvoiceReceiptGlImpactSection
+                rows={glImpactRows}
+                settings={customization.glImpactSettings}
+                columnCustomization={customization.glImpactColumns}
+              />
+            </>
           )
         }
         communications={isCustomizing ? null : (
           <CommunicationsSection
             embedded
+            toolbarTargetId={communicationsToolbarTargetId}
             showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
@@ -631,15 +827,19 @@ export default async function InvoiceReceiptDetailPage({
               number: receipt.number ?? receipt.id,
               counterpartyName: receipt.invoice.customer.name,
               counterpartyEmail: receipt.invoice.customer.email ?? null,
-              status: receipt.method,
+              status: formattedStatus,
               total: fmtCurrency(receipt.amount, undefined, moneySettings),
               lineItems: [],
             })}
           />
         )}
         communicationsCount={communications.length}
-        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        communicationsToolbarTargetId={communicationsToolbarTargetId}
+        communicationsToolbarPlacement="tab-bar"
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded toolbarTargetId={systemNotesToolbarTargetId} showDisplayControl={false} notes={systemNotes} />}
         systemNotesCount={systemNotes.length}
+        systemNotesToolbarTargetId={systemNotesToolbarTargetId}
+        systemNotesToolbarPlacement="tab-bar"
       />
     </RecordDetailPageShell>
   )

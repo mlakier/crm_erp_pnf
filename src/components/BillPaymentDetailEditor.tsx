@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RecordHeaderDetails, { type RecordHeaderField } from '@/components/RecordHeaderDetails'
 import BillPaymentApplicationsSection from '@/components/BillPaymentApplicationsSection'
+import { fmtCurrency } from '@/lib/format'
 import { buildConfiguredTransactionSections } from '@/lib/transaction-detail-helpers'
 import {
   BILL_PAYMENT_DETAIL_FIELDS,
@@ -11,10 +12,12 @@ import {
   type BillPaymentDetailFieldKey,
 } from '@/lib/bill-payment-detail-customization'
 import {
+  sumBillPaymentApplications,
   roundMoney,
   type BillApplicationCandidate,
   type BillPaymentApplicationInput,
 } from '@/lib/bill-payment-applications'
+import { parseMoneyValue } from '@/lib/money'
 
 type Option = { value: string; label: string }
 
@@ -60,18 +63,31 @@ export default function BillPaymentDetailEditor({
   const [applications, setApplications] = useState<BillPaymentApplicationInput[]>(initialApplications)
   const [headerValues, setHeaderValues] = useState<Record<string, string>>(initialHeaderValues)
 
-  const currentStatus = (headerValues.status ?? '').toLowerCase()
-  const postingLocked = currentStatus === 'processed' || currentStatus === 'cleared' || currentStatus === 'completed'
+  const persistedStatus = (initialHeaderValues.status ?? '').toLowerCase()
+  const postingLocked = persistedStatus === 'processed' || persistedStatus === 'cleared'
 
   const selectedVendor = useMemo(
     () => vendors.find((vendor) => vendor.value === (headerValues.vendorId ?? '')) ?? null,
     [headerValues.vendorId, vendors],
   )
 
+  const paymentAmount = useMemo(
+    () => roundMoney(parseMoneyValue(headerValues.amount, 0)),
+    [headerValues.amount],
+  )
+
   const appliedTotal = useMemo(
-    () => roundMoney(applications.reduce((sum, application) => sum + application.appliedAmount, 0)),
+    () => roundMoney(sumBillPaymentApplications(applications)),
     [applications],
   )
+
+  const allocationError = useMemo(() => {
+    if (paymentAmount <= 0) return 'Payment amount must be greater than zero.'
+    if (appliedTotal > paymentAmount + 0.005) {
+      return 'Applied bill amounts cannot exceed the entered payment amount.'
+    }
+    return ''
+  }, [appliedTotal, paymentAmount])
 
   useEffect(() => {
     setApplications((current) =>
@@ -149,10 +165,13 @@ export default function BillPaymentDetailEditor({
     amount: {
       key: 'amount',
       label: 'Amount',
-      value: appliedTotal > 0 ? String(appliedTotal) : '',
-      displayValue: appliedTotal > 0 ? String(appliedTotal) : '-',
-      editable: false,
-      helpText: 'Payment amount is derived from the bill applications below.',
+      value: headerValues.amount ?? '',
+      displayValue: headerValues.amount || '-',
+      editable: !postingLocked,
+      type: 'number',
+      helpText: postingLocked
+        ? 'Payment amount is locked after the payment has posted to GL.'
+        : 'Enter the total payment amount, then allocate it across open bills below.',
       fieldType: 'currency',
       subsectionTitle: 'Payment Terms',
       subsectionDescription: 'Amount, timing, method, status, and payment notes.',
@@ -257,6 +276,11 @@ export default function BillPaymentDetailEditor({
   })
 
   async function handleSubmit(values: Record<string, string>) {
+    if (allocationError) {
+      setError(allocationError)
+      return { ok: false, error: allocationError }
+    }
+
     setSaving(true)
     setError('')
 
@@ -267,6 +291,7 @@ export default function BillPaymentDetailEditor({
         body: JSON.stringify({
           vendorId: values.vendorId || null,
           bankAccountId: values.bankAccountId || null,
+          amount: values.amount,
           date: values.date,
           method: values.method || null,
           status: values.status,
@@ -311,11 +336,22 @@ export default function BillPaymentDetailEditor({
       <BillPaymentApplicationsSection
         bills={bills}
         selectedVendorId={headerValues.vendorId ?? ''}
+        paymentAmount={paymentAmount}
         applications={applications}
         onChange={postingLocked ? undefined : setApplications}
         editing={!postingLocked}
         moneySettings={moneySettings}
       />
+      {allocationError && !postingLocked ? (
+        <p className="text-sm" style={{ color: 'var(--danger)' }}>
+          {allocationError}
+        </p>
+      ) : null}
+      {!allocationError && !postingLocked && paymentAmount > appliedTotal ? (
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          Unapplied amount: {fmtCurrency(roundMoney(paymentAmount - appliedTotal))}
+        </p>
+      ) : null}
       {postingLocked ? (
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
           Vendor, payment terms, and applications are locked because this payment has already posted to GL.

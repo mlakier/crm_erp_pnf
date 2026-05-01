@@ -398,13 +398,16 @@ export default function RecordHeaderDetails({
         return
       }
 
-      if (!purchaseOrderId) {
-        setError('Missing purchase order id')
+      const resolvedUpdateUrl =
+        updateUrl ?? (purchaseOrderId ? `/api/purchase-orders?id=${encodeURIComponent(purchaseOrderId)}` : null)
+
+      if (!resolvedUpdateUrl) {
+        setError('Missing update endpoint')
         return
       }
 
       const response = await fetch(
-        updateUrl ?? `/api/purchase-orders?id=${encodeURIComponent(purchaseOrderId)}`,
+        resolvedUpdateUrl,
         {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

@@ -740,7 +740,7 @@ export default async function PurchaseOrderDetailPage({
             />
           )
         }
-        relatedDocuments={isCustomizing ? null : (
+        relatedRecords={isCustomizing ? null : (
           <PurchaseOrderRelatedDocuments
             embedded
             showDisplayControl={false}
@@ -791,16 +791,23 @@ export default async function PurchaseOrderDetailPage({
             )}
           />
         )}
-        relatedDocumentsCount={
+        relatedRecordsCount={
           (po.requisition ? 1 : 0) +
           po.receipts.length +
           po.bills.length +
           po.bills.reduce((sum, bill) => sum + bill.billPayments.length, 0)
         }
+        relatedDocuments={isCustomizing ? null : (
+          <div className="px-6 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>
+            No related documents are attached to this purchase order yet.
+          </div>
+        )}
+        relatedDocumentsCount={0}
         supplementarySections={null}
         communications={isCustomizing ? null : (
           <CommunicationsSection
             embedded
+            toolbarTargetId="purchase-order-communications-toolbar"
             showDisplayControl={false}
             rows={communications}
             compose={buildTransactionCommunicationComposePayload({
@@ -827,8 +834,12 @@ export default async function PurchaseOrderDetailPage({
           />
         )}
         communicationsCount={communications.length}
-        systemNotes={isCustomizing ? null : <SystemNotesSection embedded showDisplayControl={false} notes={systemNotes} />}
+        communicationsToolbarTargetId="purchase-order-communications-toolbar"
+        communicationsToolbarPlacement="tab-bar"
+        systemNotes={isCustomizing ? null : <SystemNotesSection embedded toolbarTargetId="purchase-order-system-notes-toolbar" showDisplayControl={false} notes={systemNotes} />}
         systemNotesCount={systemNotes.length}
+        systemNotesToolbarTargetId="purchase-order-system-notes-toolbar"
+        systemNotesToolbarPlacement="tab-bar"
       />
     </RecordDetailPageShell>
   )
