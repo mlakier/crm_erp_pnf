@@ -2392,6 +2392,7 @@ model JournalEntry {
   @@index([accountingPeriodId])
   @@index([reversesJournalEntryId])
   @@index([isOpenItemRelevant])
+  @@unique([sourceType, sourceId], map: "journal_entries_source_type_source_id_key")
   @@map("journal_entries")
 }
 

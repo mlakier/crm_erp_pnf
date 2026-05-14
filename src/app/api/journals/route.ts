@@ -4,6 +4,7 @@ import { logActivity, logCommunicationActivity, logFieldChangeActivities, logRec
 import { moneyEquals, parseMoneyValue, sumMoney } from '@/lib/money'
 import { deriveOpenItemCurrencyContext } from '@/lib/open-item-currency-context'
 import { resolveDefaultCurrencySnapshot } from '@/lib/transaction-snapshot-defaults'
+import { validateJournalPostingControls } from '@/lib/accounting/posting-engine'
 import { generateNextIntercompanyJournalNumber, generateNextJournalNumber } from '@/lib/journal-number'
 import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
 import { getTransactionPostingContextError } from '@/lib/transaction-posting-context'
@@ -83,6 +84,30 @@ function parseBoolish(value: unknown) {
   if (typeof value === 'boolean') return value
   const normalized = String(value ?? '').trim().toLowerCase()
   return ['true', '1', 'yes', 'y', 'on'].includes(normalized)
+}
+
+async function findDuplicateSourceJournal(
+  sourceType: unknown,
+  sourceId: unknown,
+  excludeJournalId?: string | null,
+) {
+  const normalizedSourceType = String(sourceType ?? '').trim()
+  const normalizedSourceId = String(sourceId ?? '').trim()
+  if (!normalizedSourceType || !normalizedSourceId) return null
+
+  return prisma.journalEntry.findFirst({
+    where: {
+      sourceType: normalizedSourceType,
+      sourceId: normalizedSourceId,
+      ...(excludeJournalId ? { NOT: { id: excludeJournalId } } : {}),
+    },
+    select: { id: true, number: true },
+  })
+}
+
+function duplicateSourceJournalError(sourceType: unknown, sourceId: unknown, journalNumber?: string | null) {
+  const sourceLabel = [sourceType, sourceId].map((value) => String(value ?? '').trim()).filter(Boolean).join(' / ')
+  return `A journal already exists for source ${sourceLabel}${journalNumber ? ` (${journalNumber})` : ''}. Open the existing journal instead of creating a duplicate posting.`
 }
 
 function validateLineItems(lineItems: Array<{ debit: number; credit: number }>) {
@@ -650,7 +675,7 @@ export async function POST(req: NextRequest) {
     (body.journalType === 'intercompany'
       ? await generateNextIntercompanyJournalNumber()
       : await generateNextJournalNumber())
-  if (body.date) body.date = new Date(body.date)
+  body.date = body.date ? new Date(body.date) : new Date()
   if (body.subsidiaryId === '') body.subsidiaryId = null
   if (body.currencyId === '') body.currencyId = null
   body.currencyId = await resolveDefaultCurrencySnapshot(body.currencyId)
@@ -669,8 +694,29 @@ export async function POST(req: NextRequest) {
   if (body.reversalReasonCode === '') body.reversalReasonCode = null
   if (body.postedByEmployeeId === '') body.postedByEmployeeId = null
   if (body.approvedByEmployeeId === '') body.approvedByEmployeeId = null
+  if (body.sourceType !== undefined) body.sourceType = String(body.sourceType ?? '').trim() || null
+  if (body.sourceId !== undefined) body.sourceId = String(body.sourceId ?? '').trim() || null
+  const duplicateSourceJournal = await findDuplicateSourceJournal(body.sourceType, body.sourceId)
+  if (duplicateSourceJournal) {
+    return NextResponse.json({
+      error: duplicateSourceJournalError(body.sourceType, body.sourceId, duplicateSourceJournal.number),
+    }, { status: 400 })
+  }
   delete body.lineItems
   const row = await prisma.$transaction(async (tx) => {
+    if (normalizedLineItems.length > 0) {
+      const postingControls = await validateJournalPostingControls({
+        tx,
+        postingDate: body.date,
+        accountingPeriodId: body.accountingPeriodId,
+        subsidiaryId: body.subsidiaryId,
+        module: 'gl',
+        lines: normalizedLineItems,
+      })
+      body.total = postingControls.total
+      body.accountingPeriodId = postingControls.accountingPeriodId
+    }
+
     const created = await tx.journalEntry.create({
       data: {
         ...body,
@@ -757,6 +803,8 @@ export async function PUT(req: NextRequest) {
   if (body.reversalReasonCode === '') body.reversalReasonCode = null
   if (body.postedByEmployeeId === '') body.postedByEmployeeId = null
   if (body.approvedByEmployeeId === '') body.approvedByEmployeeId = null
+  if (body.sourceType !== undefined) body.sourceType = String(body.sourceType ?? '').trim() || null
+  if (body.sourceId !== undefined) body.sourceId = String(body.sourceId ?? '').trim() || null
   delete body.lineItems
   const existing = await prisma.journalEntry.findUnique({
     where: { id },
@@ -767,6 +815,12 @@ export async function PUT(req: NextRequest) {
     },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (existing.status === 'posted') {
+    return NextResponse.json(
+      { error: 'Posted journal entries are immutable. Reverse the journal instead of editing it.' },
+      { status: 400 },
+    )
+  }
 
   const [subsidiaries, currencies, periods, employees, accounts, departments, locations, classes, projects, customers, vendors, items, openItems] = await Promise.all([
     prisma.subsidiary.findMany({ select: { id: true, subsidiaryId: true, name: true } }),
@@ -807,6 +861,12 @@ export async function PUT(req: NextRequest) {
   const normalizedAccountingPeriodId = body.accountingPeriodId !== undefined ? body.accountingPeriodId : existing.accountingPeriodId
   const normalizedSourceType = body.sourceType !== undefined ? body.sourceType : existing.sourceType
   const normalizedSourceId = body.sourceId !== undefined ? body.sourceId : existing.sourceId
+  const duplicateSourceJournal = await findDuplicateSourceJournal(normalizedSourceType, normalizedSourceId, id)
+  if (duplicateSourceJournal) {
+    return NextResponse.json({
+      error: duplicateSourceJournalError(normalizedSourceType, normalizedSourceId, duplicateSourceJournal.number),
+    }, { status: 400 })
+  }
   const normalizedReversesJournalEntryId = body.reversesJournalEntryId !== undefined ? body.reversesJournalEntryId : existing.reversesJournalEntryId
   const normalizedReversalReasonCode = body.reversalReasonCode !== undefined ? body.reversalReasonCode : existing.reversalReasonCode
   const normalizedPostedByEmployeeId = body.postedByEmployeeId !== undefined ? body.postedByEmployeeId : existing.postedByEmployeeId
@@ -916,6 +976,29 @@ export async function PUT(req: NextRequest) {
   }
 
   const row = await prisma.$transaction(async (tx) => {
+    const postingControlLineItems = replaceLines
+      ? effectiveLineItems
+      : existing.lineItems.map((line) => ({
+          accountId: line.accountId,
+          debit: line.debit,
+          credit: line.credit,
+        }))
+
+    if (postingControlLineItems.length > 0) {
+      const postingControls = await validateJournalPostingControls({
+        tx,
+        postingDate: normalizedDate,
+        accountingPeriodId: normalizedAccountingPeriodId,
+        subsidiaryId: normalizedSubsidiaryId,
+        module: 'gl',
+        lines: postingControlLineItems,
+      })
+      body.accountingPeriodId = postingControls.accountingPeriodId
+      if (replaceLines) {
+        body.total = postingControls.total
+      }
+    }
+
     await tx.journalEntry.update({ where: { id }, data: body })
     if (replaceLines) {
       await tx.journalEntryLineItem.deleteMany({ where: { journalEntryId: id } })
@@ -964,6 +1047,14 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  const existing = await prisma.journalEntry.findUnique({ where: { id }, select: { status: true } })
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (existing.status === 'posted') {
+    return NextResponse.json(
+      { error: 'Posted journal entries are immutable. Reverse the journal instead of deleting it.' },
+      { status: 400 },
+    )
+  }
   const row = await prisma.$transaction(async (tx) => {
     await clearJournalOpenItems(id, tx)
     return tx.journalEntry.delete({ where: { id } })

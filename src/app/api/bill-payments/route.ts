@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateBillPaymentNumber } from '@/lib/bill-payment-number'
 import { generateNextBankCheckId } from '@/lib/banking-number'
-import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { logActivity, logCommunicationActivity, logFieldChangeActivities, logRecordSnapshotActivities } from '@/lib/activity'
 import { parseMoneyValue } from '@/lib/money'
 import { loadCompanySetupSettings } from '@/lib/company-setup-settings-store'
@@ -32,6 +31,7 @@ import {
 import { loadCashBankPostingAccounts } from '@/lib/posting-account-options'
 import { getRequiredStandardTransactionPostingContext } from '@/lib/transaction-posting-context'
 import { deriveSettlementLineDimensions } from '@/lib/settlement-dimension-policy'
+import { postJournalFromSource } from '@/lib/accounting/posting-engine'
 
 const BILL_PAYMENT_POSTING_STATUSES = new Set(['processed', 'cleared'])
 const CHECK_PAYMENT_METHODS = new Set(['check', 'cheque'])
@@ -622,7 +622,6 @@ async function postBillPaymentJournal(billPaymentId: string) {
 
   if (!apAccountId || !bankAccountId || !firstBill) return
 
-  const journalNumber = await generateNextSystemJournalNumber()
   const canPopulateLocalLayer =
     settlementSummaries.length > 0
     && settlementSummaries.every(
@@ -693,65 +692,61 @@ async function postBillPaymentJournal(billPaymentId: string) {
     startingDisplayOrder: 2,
   })
 
-  await prisma.journalEntry.create({
-    data: {
-      number: journalNumber,
-      date: payment.date,
-      description: `Bill payment ${payment.number}`,
-      journalType: 'standard',
-      status: 'approved',
-      total: amount,
-      sourceType: 'bill-payment',
-      sourceId: payment.id,
-      subsidiaryId: firstBill.subsidiaryId,
-      currencyId: firstBill.currencyId,
-      userId: firstBill.userId,
-      lineItems: {
-        create: [
-          {
-            displayOrder: 0,
-            description: `${payment.number} AP settlement`,
-            memo: payment.notes ?? null,
-            activityTypeCode: 'ap_settlement',
-            debit: amount,
-            credit: 0,
-            localDebit: apLocalDebit,
-            functionalDebit: apFunctionalDebit,
-            groupDebit: apGroupDebit,
-            accountId: apAccountId,
-            subsidiaryId: firstBill.subsidiaryId,
-            vendorId: payment.vendorId ?? firstBill.vendorId,
-            ...settlementDimensions,
-          },
-          {
-            displayOrder: 1,
-            description: `${payment.number} cash disbursement`,
-            memo: payment.reference ?? payment.notes ?? null,
-            activityTypeCode: 'cash_disbursement',
-            debit: 0,
-            credit: amount,
-            localCredit:
-              paymentCurrencyContext.originalLocalAmount == null
-                ? undefined
-                : Number(paymentCurrencyContext.originalLocalAmount),
-            functionalCredit:
-              paymentCurrencyContext.originalFunctionalAmount == null
-                ? undefined
-                : Number(paymentCurrencyContext.originalFunctionalAmount),
-            groupCredit:
-              paymentCurrencyContext.originalGroupAmount == null
-                ? undefined
-                : Number(paymentCurrencyContext.originalGroupAmount),
-            accountId: bankAccountId,
-            subsidiaryId: firstBill.subsidiaryId,
-            vendorId: payment.vendorId ?? firstBill.vendorId,
-            ...settlementDimensions,
-          },
-          ...fxLines,
-        ],
+  const posting = await postJournalFromSource({
+    sourceType: 'bill-payment',
+    sourceId: payment.id,
+    description: `Bill payment ${payment.number}`,
+    postingDate: payment.date,
+    journalType: 'standard',
+    status: 'approved',
+    subsidiaryId: firstBill.subsidiaryId,
+    currencyId: firstBill.currencyId,
+    userId: firstBill.userId,
+    module: 'ap',
+    isOpenItemRelevant: true,
+    lines: [
+      {
+        displayOrder: 0,
+        description: `${payment.number} AP settlement`,
+        memo: payment.notes ?? null,
+        activityTypeCode: 'ap_settlement',
+        debit: amount,
+        credit: 0,
+        localDebit: apLocalDebit,
+        functionalDebit: apFunctionalDebit,
+        groupDebit: apGroupDebit,
+        accountId: apAccountId,
+        subsidiaryId: firstBill.subsidiaryId,
+        vendorId: payment.vendorId ?? firstBill.vendorId,
+        ...settlementDimensions,
       },
-    },
-    })
+      {
+        displayOrder: 1,
+        description: `${payment.number} cash disbursement`,
+        memo: payment.reference ?? payment.notes ?? null,
+        activityTypeCode: 'cash_disbursement',
+        debit: 0,
+        credit: amount,
+        localCredit:
+          paymentCurrencyContext.originalLocalAmount == null
+            ? undefined
+            : Number(paymentCurrencyContext.originalLocalAmount),
+        functionalCredit:
+          paymentCurrencyContext.originalFunctionalAmount == null
+            ? undefined
+            : Number(paymentCurrencyContext.originalFunctionalAmount),
+        groupCredit:
+          paymentCurrencyContext.originalGroupAmount == null
+            ? undefined
+            : Number(paymentCurrencyContext.originalGroupAmount),
+        accountId: bankAccountId,
+        subsidiaryId: firstBill.subsidiaryId,
+        vendorId: payment.vendorId ?? firstBill.vendorId,
+        ...settlementDimensions,
+      },
+      ...fxLines,
+    ],
+  })
 
   await prisma.billPayment.update({
     where: { id: payment.id },
@@ -762,13 +757,15 @@ async function postBillPaymentJournal(billPaymentId: string) {
     },
   })
 
-  await logActivity({
-    entityType: 'bill-payment',
-    entityId: payment.id,
-    action: 'post',
-    summary: `Posted bill payment ${payment.number} to GL`,
-    userId: firstBill.userId,
-  })
+  if (posting.created) {
+    await logActivity({
+      entityType: 'bill-payment',
+      entityId: payment.id,
+      action: 'post',
+      summary: `Posted bill payment ${payment.number} to GL`,
+      userId: firstBill.userId,
+    })
+  }
 }
 
 export async function GET(req: NextRequest) {

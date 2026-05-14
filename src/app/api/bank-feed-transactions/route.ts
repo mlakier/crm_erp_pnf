@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateNextBankTransactionId, generateNextBankTransferId } from '@/lib/banking-number'
-import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { logActivity } from '@/lib/activity'
 import { loadCompanySetupSettings } from '@/lib/company-setup-settings-store'
 import { deriveSettlementLineDimensions } from '@/lib/settlement-dimension-policy'
+import { postJournalFromSource } from '@/lib/accounting/posting-engine'
 
 function text(value: unknown) {
   return String(value ?? '').trim()
@@ -279,70 +279,64 @@ export async function PUT(request: Request) {
                 : bankActivityType === 'unapplied_cash'
                   ? 'unapplied cash'
                 : 'bank activity'
-      const journalNumber = await generateNextSystemJournalNumber()
       const description = `${activityLabel.charAt(0).toUpperCase()}${activityLabel.slice(1)} journal: ${bankTransaction.description}`
       const settlementDimensions = await deriveSettlementLineDimensions([])
       const transferNumber = bankActivityType === 'transfer' ? await generateNextBankTransferId() : null
-      const postingResult = await prisma.$transaction(async (tx) => {
-        const createdJournal = await tx.journalEntry.create({
-          data: {
-            number: journalNumber,
-            date: postingDate,
-            description,
-            journalType: 'standard',
-            status: text(body?.journalStatus) || 'approved',
-            total: amount,
-            sourceType: 'bank-feed-transaction',
-            sourceId: bankTransaction.id,
-            subsidiaryId: bankTransaction.bankAccount.subsidiaryId,
-            currencyId: bankTransaction.currencyId,
-            isOpenItemRelevant: false,
-            lineItems: {
-              create: isOutflow(Number(bankTransaction.amount))
-                ? [
-                    {
-                      displayOrder: 0,
-                      accountId: offsetAccount.id,
-                      ...settlementDimensions,
-                      debit: amount,
-                      credit: 0,
-                      description: bankTransaction.description,
-                      memo: bankTransaction.externalId ?? null,
-                    },
-                    {
-                      displayOrder: 1,
-                      accountId: bankGlAccountId,
-                      ...settlementDimensions,
-                      debit: 0,
-                      credit: amount,
-                      description: bankTransaction.description,
-                      memo: bankTransaction.externalId ?? null,
-                    },
-                  ]
-                : [
-                    {
-                      displayOrder: 0,
-                      accountId: bankGlAccountId,
-                      ...settlementDimensions,
-                      debit: amount,
-                      credit: 0,
-                      description: bankTransaction.description,
-                      memo: bankTransaction.externalId ?? null,
-                    },
-                    {
-                      displayOrder: 1,
-                      accountId: offsetAccount.id,
-                      ...settlementDimensions,
-                      debit: 0,
-                      credit: amount,
-                      description: bankTransaction.description,
-                      memo: bankTransaction.externalId ?? null,
-                    },
-                  ],
-            },
-          },
-        })
+      const postingResult = await postJournalFromSource({
+        sourceType: 'bank-feed-transaction',
+        sourceId: bankTransaction.id,
+        description,
+        postingDate,
+        journalType: 'standard',
+        status: text(body?.journalStatus) || 'approved',
+        subsidiaryId: bankTransaction.bankAccount.subsidiaryId,
+        currencyId: bankTransaction.currencyId,
+        module: 'gl',
+        isOpenItemRelevant: false,
+        lines: isOutflow(Number(bankTransaction.amount))
+          ? [
+              {
+                displayOrder: 0,
+                accountId: offsetAccount.id,
+                ...settlementDimensions,
+                debit: amount,
+                credit: 0,
+                description: bankTransaction.description,
+                memo: bankTransaction.externalId ?? null,
+              },
+              {
+                displayOrder: 1,
+                accountId: bankGlAccountId,
+                ...settlementDimensions,
+                debit: 0,
+                credit: amount,
+                description: bankTransaction.description,
+                memo: bankTransaction.externalId ?? null,
+              },
+            ]
+          : [
+              {
+                displayOrder: 0,
+                accountId: bankGlAccountId,
+                ...settlementDimensions,
+                debit: amount,
+                credit: 0,
+                description: bankTransaction.description,
+                memo: bankTransaction.externalId ?? null,
+              },
+              {
+                displayOrder: 1,
+                accountId: offsetAccount.id,
+                ...settlementDimensions,
+                debit: 0,
+                credit: amount,
+                description: bankTransaction.description,
+                memo: bankTransaction.externalId ?? null,
+              },
+            ],
+      })
 
+      const matchResult = await prisma.$transaction(async (tx) => {
         const offsetBankAccount = bankActivityType === 'transfer'
           ? await tx.bankAccount.findFirst({ where: { glAccountId: offsetAccount.id } })
           : null
@@ -363,7 +357,7 @@ export async function PUT(request: Request) {
                 subsidiaryId: bankTransaction.bankAccount.subsidiaryId,
                 currencyId: bankTransaction.currencyId,
                 bankFeedTransactionId: bankTransaction.id,
-                journalEntryId: createdJournal.id,
+                journalEntryId: postingResult.journalEntryId,
               },
             })
           : null
@@ -373,7 +367,7 @@ export async function PUT(request: Request) {
           data: {
             status: 'matched',
             matchedRecordType: createdTransfer ? 'bank_transfer' : 'journal_entry',
-            matchedRecordId: createdTransfer?.id ?? createdJournal.id,
+            matchedRecordId: createdTransfer?.id ?? postingResult.journalEntryId,
             matchConfidence: 100,
             suggestedMatchReason: createdTransfer
               ? `Posted bank transfer ${createdTransfer.transferNumber} to ${offsetAccount.accountNumber} - ${offsetAccount.name}`
@@ -394,32 +388,32 @@ export async function PUT(request: Request) {
           })
         }
 
-        return { journal: createdJournal, transfer: createdTransfer }
+        return { journal: postingResult, transfer: createdTransfer }
       })
 
       await logActivity({
         entityType: 'bank-feed-transaction',
         entityId: id,
         action: 'post',
-        summary: postingResult.transfer
-          ? `Posted bank feed transaction to bank transfer ${postingResult.transfer.transferNumber}`
-          : `Posted bank feed transaction to journal ${postingResult.journal.number}`,
+        summary: matchResult.transfer
+          ? `Posted bank feed transaction to bank transfer ${matchResult.transfer.transferNumber}`
+          : `Posted bank feed transaction to journal ${postingResult.journalNumber}`,
       })
 
       return NextResponse.json(
-        postingResult.transfer
+        matchResult.transfer
           ? {
-              ...postingResult.journal,
-              id: postingResult.transfer.id,
-              number: postingResult.transfer.transferNumber,
+              id: matchResult.transfer.id,
+              number: matchResult.transfer.transferNumber,
               recordType: 'bank_transfer',
-              journalEntryId: postingResult.journal.id,
-              href: `/bank-transfers/${postingResult.transfer.id}`,
+              journalEntryId: postingResult.journalEntryId,
+              href: `/bank-transfers/${matchResult.transfer.id}`,
             }
           : {
-              ...postingResult.journal,
+              id: postingResult.journalEntryId,
+              number: postingResult.journalNumber,
               recordType: 'journal_entry',
-              href: `/journals/${postingResult.journal.id}`,
+              href: `/journals/${postingResult.journalEntryId}`,
             },
         { status: 201 },
       )

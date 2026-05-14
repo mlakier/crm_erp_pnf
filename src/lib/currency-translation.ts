@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { getRequiredStandardTransactionPostingContext } from '@/lib/transaction-posting-context'
 import { loadConfiguredCtaPostingAccount } from '@/lib/company-setup-account-resolver'
+import { validatePostingAccountsAndPeriodControls } from '@/lib/accounting/posting-engine'
 
 const MONEY_TOLERANCE = 0.005
 
@@ -335,7 +336,16 @@ export async function runCurrencyTranslation(input: RunCurrencyTranslationInput)
     const groupDeltaTotal = roundMoney(translationLines.reduce((sum, line) => sum + line.groupDelta, 0))
 
     if (translationLines.length > 0) {
-      const journalNumber = await generateNextSystemJournalNumber()
+      await validatePostingAccountsAndPeriodControls({
+        tx,
+        postingDate: asOfDate,
+        accountingPeriodId: period.id,
+        subsidiaryId: journalPostingContext.subsidiaryId,
+        module: 'gl',
+        accountIds: [...translationLines.map((line) => line.accountId), ctaAccountId],
+      })
+
+      const journalNumber = await generateNextSystemJournalNumber(tx)
       const journalEntry = await tx.journalEntry.create({
         data: {
           number: journalNumber,

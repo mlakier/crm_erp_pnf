@@ -2,6 +2,10 @@ import { prisma } from '@/lib/prisma'
 import { DEFAULT_ID_SETTINGS } from '@/lib/company-preferences-definitions'
 import { formatIdentifier, getNextSequenceFromValues, loadIdSetting } from '@/lib/id-settings'
 
+type QueryRawClient = {
+  $queryRaw<T = unknown>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>
+}
+
 export function formatJournalNumber(sequence: number, config = DEFAULT_ID_SETTINGS.journal) {
   return formatIdentifier(sequence, config)
 }
@@ -56,25 +60,10 @@ export async function generateNextIntercompanyJournalNumber() {
   return generateNextJournalNumberBySetting('intercompanyJournal')
 }
 
-export async function generateNextSystemJournalNumber() {
-  const latestEntries = await prisma.journalEntry.findMany({
-    where: {
-      number: {
-        startsWith: SYSTEM_JOURNAL_ID_SETTING.prefix,
-      },
-    },
-    orderBy: {
-      number: 'desc',
-    },
-    select: {
-      number: true,
-    },
-    take: 200,
-  })
-
-  const nextSequence = getNextSequenceFromValues(
-    latestEntries.map((entry) => entry.number),
-    SYSTEM_JOURNAL_ID_SETTING,
-  )
+export async function generateNextSystemJournalNumber(client: QueryRawClient = prisma) {
+  const rows = await client.$queryRaw<Array<{ sequence: bigint | number | string }>>`
+    SELECT nextval('"system_journal_number_seq"') AS sequence
+  `
+  const nextSequence = Number(rows[0]?.sequence ?? 1)
   return formatSystemJournalNumber(nextSequence)
 }

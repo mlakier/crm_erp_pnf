@@ -5,7 +5,6 @@ import { loadCompanySetupSettings } from '@/lib/company-setup-settings-store'
 import {
   syncAutoDocumentRelationshipsForSource,
 } from '@/lib/document-relationships'
-import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { sumMoney } from '@/lib/money'
 import { deriveOpenItemCurrencyContext } from '@/lib/open-item-currency-context'
 import {
@@ -22,6 +21,7 @@ import {
   computeProportionalTranslatedSettlementAmount,
   computeRealizedFxLayerAmount,
 } from '@/lib/settlement-fx-journal'
+import { postJournalFromSourceInTransaction } from '@/lib/accounting/posting-engine'
 import { loadConfiguredRealizedFxPostingAccounts } from '@/lib/company-setup-account-resolver'
 import type { CreditMemoApplicationInput } from '@/lib/credit-memo-applications'
 import type { BillCreditApplicationInput } from '@/lib/bill-credit-applications'
@@ -742,45 +742,40 @@ export async function syncCreditMemoPosting(
           })
         : []
 
-    const journalNumber = await generateNextSystemJournalNumber()
-
-    await tx.journalEntry.create({
-      data: {
-        number: journalNumber,
-        date: creditMemo.date,
-        description: `Credit memo ${creditMemo.number}`,
-        journalType: 'standard',
-        status: 'approved',
-        total: roundMoney(creditMemo.total),
-        sourceType: 'credit-memo',
-        sourceId: creditMemo.id,
-        subsidiaryId: creditMemo.subsidiaryId,
-        currencyId: creditMemo.currencyId,
-        userId: creditMemo.userId,
-        lineItems: {
-          create: [
-            ...revenueLines,
-            {
-              displayOrder: revenueLines.length,
-              description: `${creditMemo.number} accounts receivable credit`,
-              memo: creditMemo.notes ?? null,
-              activityTypeCode: 'ar_settlement',
-              debit: 0,
-              credit: roundMoney(creditMemo.total),
-              localCredit:
-                translationContext.originalLocalAmount == null ? undefined : Number(translationContext.originalLocalAmount),
-              functionalCredit:
-                translationContext.originalFunctionalAmount == null ? undefined : Number(translationContext.originalFunctionalAmount),
-              groupCredit:
-                translationContext.originalGroupAmount == null ? undefined : Number(translationContext.originalGroupAmount),
-              accountId: arAccountId,
-              subsidiaryId: creditMemo.subsidiaryId,
-              customerId: creditMemo.customerId,
-            },
-            ...fxLines,
-          ],
+    await postJournalFromSourceInTransaction(tx, {
+      sourceType: 'credit-memo',
+      sourceId: creditMemo.id,
+      description: `Credit memo ${creditMemo.number}`,
+      postingDate: creditMemo.date,
+      accountingPeriodId: null,
+      journalType: 'standard',
+      status: 'approved',
+      subsidiaryId: creditMemo.subsidiaryId,
+      currencyId: creditMemo.currencyId,
+      userId: creditMemo.userId,
+      module: 'ar',
+      isOpenItemRelevant: true,
+      lines: [
+        ...revenueLines,
+        {
+          displayOrder: revenueLines.length,
+          description: `${creditMemo.number} accounts receivable credit`,
+          memo: creditMemo.notes ?? null,
+          activityTypeCode: 'ar_settlement',
+          debit: 0,
+          credit: roundMoney(creditMemo.total),
+          localCredit:
+            translationContext.originalLocalAmount == null ? undefined : Number(translationContext.originalLocalAmount),
+          functionalCredit:
+            translationContext.originalFunctionalAmount == null ? undefined : Number(translationContext.originalFunctionalAmount),
+          groupCredit:
+            translationContext.originalGroupAmount == null ? undefined : Number(translationContext.originalGroupAmount),
+          accountId: arAccountId,
+          subsidiaryId: creditMemo.subsidiaryId,
+          customerId: creditMemo.customerId,
         },
-      },
+        ...fxLines,
+      ],
     })
 
     const creditMemoOpenItem = await ensureOpenItemForSource({
@@ -1103,45 +1098,40 @@ export async function syncBillCreditPosting(
           })
         : []
 
-    const journalNumber = await generateNextSystemJournalNumber()
-
-    await tx.journalEntry.create({
-      data: {
-        number: journalNumber,
-        date: billCredit.date,
-        description: `Bill credit ${billCredit.number}`,
-        journalType: 'standard',
-        status: 'approved',
-        total: roundMoney(billCredit.total),
-        sourceType: 'bill-credit',
-        sourceId: billCredit.id,
-        subsidiaryId: billCredit.subsidiaryId,
-        currencyId: billCredit.currencyId,
-        userId: billCredit.userId,
-        lineItems: {
-          create: [
-            {
-              displayOrder: 0,
-              description: `${billCredit.number} accounts payable credit`,
-              memo: billCredit.notes ?? null,
-              activityTypeCode: 'ap_settlement',
-              debit: roundMoney(billCredit.total),
-              credit: 0,
-              localDebit:
-                translationContext.originalLocalAmount == null ? undefined : Number(translationContext.originalLocalAmount),
-              functionalDebit:
-                translationContext.originalFunctionalAmount == null ? undefined : Number(translationContext.originalFunctionalAmount),
-              groupDebit:
-                translationContext.originalGroupAmount == null ? undefined : Number(translationContext.originalGroupAmount),
-              accountId: apAccountId,
-              subsidiaryId: billCredit.subsidiaryId,
-              vendorId: billCredit.vendorId,
-            },
-            ...expenseLines,
-            ...fxLines,
-          ],
+    await postJournalFromSourceInTransaction(tx, {
+      sourceType: 'bill-credit',
+      sourceId: billCredit.id,
+      description: `Bill credit ${billCredit.number}`,
+      postingDate: billCredit.date,
+      accountingPeriodId: null,
+      journalType: 'standard',
+      status: 'approved',
+      subsidiaryId: billCredit.subsidiaryId,
+      currencyId: billCredit.currencyId,
+      userId: billCredit.userId,
+      module: 'ap',
+      isOpenItemRelevant: true,
+      lines: [
+        {
+          displayOrder: 0,
+          description: `${billCredit.number} accounts payable credit`,
+          memo: billCredit.notes ?? null,
+          activityTypeCode: 'ap_settlement',
+          debit: roundMoney(billCredit.total),
+          credit: 0,
+          localDebit:
+            translationContext.originalLocalAmount == null ? undefined : Number(translationContext.originalLocalAmount),
+          functionalDebit:
+            translationContext.originalFunctionalAmount == null ? undefined : Number(translationContext.originalFunctionalAmount),
+          groupDebit:
+            translationContext.originalGroupAmount == null ? undefined : Number(translationContext.originalGroupAmount),
+          accountId: apAccountId,
+          subsidiaryId: billCredit.subsidiaryId,
+          vendorId: billCredit.vendorId,
         },
-      },
+        ...expenseLines,
+        ...fxLines,
+      ],
     })
 
     const billCreditOpenItem = await ensureOpenItemForSource({

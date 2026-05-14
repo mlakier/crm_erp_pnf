@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateInvoiceReceiptNumber } from '@/lib/invoice-receipt-number'
 import { parseMoneyValue } from '@/lib/money'
-import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { generateCustomerRefundNumber } from '@/lib/customer-refund-number'
 import { logActivity, logFieldChangeActivities, logRecordSnapshotActivities } from '@/lib/activity'
 import { loadCompanySetupSettings } from '@/lib/company-setup-settings-store'
@@ -33,6 +32,7 @@ import {
 import { loadCashBankPostingAccounts } from '@/lib/posting-account-options'
 import { getRequiredStandardTransactionPostingContext } from '@/lib/transaction-posting-context'
 import { deriveSettlementLineDimensions } from '@/lib/settlement-dimension-policy'
+import { postJournalFromSource } from '@/lib/accounting/posting-engine'
 
 const INVOICE_RECEIPT_POSTING_STATUSES = new Set(['posted'])
 const AUTO_CUSTOMER_REFUND_NOTE = 'Auto-created from invoice receipt overpayment.'
@@ -547,7 +547,6 @@ async function postInvoiceReceiptJournal(cashReceiptId: string) {
 
   if (!arAccountId || !bankAccountId) return
 
-  const journalNumber = await generateNextSystemJournalNumber()
   const totalAppliedAmount = roundMoney(
     applicationsToSettle.reduce((sum, application) => sum + Number(application.appliedAmount), 0),
   )
@@ -625,64 +624,60 @@ async function postInvoiceReceiptJournal(cashReceiptId: string) {
     startingDisplayOrder: 2,
   })
 
-  await prisma.journalEntry.create({
-    data: {
-      number: journalNumber,
-      date: receipt.date,
-      description: `Invoice receipt ${receipt.number ?? receipt.id}`,
-      journalType: 'standard',
-      status: 'approved',
-      total: amount,
-      sourceType: 'invoice-receipt',
-      sourceId: receipt.id,
-      subsidiaryId: firstInvoice.subsidiaryId,
-      currencyId: firstInvoice.currencyId,
-      userId: firstInvoice.userId,
-      lineItems: {
-        create: [
-          {
-            displayOrder: 0,
-            description: `${receipt.number ?? receipt.id} cash receipt`,
-            memo: receipt.reference ?? null,
-            activityTypeCode: 'cash_receipt',
-            debit: amount,
-            credit: 0,
-            localDebit:
-              canPopulateLocalLayer && receiptCurrencyContext.originalLocalAmount != null
-                ? Number(receiptCurrencyContext.originalLocalAmount)
-                : undefined,
-            functionalDebit:
-              canPopulateFunctionalLayer && receiptCurrencyContext.originalFunctionalAmount != null
-                ? Number(receiptCurrencyContext.originalFunctionalAmount)
-                : undefined,
-            groupDebit:
-              canPopulateGroupLayer && receiptCurrencyContext.originalGroupAmount != null
-                ? Number(receiptCurrencyContext.originalGroupAmount)
-                : undefined,
-            accountId: bankAccountId,
-            subsidiaryId: firstInvoice.subsidiaryId,
-            customerId: firstInvoice.customerId,
-            ...settlementDimensions,
-          },
-          {
-            displayOrder: 1,
-            description: `${receipt.number ?? receipt.id} AR application`,
-            memo: receipt.reference ?? null,
-            activityTypeCode: 'ar_settlement',
-            debit: 0,
-            credit: amount,
-            localCredit: arLocalCredit,
-            functionalCredit: arFunctionalCredit,
-            groupCredit: arGroupCredit,
-            accountId: arAccountId,
-            subsidiaryId: firstInvoice.subsidiaryId,
-            customerId: firstInvoice.customerId,
-            ...settlementDimensions,
-          },
-          ...fxLines,
-        ],
+  const posting = await postJournalFromSource({
+    sourceType: 'invoice-receipt',
+    sourceId: receipt.id,
+    description: `Invoice receipt ${receipt.number ?? receipt.id}`,
+    postingDate: receipt.date,
+    journalType: 'standard',
+    status: 'approved',
+    subsidiaryId: firstInvoice.subsidiaryId,
+    currencyId: firstInvoice.currencyId,
+    userId: firstInvoice.userId,
+    module: 'ar',
+    isOpenItemRelevant: true,
+    lines: [
+      {
+        displayOrder: 0,
+        description: `${receipt.number ?? receipt.id} cash receipt`,
+        memo: receipt.reference ?? null,
+        activityTypeCode: 'cash_receipt',
+        debit: amount,
+        credit: 0,
+        localDebit:
+          canPopulateLocalLayer && receiptCurrencyContext.originalLocalAmount != null
+            ? Number(receiptCurrencyContext.originalLocalAmount)
+            : undefined,
+        functionalDebit:
+          canPopulateFunctionalLayer && receiptCurrencyContext.originalFunctionalAmount != null
+            ? Number(receiptCurrencyContext.originalFunctionalAmount)
+            : undefined,
+        groupDebit:
+          canPopulateGroupLayer && receiptCurrencyContext.originalGroupAmount != null
+            ? Number(receiptCurrencyContext.originalGroupAmount)
+            : undefined,
+        accountId: bankAccountId,
+        subsidiaryId: firstInvoice.subsidiaryId,
+        customerId: firstInvoice.customerId,
+        ...settlementDimensions,
       },
-    },
+      {
+        displayOrder: 1,
+        description: `${receipt.number ?? receipt.id} AR application`,
+        memo: receipt.reference ?? null,
+        activityTypeCode: 'ar_settlement',
+        debit: 0,
+        credit: amount,
+        localCredit: arLocalCredit,
+        functionalCredit: arFunctionalCredit,
+        groupCredit: arGroupCredit,
+        accountId: arAccountId,
+        subsidiaryId: firstInvoice.subsidiaryId,
+        customerId: firstInvoice.customerId,
+        ...settlementDimensions,
+      },
+      ...fxLines,
+    ],
   })
 
   await prisma.cashReceipt.update({
@@ -694,13 +689,15 @@ async function postInvoiceReceiptJournal(cashReceiptId: string) {
     },
   })
 
-  await logActivity({
-    entityType: 'invoice-receipt',
-    entityId: receipt.id,
-    action: 'post',
-    summary: `Posted invoice receipt ${receipt.number ?? receipt.id} to GL`,
-    userId: firstInvoice.userId,
-  })
+  if (posting.created) {
+    await logActivity({
+      entityType: 'invoice-receipt',
+      entityId: receipt.id,
+      action: 'post',
+      summary: `Posted invoice receipt ${receipt.number ?? receipt.id} to GL`,
+      userId: firstInvoice.userId,
+    })
+  }
 }
 
 async function unpostInvoiceReceiptJournal(cashReceiptId: string) {

@@ -3,8 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { logActivity, logCommunicationActivity, logFieldChangeActivities, logRecordSnapshotActivities } from '@/lib/activity'
 import { canReceivePurchaseOrderLine } from '@/lib/item-business-rules'
 import { syncReceiptQuantity } from '@/lib/receipt-quantity'
-import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
+import { postJournalFromSource } from '@/lib/accounting/posting-engine'
 
 type ReceiptLineInput = {
   purchaseOrderLineItemId: string
@@ -136,46 +136,41 @@ async function postReceiptJournal(receiptId: string) {
   const totalDebit = debitLines.reduce((sum, line) => sum + Number(line.debit ?? 0), 0)
   if (!debitLines.length || totalDebit <= 0) return
 
-  const journalNumber = await generateNextSystemJournalNumber()
-
-  await prisma.journalEntry.create({
-    data: {
-      number: journalNumber,
-      date: receipt.date,
-      description: `Receipt ${receipt.id} inventory posting`,
-      journalType: 'standard',
-      status: 'approved',
-      total: totalDebit,
-      sourceType: 'receipt',
-      sourceId: receipt.id,
-      subsidiaryId: receipt.purchaseOrder.subsidiaryId,
-      currencyId: receipt.purchaseOrder.currencyId,
-      userId: receipt.purchaseOrder.userId,
-      lineItems: {
-        create: [
-          ...debitLines,
-          {
-            displayOrder: debitLines.length,
-            description: `${receipt.purchaseOrder.number} receipt offset`,
-            memo: receipt.notes ?? null,
-            debit: 0,
-            credit: totalDebit,
-            accountId: receiptOffsetAccountId,
-            subsidiaryId: receipt.purchaseOrder.subsidiaryId,
-            vendorId: receipt.purchaseOrder.vendorId,
-          },
-        ],
-      },
-    },
-  })
-
-  await logActivity({
-    entityType: 'receipt',
-    entityId: receipt.id,
-    action: 'post',
-    summary: `Posted receipt ${receipt.id} to GL`,
+  const posting = await postJournalFromSource({
+    sourceType: 'receipt',
+    sourceId: receipt.id,
+    description: `Receipt ${receipt.id} inventory posting`,
+    postingDate: receipt.date,
+    journalType: 'standard',
+    status: 'approved',
+    subsidiaryId: receipt.purchaseOrder.subsidiaryId,
+    currencyId: receipt.purchaseOrder.currencyId,
     userId: receipt.purchaseOrder.userId,
+    module: 'inventory',
+    lines: [
+      ...debitLines,
+      {
+        displayOrder: debitLines.length,
+        description: `${receipt.purchaseOrder.number} receipt offset`,
+        memo: receipt.notes ?? null,
+        debit: 0,
+        credit: totalDebit,
+        accountId: receiptOffsetAccountId,
+        subsidiaryId: receipt.purchaseOrder.subsidiaryId,
+        vendorId: receipt.purchaseOrder.vendorId,
+      },
+    ],
   })
+
+  if (posting.created) {
+    await logActivity({
+      entityType: 'receipt',
+      entityId: receipt.id,
+      action: 'post',
+      summary: `Posted receipt ${receipt.id} to GL`,
+      userId: receipt.purchaseOrder.userId,
+    })
+  }
 }
 
 export async function POST(request: NextRequest) {

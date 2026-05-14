@@ -6,7 +6,6 @@ import { generateCustomerRefundNumber } from '@/lib/customer-refund-number'
 import { loadCompanySetupSettings } from '@/lib/company-setup-settings-store'
 import { loadConfiguredRealizedFxPostingAccounts } from '@/lib/company-setup-account-resolver'
 import { deriveOpenItemCurrencyContext } from '@/lib/open-item-currency-context'
-import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { logActivity, logCommunicationActivity } from '@/lib/activity'
 import {
   buildRealizedFxJournalLines,
@@ -20,6 +19,7 @@ import {
   syncOpenItemStatus,
 } from '@/lib/open-item-service'
 import { loadCashBankPostingAccounts } from '@/lib/posting-account-options'
+import { postJournalFromSource } from '@/lib/accounting/posting-engine'
 
 const CUSTOMER_REFUND_POSTING_STATUSES = new Set(['processed'])
 
@@ -277,72 +277,69 @@ async function postCustomerRefundJournal(refundId: string) {
       startingDisplayOrder: 2,
     })
 
-    const journalNumber = await generateNextSystemJournalNumber()
-    await prisma.journalEntry.create({
-      data: {
-        number: journalNumber,
-        date: refund.date,
-        description: `Customer refund ${refund.number}`,
-        journalType: 'standard',
-        status: 'approved',
-        total: amount,
-        sourceType: 'customer-refund',
-        sourceId: refund.id,
-        subsidiaryId: refund.subsidiaryId,
-        currencyId: refund.currencyId,
-        userId: refund.userId,
-        lineItems: {
-          create: [
-            {
-              displayOrder: 0,
-              description: `${refund.number} customer refund`,
-              memo: refund.reference ?? null,
-              activityTypeCode: 'ar_settlement',
-              debit: amount,
-              credit: 0,
-              localDebit: arLocalDebit == null ? undefined : arLocalDebit,
-              functionalDebit: arFunctionalDebit == null ? undefined : arFunctionalDebit,
-              groupDebit: arGroupDebit == null ? undefined : arGroupDebit,
-              accountId: arAccountId,
-              subsidiaryId: refund.subsidiaryId,
-              customerId: refund.customerId,
-            },
-            {
-              displayOrder: 1,
-              description: `${refund.number} cash disbursement`,
-              memo: refund.reference ?? null,
-              activityTypeCode: 'cash_disbursement',
-              debit: 0,
-              credit: amount,
-              localCredit:
-                refundCurrencyContext.originalLocalAmount == null
-                  ? undefined
-                  : Number(refundCurrencyContext.originalLocalAmount),
-              functionalCredit:
-                refundCurrencyContext.originalFunctionalAmount == null
-                  ? undefined
-                  : Number(refundCurrencyContext.originalFunctionalAmount),
-              groupCredit:
-                refundCurrencyContext.originalGroupAmount == null
-                  ? undefined
-                  : Number(refundCurrencyContext.originalGroupAmount),
-              accountId: bankAccountId,
-              subsidiaryId: refund.subsidiaryId,
-              customerId: refund.customerId,
-            },
-            ...fxLines,
-          ],
+    const posting = await postJournalFromSource({
+      sourceType: 'customer-refund',
+      sourceId: refund.id,
+      description: `Customer refund ${refund.number}`,
+      postingDate: refund.date,
+      journalType: 'standard',
+      status: 'approved',
+      subsidiaryId: refund.subsidiaryId,
+      currencyId: refund.currencyId,
+      userId: refund.userId,
+      module: 'ar',
+      isOpenItemRelevant: true,
+      lines: [
+        {
+          displayOrder: 0,
+          description: `${refund.number} customer refund`,
+          memo: refund.reference ?? null,
+          activityTypeCode: 'ar_settlement',
+          debit: amount,
+          credit: 0,
+          localDebit: arLocalDebit == null ? undefined : arLocalDebit,
+          functionalDebit: arFunctionalDebit == null ? undefined : arFunctionalDebit,
+          groupDebit: arGroupDebit == null ? undefined : arGroupDebit,
+          accountId: arAccountId,
+          subsidiaryId: refund.subsidiaryId,
+          customerId: refund.customerId,
         },
-      },
+        {
+          displayOrder: 1,
+          description: `${refund.number} cash disbursement`,
+          memo: refund.reference ?? null,
+          activityTypeCode: 'cash_disbursement',
+          debit: 0,
+          credit: amount,
+          localCredit:
+            refundCurrencyContext.originalLocalAmount == null
+              ? undefined
+              : Number(refundCurrencyContext.originalLocalAmount),
+          functionalCredit:
+            refundCurrencyContext.originalFunctionalAmount == null
+              ? undefined
+              : Number(refundCurrencyContext.originalFunctionalAmount),
+          groupCredit:
+            refundCurrencyContext.originalGroupAmount == null
+              ? undefined
+              : Number(refundCurrencyContext.originalGroupAmount),
+          accountId: bankAccountId,
+          subsidiaryId: refund.subsidiaryId,
+          customerId: refund.customerId,
+        },
+        ...fxLines,
+      ],
     })
 
-    await logActivity({
-      entityType: 'customer-refund',
-      entityId: refund.id,
-      action: 'post',
-      summary: `Posted customer refund ${refund.number} to GL`,
-      userId: refund.userId ?? undefined,
-    })
+    if (posting.created) {
+      await logActivity({
+        entityType: 'customer-refund',
+        entityId: refund.id,
+        action: 'post',
+        summary: `Posted customer refund ${refund.number} to GL`,
+        userId: refund.userId ?? undefined,
+      })
+    }
     return
   }
 

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logActivity, logCommunicationActivity, logFieldChangeActivities, logRecordSnapshotActivities } from '@/lib/activity'
 import { generateNextInvoiceNumber } from '@/lib/invoice-number'
-import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { calcLineTotal, sumMoney } from '@/lib/money'
 import { toNumericValue } from '@/lib/format'
 import { loadCompanySetupSettings } from '@/lib/company-setup-settings-store'
@@ -11,6 +10,7 @@ import { ensureOpenItemForSource } from '@/lib/open-item-service'
 import { getTransactionPostingContextError } from '@/lib/transaction-posting-context'
 import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
 import { deriveSettlementLineDimensions } from '@/lib/settlement-dimension-policy'
+import { postJournalFromSource } from '@/lib/accounting/posting-engine'
 import {
   coerceWorkflowValueForStep,
   getDefaultWorkflowStatus,
@@ -242,46 +242,42 @@ async function postInvoiceApprovalJournal(invoiceId: string) {
   const totalCredit = revenueLines.reduce((sum, line) => sum + Number(line.credit ?? 0), 0)
   if (!revenueLines.length || totalCredit <= 0) return
 
-  const number = await generateNextSystemJournalNumber()
-
-  await prisma.journalEntry.create({
-    data: {
-      number,
-      description: `Invoice ${invoice.number} posting`,
-      date: new Date(),
-      status: 'approved',
-      journalType: 'standard',
-      total: totalCredit,
-      sourceType: 'invoice',
-      sourceId: invoice.id,
-      subsidiaryId: invoice.subsidiaryId,
-      currencyId: invoice.currencyId,
-      userId: invoice.userId,
-      lineItems: {
-        create: [
-          {
-            displayOrder: 1,
-            accountId: arAccount.id,
-            activityTypeCode: 'ar_addition',
-            debit: totalCredit,
-            credit: 0,
-            memo: `AR for invoice ${invoice.number}`,
-            customerId: invoice.customerId,
-            ...invoiceSummaryDimensions,
-          },
-          ...revenueLines,
-        ],
-      },
-    },
-  })
-
-  await logActivity({
-    entityType: 'invoice',
-    entityId: invoice.id,
-    action: 'update',
-    summary: `Posted invoice ${invoice.number} to GL`,
+  const posting = await postJournalFromSource({
+    sourceType: 'invoice',
+    sourceId: invoice.id,
+    description: `Invoice ${invoice.number} posting`,
+    postingDate: invoice.createdAt,
+    journalType: 'standard',
+    status: 'approved',
+    subsidiaryId: invoice.subsidiaryId,
+    currencyId: invoice.currencyId,
     userId: invoice.userId,
+    module: 'ar',
+    isOpenItemRelevant: true,
+    lines: [
+      {
+        displayOrder: 1,
+        accountId: arAccount.id,
+        activityTypeCode: 'ar_addition',
+        debit: totalCredit,
+        credit: 0,
+        memo: `AR for invoice ${invoice.number}`,
+        customerId: invoice.customerId,
+        ...invoiceSummaryDimensions,
+      },
+      ...revenueLines,
+    ],
   })
+
+  if (posting.created) {
+    await logActivity({
+      entityType: 'invoice',
+      entityId: invoice.id,
+      action: 'update',
+      summary: `Posted invoice ${invoice.number} to GL`,
+      userId: invoice.userId,
+    })
+  }
 }
 
 export async function GET() {

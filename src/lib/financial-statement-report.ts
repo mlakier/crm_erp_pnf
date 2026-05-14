@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { toNumericValue } from '@/lib/format'
 import { resolveSubsidiaryScope } from '@/lib/subsidiary-scope'
@@ -15,8 +16,6 @@ type AmountLike =
       toNumber?: () => number
     }
 
-type LineWithAccount = Awaited<ReturnType<typeof loadStatementLines>>[number]
-
 export type FinancialStatementAccountRow = {
   accountId: string
   accountNumber: string
@@ -28,6 +27,40 @@ export type FinancialStatementAccountRow = {
   amount: number
   lineCount: number
   missingMapping: boolean
+}
+
+type FinancialStatementFactRow = {
+  lineItemId: string
+  journalEntryId: string
+  journalNumber: string
+  journalDate: Date
+  journalDescription: string | null
+  sourceType: string | null
+  sourceId: string | null
+  accountId: string
+  accountNumber: string
+  accountName: string
+  accountType: string
+  normalBalance: string | null
+  financialStatementSection: string | null
+  financialStatementGroup: string | null
+  financialStatementCategory: string | null
+  lineDescription: string | null
+  transactionDebit: AmountLike
+  transactionCredit: AmountLike
+  localDebit: AmountLike
+  localCredit: AmountLike
+  functionalDebit: AmountLike
+  functionalCredit: AmountLike
+  groupDebit: AmountLike
+  groupCredit: AmountLike
+  transactionAmount: AmountLike
+  localAmount: AmountLike
+  functionalAmount: AmountLike
+  groupAmount: AmountLike
+  missingLocalLayer: boolean
+  missingFunctionalLayer: boolean
+  missingGroupLayer: boolean
 }
 
 export type FinancialStatementSection = {
@@ -90,73 +123,27 @@ function normalizeDateOnly(value: Date | string | null | undefined) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
 }
 
-function getLayerAmounts(line: {
-  debit: AmountLike
-  credit: AmountLike
-  localDebit: AmountLike
-  localCredit: AmountLike
-  functionalDebit: AmountLike
-  functionalCredit: AmountLike
-  groupDebit: AmountLike
-  groupCredit: AmountLike
-}, amountLayer: FinancialStatementAmountLayer) {
+function getLayerAmounts(line: FinancialStatementFactRow, amountLayer: FinancialStatementAmountLayer) {
   switch (amountLayer) {
     case 'local':
-      return { debit: line.localDebit, credit: line.localCredit }
+      return { amount: line.localAmount, debit: line.localDebit, credit: line.localCredit, missingSelectedLayer: line.missingLocalLayer }
     case 'functional':
-      return { debit: line.functionalDebit, credit: line.functionalCredit }
+      return { amount: line.functionalAmount, debit: line.functionalDebit, credit: line.functionalCredit, missingSelectedLayer: line.missingFunctionalLayer }
     case 'group':
-      return { debit: line.groupDebit, credit: line.groupCredit }
+      return { amount: line.groupAmount, debit: line.groupDebit, credit: line.groupCredit, missingSelectedLayer: line.missingGroupLayer }
     case 'transaction':
     default:
-      return { debit: line.debit, credit: line.credit }
+      return { amount: line.transactionAmount, debit: line.transactionDebit, credit: line.transactionCredit, missingSelectedLayer: false }
   }
 }
 
-function signedAmountForNormalBalance(
-  line: {
-    debit: AmountLike
-    credit: AmountLike
-    localDebit: AmountLike
-    localCredit: AmountLike
-    functionalDebit: AmountLike
-    functionalCredit: AmountLike
-    groupDebit: AmountLike
-    groupCredit: AmountLike
-    account: { normalBalance: string | null }
-  },
-  amountLayer: FinancialStatementAmountLayer,
-) {
+function signedAmountForNormalBalance(line: FinancialStatementFactRow, amountLayer: FinancialStatementAmountLayer) {
   const layer = getLayerAmounts(line, amountLayer)
   const debit = toNumericValue(layer.debit, 0)
   const credit = toNumericValue(layer.credit, 0)
-  const missingSelectedLayer =
-    amountLayer !== 'transaction'
-    && layer.debit == null
-    && layer.credit == null
-    && (toNumericValue(line.debit, 0) !== 0 || toNumericValue(line.credit, 0) !== 0)
+  const amount = toNumericValue(layer.amount, 0)
 
-  const normalBalance = String(line.account.normalBalance ?? 'debit').trim().toLowerCase()
-  const amount = normalBalance === 'credit' ? credit - debit : debit - credit
-
-  return { amount, debit, credit, missingSelectedLayer }
-}
-
-function isBalanceSheetAccount(accountType: string, fsSection: string | null | undefined) {
-  const text = `${accountType} ${fsSection ?? ''}`.toLowerCase()
-  return text.includes('asset') || text.includes('liability') || text.includes('equity') || text.includes('balance sheet')
-}
-
-function isProfitAndLossAccount(accountType: string, fsSection: string | null | undefined) {
-  const text = `${accountType} ${fsSection ?? ''}`.toLowerCase()
-  return (
-    text.includes('revenue')
-    || text.includes('income')
-    || text.includes('expense')
-    || text.includes('cost of goods')
-    || text.includes('p&l')
-    || text.includes('profit')
-  )
+  return { amount, debit, credit, missingSelectedLayer: layer.missingSelectedLayer }
 }
 
 function defaultSection(accountType: string, statementType: FinancialStatementType) {
@@ -266,66 +253,77 @@ async function loadStatementLines(filters: {
   startDate: Date | null
   endDate: Date
 }) {
-  return prisma.journalEntryLineItem.findMany({
-    where: {
-      journalEntry: {
-        date: filters.startDate ? { gte: filters.startDate, lte: filters.endDate } : { lte: filters.endDate },
-        status: { in: ['approved', 'posted'] },
-        ...(filters.subsidiaryIds.length > 0 ? { subsidiaryId: { in: filters.subsidiaryIds } } : {}),
-      },
-      account: {
-        active: true,
-        isPosting: true,
-      },
-    },
-    select: {
-      id: true,
-      description: true,
-      debit: true,
-      credit: true,
-      localDebit: true,
-      localCredit: true,
-      functionalDebit: true,
-      functionalCredit: true,
-      groupDebit: true,
-      groupCredit: true,
-      account: {
-        select: {
-          id: true,
-          accountNumber: true,
-          name: true,
-          accountType: true,
-          normalBalance: true,
-          financialStatementSection: true,
-          financialStatementGroup: true,
-          financialStatementCategory: true,
-        },
-      },
-      journalEntry: {
-        select: {
-          id: true,
-          number: true,
-          date: true,
-          description: true,
-          sourceType: true,
-          sourceId: true,
-        },
-      },
-    },
-    orderBy: [
-      { account: { accountNumber: 'asc' } },
-      { journalEntry: { date: 'asc' } },
-      { journalEntry: { number: 'asc' } },
-      { displayOrder: 'asc' },
-    ],
-  })
-}
+  const statementPredicate = filters.statementType === 'balance_sheet'
+    ? Prisma.sql`(
+        lower(fact."account_type") LIKE '%asset%'
+        OR lower(fact."account_type") LIKE '%liabil%'
+        OR lower(fact."account_type") LIKE '%equity%'
+        OR lower(COALESCE(fact."financial_statement_section", '')) LIKE '%asset%'
+        OR lower(COALESCE(fact."financial_statement_section", '')) LIKE '%liabil%'
+        OR lower(COALESCE(fact."financial_statement_section", '')) LIKE '%equity%'
+        OR lower(COALESCE(fact."financial_statement_section", '')) LIKE '%balance sheet%'
+      )`
+    : Prisma.sql`(
+        lower(fact."account_type") LIKE '%revenue%'
+        OR lower(fact."account_type") LIKE '%income%'
+        OR lower(fact."account_type") LIKE '%expense%'
+        OR lower(fact."account_type") LIKE '%cost of goods%'
+        OR lower(COALESCE(fact."financial_statement_section", '')) LIKE '%revenue%'
+        OR lower(COALESCE(fact."financial_statement_section", '')) LIKE '%income%'
+        OR lower(COALESCE(fact."financial_statement_section", '')) LIKE '%expense%'
+        OR lower(COALESCE(fact."financial_statement_section", '')) LIKE '%cost of goods%'
+        OR lower(COALESCE(fact."financial_statement_section", '')) LIKE '%p&l%'
+        OR lower(COALESCE(fact."financial_statement_section", '')) LIKE '%profit%'
+      )`
+  const datePredicate = filters.startDate
+    ? Prisma.sql`fact."journal_date" BETWEEN ${filters.startDate} AND ${filters.endDate}`
+    : Prisma.sql`fact."journal_date" <= ${filters.endDate}`
+  const subsidiaryPredicate = filters.subsidiaryIds.length > 0
+    ? Prisma.sql`AND fact."journal_subsidiary_id" IN (${Prisma.join(filters.subsidiaryIds)})`
+    : Prisma.empty
 
-function includeLineForStatement(line: LineWithAccount, statementType: FinancialStatementType) {
-  if (statementType === 'balance_sheet') {
-    return isBalanceSheetAccount(line.account.accountType, line.account.financialStatementSection)
-  }
-  return isProfitAndLossAccount(line.account.accountType, line.account.financialStatementSection)
+  return prisma.$queryRaw<FinancialStatementFactRow[]>`
+    SELECT
+      fact."journal_entry_line_item_id" AS "lineItemId",
+      fact."journal_entry_id" AS "journalEntryId",
+      fact."journal_number" AS "journalNumber",
+      fact."journal_date" AS "journalDate",
+      fact."journal_description" AS "journalDescription",
+      fact."source_type" AS "sourceType",
+      fact."source_id" AS "sourceId",
+      fact."account_id" AS "accountId",
+      fact."account_number" AS "accountNumber",
+      fact."account_name" AS "accountName",
+      fact."account_type" AS "accountType",
+      fact."normal_balance" AS "normalBalance",
+      fact."financial_statement_section" AS "financialStatementSection",
+      fact."financial_statement_group" AS "financialStatementGroup",
+      fact."financial_statement_category" AS "financialStatementCategory",
+      fact."line_description" AS "lineDescription",
+      fact."transaction_debit" AS "transactionDebit",
+      fact."transaction_credit" AS "transactionCredit",
+      fact."local_debit" AS "localDebit",
+      fact."local_credit" AS "localCredit",
+      fact."functional_debit" AS "functionalDebit",
+      fact."functional_credit" AS "functionalCredit",
+      fact."group_debit" AS "groupDebit",
+      fact."group_credit" AS "groupCredit",
+      fact."transaction_amount" AS "transactionAmount",
+      fact."local_amount" AS "localAmount",
+      fact."functional_amount" AS "functionalAmount",
+      fact."group_amount" AS "groupAmount",
+      fact."missing_local_layer" AS "missingLocalLayer",
+      fact."missing_functional_layer" AS "missingFunctionalLayer",
+      fact."missing_group_layer" AS "missingGroupLayer"
+    FROM "financial_statement_line_facts" fact
+    WHERE ${datePredicate}
+      AND fact."journal_status" IN ('approved', 'posted')
+      AND fact."account_active" = true
+      AND fact."account_is_posting" = true
+      ${subsidiaryPredicate}
+      AND ${statementPredicate}
+    ORDER BY fact."account_number" ASC, fact."journal_date" ASC, fact."journal_number" ASC, fact."display_order" ASC
+  `
 }
 
 function roundMoney(value: number) {
@@ -409,25 +407,24 @@ export async function buildFinancialStatementReport(filters: {
   let missingLayerLineCount = 0
 
   for (const line of lines) {
-    if (!includeLineForStatement(line, filters.statementType)) continue
     const { amount, debit, credit, missingSelectedLayer } = signedAmountForNormalBalance(line, amountLayer)
     if (missingSelectedLayer) missingLayerLineCount += 1
     if (Math.abs(amount) < 0.005) continue
 
-    const missingMapping = !line.account.financialStatementSection || !line.account.financialStatementGroup || !line.account.financialStatementCategory
-    const fsSection = normalizeStatementSection(line.account.financialStatementSection, line.account.accountType, filters.statementType)
-    const fsGroup = line.account.financialStatementGroup?.trim() || 'Unmapped'
-    const fsCategory = line.account.financialStatementCategory?.trim() || 'Unmapped'
-    const existing = rowsByAccount.get(line.account.id)
+    const missingMapping = !line.financialStatementSection || !line.financialStatementGroup || !line.financialStatementCategory
+    const fsSection = normalizeStatementSection(line.financialStatementSection, line.accountType, filters.statementType)
+    const fsGroup = line.financialStatementGroup?.trim() || 'Unmapped'
+    const fsCategory = line.financialStatementCategory?.trim() || 'Unmapped'
+    const existing = rowsByAccount.get(line.accountId)
     if (existing) {
       existing.amount = roundMoney(existing.amount + amount)
       existing.lineCount += 1
     } else {
-      rowsByAccount.set(line.account.id, {
-        accountId: line.account.id,
-        accountNumber: line.account.accountNumber,
-        accountName: line.account.name,
-        accountType: line.account.accountType,
+      rowsByAccount.set(line.accountId, {
+        accountId: line.accountId,
+        accountNumber: line.accountNumber,
+        accountName: line.accountName,
+        accountType: line.accountType,
         fsSection,
         fsGroup,
         fsCategory,
@@ -437,21 +434,21 @@ export async function buildFinancialStatementReport(filters: {
       })
     }
 
-    if (filters.drillAccountId && filters.drillAccountId === line.account.id) {
+    if (filters.drillAccountId && filters.drillAccountId === line.accountId) {
       drillLines.push({
-        journalEntryId: line.journalEntry.id,
-        journalNumber: line.journalEntry.number,
-        journalDate: line.journalEntry.date,
-        accountId: line.account.id,
-        accountNumber: line.account.accountNumber,
-        accountName: line.account.name,
+        journalEntryId: line.journalEntryId,
+        journalNumber: line.journalNumber,
+        journalDate: line.journalDate,
+        accountId: line.accountId,
+        accountNumber: line.accountNumber,
+        accountName: line.accountName,
         amount,
         debit,
         credit,
-        description: line.description,
-        journalDescription: line.journalEntry.description,
-        sourceType: line.journalEntry.sourceType,
-        sourceId: line.journalEntry.sourceId,
+        description: line.lineDescription,
+        journalDescription: line.journalDescription,
+        sourceType: line.sourceType,
+        sourceId: line.sourceId,
       })
     }
   }

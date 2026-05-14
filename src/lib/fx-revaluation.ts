@@ -6,6 +6,7 @@ import { getOpenItemRemainingAmount } from '@/lib/open-item-service'
 import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { loadConfiguredUnrealizedFxPostingAccounts } from '@/lib/company-setup-account-resolver'
 import { getRequiredStandardTransactionPostingContext } from '@/lib/transaction-posting-context'
+import { validatePostingAccountsAndPeriodControls } from '@/lib/accounting/posting-engine'
 
 const MONEY_TOLERANCE = 0.005
 
@@ -1013,7 +1014,16 @@ export async function runFxRevaluation(input: RunFxRevaluationInput) {
     })
 
     if (journalLineCreates.length > 0) {
-      const journalNumber = await generateNextSystemJournalNumber()
+      await validatePostingAccountsAndPeriodControls({
+        tx,
+        postingDate: asOfDate,
+        accountingPeriodId: period.id,
+        subsidiaryId: journalPostingContext.subsidiaryId,
+        module: 'gl',
+        accountIds: journalLineCreates.map((line) => line.accountId),
+      })
+
+      const journalNumber = await generateNextSystemJournalNumber(tx)
       const journalEntry = await tx.journalEntry.create({
         data: {
           number: journalNumber,

@@ -5,13 +5,13 @@ import { logActivity, logCommunicationActivity, logFieldChangeActivities, logRec
 import { generateNextBillNumber } from '@/lib/bill-number'
 import { calcLineTotal, parseMoneyValue, sumMoney } from '@/lib/money'
 import { resolveVendorTransactionSnapshot } from '@/lib/transaction-snapshot-defaults'
-import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { loadCompanySetupSettings } from '@/lib/company-setup-settings-store'
 import { deriveOpenItemCurrencyContext } from '@/lib/open-item-currency-context'
 import { ensureOpenItemForSource } from '@/lib/open-item-service'
 import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
 import { getRequiredStandardTransactionPostingContext, getTransactionPostingContextError } from '@/lib/transaction-posting-context'
 import { deriveSettlementLineDimensions } from '@/lib/settlement-dimension-policy'
+import { postJournalFromSource } from '@/lib/accounting/posting-engine'
 
 const INCLUDE = {
   vendor: true,
@@ -82,7 +82,7 @@ async function findBillPostingAccounts() {
 
 async function postBillApprovalJournal(billId: string) {
   const existingJournal = await prisma.journalEntry.findFirst({
-    where: { sourceId: billId },
+    where: { sourceType: 'bill', sourceId: billId },
     select: { id: true },
   })
   if (existingJournal) return
@@ -127,8 +127,6 @@ async function postBillApprovalJournal(billId: string) {
     memo: bill.notes ?? null,
     createdById: bill.userId ?? null,
   })
-
-  if (existingJournal) return
 
   if (!apAccountId) return
 
@@ -185,34 +183,30 @@ async function postBillApprovalJournal(billId: string) {
     classId: billSummaryDimensions.classId ?? null,
   })
 
-  const journalNumber = await generateNextSystemJournalNumber()
-
-  await prisma.journalEntry.create({
-    data: {
-      number: journalNumber,
-      date: bill.date,
-      description: `Bill posting for ${bill.number}`,
-      journalType: 'standard',
-      status: 'approved',
-      total: totalDebit,
-      sourceType: 'bill',
-      sourceId: bill.id,
-      subsidiaryId: bill.subsidiaryId,
-      currencyId: bill.currencyId,
-      userId: bill.userId,
-      lineItems: {
-        create: lineCreates,
-      },
-    },
-  })
-
-  await logActivity({
-    entityType: 'bill',
-    entityId: bill.id,
-    action: 'post',
-    summary: `Posted bill ${bill.number} to GL`,
+  const posting = await postJournalFromSource({
+    sourceType: 'bill',
+    sourceId: bill.id,
+    description: `Bill posting for ${bill.number}`,
+    postingDate: bill.date,
+    journalType: 'standard',
+    status: 'approved',
+    subsidiaryId: bill.subsidiaryId,
+    currencyId: bill.currencyId,
     userId: bill.userId,
+    module: 'ap',
+    isOpenItemRelevant: true,
+    lines: lineCreates,
   })
+
+  if (posting.created) {
+    await logActivity({
+      entityType: 'bill',
+      entityId: bill.id,
+      action: 'post',
+      summary: `Posted bill ${bill.number} to GL`,
+      userId: bill.userId,
+    })
+  }
 }
 
 export async function GET(request: NextRequest) {

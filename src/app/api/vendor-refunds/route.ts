@@ -6,7 +6,6 @@ import { generateVendorRefundNumber } from '@/lib/vendor-refund-number'
 import { loadCompanySetupSettings } from '@/lib/company-setup-settings-store'
 import { loadConfiguredRealizedFxPostingAccounts } from '@/lib/company-setup-account-resolver'
 import { deriveOpenItemCurrencyContext } from '@/lib/open-item-currency-context'
-import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { logActivity, logCommunicationActivity } from '@/lib/activity'
 import {
   buildRealizedFxJournalLines,
@@ -20,6 +19,7 @@ import {
   syncOpenItemStatus,
 } from '@/lib/open-item-service'
 import { loadCashBankPostingAccounts } from '@/lib/posting-account-options'
+import { postJournalFromSource } from '@/lib/accounting/posting-engine'
 
 const VENDOR_REFUND_POSTING_STATUSES = new Set(['processed'])
 
@@ -305,72 +305,69 @@ async function postVendorRefundJournal(refundId: string) {
     startingDisplayOrder: 2,
   })
 
-  const journalNumber = await generateNextSystemJournalNumber()
-  await prisma.journalEntry.create({
-    data: {
-      number: journalNumber,
-      date: refund.date,
-      description: `Vendor refund ${refund.number}`,
-      journalType: 'standard',
-      status: 'approved',
-      total: amount,
-      sourceType: 'vendor-refund',
-      sourceId: refund.id,
-      subsidiaryId: refund.subsidiaryId,
-      currencyId: refund.currencyId,
-      userId: refund.userId,
-      lineItems: {
-        create: [
-          {
-            displayOrder: 0,
-            description: `${refund.number} cash receipt`,
-            memo: refund.reference ?? null,
-            activityTypeCode: 'cash_receipt',
-            debit: amount,
-            credit: 0,
-            localDebit:
-              refundCurrencyContext.originalLocalAmount == null
-                ? undefined
-                : Number(refundCurrencyContext.originalLocalAmount),
-            functionalDebit:
-              refundCurrencyContext.originalFunctionalAmount == null
-                ? undefined
-                : Number(refundCurrencyContext.originalFunctionalAmount),
-            groupDebit:
-              refundCurrencyContext.originalGroupAmount == null
-                ? undefined
-                : Number(refundCurrencyContext.originalGroupAmount),
-            accountId: bankAccountId,
-            subsidiaryId: refund.subsidiaryId,
-            vendorId: refund.vendorId,
-          },
-          {
-            displayOrder: 1,
-            description: `${refund.number} AP settlement`,
-            memo: refund.reference ?? null,
-            activityTypeCode: 'ap_settlement',
-            debit: 0,
-            credit: amount,
-            localCredit: apLocalCredit == null ? undefined : apLocalCredit,
-            functionalCredit: apFunctionalCredit == null ? undefined : apFunctionalCredit,
-            groupCredit: apGroupCredit == null ? undefined : apGroupCredit,
-            accountId: apAccountId,
-            subsidiaryId: refund.subsidiaryId,
-            vendorId: refund.vendorId,
-          },
-          ...fxLines,
-        ],
+  const posting = await postJournalFromSource({
+    sourceType: 'vendor-refund',
+    sourceId: refund.id,
+    description: `Vendor refund ${refund.number}`,
+    postingDate: refund.date,
+    journalType: 'standard',
+    status: 'approved',
+    subsidiaryId: refund.subsidiaryId,
+    currencyId: refund.currencyId,
+    userId: refund.userId,
+    module: 'ap',
+    isOpenItemRelevant: true,
+    lines: [
+      {
+        displayOrder: 0,
+        description: `${refund.number} cash receipt`,
+        memo: refund.reference ?? null,
+        activityTypeCode: 'cash_receipt',
+        debit: amount,
+        credit: 0,
+        localDebit:
+          refundCurrencyContext.originalLocalAmount == null
+            ? undefined
+            : Number(refundCurrencyContext.originalLocalAmount),
+        functionalDebit:
+          refundCurrencyContext.originalFunctionalAmount == null
+            ? undefined
+            : Number(refundCurrencyContext.originalFunctionalAmount),
+        groupDebit:
+          refundCurrencyContext.originalGroupAmount == null
+            ? undefined
+            : Number(refundCurrencyContext.originalGroupAmount),
+        accountId: bankAccountId,
+        subsidiaryId: refund.subsidiaryId,
+        vendorId: refund.vendorId,
       },
-    },
+      {
+        displayOrder: 1,
+        description: `${refund.number} AP settlement`,
+        memo: refund.reference ?? null,
+        activityTypeCode: 'ap_settlement',
+        debit: 0,
+        credit: amount,
+        localCredit: apLocalCredit == null ? undefined : apLocalCredit,
+        functionalCredit: apFunctionalCredit == null ? undefined : apFunctionalCredit,
+        groupCredit: apGroupCredit == null ? undefined : apGroupCredit,
+        accountId: apAccountId,
+        subsidiaryId: refund.subsidiaryId,
+        vendorId: refund.vendorId,
+      },
+      ...fxLines,
+    ],
   })
 
-  await logActivity({
-    entityType: 'vendor-refund',
-    entityId: refund.id,
-    action: 'post',
-    summary: `Posted vendor refund ${refund.number} to GL`,
-    userId: refund.userId ?? undefined,
-  })
+  if (posting.created) {
+    await logActivity({
+      entityType: 'vendor-refund',
+      entityId: refund.id,
+      action: 'post',
+      summary: `Posted vendor refund ${refund.number} to GL`,
+      userId: refund.userId ?? undefined,
+    })
+  }
 }
 
 async function unpostVendorRefundJournal(refundId: string) {
