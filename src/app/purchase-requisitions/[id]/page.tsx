@@ -607,7 +607,7 @@ export default async function PurchaseRequisitionDetailPage({
     },
     {
       vendor: req.vendor ? `/vendors/${req.vendor.id}` : null,
-      department: req.department ? `/departments/${req.department.id}` : null,
+      department: req.department ? '/configuration/manage-dimensions' : null,
       owner: req.user ? `/users/${req.user.id}` : null,
       subsidiary: req.subsidiary ? `/subsidiaries/${req.subsidiary.id}` : null,
       currency: req.currency ? `/currencies/${req.currency.id}` : null,

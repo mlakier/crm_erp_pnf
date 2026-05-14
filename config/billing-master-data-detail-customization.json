@@ -1,0 +1,109 @@
+{
+  "billing-schedules": {
+    "formColumns": 3,
+    "sections": [
+      "Core",
+      "Policy",
+      "Renewal & Grouping",
+      "Status"
+    ],
+    "sectionRows": {
+      "Core": 1,
+      "Policy": 2,
+      "Renewal & Grouping": 2,
+      "Status": 1
+    },
+    "fields": {
+      "billingScheduleId": {
+        "visible": true,
+        "section": "Core",
+        "order": 0,
+        "column": 1
+      },
+      "name": {
+        "visible": true,
+        "section": "Core",
+        "order": 0,
+        "column": 2
+      },
+      "description": {
+        "visible": true,
+        "section": "Core",
+        "order": 0,
+        "column": 3
+      },
+      "scheduleType": {
+        "visible": true,
+        "section": "Policy",
+        "order": 0,
+        "column": 1
+      },
+      "frequency": {
+        "visible": true,
+        "section": "Policy",
+        "order": 0,
+        "column": 2
+      },
+      "billingTiming": {
+        "visible": true,
+        "section": "Policy",
+        "order": 0,
+        "column": 3
+      },
+      "billingAnchor": {
+        "visible": true,
+        "section": "Policy",
+        "order": 1,
+        "column": 3
+      },
+      "billingDay": {
+        "visible": true,
+        "section": "Policy",
+        "order": 1,
+        "column": 1
+      },
+      "prorationPolicy": {
+        "visible": true,
+        "section": "Policy",
+        "order": 1,
+        "column": 2
+      },
+      "renewalMode": {
+        "visible": true,
+        "section": "Renewal & Grouping",
+        "order": 0,
+        "column": 1
+      },
+      "invoiceGroupingPolicy": {
+        "visible": true,
+        "section": "Renewal & Grouping",
+        "order": 0,
+        "column": 2
+      },
+      "graceDays": {
+        "visible": true,
+        "section": "Renewal & Grouping",
+        "order": 0,
+        "column": 3
+      },
+      "minimumBillAmount": {
+        "visible": true,
+        "section": "Renewal & Grouping",
+        "order": 1,
+        "column": 2
+      },
+      "currencyId": {
+        "visible": true,
+        "section": "Renewal & Grouping",
+        "order": 1,
+        "column": 1
+      },
+      "inactive": {
+        "visible": true,
+        "section": "Status",
+        "order": 0,
+        "column": 1
+      }
+    }
+  }
+}

@@ -197,6 +197,9 @@ export function buildTransactionGlImpactRows({
       groupDebit?: unknown
       groupCredit?: unknown
       account: { accountId: string; accountNumber?: string | null; name: string }
+      department?: { departmentId: string; departmentNumber?: string | null; name: string } | null
+      location?: { locationId: string; code?: string | null; name: string } | null
+      classDimension?: { classId: string; name: string } | null
     }>
   }>
   sourceNumberByKey: Map<string, string>
@@ -211,6 +214,15 @@ export function buildTransactionGlImpactRows({
       sourceType: formatTransactionSourceType(entry.sourceType),
       sourceNumber: sourceNumberByKey.get(`${entry.sourceType ?? ''}:${entry.sourceId ?? ''}`) ?? entry.sourceId ?? '-',
       account: formatGlAccountLabel(line.account),
+      department: line.department
+        ? [line.department.departmentNumber ?? line.department.departmentId, line.department.name].filter(Boolean).join(' - ')
+        : '-',
+      location: line.location
+        ? [line.location.code ?? line.location.locationId, line.location.name].filter(Boolean).join(' - ')
+        : '-',
+      class: line.classDimension
+        ? [line.classDimension.classId, line.classDimension.name].filter(Boolean).join(' - ')
+        : '-',
       description: line.description ?? line.memo ?? entry.description ?? '-',
       debit: toNumericValue(line.debit, 0),
       credit: toNumericValue(line.credit, 0),

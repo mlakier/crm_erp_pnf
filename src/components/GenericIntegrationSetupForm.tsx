@@ -12,11 +12,15 @@ export default function GenericIntegrationSetupForm({ integrationKey, credential
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(credentials.map((f) => [f.key, ''])),
   )
+  const [configuredSecrets, setConfiguredSecrets] = useState<Record<string, boolean>>({})
   const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
+  const [testMessage, setTestMessage] = useState('')
+  const [testMessageType, setTestMessageType] = useState<'success' | 'error'>('success')
 
   useEffect(() => {
     let mounted = true
@@ -24,7 +28,7 @@ export default function GenericIntegrationSetupForm({ integrationKey, credential
       try {
         const res = await fetch(`/api/integrations/${integrationKey}`, { cache: 'no-store' })
         if (!res.ok || !mounted) return
-        const body = await res.json() as Record<string, string>
+        const body = await res.json() as Record<string, string | boolean>
         if (mounted) {
           setValues((prev) => {
             const next = { ...prev }
@@ -33,6 +37,13 @@ export default function GenericIntegrationSetupForm({ integrationKey, credential
             }
             return next
           })
+          setConfiguredSecrets(
+            Object.fromEntries(
+              credentials
+                .filter((field) => field.type === 'password')
+                .map((field) => [field.key, Boolean(body[`${field.key}Configured`])]),
+            ),
+          )
         }
       } catch {
         // leave defaults
@@ -42,7 +53,7 @@ export default function GenericIntegrationSetupForm({ integrationKey, credential
     }
     load()
     return () => { mounted = false }
-  }, [integrationKey])
+  }, [credentials, integrationKey])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -60,6 +71,15 @@ export default function GenericIntegrationSetupForm({ integrationKey, credential
         setMessage(body.error ?? 'Failed to save settings')
         return
       }
+      setConfiguredSecrets((prev) => {
+        const next = { ...prev }
+        for (const field of credentials) {
+          if (field.type === 'password' && values[field.key]?.trim()) {
+            next[field.key] = true
+          }
+        }
+        return next
+      })
       setMessageType('success')
       setMessage('Integration settings saved successfully')
     } catch {
@@ -74,10 +94,52 @@ export default function GenericIntegrationSetupForm({ integrationKey, credential
     setVisibleFields((prev) => ({ ...prev, [key]: !prev[key] }))
   }
 
+  async function handleStripeTest() {
+    setTesting(true)
+    setTestMessage('')
+    try {
+      const res = await fetch('/api/integrations/stripe/test', { method: 'POST' })
+      const body = await res.json() as {
+        error?: string
+        account?: {
+          id?: string
+          country?: string
+          defaultCurrency?: string
+          chargesEnabled?: boolean
+          payoutsEnabled?: boolean
+        }
+        mode?: string
+      }
+      if (!res.ok) {
+        setTestMessageType('error')
+        setTestMessage(body.error ?? 'Stripe connection test failed')
+        return
+      }
+
+      const account = body.account
+      const details = [
+        account?.id,
+        body.mode ? `${body.mode} mode` : '',
+        account?.country,
+        account?.defaultCurrency?.toUpperCase(),
+        account?.chargesEnabled ? 'charges enabled' : 'charges not enabled',
+        account?.payoutsEnabled ? 'payouts enabled' : 'payouts not enabled',
+      ].filter(Boolean).join(' | ')
+
+      setTestMessageType('success')
+      setTestMessage(`Stripe connection verified${details ? `: ${details}` : ''}`)
+    } catch {
+      setTestMessageType('error')
+      setTestMessage('Stripe connection test failed')
+    } finally {
+      setTesting(false)
+    }
+  }
+
   if (loading) {
     return (
       <section className="rounded-2xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
-        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Loading saved settings…</p>
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Loading saved settings...</p>
       </section>
     )
   }
@@ -88,12 +150,13 @@ export default function GenericIntegrationSetupForm({ integrationKey, credential
         Credentials
       </p>
       <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
-        Enter your integration credentials below. Values are stored locally in the config directory.
+        Enter your integration credentials below. Secret values are stored server-side and are never shown back in the browser.
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-5">
         {credentials.map((field) => {
           const isPassword = field.type === 'password'
+          const alreadyConfigured = isPassword && configuredSecrets[field.key]
           const inputType = isPassword
             ? visibleFields[field.key] ? 'text' : 'password'
             : field.type
@@ -117,7 +180,7 @@ export default function GenericIntegrationSetupForm({ integrationKey, credential
                     // @ts-expect-error CSS custom property
                     '--tw-ring-color': 'var(--accent-primary)',
                   }}
-                  required={field.required}
+                  required={field.required && !alreadyConfigured}
                 />
                 {isPassword && (
                   <button
@@ -135,6 +198,11 @@ export default function GenericIntegrationSetupForm({ integrationKey, credential
                   {field.hint}
                 </p>
               )}
+              {alreadyConfigured && (
+                <p className="mt-1.5 text-xs" style={{ color: '#86efac' }}>
+                  Secret is configured. Leave blank to keep the existing value.
+                </p>
+              )}
             </div>
           )
         })}
@@ -150,16 +218,38 @@ export default function GenericIntegrationSetupForm({ integrationKey, credential
           </p>
         )}
 
-        <div className="flex items-center gap-3 pt-1">
+        <div className="flex flex-wrap items-center gap-3 pt-1">
           <button
             type="submit"
             disabled={saving}
             className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition disabled:opacity-50"
             style={{ backgroundColor: 'var(--accent-primary)' }}
           >
-            {saving ? 'Saving…' : 'Save Configuration'}
+            {saving ? 'Saving...' : 'Save Configuration'}
           </button>
+          {integrationKey === 'stripe' && (
+            <button
+              type="button"
+              onClick={handleStripeTest}
+              disabled={testing || saving}
+              className="rounded-xl border px-5 py-2.5 text-sm font-semibold transition disabled:opacity-50"
+              style={{ borderColor: 'var(--border-muted)', color: 'var(--text-primary)' }}
+            >
+              {testing ? 'Testing...' : 'Test Stripe Connection'}
+            </button>
+          )}
         </div>
+
+        {integrationKey === 'stripe' && testMessage && (
+          <p
+            className="rounded-lg border px-4 py-2.5 text-sm"
+            style={testMessageType === 'success'
+              ? { backgroundColor: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.3)', color: '#86efac' }
+              : { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)', color: '#fca5a5' }}
+          >
+            {testMessage}
+          </p>
+        )}
       </form>
     </section>
   )

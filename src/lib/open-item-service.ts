@@ -3,7 +3,9 @@ import { Prisma, type PrismaClient } from '@prisma/client'
 import { logActivity } from '@/lib/activity'
 import { DEFAULT_ID_SETTINGS } from '@/lib/company-preferences-definitions'
 import { formatIdentifier, getNextSequenceFromValues, loadIdSetting } from '@/lib/id-settings'
+import { deriveOpenItemCurrencyContext } from '@/lib/open-item-currency-context'
 import { prisma } from '@/lib/prisma'
+import { getRequiredAccountingPostingContext } from '@/lib/transaction-posting-context'
 
 type OpenItemTransactionClient = Prisma.TransactionClient | PrismaClient
 
@@ -101,6 +103,89 @@ function computeRealizedFxAmounts(input: {
       carriedGroupAmount == null || settledGroupAmount == null
         ? null
         : roundMoney(settledGroupAmount - carriedGroupAmount),
+  }
+}
+
+export async function assertPostingPeriodIsOpen(input: {
+  tx: OpenItemTransactionClient
+  accountingPeriodId?: string | null
+  postingDate?: Date | string | null
+  subsidiaryId?: string | null
+  context: string
+}) {
+  if (!input.accountingPeriodId) return
+
+  const postingDate = input.postingDate ? new Date(input.postingDate) : null
+  const period = await input.tx.accountingPeriod.findUnique({
+    where: { id: input.accountingPeriodId },
+    select: {
+      id: true,
+      name: true,
+      startDate: true,
+      endDate: true,
+      closed: true,
+      subsidiaryId: true,
+    },
+  })
+
+  if (!period) {
+    throw new Error(`${input.context} accounting period was not found.`)
+  }
+  if (period.closed) {
+    throw new Error(`${input.context} cannot post to closed accounting period ${period.name}.`)
+  }
+  if (postingDate && (postingDate < period.startDate || postingDate > period.endDate)) {
+    throw new Error(`${input.context} posting date must fall inside accounting period ${period.name}.`)
+  }
+  if (input.subsidiaryId && period.subsidiaryId && input.subsidiaryId !== period.subsidiaryId) {
+    throw new Error(`${input.context} subsidiary does not match the selected accounting period.`)
+  }
+}
+
+function assertCompatibleOpenItems(input: {
+  fromItem: {
+    id: string
+    isOpen: boolean
+    subsidiaryId: string | null
+    transactionCurrencyId: string | null
+    counterpartyType: string | null
+    counterpartyId: string | null
+  }
+  toItem: {
+    id: string
+    isOpen: boolean
+    subsidiaryId: string | null
+    transactionCurrencyId: string | null
+    counterpartyType: string | null
+    counterpartyId: string | null
+  } | null
+}) {
+  const { fromItem, toItem } = input
+  if (!fromItem.isOpen) {
+    throw new Error('Source open item is already closed.')
+  }
+  if (!toItem) return
+  if (fromItem.id === toItem.id) {
+    throw new Error('An open item cannot clear itself.')
+  }
+  if (!toItem.isOpen) {
+    throw new Error('Target open item is already closed.')
+  }
+  if (fromItem.subsidiaryId !== toItem.subsidiaryId) {
+    throw new Error('Open items must belong to the same subsidiary to be cleared together.')
+  }
+  if (fromItem.transactionCurrencyId !== toItem.transactionCurrencyId) {
+    throw new Error('Open items must use the same transaction currency to be cleared together.')
+  }
+  if (
+    fromItem.counterpartyType
+    && toItem.counterpartyType
+    && fromItem.counterpartyType !== toItem.counterpartyType
+  ) {
+    throw new Error('Open items must use the same counterparty type to be cleared together.')
+  }
+  if (fromItem.counterpartyId && toItem.counterpartyId && fromItem.counterpartyId !== toItem.counterpartyId) {
+    throw new Error('Open items must use the same counterparty to be cleared together.')
   }
 }
 
@@ -300,6 +385,13 @@ export async function createOpenItem(
   const openItemNumber = await generateOpenItemNumber(tx)
   const openingEntryType = input.openingEntryType ?? 'opening_balance'
   const status = input.status ?? 'open'
+  const postingContext = getRequiredAccountingPostingContext('open-item', {
+    subsidiaryId: input.subsidiaryId,
+    transactionCurrencyId: input.transactionCurrencyId,
+  })
+  if ('error' in postingContext) {
+    throw new Error(postingContext.error)
+  }
 
   const item = await tx.openItem.create({
     data: {
@@ -308,8 +400,8 @@ export async function createOpenItem(
       status,
       accountType: input.accountType,
       accountId: input.accountId ?? null,
-      subsidiaryId: input.subsidiaryId ?? null,
-      transactionCurrencyId: input.transactionCurrencyId ?? null,
+      subsidiaryId: postingContext.subsidiaryId,
+      transactionCurrencyId: postingContext.transactionCurrencyId,
       localCurrencyId: input.localCurrencyId ?? null,
       functionalCurrencyId: input.functionalCurrencyId ?? null,
       groupCurrencyId: input.groupCurrencyId ?? null,
@@ -484,14 +576,29 @@ export async function createClearingDocument(
 ) {
   const tx = input.tx ?? prisma
   const clearingNumber = await generateClearingDocumentNumber(tx)
+  const postingContext = getRequiredAccountingPostingContext('clearing-document', {
+    subsidiaryId: input.subsidiaryId,
+    transactionCurrencyId: input.transactionCurrencyId,
+  })
+  if ('error' in postingContext) {
+    throw new Error(postingContext.error)
+  }
+
+  await assertPostingPeriodIsOpen({
+    tx,
+    accountingPeriodId: input.accountingPeriodId ?? null,
+    postingDate: input.postingDate ?? input.clearingDate,
+    subsidiaryId: postingContext.subsidiaryId,
+    context: 'Clearing document',
+  })
 
   return tx.clearingDocumentHeader.create({
     data: {
       clearingNumber,
       clearingType: input.clearingType,
       status: input.status ?? 'posted',
-      subsidiaryId: input.subsidiaryId ?? null,
-      transactionCurrencyId: input.transactionCurrencyId ?? null,
+      subsidiaryId: postingContext.subsidiaryId,
+      transactionCurrencyId: postingContext.transactionCurrencyId,
       localCurrencyId: input.localCurrencyId ?? null,
       functionalCurrencyId: input.functionalCurrencyId ?? null,
       groupCurrencyId: input.groupCurrencyId ?? null,
@@ -601,6 +708,31 @@ export async function applyOpenItems(
       throw new Error('Target open item not found')
     }
 
+    assertCompatibleOpenItems({ fromItem, toItem })
+
+    await assertPostingPeriodIsOpen({
+      tx,
+      accountingPeriodId: input.accountingPeriodId ?? null,
+      postingDate: input.postingDate ?? input.applicationDate,
+      subsidiaryId: fromItem.subsidiaryId ?? toItem?.subsidiaryId ?? null,
+      context: 'Open item clearing',
+    })
+
+    if (input.settlementTransactionType && input.settlementTransactionId) {
+      const existingApplication = await tx.openItemApplication.findFirst({
+        where: {
+          fromOpenItemId: fromItem.id,
+          toOpenItemId: toItem?.id ?? null,
+          settlementTransactionType: input.settlementTransactionType,
+          settlementTransactionId: input.settlementTransactionId,
+        },
+        select: { applicationNumber: true },
+      })
+      if (existingApplication) {
+        throw new Error(`Open item clearing was already posted as ${existingApplication.applicationNumber}.`)
+      }
+    }
+
     const transactionAmount = roundMoney(input.transactionAmount)
     if (!Number.isFinite(transactionAmount) || transactionAmount <= 0) {
       throw new Error('Application amount must be greater than zero')
@@ -618,13 +750,29 @@ export async function applyOpenItems(
       }
     }
 
+    const settlementCurrencyContext =
+      input.localAmount == null || input.functionalAmount == null || input.groupAmount == null
+        ? await deriveOpenItemCurrencyContext({
+            tx,
+            subsidiaryId: fromItem.subsidiaryId ?? null,
+            transactionCurrencyId: fromItem.transactionCurrencyId ?? null,
+            transactionAmount,
+            effectiveDate: input.postingDate ?? input.applicationDate,
+            rateType: 'spot',
+          })
+        : null
+    const settlementLocalAmount = input.localAmount ?? settlementCurrencyContext?.originalLocalAmount ?? null
+    const settlementFunctionalAmount =
+      input.functionalAmount ?? settlementCurrencyContext?.originalFunctionalAmount ?? null
+    const settlementGroupAmount = input.groupAmount ?? settlementCurrencyContext?.originalGroupAmount ?? null
+
     const realizedFx = computeRealizedFxAmounts({
       fromItem,
       toItem,
       transactionAmount,
-      settlementLocalAmount: input.localAmount ?? null,
-      settlementFunctionalAmount: input.functionalAmount ?? null,
-      settlementGroupAmount: input.groupAmount ?? null,
+      settlementLocalAmount,
+      settlementFunctionalAmount,
+      settlementGroupAmount,
     })
 
     const application = await tx.openItemApplication.create({
@@ -639,10 +787,10 @@ export async function applyOpenItems(
         applicationDate: new Date(input.applicationDate),
         postingDate: input.postingDate ? new Date(input.postingDate) : null,
         transactionAmount: toDecimal(transactionAmount),
-        localAmount: input.localAmount == null ? null : toDecimal(input.localAmount),
+        localAmount: settlementLocalAmount == null ? null : toDecimal(settlementLocalAmount),
         functionalAmount:
-          input.functionalAmount == null ? null : toDecimal(input.functionalAmount),
-        groupAmount: input.groupAmount == null ? null : toDecimal(input.groupAmount),
+          settlementFunctionalAmount == null ? null : toDecimal(settlementFunctionalAmount),
+        groupAmount: settlementGroupAmount == null ? null : toDecimal(settlementGroupAmount),
         realizedFxLocalAmount:
           realizedFx.realizedFxLocalAmount == null ? null : toDecimal(realizedFx.realizedFxLocalAmount),
         realizedFxFunctionalAmount:
@@ -663,10 +811,10 @@ export async function applyOpenItems(
       postingDate: input.postingDate ?? null,
       accountingPeriodId: input.accountingPeriodId ?? null,
       transactionAmount: -transactionAmount,
-      localAmount: input.localAmount == null ? null : -roundMoney(input.localAmount),
+      localAmount: settlementLocalAmount == null ? null : -roundMoney(settlementLocalAmount),
       functionalAmount:
-        input.functionalAmount == null ? null : -roundMoney(input.functionalAmount),
-      groupAmount: input.groupAmount == null ? null : -roundMoney(input.groupAmount),
+        settlementFunctionalAmount == null ? null : -roundMoney(settlementFunctionalAmount),
+      groupAmount: settlementGroupAmount == null ? null : -roundMoney(settlementGroupAmount),
       sourceApplicationId: application.id,
       sourceTransactionType: input.settlementTransactionType ?? null,
       sourceTransactionId: input.settlementTransactionId ?? null,
@@ -684,10 +832,10 @@ export async function applyOpenItems(
         postingDate: input.postingDate ?? null,
         accountingPeriodId: input.accountingPeriodId ?? null,
         transactionAmount: -transactionAmount,
-        localAmount: input.localAmount == null ? null : -roundMoney(input.localAmount),
+        localAmount: settlementLocalAmount == null ? null : -roundMoney(settlementLocalAmount),
         functionalAmount:
-          input.functionalAmount == null ? null : -roundMoney(input.functionalAmount),
-        groupAmount: input.groupAmount == null ? null : -roundMoney(input.groupAmount),
+          settlementFunctionalAmount == null ? null : -roundMoney(settlementFunctionalAmount),
+        groupAmount: settlementGroupAmount == null ? null : -roundMoney(settlementGroupAmount),
         sourceApplicationId: application.id,
         sourceTransactionType: input.settlementTransactionType ?? null,
         sourceTransactionId: input.settlementTransactionId ?? null,
@@ -729,9 +877,9 @@ export async function applyOpenItems(
             counterpartyType: fromItem.counterpartyType ?? toItem?.counterpartyType ?? null,
             counterpartyId: fromItem.counterpartyId ?? toItem?.counterpartyId ?? null,
             transactionAmount,
-            localAmount: input.localAmount ?? null,
-            functionalAmount: input.functionalAmount ?? null,
-            groupAmount: input.groupAmount ?? null,
+            localAmount: settlementLocalAmount,
+            functionalAmount: settlementFunctionalAmount,
+            groupAmount: settlementGroupAmount,
             realizedFxLocalAmount: realizedFx.realizedFxLocalAmount,
             realizedFxFunctionalAmount: realizedFx.realizedFxFunctionalAmount,
             realizedFxGroupAmount: realizedFx.realizedFxGroupAmount,
@@ -749,9 +897,9 @@ export async function applyOpenItems(
                 settlementTransactionType: input.settlementTransactionType ?? null,
                 settlementTransactionId: input.settlementTransactionId ?? null,
                 transactionAmount,
-                localAmount: input.localAmount ?? null,
-                functionalAmount: input.functionalAmount ?? null,
-                groupAmount: input.groupAmount ?? null,
+                localAmount: settlementLocalAmount,
+                functionalAmount: settlementFunctionalAmount,
+                groupAmount: settlementGroupAmount,
                 realizedFxLocalAmount: realizedFx.realizedFxLocalAmount,
                 realizedFxFunctionalAmount: realizedFx.realizedFxFunctionalAmount,
                 realizedFxGroupAmount: realizedFx.realizedFxGroupAmount,
@@ -771,9 +919,9 @@ export async function applyOpenItems(
                       settlementTransactionType: input.settlementTransactionType ?? null,
                       settlementTransactionId: input.settlementTransactionId ?? null,
                       transactionAmount,
-                      localAmount: input.localAmount ?? null,
-                      functionalAmount: input.functionalAmount ?? null,
-                      groupAmount: input.groupAmount ?? null,
+                      localAmount: settlementLocalAmount,
+                      functionalAmount: settlementFunctionalAmount,
+                      groupAmount: settlementGroupAmount,
                       realizedFxLocalAmount: realizedFx.realizedFxLocalAmount,
                       realizedFxFunctionalAmount: realizedFx.realizedFxFunctionalAmount,
                       realizedFxGroupAmount: realizedFx.realizedFxGroupAmount,

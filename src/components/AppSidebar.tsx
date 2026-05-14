@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
+import GlobalSearch from './GlobalSearch'
 
 type NavItem = {
   label: string
@@ -39,7 +40,10 @@ const NAV: NavGroup[] = [
   },
   {
     section: 'Configuration',
-    items: [],
+    items: [
+      { label: 'Manage Dimensions', href: '/configuration/manage-dimensions' },
+      { label: 'Transaction Required Fields', href: '/configuration/transaction-required-fields' },
+    ],
   },
   {
     section: 'Utilities',
@@ -58,20 +62,32 @@ const NAV: NavGroup[] = [
       { label: 'Roles', href: '/roles' },
       { label: 'Contacts', href: '/contacts' },
       { label: 'Customers', href: '/customers' },
+      { label: 'Price Levels', href: '/price-levels' },
+      { label: 'Price Books', href: '/price-books' },
+      { label: 'Billing Accounts', href: '/billing-accounts' },
+      { label: 'Billing Schedules', href: '/billing-schedules' },
+      { label: 'Subscription Plans', href: '/subscription-plans' },
       { label: 'Vendors', href: '/vendors' },
       { label: 'Subsidiaries', href: '/subsidiaries' },
       { label: 'Currencies', href: '/currencies' },
-      { label: 'Locations', href: '/locations' },
       { label: 'Accounting Periods', href: '/accounting-periods' },
       { label: 'Items', href: '/items' },
       { label: 'Chart of Accounts', href: '/chart-of-accounts' },
-      { label: 'Departments', href: '/departments' },
       { label: 'Employees', href: '/employees' },
     ],
   },
   {
     section: 'Treasury',
-    items: [],
+    items: [
+      { label: 'Bank Accounts', href: '/bank-accounts' },
+      { label: 'Bank Connections', href: '/bank-connections' },
+      { label: 'Bank Activity Import', href: '/bank-activity-import' },
+      { label: 'Bank Deposits', href: '/bank-deposits' },
+      { label: 'Bank Transfers', href: '/bank-transfers' },
+      { label: 'Checks', href: '/bank-checks' },
+      { label: 'Bank Matching Workbench', href: '/bank-matching' },
+      { label: 'Bank Reconciliations', href: '/bank-reconciliations' },
+    ],
   },
   {
     section: 'Workflows',
@@ -103,6 +119,7 @@ const NAV: NavGroup[] = [
       { label: 'Receipts', href: '/receipts' },
       { label: 'Bills', href: '/bills' },
       { label: 'Bill Credits', href: '/bill-credits' },
+      { label: 'Payment Runs', href: '/payment-runs' },
       { label: 'Bill Payments', href: '/bill-payments' },
       { label: 'Vendor Refunds', href: '/vendor-refunds' },
     ],
@@ -110,8 +127,13 @@ const NAV: NavGroup[] = [
   {
     section: 'Record To Report',
     items: [
+      { label: 'Balance Sheet', href: '/balance-sheet' },
+      { label: 'Profit & Loss', href: '/profit-and-loss' },
+      { label: 'Indirect Cash Flow', href: '/cash-flow' },
+      { label: 'Retained Earnings', href: '/retained-earnings' },
       { label: 'Journals', href: '/journals' },
       { label: 'Intercompany Journals', href: '/intercompany-journals' },
+      { label: 'Open Item Clearing', href: '/open-item-clearing' },
       { label: 'Clearing Documents', href: '/clearing-documents' },
       { label: 'FX Revaluation', href: '/fx-revaluation' },
       { label: 'Rollforwards', href: '/rollforwards' },
@@ -263,6 +285,10 @@ export default function AppSidebar({ companyLogoUrl: _companyLogoUrl }: { compan
             })}
           </div>
         </nav>
+
+        <div className="ml-auto shrink-0">
+          <GlobalSearch />
+        </div>
       </div>
     </div>
   )

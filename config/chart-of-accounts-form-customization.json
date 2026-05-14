@@ -1,16 +1,20 @@
 {
-  "formColumns": 2,
+  "formColumns": 3,
   "sections": [
     "Core",
     "Reporting",
     "Structure",
-    "Controls"
+    "Controls",
+    "Close Automation",
+    "System Behavior"
   ],
   "sectionRows": {
     "Core": 3,
-    "Reporting": 3,
+    "Reporting": 4,
     "Structure": 3,
-    "Controls": 4
+    "Controls": 5,
+    "Close Automation": 6,
+    "System Behavior": 6
   },
   "fields": {
     "accountId": {
@@ -22,7 +26,7 @@
     "accountNumber": {
       "visible": true,
       "section": "Core",
-      "order": 0,
+      "order": 1,
       "column": 2
     },
     "name": {
@@ -35,25 +39,31 @@
       "visible": true,
       "section": "Core",
       "order": 1,
-      "column": 2
+      "column": 3
     },
     "accountType": {
       "visible": true,
       "section": "Core",
-      "order": 2,
-      "column": 1
+      "order": 0,
+      "column": 2
+    },
+    "category": {
+      "visible": true,
+      "section": "Core",
+      "order": 0,
+      "column": 3
     },
     "normalBalance": {
       "visible": true,
       "section": "Reporting",
-      "order": 0,
-      "column": 1
+      "order": 1,
+      "column": 2
     },
     "financialStatementSection": {
       "visible": true,
       "section": "Reporting",
       "order": 0,
-      "column": 2
+      "column": 1
     },
     "financialStatementGroup": {
       "visible": true,
@@ -64,8 +74,20 @@
     "financialStatementCategory": {
       "visible": true,
       "section": "Reporting",
-      "order": 1,
+      "order": 2,
+      "column": 1
+    },
+    "accountRole": {
+      "visible": true,
+      "section": "Reporting",
+      "order": 0,
       "column": 2
+    },
+    "rollforwardCategory": {
+      "visible": true,
+      "section": "Reporting",
+      "order": 0,
+      "column": 3
     },
     "subsidiaryIds": {
       "visible": true,
@@ -76,14 +98,14 @@
     "includeChildren": {
       "visible": true,
       "section": "Structure",
-      "order": 0,
-      "column": 2
+      "order": 1,
+      "column": 1
     },
     "parentAccountId": {
       "visible": true,
       "section": "Structure",
-      "order": 1,
-      "column": 1
+      "order": 0,
+      "column": 2
     },
     "closeToAccountId": {
       "visible": true,
@@ -100,7 +122,7 @@
     "isControlAccount": {
       "visible": true,
       "section": "Controls",
-      "order": 0,
+      "order": 2,
       "column": 2
     },
     "allowsManualPosting": {
@@ -112,14 +134,14 @@
     "requiresSubledgerType": {
       "visible": true,
       "section": "Structure",
-      "order": 2,
-      "column": 1
+      "order": 0,
+      "column": 3
     },
     "cashFlowCategory": {
       "visible": true,
       "section": "Reporting",
-      "order": 2,
-      "column": 1
+      "order": 1,
+      "column": 3
     },
     "inventory": {
       "visible": true,
@@ -130,20 +152,176 @@
     "revalueOpenBalance": {
       "visible": true,
       "section": "Controls",
+      "order": 0,
+      "column": 3
+    },
+    "monetaryClassification": {
+      "visible": true,
+      "section": "Controls",
+      "order": 1,
+      "column": 3
+    },
+    "translationTreatment": {
+      "visible": true,
+      "section": "Controls",
       "order": 2,
-      "column": 1
+      "column": 3
     },
     "eliminateIntercoTransactions": {
       "visible": true,
       "section": "Controls",
       "order": 2,
-      "column": 2
+      "column": 1
     },
     "summary": {
       "visible": true,
       "section": "Controls",
+      "order": 0,
+      "column": 2
+    },
+    "requiresMonthlyReconciliation": {
+      "visible": true,
+      "section": "Close Automation",
+      "order": 0,
+      "column": 1
+    },
+    "reconciliationType": {
+      "visible": true,
+      "section": "Close Automation",
+      "order": 0,
+      "column": 2
+    },
+    "closeReviewOwnerId": {
+      "visible": true,
+      "section": "Close Automation",
+      "order": 1,
+      "column": 1
+    },
+    "closeReviewFrequency": {
+      "visible": true,
+      "section": "Close Automation",
+      "order": 1,
+      "column": 2
+    },
+    "aiReviewEnabled": {
+      "visible": true,
+      "section": "Close Automation",
+      "order": 2,
+      "column": 1
+    },
+    "aiRiskLevel": {
+      "visible": true,
+      "section": "Close Automation",
+      "order": 2,
+      "column": 2
+    },
+    "autoMatchStrategy": {
+      "visible": true,
+      "section": "Close Automation",
       "order": 3,
       "column": 1
+    },
+    "materialityThreshold": {
+      "visible": true,
+      "section": "Close Automation",
+      "order": 3,
+      "column": 2
+    },
+    "agingReviewRequired": {
+      "visible": true,
+      "section": "Close Automation",
+      "order": 0,
+      "column": 3
+    },
+    "reserveReviewRequired": {
+      "visible": true,
+      "section": "Close Automation",
+      "order": 1,
+      "column": 3
+    },
+    "writeOffReviewRequired": {
+      "visible": true,
+      "section": "Close Automation",
+      "order": 3,
+      "column": 3
+    },
+    "waterfallReviewRequired": {
+      "visible": true,
+      "section": "Close Automation",
+      "order": 2,
+      "column": 3
+    },
+    "taxSensitive": {
+      "visible": true,
+      "section": "System Behavior",
+      "order": 0,
+      "column": 1
+    },
+    "intercompanyAccount": {
+      "visible": true,
+      "section": "System Behavior",
+      "order": 0,
+      "column": 2
+    },
+    "eliminationAccount": {
+      "visible": true,
+      "section": "System Behavior",
+      "order": 1,
+      "column": 1
+    },
+    "bankAccountRequired": {
+      "visible": true,
+      "section": "System Behavior",
+      "order": 1,
+      "column": 2
+    },
+    "inventoryCostLayerAccount": {
+      "visible": true,
+      "section": "System Behavior",
+      "order": 2,
+      "column": 1
+    },
+    "revenueRecognitionAccount": {
+      "visible": true,
+      "section": "System Behavior",
+      "order": 2,
+      "column": 2
+    },
+    "deferredCostAccount": {
+      "visible": true,
+      "section": "System Behavior",
+      "order": 3,
+      "column": 1
+    },
+    "fixedAssetAccount": {
+      "visible": true,
+      "section": "System Behavior",
+      "order": 3,
+      "column": 2
+    },
+    "prepaidAccount": {
+      "visible": true,
+      "section": "System Behavior",
+      "order": 4,
+      "column": 1
+    },
+    "accrualAccount": {
+      "visible": true,
+      "section": "System Behavior",
+      "order": 4,
+      "column": 2
+    },
+    "clearingAccount": {
+      "visible": true,
+      "section": "System Behavior",
+      "order": 5,
+      "column": 1
+    },
+    "suspenseAccount": {
+      "visible": true,
+      "section": "System Behavior",
+      "order": 5,
+      "column": 2
     }
   },
   "statCards": [

@@ -62,6 +62,8 @@ model User {
   subsidiaryAssignments UserSubsidiary[]
   customers             Customer[]
   contacts              Contact[]
+  customerCreditProfilesOwned CustomerCreditProfile[] @relation("CustomerCreditProfileCollectionsOwner")
+  customerAuditLogs     CustomerAuditLog[] @relation("CustomerAuditLogActor")
   projects              Project[]
   tasks                 Task[]
   leads                 Lead[]
@@ -133,8 +135,32 @@ model Customer {
   phone      String?
   address    String?
   industry   String?
+  customerType String?
+  customerGroup String?
+  customerStatus String?
+  territory String?
+  salesManager String?
+  projectManager String?
+  arAccountId String?
+  startDate DateTime?
+  endDate DateTime?
+  reminderDays Int?
+  priceLevel String?
+  priceBook String?
+  taxable Boolean @default(false)
+  taxItem String?
+  resaleNumber String?
+  language String?
+  numberFormat String?
+  negativeNumberFormat String?
+  shipComplete Boolean @default(false)
+  shippingCarrier String?
+  shippingMethod String?
+  blockCollectionEmail Boolean @default(false)
+  collectionsRep String?
   subsidiaryId String?
   currencyId String?
+  includeChildren Boolean @default(false)
   inactive   Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -143,6 +169,14 @@ model Customer {
   userId                String
   user                  User                   @relation(fields: [userId], references: [id])
   contacts              Contact[]
+  entitySettings        CustomerEntitySetting[]
+  addresses             CustomerAddress[]
+  taxProfiles           CustomerTaxProfile[]
+  creditProfiles        CustomerCreditProfile[]
+  dimensionDefaults     CustomerDimensionDefault[]
+  contracts             CustomerContract[]
+  auditLogs             CustomerAuditLog[]
+  billingAccounts       BillingAccount[]
   leads                 Lead[]
   opportunities         Opportunity[]
   quotes                Quote[]
@@ -153,11 +187,500 @@ model Customer {
   journalEntryLineItems JournalEntryLineItem[]
   subsidiary            Subsidiary?            @relation(fields: [subsidiaryId], references: [id])
   currency              Currency?              @relation(fields: [currencyId], references: [id])
+  arAccount             ChartOfAccounts?       @relation("CustomerArAccount", fields: [arAccountId], references: [id])
+  paymentInstruments    CustomerPaymentInstrument[]
 
   @@index([userId])
   @@index([subsidiaryId])
   @@index([currencyId])
+  @@index([arAccountId])
+  @@index([customerType])
+  @@index([customerGroup])
+  @@index([customerStatus])
   @@map("customers")
+}
+
+model CustomerEntitySetting {
+  id                              String   @id @default(cuid())
+  customerId                      String
+  subsidiaryId                    String?
+  isEnabledForEntity              Boolean  @default(true)
+  defaultArAccountId              String?
+  defaultRevenueAccountId         String?
+  defaultDeferredRevenueAccountId String?
+  defaultUnbilledArAccountId      String?
+  paymentTerms                    String?
+  defaultDueDays                  Int?
+  currencyId                      String?
+  taxCode                         String?
+  creditLimit                     Decimal? @db.Decimal(18, 2)
+  billingHold                     Boolean  @default(false)
+  billingHoldReason               String?
+  invoiceDeliveryMethod           String?
+  intercompanyPartnerSubsidiaryId String?
+  inactive                        Boolean  @default(false)
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
+
+  customer                      Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  subsidiary                    Subsidiary?      @relation("CustomerEntitySettingSubsidiary", fields: [subsidiaryId], references: [id])
+  currency                      Currency?        @relation("CustomerEntitySettingCurrency", fields: [currencyId], references: [id])
+  defaultArAccount              ChartOfAccounts? @relation("CustomerEntitySettingArAccount", fields: [defaultArAccountId], references: [id])
+  defaultRevenueAccount         ChartOfAccounts? @relation("CustomerEntitySettingRevenueAccount", fields: [defaultRevenueAccountId], references: [id])
+  defaultDeferredRevenueAccount ChartOfAccounts? @relation("CustomerEntitySettingDeferredRevenueAccount", fields: [defaultDeferredRevenueAccountId], references: [id])
+  defaultUnbilledArAccount      ChartOfAccounts? @relation("CustomerEntitySettingUnbilledArAccount", fields: [defaultUnbilledArAccountId], references: [id])
+  intercompanyPartnerSubsidiary Subsidiary?      @relation("CustomerEntitySettingIntercompanyPartner", fields: [intercompanyPartnerSubsidiaryId], references: [id])
+
+  @@unique([customerId, subsidiaryId])
+  @@index([customerId])
+  @@index([subsidiaryId])
+  @@index([currencyId])
+  @@index([defaultArAccountId])
+  @@index([defaultRevenueAccountId])
+  @@index([defaultDeferredRevenueAccountId])
+  @@index([defaultUnbilledArAccountId])
+  @@index([intercompanyPartnerSubsidiaryId])
+  @@map("customer_entity_settings")
+}
+
+model CustomerAddress {
+  id                String   @id @default(cuid())
+  customerId        String
+  addressId         String?  @unique
+  addressType       String   @default("billing")
+  attentionTo       String?
+  line1             String?
+  line2             String?
+  city              String?
+  stateRegion       String?
+  postalCode        String?
+  countryCode       String?
+  taxJurisdictionId String?
+  isPrimary         Boolean  @default(false)
+  isActive          Boolean  @default(true)
+  effectiveFrom     DateTime?
+  effectiveTo       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([addressType])
+  @@index([countryCode])
+  @@map("customer_addresses")
+}
+
+model CustomerTaxProfile {
+  id                         String    @id @default(cuid())
+  customerId                 String
+  taxProfileId               String?   @unique
+  subsidiaryId               String?
+  taxCountry                 String?
+  taxRegistrationNumber      String?
+  taxExempt                  Boolean   @default(false)
+  taxExemptionCertificateId  String?
+  taxExemptionExpirationDate DateTime?
+  resaleCertificateNumber    String?
+  vatReverseChargeApplicable Boolean   @default(false)
+  taxCode                    String?
+  taxEngineCustomerCode      String?
+  taxValidationStatus        String?
+  validatedAt                DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  subsidiary Subsidiary? @relation("CustomerTaxProfileSubsidiary", fields: [subsidiaryId], references: [id])
+
+  @@index([customerId])
+  @@index([subsidiaryId])
+  @@index([taxCountry])
+  @@index([taxCode])
+  @@map("customer_tax_profiles")
+}
+
+model CustomerCreditProfile {
+  id                     String    @id @default(cuid())
+  customerId             String
+  creditProfileId        String?   @unique
+  subsidiaryId           String?
+  creditLimit            Decimal?  @db.Decimal(18, 2)
+  creditCurrencyId       String?
+  creditStatus           String    @default("pending_review")
+  creditRating           String?
+  creditReviewDate       DateTime?
+  nextCreditReviewDate   DateTime?
+  averageDaysToPay       Decimal?  @db.Decimal(10, 2)
+  highestBalance         Decimal?  @db.Decimal(18, 2)
+  dunningLevel           String?
+  collectionsOwnerUserId String?
+  creditHold             Boolean   @default(false)
+  creditHoldReason       String?
+  collectionsHold        Boolean   @default(false)
+  blockCollectionEmail   Boolean   @default(false)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  customer             Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  subsidiary           Subsidiary? @relation("CustomerCreditProfileSubsidiary", fields: [subsidiaryId], references: [id])
+  creditCurrency       Currency?   @relation("CustomerCreditProfileCurrency", fields: [creditCurrencyId], references: [id])
+  collectionsOwnerUser User?       @relation("CustomerCreditProfileCollectionsOwner", fields: [collectionsOwnerUserId], references: [id])
+
+  @@index([customerId])
+  @@index([subsidiaryId])
+  @@index([creditCurrencyId])
+  @@index([collectionsOwnerUserId])
+  @@index([creditStatus])
+  @@map("customer_credit_profiles")
+}
+
+model CustomerDimensionDefault {
+  id                    String    @id @default(cuid())
+  customerId            String
+  subsidiaryId          String?
+  dimensionDefinitionId String
+  dimensionValueId      String
+  effectiveFrom         DateTime?
+  effectiveTo           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  customer            Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  subsidiary          Subsidiary?          @relation("CustomerDimensionDefaultSubsidiary", fields: [subsidiaryId], references: [id])
+  dimensionDefinition DimensionDefinition @relation("CustomerDimensionDefaultDefinition", fields: [dimensionDefinitionId], references: [id], onDelete: Cascade)
+  dimensionValue      DimensionValue      @relation("CustomerDimensionDefaultValue", fields: [dimensionValueId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, subsidiaryId, dimensionDefinitionId, effectiveFrom])
+  @@index([customerId])
+  @@index([subsidiaryId])
+  @@index([dimensionDefinitionId])
+  @@index([dimensionValueId])
+  @@map("customer_dimension_defaults")
+}
+
+model CustomerContract {
+  id                   String    @id @default(cuid())
+  customerId           String
+  contractNumber       String    @unique
+  contractStatus       String    @default("draft")
+  contractStartDate    DateTime?
+  contractEndDate      DateTime?
+  autoRenew            Boolean   @default(false)
+  renewalTermMonths    Int?
+  noticePeriodDays     Int?
+  billingTerms         String?
+  contractCurrencyId   String?
+  signedDocumentId     String?
+  description          String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  customer         Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  contractCurrency Currency? @relation("CustomerContractCurrency", fields: [contractCurrencyId], references: [id])
+
+  @@index([customerId])
+  @@index([contractCurrencyId])
+  @@index([contractStatus])
+  @@map("customer_contracts")
+}
+
+model CustomerAuditLog {
+  id            String   @id @default(cuid())
+  customerId    String
+  actorUserId   String?
+  action        String
+  fieldName     String?
+  oldValue      String?
+  newValue      String?
+  changeReason  String?
+  source        String?
+  createdAt     DateTime @default(now())
+
+  customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  actorUser User?    @relation("CustomerAuditLogActor", fields: [actorUserId], references: [id])
+
+  @@index([customerId])
+  @@index([actorUserId])
+  @@index([action])
+  @@map("customer_audit_log")
+}
+
+model CustomerPaymentInstrument {
+  id                  String   @id @default(cuid())
+  customerId          String
+  instrumentId        String?  @unique
+  paymentType         String   @default("ach")
+  status              String   @default("draft")
+  bankName            String?
+  accountHolderName   String?
+  maskedAccountNumber String?
+  routingNumberMasked String?
+  bankCountry         String?
+  currencyId          String?
+  accountType         String?
+  mandateReference    String?
+  mandateStatus       String?
+  tokenProvider       String?
+  tokenReference      String?
+  encryptedPayloadRef String?
+  isDefault           Boolean  @default(false)
+  inactive            Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  currency Currency? @relation("CustomerPaymentInstrumentCurrency", fields: [currencyId], references: [id])
+  billingAccounts BillingAccount[]
+
+  @@index([customerId])
+  @@index([currencyId])
+  @@index([paymentType])
+  @@index([status])
+  @@map("customer_payment_instruments")
+}
+
+model PriceLevel {
+  id                   String   @id @default(cuid())
+  priceLevelId         String?  @unique
+  name                 String
+  description          String?
+  levelType            String?
+  subsidiaryId         String?
+  includeChildren      Boolean  @default(false)
+  defaultDiscountPct   Decimal? @db.Decimal(9, 4)
+  minimumMarginPct     Decimal? @db.Decimal(9, 4)
+  approvalRequired     Boolean  @default(false)
+  approvalWorkflow     String?
+  allowManualOverride  Boolean  @default(true)
+  effectiveStartDate   DateTime?
+  effectiveEndDate     DateTime?
+  inactive             Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  subsidiary Subsidiary? @relation(fields: [subsidiaryId], references: [id])
+  priceBooks PriceBook[]
+  billingAccounts BillingAccount[]
+  subscriptionPlans SubscriptionPlan[]
+
+  @@index([subsidiaryId])
+  @@index([levelType])
+  @@index([inactive])
+  @@map("price_levels")
+}
+
+model PriceBook {
+  id                   String   @id @default(cuid())
+  priceBookId          String?  @unique
+  name                 String
+  description          String?
+  bookType             String?
+  subsidiaryId         String?
+  includeChildren      Boolean  @default(false)
+  currencyId           String?
+  defaultPriceLevelId  String?
+  approvalRequired     Boolean  @default(false)
+  approvalWorkflow     String?
+  allowManualOverride  Boolean  @default(true)
+  effectiveStartDate   DateTime?
+  effectiveEndDate     DateTime?
+  inactive             Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  subsidiary        Subsidiary? @relation(fields: [subsidiaryId], references: [id])
+  currency          Currency?   @relation(fields: [currencyId], references: [id])
+  defaultPriceLevel PriceLevel? @relation(fields: [defaultPriceLevelId], references: [id])
+  priceBookItems    PriceBookItem[]
+  billingAccounts   BillingAccount[]
+  subscriptionPlans SubscriptionPlan[]
+
+  @@index([subsidiaryId])
+  @@index([currencyId])
+  @@index([defaultPriceLevelId])
+  @@index([bookType])
+  @@index([inactive])
+  @@map("price_books")
+}
+
+model PriceBookItem {
+  id                  String   @id @default(cuid())
+  priceBookItemId     String?  @unique
+  priceBookId         String
+  itemId              String
+  unitPrice           Decimal  @db.Decimal(19, 4)
+  currencyId          String?
+  uom                 String?
+  minimumQuantity     Decimal? @db.Decimal(18, 4)
+  maximumQuantity     Decimal? @db.Decimal(18, 4)
+  effectiveStartDate  DateTime?
+  effectiveEndDate    DateTime?
+  status              String   @default("active")
+  priceSource         String   @default("manual")
+  marginFloorPct      Decimal? @db.Decimal(9, 4)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  priceBook PriceBook @relation(fields: [priceBookId], references: [id], onDelete: Cascade)
+  item      Item      @relation(fields: [itemId], references: [id])
+  currency  Currency? @relation(fields: [currencyId], references: [id])
+
+  @@index([priceBookId])
+  @@index([itemId])
+  @@index([currencyId])
+  @@index([status])
+  @@index([priceSource])
+  @@map("price_book_items")
+}
+
+model BillingSchedule {
+  id                    String   @id @default(cuid())
+  billingScheduleId     String?  @unique
+  name                  String
+  description           String?
+  scheduleType          String?
+  frequency             String?
+  billingTiming         String?
+  billingAnchor         String?
+  billingDay            Int?
+  prorationPolicy       String?
+  renewalMode           String?
+  invoiceGroupingPolicy String?
+  graceDays             Int?
+  minimumBillAmount     Decimal? @db.Decimal(18, 2)
+  currencyId            String?
+  inactive              Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  currency          Currency? @relation(fields: [currencyId], references: [id])
+  billingAccounts   BillingAccount[]
+  subscriptionPlans SubscriptionPlan[]
+
+  @@index([scheduleType])
+  @@index([frequency])
+  @@index([currencyId])
+  @@index([inactive])
+  @@map("billing_schedules")
+}
+
+model BillingAccount {
+  id                       String   @id @default(cuid())
+  billingAccountId         String?  @unique
+  name                     String
+  description              String?
+  customerId               String?
+  accountType              String?
+  status                   String?  @default("active")
+  subsidiaryId             String?
+  includeChildren          Boolean  @default(false)
+  currencyId               String?
+  defaultBillingScheduleId String?
+  defaultPriceBookId       String?
+  defaultPriceLevelId      String?
+  billToContactId          String?
+  invoiceDeliveryMethod    String?
+  billingEmail             String?
+  billingAddress           String?
+  paymentTerms             String?
+  paymentMethod            String?
+  paymentInstrumentId      String?
+  consolidateInvoices      Boolean  @default(true)
+  requiresPurchaseOrder    Boolean  @default(false)
+  poNumber                 String?
+  taxable                  Boolean  @default(false)
+  taxCode                  String?
+  taxRegistrationStatus    String?
+  creditHold               Boolean  @default(false)
+  collectionsHold          Boolean  @default(false)
+  directDebitEnabled       Boolean  @default(false)
+  inactive                 Boolean  @default(false)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  customer               Customer?                  @relation(fields: [customerId], references: [id])
+  subsidiary             Subsidiary?                @relation(fields: [subsidiaryId], references: [id])
+  currency               Currency?                  @relation(fields: [currencyId], references: [id])
+  defaultBillingSchedule BillingSchedule?           @relation(fields: [defaultBillingScheduleId], references: [id])
+  defaultPriceBook       PriceBook?                 @relation(fields: [defaultPriceBookId], references: [id])
+  defaultPriceLevel      PriceLevel?                @relation(fields: [defaultPriceLevelId], references: [id])
+  billToContact          Contact?                   @relation(fields: [billToContactId], references: [id])
+  paymentInstrument      CustomerPaymentInstrument? @relation(fields: [paymentInstrumentId], references: [id])
+
+  @@index([customerId])
+  @@index([accountType])
+  @@index([status])
+  @@index([subsidiaryId])
+  @@index([currencyId])
+  @@index([defaultBillingScheduleId])
+  @@index([defaultPriceBookId])
+  @@index([defaultPriceLevelId])
+  @@index([billToContactId])
+  @@index([paymentInstrumentId])
+  @@index([inactive])
+  @@map("billing_accounts")
+}
+
+model SubscriptionPlan {
+  id                       String   @id @default(cuid())
+  subscriptionPlanId       String?  @unique
+  name                     String
+  description              String?
+  planType                 String?
+  billingModel             String?
+  status                   String?  @default("draft")
+  itemId                   String?
+  subsidiaryId             String?
+  includeChildren          Boolean  @default(false)
+  currencyId               String?
+  defaultBillingScheduleId String?
+  defaultPriceBookId       String?
+  defaultPriceLevelId      String?
+  termMonths               Int?
+  autoRenew                Boolean  @default(false)
+  renewalMode              String?
+  renewalTermMonths        Int?
+  usageRatingModel         String?
+  includedQuantity         Decimal? @db.Decimal(18, 4)
+  overageRate              Decimal? @db.Decimal(18, 4)
+  minimumCommitAmount      Decimal? @db.Decimal(18, 2)
+  setupFeeAmount           Decimal? @db.Decimal(18, 2)
+  revenueRecognitionPolicy String?
+  revenueAccountId         String?
+  deferredRevenueAccountId String?
+  costAccountId            String?
+  deferredCostAccountId    String?
+  inactive                 Boolean  @default(false)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  item                   Item?             @relation(fields: [itemId], references: [id])
+  subsidiary             Subsidiary?       @relation(fields: [subsidiaryId], references: [id])
+  currency               Currency?         @relation(fields: [currencyId], references: [id])
+  defaultBillingSchedule BillingSchedule?  @relation(fields: [defaultBillingScheduleId], references: [id])
+  defaultPriceBook       PriceBook?        @relation(fields: [defaultPriceBookId], references: [id])
+  defaultPriceLevel      PriceLevel?       @relation(fields: [defaultPriceLevelId], references: [id])
+  revenueAccount         ChartOfAccounts?  @relation("SubscriptionPlanRevenueAccount", fields: [revenueAccountId], references: [id])
+  deferredRevenueAccount ChartOfAccounts?  @relation("SubscriptionPlanDeferredRevenueAccount", fields: [deferredRevenueAccountId], references: [id])
+  costAccount            ChartOfAccounts?  @relation("SubscriptionPlanCostAccount", fields: [costAccountId], references: [id])
+  deferredCostAccount    ChartOfAccounts?  @relation("SubscriptionPlanDeferredCostAccount", fields: [deferredCostAccountId], references: [id])
+
+  @@index([planType])
+  @@index([billingModel])
+  @@index([status])
+  @@index([itemId])
+  @@index([subsidiaryId])
+  @@index([currencyId])
+  @@index([defaultBillingScheduleId])
+  @@index([defaultPriceBookId])
+  @@index([defaultPriceLevelId])
+  @@index([revenueAccountId])
+  @@index([deferredRevenueAccountId])
+  @@index([costAccountId])
+  @@index([deferredCostAccountId])
+  @@index([inactive])
+  @@map("subscription_plans")
 }
 
 model Contact {
@@ -167,12 +690,19 @@ model Contact {
   lastName                  String
   email                     String?
   phone                     String?
+  mobile                    String?
   address                   String?
   position                  String?
+  contactType               String?
   isPrimaryForCustomer      Boolean  @default(false)
   receivesQuotesSalesOrders Boolean  @default(false)
   receivesInvoices          Boolean  @default(false)
   receivesInvoiceCc         Boolean  @default(false)
+  receivesStatements        Boolean  @default(false)
+  receivesDunning           Boolean  @default(false)
+  receivesContractNotices   Boolean  @default(false)
+  receivesTaxNotices        Boolean  @default(false)
+  receivesSupportNotices    Boolean  @default(false)
   active                    Boolean  @default(true)
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
@@ -182,6 +712,7 @@ model Contact {
   customer   Customer? @relation(fields: [customerId], references: [id])
   vendorId   String?
   vendor     Vendor?   @relation(fields: [vendorId], references: [id])
+  billingAccounts BillingAccount[]
   leads      Lead[]
   userId     String
   user       User      @relation(fields: [userId], references: [id])
@@ -256,6 +787,8 @@ model Vendor {
   purchaseOrders        PurchaseOrder[]
   bills                 Bill[]
   billPayments          BillPayment[]
+  paymentRunLines       PaymentRunLine[]
+  bankChecks            BankCheck[]
   billCredits           BillCredit[]
   vendorRefunds         VendorRefund[]
   contacts              Contact[]
@@ -352,6 +885,176 @@ model Location {
   @@map("locations")
 }
 
+model ClassDimension {
+  id                    String   @id @default(cuid())
+  classId               String   @unique
+  name                  String
+  description           String?
+  inactive              Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  invoiceLineItems      InvoiceLineItem[]
+  billLineItems         BillLineItem[]
+  journalEntryLineItems JournalEntryLineItem[]
+
+  @@map("classes")
+}
+
+model DimensionDefinition {
+  id                        String   @id @default(cuid())
+  dimensionKey              String   @unique
+  label                     String
+  description               String?
+  dimensionType             String   @default("custom")
+  valueSourceType           String
+  valueModel                String   @default("simple_managed_list")
+  selectionType             String   @default("single_select")
+  isSeeded                  Boolean  @default(false)
+  isCustom                  Boolean  @default(false)
+  isActive                  Boolean  @default(true)
+  allowsHeaderAssignment    Boolean  @default(true)
+  allowsLineAssignment      Boolean  @default(true)
+  allowsGlAssignment        Boolean  @default(true)
+  allowsProjectAssignment   Boolean  @default(false)
+  allowsSubscriptionAssignment Boolean @default(false)
+  inheritanceMode           String   @default("inherit_with_override")
+  overrideMode              String   @default("allowed")
+  validationMode            String   @default("optional")
+  postToGl                  Boolean  @default(true)
+  requiresGlSplit           Boolean  @default(false)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  values                    DimensionValue[]
+  applicabilities           DimensionApplicability[]
+  sourcingPolicies          DimensionSourcingPolicy[]
+  transactionFamilyAssignments DimensionTransactionFamilyAssignment[]
+  transactionFamilySourcingPolicies DimensionTransactionFamilySourcingPolicy[]
+  assignments               DimensionAssignment[]
+  customerDimensionDefaults CustomerDimensionDefault[] @relation("CustomerDimensionDefaultDefinition")
+
+  @@map("dimension_definitions")
+}
+
+model DimensionTransactionFamilySourcingPolicy {
+  id                    String   @id @default(cuid())
+  dimensionDefinitionId String
+  familyKey             String
+  headerSourcePriorityJson String?
+  lineSourcePriorityJson   String?
+  allowProjectInheritance Boolean @default(false)
+  allowSubscriptionInheritance Boolean @default(false)
+  allowManualOverride    Boolean  @default(true)
+  failIfUnresolved       Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  dimensionDefinition   DimensionDefinition @relation(fields: [dimensionDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([dimensionDefinitionId, familyKey])
+  @@index([dimensionDefinitionId])
+  @@map("dimension_transaction_family_sourcing_policies")
+}
+
+model DimensionTransactionFamilyAssignment {
+  id                    String   @id @default(cuid())
+  dimensionDefinitionId String
+  familyKey             String
+  allowsHeader          Boolean  @default(false)
+  allowsLine            Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  dimensionDefinition   DimensionDefinition @relation(fields: [dimensionDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([dimensionDefinitionId, familyKey])
+  @@index([dimensionDefinitionId])
+  @@map("dimension_transaction_family_assignments")
+}
+
+model DimensionValue {
+  id                    String   @id @default(cuid())
+  dimensionDefinitionId String
+  valueKey              String
+  code                  String
+  name                  String
+  description           String?
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  dimensionDefinition   DimensionDefinition @relation(fields: [dimensionDefinitionId], references: [id], onDelete: Cascade)
+  assignments           DimensionAssignment[]
+  customerDimensionDefaults CustomerDimensionDefault[] @relation("CustomerDimensionDefaultValue")
+
+  @@unique([dimensionDefinitionId, valueKey])
+  @@unique([dimensionDefinitionId, code])
+  @@index([dimensionDefinitionId])
+  @@map("dimension_values")
+}
+
+model DimensionApplicability {
+  id                    String   @id @default(cuid())
+  dimensionDefinitionId String
+  targetKey             String
+  isVisible             Boolean  @default(true)
+  isRequired            Boolean  @default(false)
+  isLockedInCustomize   Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  dimensionDefinition   DimensionDefinition @relation(fields: [dimensionDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([dimensionDefinitionId, targetKey])
+  @@index([dimensionDefinitionId])
+  @@map("dimension_applicabilities")
+}
+
+model DimensionSourcingPolicy {
+  id                        String   @id @default(cuid())
+  dimensionDefinitionId     String
+  targetKey                 String
+  sourcePriorityJson        String?
+  allowHeaderInheritance    Boolean  @default(false)
+  allowSourceLineInheritance Boolean @default(false)
+  allowProjectInheritance   Boolean  @default(false)
+  allowSubscriptionInheritance Boolean @default(false)
+  allowManualOverride       Boolean  @default(true)
+  failIfUnresolved          Boolean  @default(false)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  dimensionDefinition       DimensionDefinition @relation(fields: [dimensionDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([dimensionDefinitionId, targetKey])
+  @@index([dimensionDefinitionId])
+  @@map("dimension_sourcing_policies")
+}
+
+model DimensionAssignment {
+  id                    String   @id @default(cuid())
+  targetType            String
+  targetId              String
+  scopeLevel            String
+  dimensionDefinitionId String
+  dimensionValueId      String?
+  sourceType            String?
+  sourceRecordType      String?
+  sourceRecordId        String?
+  isOverridden          Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  dimensionDefinition   DimensionDefinition @relation(fields: [dimensionDefinitionId], references: [id], onDelete: Cascade)
+  dimensionValue        DimensionValue?     @relation(fields: [dimensionValueId], references: [id], onDelete: SetNull)
+
+  @@index([targetType, targetId])
+  @@index([dimensionDefinitionId])
+  @@index([dimensionValueId])
+  @@map("dimension_assignments")
+}
+
 model CostCenter {
   id        String   @id @default(cuid())
   name      String
@@ -378,6 +1081,8 @@ model ChartOfAccounts {
   accountRole                  String?
   inventory                    Boolean  @default(false)
   revalueOpenBalance           Boolean  @default(false)
+  monetaryClassification       String?
+  translationTreatment         String?
   eliminateIntercoTransactions Boolean  @default(false)
   summary                      Boolean  @default(false)
   isPosting                    Boolean  @default(true)
@@ -385,6 +1090,30 @@ model ChartOfAccounts {
   allowsManualPosting          Boolean  @default(true)
   requiresSubledgerType        String?
   cashFlowCategory             String?
+  requiresMonthlyReconciliation Boolean @default(false)
+  reconciliationType           String?
+  closeReviewOwnerId           String?
+  closeReviewFrequency         String?
+  aiReviewEnabled              Boolean  @default(false)
+  aiRiskLevel                  String?
+  autoMatchStrategy            String?
+  materialityThreshold         Decimal? @db.Decimal(18, 2)
+  agingReviewRequired          Boolean  @default(false)
+  reserveReviewRequired        Boolean  @default(false)
+  writeOffReviewRequired       Boolean  @default(false)
+  waterfallReviewRequired      Boolean  @default(false)
+  taxSensitive                 Boolean  @default(false)
+  intercompanyAccount          Boolean  @default(false)
+  eliminationAccount           Boolean  @default(false)
+  bankAccountRequired          Boolean  @default(false)
+  inventoryCostLayerAccount    Boolean  @default(false)
+  revenueRecognitionAccount    Boolean  @default(false)
+  deferredCostAccount          Boolean  @default(false)
+  fixedAssetAccount            Boolean  @default(false)
+  prepaidAccount               Boolean  @default(false)
+  accrualAccount               Boolean  @default(false)
+  clearingAccount              Boolean  @default(false)
+  suspenseAccount              Boolean  @default(false)
   parentSubsidiaryId           String?
   parentAccountId              String?
   closeToAccountId             String?
@@ -407,10 +1136,21 @@ model ChartOfAccounts {
   inventoryItems               Item[]                     @relation("ItemInventoryAccount")
   cogsExpenseItems             Item[]                     @relation("ItemCogsExpenseAccount")
   deferredCostItems            Item[]                     @relation("ItemDeferredCostAccount")
+  subscriptionPlanRevenueAccounts         SubscriptionPlan[] @relation("SubscriptionPlanRevenueAccount")
+  subscriptionPlanDeferredRevenueAccounts SubscriptionPlan[] @relation("SubscriptionPlanDeferredRevenueAccount")
+  subscriptionPlanCostAccounts            SubscriptionPlan[] @relation("SubscriptionPlanCostAccount")
+  subscriptionPlanDeferredCostAccounts    SubscriptionPlan[] @relation("SubscriptionPlanDeferredCostAccount")
   cashReceipts                 CashReceipt[]              @relation("CashReceiptBankAccount")
   customerRefunds              CustomerRefund[]           @relation("CustomerRefundBankAccount")
+  customerArAccounts           Customer[]                 @relation("CustomerArAccount")
+  customerEntityArAccounts     CustomerEntitySetting[]     @relation("CustomerEntitySettingArAccount")
+  customerEntityRevenueAccounts CustomerEntitySetting[]    @relation("CustomerEntitySettingRevenueAccount")
+  customerEntityDeferredRevenueAccounts CustomerEntitySetting[] @relation("CustomerEntitySettingDeferredRevenueAccount")
+  customerEntityUnbilledArAccounts CustomerEntitySetting[] @relation("CustomerEntitySettingUnbilledArAccount")
   vendorRefunds                VendorRefund[]             @relation("VendorRefundBankAccount")
   billPayments                 BillPayment[]              @relation("BillPaymentBankAccount")
+  bankDepositOffsets           BankDeposit[]              @relation("BankDepositOffsetAccount")
+  linkedBankAccount            BankAccount?                @relation("BankAccountGlAccount")
   openItems                    OpenItem[]
   expenseBillLineItems         BillLineItem[]
   retainedEarningsSubsidiaries     Subsidiary[] @relation("SubsidiaryRetainedEarningsAccount")
@@ -418,6 +1158,13 @@ model ChartOfAccounts {
   intercompanyClearingSubsidiaries Subsidiary[] @relation("SubsidiaryIntercompanyClearingAccount")
   dueToSubsidiaries                Subsidiary[] @relation("SubsidiaryDueToAccount")
   dueFromSubsidiaries              Subsidiary[] @relation("SubsidiaryDueFromAccount")
+  investmentInSubsidiarySubsidiaries Subsidiary[] @relation("SubsidiaryInvestmentInSubsidiaryAccount")
+  nciEquitySubsidiaries            Subsidiary[] @relation("SubsidiaryNciEquityAccount")
+  nciIncomeStatementSubsidiaries   Subsidiary[] @relation("SubsidiaryNciIncomeStatementAccount")
+  realizedFxGainSubsidiaries       Subsidiary[] @relation("SubsidiaryRealizedFxGainAccount")
+  realizedFxLossSubsidiaries       Subsidiary[] @relation("SubsidiaryRealizedFxLossAccount")
+  unrealizedFxGainSubsidiaries     Subsidiary[] @relation("SubsidiaryUnrealizedFxGainAccount")
+  unrealizedFxLossSubsidiaries     Subsidiary[] @relation("SubsidiaryUnrealizedFxLossAccount")
 
   @@index([parentSubsidiaryId])
   @@index([parentAccountId])
@@ -438,6 +1185,311 @@ model ChartOfAccountSubsidiary {
   @@unique([chartOfAccountId, subsidiaryId])
   @@index([subsidiaryId])
   @@map("chart_of_account_subsidiaries")
+}
+
+model BankConnection {
+  id              String    @id @default(cuid())
+  connectionId    String    @unique
+  connectionCategory String  @default("bank_feed")
+  provider        String
+  institutionName String
+  status          String    @default("not_connected")
+  health          String    @default("not_configured")
+  syncFrequency   String    @default("daily")
+  lastSyncAt      DateTime?
+  consentExpiresAt DateTime?
+  notes           String?
+  active          Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  bankAccounts     BankAccount[]
+  feedTransactions BankFeedTransaction[]
+
+  @@map("bank_connections")
+}
+
+model BankAccount {
+  id                       String   @id @default(cuid())
+  bankAccountId            String   @unique
+  name                     String
+  bankName                 String
+  accountType              String
+  maskedAccountNumber      String?
+  statementSource          String   @default("manual_import")
+  paymentFileFormat        String?
+  checkNumberPrefix        String?
+  nextCheckNumber          Int?
+  reconciliationStartDate  DateTime?
+  active                   Boolean  @default(true)
+  subsidiaryId             String
+  currencyId               String
+  glAccountId              String   @unique
+  connectionId             String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  subsidiary      Subsidiary        @relation("BankAccountSubsidiary", fields: [subsidiaryId], references: [id])
+  currency        Currency          @relation("BankAccountCurrency", fields: [currencyId], references: [id])
+  glAccount       ChartOfAccounts   @relation("BankAccountGlAccount", fields: [glAccountId], references: [id])
+  connection      BankConnection?   @relation(fields: [connectionId], references: [id])
+  feedTransactions BankFeedTransaction[]
+  deposits        BankDeposit[]
+  transfersOut    BankTransfer[]    @relation("BankTransferFromAccount")
+  transfersIn     BankTransfer[]    @relation("BankTransferToAccount")
+  checks          BankCheck[]
+  paymentRuns     PaymentRun[]
+  statements      BankStatement[]
+  reconciliations BankReconciliation[]
+
+  @@index([subsidiaryId])
+  @@index([currencyId])
+  @@index([connectionId])
+  @@map("bank_accounts")
+}
+
+model BankFeedTransaction {
+  id                   String   @id @default(cuid())
+  bankTransactionId    String   @unique
+  bankAccountId        String
+  connectionId         String?
+  externalId           String?
+  transactionDate      DateTime
+  postedDate           DateTime?
+  description          String
+  counterparty         String?
+  amount               Decimal  @db.Decimal(18, 2)
+  currencyId           String
+  direction            String
+  status               String   @default("unmatched")
+  matchedRecordType    String?
+  matchedRecordId      String?
+  matchConfidence      Decimal? @db.Decimal(5, 2)
+  suggestedMatchReason String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  bankAccount BankAccount     @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  connection  BankConnection? @relation(fields: [connectionId], references: [id])
+  currency    Currency        @relation("BankFeedTransactionCurrency", fields: [currencyId], references: [id])
+
+  @@index([bankAccountId])
+  @@index([connectionId])
+  @@index([currencyId])
+  @@index([status])
+  @@map("bank_feed_transactions")
+}
+
+model BankDeposit {
+  id                    String   @id @default(cuid())
+  depositNumber         String   @unique
+  status                String   @default("draft")
+  depositDate           DateTime
+  amount                Decimal  @db.Decimal(18, 2)
+  memo                  String?
+  bankAccountId         String
+  subsidiaryId          String
+  currencyId            String
+  offsetAccountId       String?
+  bankFeedTransactionId String?
+  journalEntryId        String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  bankAccount BankAccount   @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  subsidiary  Subsidiary    @relation("BankDepositSubsidiary", fields: [subsidiaryId], references: [id])
+  currency    Currency      @relation("BankDepositCurrency", fields: [currencyId], references: [id])
+  offsetAccount ChartOfAccounts? @relation("BankDepositOffsetAccount", fields: [offsetAccountId], references: [id])
+
+  @@index([bankAccountId])
+  @@index([subsidiaryId])
+  @@index([currencyId])
+  @@index([offsetAccountId])
+  @@index([status])
+  @@map("bank_deposits")
+}
+
+model BankTransfer {
+  id                    String   @id @default(cuid())
+  transferNumber        String   @unique
+  status                String   @default("draft")
+  transferDate          DateTime
+  amount                Decimal  @db.Decimal(18, 2)
+  memo                  String?
+  fromBankAccountId     String
+  toBankAccountId       String?
+  subsidiaryId          String
+  currencyId            String
+  bankFeedTransactionId String?
+  journalEntryId        String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  fromBankAccount BankAccount @relation("BankTransferFromAccount", fields: [fromBankAccountId], references: [id], onDelete: Cascade)
+  toBankAccount   BankAccount? @relation("BankTransferToAccount", fields: [toBankAccountId], references: [id], onDelete: SetNull)
+  subsidiary      Subsidiary   @relation("BankTransferSubsidiary", fields: [subsidiaryId], references: [id])
+  currency        Currency     @relation("BankTransferCurrency", fields: [currencyId], references: [id])
+
+  @@index([fromBankAccountId])
+  @@index([toBankAccountId])
+  @@index([subsidiaryId])
+  @@index([currencyId])
+  @@index([status])
+  @@map("bank_transfers")
+}
+
+model BankCheck {
+  id                    String   @id @default(cuid())
+  checkTransactionNumber String  @unique
+  checkNumber           String
+  status                String   @default("issued")
+  checkDate             DateTime
+  amount                Decimal  @db.Decimal(18, 2)
+  payeeName             String
+  memo                  String?
+  bankAccountId         String
+  vendorId              String?
+  subsidiaryId          String
+  currencyId            String
+  billPaymentId         String?
+  bankFeedTransactionId String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  vendor      Vendor?     @relation(fields: [vendorId], references: [id])
+  subsidiary  Subsidiary  @relation("BankCheckSubsidiary", fields: [subsidiaryId], references: [id])
+  currency    Currency    @relation("BankCheckCurrency", fields: [currencyId], references: [id])
+  billPayment BillPayment? @relation(fields: [billPaymentId], references: [id])
+
+  @@index([bankAccountId])
+  @@index([vendorId])
+  @@index([subsidiaryId])
+  @@index([currencyId])
+  @@index([billPaymentId])
+  @@index([status])
+  @@map("bank_checks")
+}
+
+model PaymentRun {
+  id              String   @id @default(cuid())
+  paymentRunNumber String @unique
+  status          String   @default("draft")
+  runDate         DateTime @default(now())
+  paymentDate     DateTime
+  dueDateCutoff   DateTime?
+  paymentMethod   String   @default("ach")
+  memo            String?
+  bankAccountId   String?
+  subsidiaryId    String?
+  currencyId      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  subsidiary  Subsidiary?  @relation("PaymentRunSubsidiary", fields: [subsidiaryId], references: [id])
+  currency    Currency?    @relation("PaymentRunCurrency", fields: [currencyId], references: [id])
+  lines       PaymentRunLine[]
+
+  @@index([bankAccountId])
+  @@index([subsidiaryId])
+  @@index([currencyId])
+  @@index([status])
+  @@map("payment_runs")
+}
+
+model PaymentRunLine {
+  id            String   @id @default(cuid())
+  paymentRunId  String
+  billId        String
+  vendorId      String
+  amount        Decimal  @db.Decimal(18, 2)
+  status        String   @default("proposed")
+  billPaymentId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  paymentRun PaymentRun   @relation(fields: [paymentRunId], references: [id], onDelete: Cascade)
+  bill       Bill         @relation(fields: [billId], references: [id])
+  vendor     Vendor       @relation(fields: [vendorId], references: [id])
+  billPayment BillPayment? @relation(fields: [billPaymentId], references: [id])
+
+  @@unique([paymentRunId, billId])
+  @@index([billId])
+  @@index([vendorId])
+  @@index([billPaymentId])
+  @@index([status])
+  @@map("payment_run_lines")
+}
+
+model BankStatement {
+  id              String   @id @default(cuid())
+  statementId     String   @unique
+  bankAccountId   String
+  statementDate   DateTime
+  periodStartDate DateTime
+  periodEndDate   DateTime
+  openingBalance  Decimal  @db.Decimal(18, 2)
+  closingBalance  Decimal  @db.Decimal(18, 2)
+  status          String   @default("imported")
+  source          String   @default("manual_import")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  bankAccount BankAccount       @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  lines       BankStatementLine[]
+
+  @@index([bankAccountId])
+  @@index([statementDate])
+  @@map("bank_statements")
+}
+
+model BankStatementLine {
+  id                String   @id @default(cuid())
+  statementLineId   String   @unique
+  statementId       String
+  transactionDate   DateTime
+  description       String
+  amount            Decimal  @db.Decimal(18, 2)
+  currencyId        String
+  reference         String?
+  matchedRecordType String?
+  matchedRecordId   String?
+  status            String   @default("unmatched")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  statement BankStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  currency  Currency      @relation("BankStatementLineCurrency", fields: [currencyId], references: [id])
+
+  @@index([statementId])
+  @@index([currencyId])
+  @@index([status])
+  @@map("bank_statement_lines")
+}
+
+model BankReconciliation {
+  id                  String   @id @default(cuid())
+  reconciliationId    String   @unique
+  bankAccountId       String
+  subsidiaryId        String
+  periodEndDate       DateTime
+  bankStatementBalance Decimal @db.Decimal(18, 2)
+  glBalance           Decimal  @db.Decimal(18, 2)
+  difference          Decimal  @db.Decimal(18, 2)
+  status              String   @default("open")
+  aiReviewStatus      String   @default("not_started")
+  reviewerNotes       String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  subsidiary  Subsidiary  @relation("BankReconciliationSubsidiary", fields: [subsidiaryId], references: [id])
+
+  @@index([bankAccountId])
+  @@index([subsidiaryId])
+  @@index([periodEndDate])
+  @@map("bank_reconciliations")
 }
 
 model CustomFieldDefinition {
@@ -545,8 +1597,8 @@ model Opportunity {
   stage             String    @default("prospecting")
   closeDate         DateTime?
   probability       Float?
-  subsidiaryId      String?
-  currencyId        String?
+  subsidiaryId      String
+  currencyId        String
   inactive          Boolean   @default(false)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
@@ -559,8 +1611,8 @@ model Opportunity {
   user       User                  @relation(fields: [userId], references: [id])
   quote      Quote?
   lineItems  OpportunityLineItem[]
-  subsidiary Subsidiary?               @relation(fields: [subsidiaryId], references: [id])
-  currency   Currency?             @relation(fields: [currencyId], references: [id])
+  subsidiary Subsidiary                @relation(fields: [subsidiaryId], references: [id])
+  currency   Currency                  @relation(fields: [currencyId], references: [id])
 
   @@index([customerId])
   @@index([userId])
@@ -596,8 +1648,8 @@ model Quote {
   total      Decimal   @db.Decimal(18, 2)
   validUntil DateTime?
   notes      String?
-  subsidiaryId String?
-  currencyId String?
+  subsidiaryId String
+  currencyId String
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
@@ -610,8 +1662,8 @@ model Quote {
   opportunity   Opportunity?    @relation(fields: [opportunityId], references: [id])
   salesOrder    SalesOrder?
   lineItems     QuoteLineItem[]
-  subsidiary    Subsidiary?     @relation(fields: [subsidiaryId], references: [id])
-  currency      Currency?       @relation(fields: [currencyId], references: [id])
+  subsidiary    Subsidiary      @relation(fields: [subsidiaryId], references: [id])
+  currency      Currency        @relation(fields: [currencyId], references: [id])
 
   @@index([customerId])
   @@index([userId])
@@ -625,8 +1677,8 @@ model SalesOrder {
   number     String   @unique
   status     String   @default("draft")
   total      Decimal   @db.Decimal(18, 2)
-  subsidiaryId String?
-  currencyId String?
+  subsidiaryId String
+  currencyId String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -640,8 +1692,8 @@ model SalesOrder {
   invoices     Invoice[]
   lineItems    SalesOrderLineItem[]
   fulfillments Fulfillment[]
-  subsidiary   Subsidiary?          @relation(fields: [subsidiaryId], references: [id])
-  currency     Currency?            @relation(fields: [currencyId], references: [id])
+  subsidiary   Subsidiary           @relation(fields: [subsidiaryId], references: [id])
+  currency     Currency             @relation(fields: [currencyId], references: [id])
 
   @@index([customerId])
   @@index([userId])
@@ -657,8 +1709,12 @@ model Invoice {
   total      Decimal   @db.Decimal(18, 2)
   dueDate    DateTime?
   paidDate   DateTime?
-  subsidiaryId String?
-  currencyId String?
+  stripeCheckoutSessionId String?
+  stripePaymentUrl String?
+  stripePaymentUrlExpiresAt DateTime?
+  stripePaymentLinkCreatedAt DateTime?
+  subsidiaryId String
+  currencyId String
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
@@ -673,8 +1729,8 @@ model Invoice {
   cashReceiptApplications CashReceiptApplication[]
   lineItems    InvoiceLineItem[]
   creditMemos  CreditMemo[]
-  subsidiary   Subsidiary?       @relation(fields: [subsidiaryId], references: [id])
-  currency     Currency?         @relation(fields: [currencyId], references: [id])
+  subsidiary   Subsidiary        @relation(fields: [subsidiaryId], references: [id])
+  currency     Currency          @relation(fields: [currencyId], references: [id])
 
   @@index([customerId])
   @@index([salesOrderId])
@@ -694,8 +1750,8 @@ model CashReceipt {
   method    String // check, wire, etc.
   reference String?
   bankAccountId String?
-  subsidiaryId String?
-  currencyId String?
+  subsidiaryId String
+  currencyId String
   fxRateType String?
   fxRateSource String?
   fxEffectiveDate DateTime?
@@ -706,8 +1762,8 @@ model CashReceipt {
   invoiceId String
   invoice   Invoice @relation(fields: [invoiceId], references: [id])
   bankAccount ChartOfAccounts? @relation("CashReceiptBankAccount", fields: [bankAccountId], references: [id])
-  subsidiary Subsidiary? @relation(fields: [subsidiaryId], references: [id])
-  currency Currency? @relation(fields: [currencyId], references: [id])
+  subsidiary Subsidiary @relation(fields: [subsidiaryId], references: [id])
+  currency Currency @relation(fields: [currencyId], references: [id])
   applications CashReceiptApplication[]
   customerRefunds CustomerRefund[]
 
@@ -732,8 +1788,8 @@ model CustomerRefund {
   customerId         String
   cashReceiptId      String?
   userId             String?
-  subsidiaryId       String?
-  currencyId         String?
+  subsidiaryId       String
+  currencyId         String
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -741,8 +1797,8 @@ model CustomerRefund {
   cashReceipt        CashReceipt?    @relation(fields: [cashReceiptId], references: [id])
   bankAccount        ChartOfAccounts? @relation("CustomerRefundBankAccount", fields: [bankAccountId], references: [id])
   user               User?           @relation(fields: [userId], references: [id])
-  subsidiary         Subsidiary?     @relation(fields: [subsidiaryId], references: [id])
-  currency           Currency?       @relation(fields: [currencyId], references: [id])
+  subsidiary         Subsidiary      @relation(fields: [subsidiaryId], references: [id])
+  currency           Currency        @relation(fields: [currencyId], references: [id])
 
   @@index([status])
   @@index([customerId])
@@ -767,8 +1823,8 @@ model VendorRefund {
   vendorId           String
   billPaymentId      String?
   userId             String?
-  subsidiaryId       String?
-  currencyId         String?
+  subsidiaryId       String
+  currencyId         String
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -776,8 +1832,8 @@ model VendorRefund {
   billPayment        BillPayment?     @relation(fields: [billPaymentId], references: [id])
   bankAccount        ChartOfAccounts? @relation("VendorRefundBankAccount", fields: [bankAccountId], references: [id])
   user               User?            @relation(fields: [userId], references: [id])
-  subsidiary         Subsidiary?      @relation(fields: [subsidiaryId], references: [id])
-  currency           Currency?        @relation(fields: [currencyId], references: [id])
+  subsidiary         Subsidiary       @relation(fields: [subsidiaryId], references: [id])
+  currency           Currency         @relation(fields: [currencyId], references: [id])
 
   @@index([bankAccountId])
   @@index([vendorId])
@@ -814,8 +1870,8 @@ model Requisition {
   neededByDate DateTime?
   notes        String?
   total        Decimal   @default(0) @db.Decimal(18, 2)
-  subsidiaryId String?
-  currencyId   String?
+  subsidiaryId String
+  currencyId   String
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -826,8 +1882,8 @@ model Requisition {
   department    Department?           @relation(fields: [departmentId], references: [id])
   vendorId      String?
   vendor        Vendor?               @relation(fields: [vendorId], references: [id])
-  subsidiary    Subsidiary?               @relation(fields: [subsidiaryId], references: [id])
-  currency      Currency?             @relation(fields: [currencyId], references: [id])
+  subsidiary    Subsidiary                @relation(fields: [subsidiaryId], references: [id])
+  currency      Currency                  @relation(fields: [currencyId], references: [id])
   lineItems     RequisitionLineItem[]
   purchaseOrder PurchaseOrder?
 
@@ -865,8 +1921,8 @@ model PurchaseOrder {
   number     String   @unique
   status     String   @default("draft")
   total      Decimal   @db.Decimal(18, 2)
-  subsidiaryId String?
-  currencyId String?
+  subsidiaryId String
+  currencyId String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -880,8 +1936,8 @@ model PurchaseOrder {
   lineItems     PurchaseOrderLineItem[]
   receipts      Receipt[]
   bills         Bill[]
-  subsidiary    Subsidiary?                 @relation(fields: [subsidiaryId], references: [id])
-  currency      Currency?               @relation(fields: [currencyId], references: [id])
+  subsidiary    Subsidiary                  @relation(fields: [subsidiaryId], references: [id])
+  currency      Currency                    @relation(fields: [currencyId], references: [id])
 
   @@index([vendorId])
   @@index([userId])
@@ -961,6 +2017,7 @@ model InvoiceLineItem {
   notes                     String?
   departmentId              String?
   locationId                String?
+  classId                   String?
   projectId                 String?
   serviceStartDate          DateTime?
   serviceEndDate            DateTime?
@@ -975,16 +2032,18 @@ model InvoiceLineItem {
   invoice        Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   itemId         String?
   item           Item?           @relation(fields: [itemId], references: [id])
-  department     Department?     @relation(fields: [departmentId], references: [id])
-  location       Location?       @relation(fields: [locationId], references: [id])
-  project        Project?        @relation(fields: [projectId], references: [id])
-  revRecTemplate RevRecTemplate? @relation(fields: [revRecTemplateId], references: [id])
+    department     Department?     @relation(fields: [departmentId], references: [id])
+    location       Location?       @relation(fields: [locationId], references: [id])
+    classDimension ClassDimension? @relation(fields: [classId], references: [id])
+    project        Project?        @relation(fields: [projectId], references: [id])
+    revRecTemplate RevRecTemplate? @relation(fields: [revRecTemplateId], references: [id])
 
   @@index([invoiceId])
   @@index([itemId])
-  @@index([departmentId])
-  @@index([locationId])
-  @@index([projectId])
+    @@index([departmentId])
+    @@index([locationId])
+    @@index([classId])
+    @@index([projectId])
   @@index([revRecTemplateId])
   @@map("invoice_line_items")
 }
@@ -999,6 +2058,7 @@ model BillLineItem {
   notes                     String?
   departmentId              String?
   locationId                String?
+  classId                   String?
   projectId                 String?
   serviceStartDate          DateTime?
   serviceEndDate            DateTime?
@@ -1015,18 +2075,20 @@ model BillLineItem {
   item           Item?           @relation(fields: [itemId], references: [id])
   expenseAccountId String?
   expenseAccount ChartOfAccounts? @relation(fields: [expenseAccountId], references: [id])
-  department     Department?     @relation(fields: [departmentId], references: [id])
-  location       Location?       @relation(fields: [locationId], references: [id])
-  project        Project?        @relation(fields: [projectId], references: [id])
+    department     Department?     @relation(fields: [departmentId], references: [id])
+    location       Location?       @relation(fields: [locationId], references: [id])
+    classDimension ClassDimension? @relation(fields: [classId], references: [id])
+    project        Project?        @relation(fields: [projectId], references: [id])
   revRecTemplate RevRecTemplate? @relation(fields: [revRecTemplateId], references: [id])
 
   @@index([billId])
   @@index([itemId])
   @@index([lineType])
   @@index([expenseAccountId])
-  @@index([departmentId])
-  @@index([locationId])
-  @@index([projectId])
+    @@index([departmentId])
+    @@index([locationId])
+    @@index([classId])
+    @@index([projectId])
   @@index([revRecTemplateId])
   @@map("bill_line_items")
 }
@@ -1039,8 +2101,8 @@ model CreditMemo {
   date       DateTime @default(now())
   reason     String?
   notes      String?
-  subsidiaryId String?
-  currencyId String?
+  subsidiaryId String
+  currencyId String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -1052,8 +2114,8 @@ model CreditMemo {
   userId     String
   user       User                 @relation(fields: [userId], references: [id])
   lineItems  CreditMemoLineItem[]
-  subsidiary Subsidiary?          @relation(fields: [subsidiaryId], references: [id])
-  currency   Currency?            @relation(fields: [currencyId], references: [id])
+  subsidiary Subsidiary           @relation(fields: [subsidiaryId], references: [id])
+  currency   Currency             @relation(fields: [currencyId], references: [id])
 
   @@index([customerId])
   @@index([invoiceId])
@@ -1091,8 +2153,8 @@ model BillCredit {
   date       DateTime @default(now())
   reason     String?
   notes      String?
-  subsidiaryId String?
-  currencyId String?
+  subsidiaryId String
+  currencyId String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -1104,8 +2166,8 @@ model BillCredit {
   userId    String
   user      User                 @relation(fields: [userId], references: [id])
   lineItems BillCreditLineItem[]
-  subsidiary Subsidiary?          @relation(fields: [subsidiaryId], references: [id])
-  currency  Currency?            @relation(fields: [currencyId], references: [id])
+  subsidiary Subsidiary           @relation(fields: [subsidiaryId], references: [id])
+  currency  Currency              @relation(fields: [currencyId], references: [id])
 
   @@index([vendorId])
   @@index([billId])
@@ -1161,12 +2223,14 @@ model JournalEntryLineItem {
   account        ChartOfAccounts @relation(fields: [accountId], references: [id])
   subsidiaryId   String?
   subsidiary     Subsidiary?     @relation(fields: [subsidiaryId], references: [id])
-  departmentId   String?
-  department     Department?     @relation(fields: [departmentId], references: [id])
-  locationId     String?
-  location       Location?       @relation(fields: [locationId], references: [id])
-  projectId      String?
-  project        Project?        @relation(fields: [projectId], references: [id])
+    departmentId   String?
+    department     Department?     @relation(fields: [departmentId], references: [id])
+    locationId     String?
+    location       Location?       @relation(fields: [locationId], references: [id])
+    classId        String?
+    classDimension ClassDimension? @relation(fields: [classId], references: [id])
+    projectId      String?
+    project        Project?        @relation(fields: [projectId], references: [id])
   customerId     String?
   customer       Customer?       @relation(fields: [customerId], references: [id])
   vendorId       String?
@@ -1179,9 +2243,10 @@ model JournalEntryLineItem {
 
   @@index([journalEntryId])
   @@index([accountId])
-  @@index([departmentId])
-  @@index([locationId])
-  @@index([projectId])
+    @@index([departmentId])
+    @@index([locationId])
+    @@index([classId])
+    @@index([projectId])
   @@index([customerId])
   @@index([vendorId])
   @@index([itemId])
@@ -1215,16 +2280,16 @@ model Receipt {
   date      DateTime
   status    String   @default("pending")
   notes     String?
-  subsidiaryId String?
-  currencyId String?
+  subsidiaryId String
+  currencyId String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
   purchaseOrderId String
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
-  subsidiary      Subsidiary?   @relation(fields: [subsidiaryId], references: [id])
-  currency        Currency?     @relation(fields: [currencyId], references: [id])
+  subsidiary      Subsidiary    @relation(fields: [subsidiaryId], references: [id])
+  currency        Currency      @relation(fields: [currencyId], references: [id])
   lines           ReceiptLine[]
 
   @@index([purchaseOrderId])
@@ -1258,8 +2323,8 @@ model Bill {
   status     String    @default("received")
   notes      String?
   ocrData    String? // JSON
-  subsidiaryId String?
-  currencyId String?
+  subsidiaryId String
+  currencyId String
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
@@ -1271,10 +2336,11 @@ model Bill {
   user            User?          @relation(fields: [userId], references: [id])
   lineItems       BillLineItem[]
   billCredits     BillCredit[]
-  subsidiary      Subsidiary?    @relation(fields: [subsidiaryId], references: [id])
-  currency        Currency?      @relation(fields: [currencyId], references: [id])
+  subsidiary      Subsidiary     @relation(fields: [subsidiaryId], references: [id])
+  currency        Currency       @relation(fields: [currencyId], references: [id])
   billPayments    BillPayment[]
   paymentApplications BillPaymentApplication[]
+  paymentRunLines PaymentRunLine[]
 
   @@index([vendorId])
   @@index([vendorBillNumber])
@@ -1305,10 +2371,10 @@ model JournalEntry {
   updatedAt          DateTime @updatedAt
 
   // Relations
-  subsidiaryId         String?
-  subsidiary           Subsidiary?           @relation(fields: [subsidiaryId], references: [id])
-  currencyId           String?
-  currency             Currency?              @relation(fields: [currencyId], references: [id])
+  subsidiaryId         String
+  subsidiary           Subsidiary            @relation(fields: [subsidiaryId], references: [id])
+  currencyId           String
+  currency             Currency              @relation(fields: [currencyId], references: [id])
   userId               String?
   user                 User?                  @relation(fields: [userId], references: [id])
   postedByEmployeeId   String?
@@ -1442,6 +2508,9 @@ model Currency {
   localCurrencySubsidiaries   Subsidiary[]        @relation("SubsidiaryLocalCurrency")
   items                      Item[]
   customers                  Customer[]
+  customerEntitySettings     CustomerEntitySetting[] @relation("CustomerEntitySettingCurrency")
+  customerCreditProfiles     CustomerCreditProfile[] @relation("CustomerCreditProfileCurrency")
+  customerContracts          CustomerContract[] @relation("CustomerContractCurrency")
   vendors                    Vendor[]
   leads                      Lead[]
   opportunities              Opportunity[]
@@ -1464,6 +2533,19 @@ model Currency {
   functionalCurrencySubsidiaries Subsidiary[]        @relation("SubsidiaryFunctionalCurrency")
   groupCurrencySubsidiaries      Subsidiary[]        @relation("SubsidiaryGroupCurrency")
   approvalLimitUsers         User[]          @relation("UserApprovalCurrency")
+  bankAccounts               BankAccount[]   @relation("BankAccountCurrency")
+  bankFeedTransactions       BankFeedTransaction[] @relation("BankFeedTransactionCurrency")
+  customerPaymentInstruments CustomerPaymentInstrument[] @relation("CustomerPaymentInstrumentCurrency")
+  bankDeposits               BankDeposit[]   @relation("BankDepositCurrency")
+  bankTransfers              BankTransfer[]  @relation("BankTransferCurrency")
+  bankChecks                 BankCheck[]     @relation("BankCheckCurrency")
+  paymentRuns                PaymentRun[]    @relation("PaymentRunCurrency")
+  bankStatementLines         BankStatementLine[] @relation("BankStatementLineCurrency")
+  priceBooks                 PriceBook[]
+  priceBookItems             PriceBookItem[]
+  billingSchedules           BillingSchedule[]
+  billingAccounts            BillingAccount[]
+  subscriptionPlans          SubscriptionPlan[]
 
   fulfillments Fulfillment[]
 
@@ -1507,13 +2589,37 @@ model Subsidiary {
   functionalCurrencyId          String?
   groupCurrencyId               String?
   fiscalCalendarId              String?
+  accountingStandard            String?
   consolidationMethod           String?
   ownershipPercent              Float?
+  directOwnershipPercent        Float?
+  ultimateOwnershipPercent      Float?
+  ownershipEffectiveFrom        DateTime?
+  ownershipEffectiveThrough     DateTime?
+  consolidationEffectiveFrom    DateTime?
+  consolidationEffectiveThrough DateTime?
+  controlIndicator              Boolean   @default(true)
+  nciRequired                   Boolean   @default(false)
+  eliminationTargetParentId     String?
+  eliminationScope              String?
+  eliminationCurrencyBasis      String?
   retainedEarningsAccountId     String?
   ctaAccountId                  String?
   intercompanyClearingAccountId String?
   dueToAccountId                String?
   dueFromAccountId              String?
+  investmentInSubsidiaryAccountId String?
+  nciEquityAccountId            String?
+  nciIncomeStatementAccountId   String?
+  realizedFxGainAccountId       String?
+  realizedFxLossAccountId       String?
+  unrealizedFxGainAccountId     String?
+  unrealizedFxLossAccountId     String?
+  allowTransactions             Boolean   @default(true)
+  allowBankAccounts             Boolean   @default(true)
+  allowInventory                Boolean   @default(false)
+  allowPayroll                  Boolean   @default(false)
+  allowProjects                 Boolean   @default(true)
   periodLockDate                DateTime?
   active                        Boolean   @default(true)
   createdAt                     DateTime  @default(now())
@@ -1526,11 +2632,20 @@ model Subsidiary {
   groupCurrency               Currency?                  @relation("SubsidiaryGroupCurrency", fields: [groupCurrencyId], references: [id])
   parentSubsidiary            Subsidiary?                @relation("SubsidiaryHierarchy", fields: [parentSubsidiaryId], references: [id])
   childSubsidiaries           Subsidiary[]               @relation("SubsidiaryHierarchy")
+  eliminationTargetParent     Subsidiary?                @relation("SubsidiaryEliminationTargetParent", fields: [eliminationTargetParentId], references: [id])
+  eliminationSubsidiaries     Subsidiary[]               @relation("SubsidiaryEliminationTargetParent")
   retainedEarningsAccount     ChartOfAccounts?           @relation("SubsidiaryRetainedEarningsAccount", fields: [retainedEarningsAccountId], references: [id])
   ctaAccount                  ChartOfAccounts?           @relation("SubsidiaryCtaAccount", fields: [ctaAccountId], references: [id])
   intercompanyClearingAccount ChartOfAccounts?           @relation("SubsidiaryIntercompanyClearingAccount", fields: [intercompanyClearingAccountId], references: [id])
   dueToAccount                ChartOfAccounts?           @relation("SubsidiaryDueToAccount", fields: [dueToAccountId], references: [id])
   dueFromAccount              ChartOfAccounts?           @relation("SubsidiaryDueFromAccount", fields: [dueFromAccountId], references: [id])
+  investmentInSubsidiaryAccount ChartOfAccounts?         @relation("SubsidiaryInvestmentInSubsidiaryAccount", fields: [investmentInSubsidiaryAccountId], references: [id])
+  nciEquityAccount            ChartOfAccounts?           @relation("SubsidiaryNciEquityAccount", fields: [nciEquityAccountId], references: [id])
+  nciIncomeStatementAccount   ChartOfAccounts?           @relation("SubsidiaryNciIncomeStatementAccount", fields: [nciIncomeStatementAccountId], references: [id])
+  realizedFxGainAccount       ChartOfAccounts?           @relation("SubsidiaryRealizedFxGainAccount", fields: [realizedFxGainAccountId], references: [id])
+  realizedFxLossAccount       ChartOfAccounts?           @relation("SubsidiaryRealizedFxLossAccount", fields: [realizedFxLossAccountId], references: [id])
+  unrealizedFxGainAccount     ChartOfAccounts?           @relation("SubsidiaryUnrealizedFxGainAccount", fields: [unrealizedFxGainAccountId], references: [id])
+  unrealizedFxLossAccount     ChartOfAccounts?           @relation("SubsidiaryUnrealizedFxLossAccount", fields: [unrealizedFxLossAccountId], references: [id])
   departmentAssignments       DepartmentSubsidiary[]
   itemAssignments             ItemSubsidiary[]
   employeeAssignments         EmployeeSubsidiary[]
@@ -1540,6 +2655,15 @@ model Subsidiary {
   employees                   Employee[]
   items                       Item[]
   customers                   Customer[]
+  customerEntitySettings      CustomerEntitySetting[] @relation("CustomerEntitySettingSubsidiary")
+  customerEntityIntercompanyPartners CustomerEntitySetting[] @relation("CustomerEntitySettingIntercompanyPartner")
+  customerTaxProfiles         CustomerTaxProfile[] @relation("CustomerTaxProfileSubsidiary")
+  customerCreditProfiles      CustomerCreditProfile[] @relation("CustomerCreditProfileSubsidiary")
+  customerDimensionDefaults   CustomerDimensionDefault[] @relation("CustomerDimensionDefaultSubsidiary")
+  priceLevels                 PriceLevel[]
+  priceBooks                  PriceBook[]
+  billingAccounts             BillingAccount[]
+  subscriptionPlans           SubscriptionPlan[]
   vendors                     Vendor[]
   leads                       Lead[]
   opportunities               Opportunity[]
@@ -1562,16 +2686,30 @@ model Subsidiary {
   chartOfAccountsAsParent     ChartOfAccounts[]          @relation("ChartOfAccountParentSubsidiary")
   chartOfAccountAssignments   ChartOfAccountSubsidiary[] @relation("ChartOfAccountSubsidiaryAssignment")
   fulfillments                Fulfillment[]
+  bankAccounts                BankAccount[]              @relation("BankAccountSubsidiary")
+  bankDeposits                BankDeposit[]              @relation("BankDepositSubsidiary")
+  bankTransfers               BankTransfer[]             @relation("BankTransferSubsidiary")
+  bankChecks                  BankCheck[]                @relation("BankCheckSubsidiary")
+  paymentRuns                 PaymentRun[]               @relation("PaymentRunSubsidiary")
+  bankReconciliations         BankReconciliation[]       @relation("BankReconciliationSubsidiary")
 
   @@index([localCurrencyId])
   @@index([functionalCurrencyId])
   @@index([groupCurrencyId])
   @@index([parentSubsidiaryId])
+  @@index([eliminationTargetParentId])
   @@index([retainedEarningsAccountId])
   @@index([ctaAccountId])
   @@index([intercompanyClearingAccountId])
   @@index([dueToAccountId])
   @@index([dueFromAccountId])
+  @@index([investmentInSubsidiaryAccountId])
+  @@index([nciEquityAccountId])
+  @@index([nciIncomeStatementAccountId])
+  @@index([realizedFxGainAccountId])
+  @@index([realizedFxLossAccountId])
+  @@index([unrealizedFxGainAccountId])
+  @@index([unrealizedFxLossAccountId])
   @@map("subsidiaries")
 }
 
@@ -1652,6 +2790,8 @@ model Item {
   creditMemoLineItems    CreditMemoLineItem[]
   billCreditLineItems    BillCreditLineItem[]
   journalEntryLineItems  JournalEntryLineItem[]
+  subscriptionPlans      SubscriptionPlan[]
+  priceBookItems         PriceBookItem[]
 
   @@index([currencyId])
   @@index([subsidiaryId])
@@ -1778,15 +2918,15 @@ model Fulfillment {
   status       String   @default("pending")
   date         DateTime @default(now())
   notes        String?
-  subsidiaryId String?
-  currencyId   String?
+  subsidiaryId String
+  currencyId   String
   salesOrderId String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   salesOrder SalesOrder?       @relation(fields: [salesOrderId], references: [id])
-  subsidiary Subsidiary?           @relation(fields: [subsidiaryId], references: [id])
-  currency   Currency?         @relation(fields: [currencyId], references: [id])
+  subsidiary Subsidiary            @relation(fields: [subsidiaryId], references: [id])
+  currency   Currency              @relation(fields: [currencyId], references: [id])
   lines      FulfillmentLine[]
 
   @@map("fulfillments")
@@ -1817,8 +2957,8 @@ model BillPayment {
   vendorId  String?
   billId    String?
   bankAccountId String?
-  subsidiaryId String?
-  currencyId String?
+  subsidiaryId String
+  currencyId String
   fxRateType String?
   fxRateSource String?
   fxEffectiveDate DateTime?
@@ -1828,10 +2968,12 @@ model BillPayment {
   vendor Vendor? @relation(fields: [vendorId], references: [id])
   bill Bill? @relation(fields: [billId], references: [id])
   bankAccount ChartOfAccounts? @relation("BillPaymentBankAccount", fields: [bankAccountId], references: [id])
-  subsidiary Subsidiary? @relation(fields: [subsidiaryId], references: [id])
-  currency Currency? @relation(fields: [currencyId], references: [id])
+  subsidiary Subsidiary @relation(fields: [subsidiaryId], references: [id])
+  currency Currency @relation(fields: [currencyId], references: [id])
   applications BillPaymentApplication[]
   vendorRefunds VendorRefund[]
+  bankChecks    BankCheck[]
+  paymentRunLines PaymentRunLine[]
 
   @@index([vendorId])
   @@index([billId])
@@ -2018,8 +3160,8 @@ model OpenItem {
   status                   String
   accountType              String
   accountId                String?
-  subsidiaryId             String?
-  transactionCurrencyId    String?
+  subsidiaryId             String
+  transactionCurrencyId    String
   localCurrencyId          String?
   functionalCurrencyId     String?
   groupCurrencyId          String?
@@ -2146,8 +3288,8 @@ model ClearingDocumentHeader {
   clearingNumber           String   @unique
   clearingType             String
   status                   String
-  subsidiaryId             String?
-  transactionCurrencyId    String?
+  subsidiaryId             String
+  transactionCurrencyId    String
   localCurrencyId          String?
   functionalCurrencyId     String?
   groupCurrencyId          String?

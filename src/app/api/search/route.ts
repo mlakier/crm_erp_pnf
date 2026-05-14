@@ -8,6 +8,8 @@ const PAGES = [
   { label: 'Company Setup',         href: '/company-setup' },
   { label: 'Company Prefs',         href: '/company-preferences' },
   { label: 'File Cabinet',          href: '/company-information/file-cabinet' },
+  { label: 'Manage Dimensions',     href: '/configuration/manage-dimensions' },
+  { label: 'Transaction Required Fields', href: '/configuration/transaction-required-fields' },
   { label: 'Manage Lists',          href: '/lists' },
   { label: 'Manage Integrations',   href: '/integrations' },
   { label: 'Manage Permissions',    href: '/manage-permissions' },
@@ -19,11 +21,9 @@ const PAGES = [
   { label: 'Vendors',               href: '/vendors' },
   { label: 'Subsidiaries',          href: '/subsidiaries' },
   { label: 'Currencies',            href: '/currencies' },
-  { label: 'Locations',             href: '/locations' },
   { label: 'Accounting Periods',    href: '/accounting-periods' },
   { label: 'Items',                 href: '/items' },
   { label: 'Chart of Accounts',     href: '/chart-of-accounts' },
-  { label: 'Departments',           href: '/departments' },
   { label: 'Employees',             href: '/employees' },
   { label: 'LTC Workflow',          href: '/otc-workflow' },
   { label: 'PTP Workflow',          href: '/ptp-workflow' },
@@ -148,8 +148,8 @@ async function searchRecords(q: string, limit: number): Promise<Hit[]> {
   for (const r of leads) hits.push({ type: 'record', label: `${r.firstName} ${r.lastName}`, href: `/leads/${r.id}`, detail: r.company || 'Lead' })
   for (const r of items) hits.push({ type: 'record', label: r.name, href: `/items/${r.id}`, detail: `Item ${r.itemId || ''}` })
   for (const r of employees) hits.push({ type: 'record', label: `${r.firstName} ${r.lastName}`, href: `/employees/${r.id}`, detail: 'Employee' })
-  for (const r of departments) hits.push({ type: 'record', label: r.name, href: `/departments/${r.id}`, detail: 'Department' })
-  for (const r of locations) hits.push({ type: 'record', label: r.name, href: '/locations', detail: `${r.locationId} - ${r.code}${r.subsidiary ? ` - ${r.subsidiary.subsidiaryId}` : ''}` })
+  for (const r of departments) hits.push({ type: 'record', label: r.name, href: '/configuration/manage-dimensions', detail: 'Department dimension value' })
+  for (const r of locations) hits.push({ type: 'record', label: r.name, href: '/configuration/manage-dimensions', detail: `Location dimension value ${r.locationId} - ${r.code}${r.subsidiary ? ` - ${r.subsidiary.subsidiaryId}` : ''}` })
   for (const r of accountingPeriods) hits.push({ type: 'record', label: r.name, href: `/accounting-periods/${r.id}`, detail: `${r.status}${r.subsidiary ? ` - ${r.subsidiary.subsidiaryId}` : ''}` })
   for (const r of opportunities) hits.push({ type: 'record', label: r.name, href: `/opportunities/${r.id}`, detail: `Opportunity ${r.opportunityNumber || ''}` })
   for (const r of clearingDocuments) hits.push({ type: 'record', label: r.clearingNumber, href: `/clearing-documents/${r.id}`, detail: `${r.clearingType} - ${r.status}` })

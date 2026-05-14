@@ -348,7 +348,7 @@ export default async function ItemDetailPage({
               reference: item.department.departmentId,
               name: item.department.name,
               details: 'Department',
-              href: `/departments/${item.department.id}`,
+              href: '/configuration/manage-dimensions',
             }]
           : []),
         ...(item.location
@@ -358,7 +358,7 @@ export default async function ItemDetailPage({
               reference: item.location.locationId,
               name: item.location.name,
               details: 'Default Location',
-              href: `/locations/${item.location.id}`,
+              href: '/configuration/manage-dimensions',
             }]
           : []),
         ...(item.currency

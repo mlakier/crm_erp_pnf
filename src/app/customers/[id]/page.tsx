@@ -10,6 +10,7 @@ import CommunicationsSection from '@/components/CommunicationsSection'
 import RelatedRecordsSection from '@/components/RelatedRecordsSection'
 import CustomerRelatedDocumentsSection from '@/components/CustomerRelatedDocumentsSection'
 import CustomerContactsSection from '@/components/CustomerContactsSection'
+import DimensionDefaultsSection from '@/components/DimensionDefaultsSection'
 import SystemNotesSection from '@/components/SystemNotesSection'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import { fmtCurrency, normalizePhone, toNumericValue } from '@/lib/format'
@@ -26,6 +27,7 @@ import { loadListOptionsForSource } from '@/lib/list-source'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { loadMasterDataSystemInfo } from '@/lib/master-data-system-info'
 import { loadMasterDataSystemNotes } from '@/lib/master-data-system-notes'
+import { getDimensionConfigurationRows } from '@/lib/dimension-control-plane'
 import type { TransactionStatDefinition, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 export default async function CustomerDetailPage({
@@ -42,7 +44,7 @@ export default async function CustomerDetailPage({
   const isCustomizing = customize === '1'
   const fieldMetaById = buildFieldMetaById(CUSTOMER_FORM_FIELDS)
 
-  const [customer, fieldOptions, inactiveOptions, formCustomization, formRequirements, currencies] = await Promise.all([
+  const [customer, fieldOptions, inactiveOptions, formCustomization, formRequirements, currencies, dimensionRows, dimensionAssignments] = await Promise.all([
     prisma.customer.findUnique({
       where: { id },
       include: {
@@ -56,6 +58,11 @@ export default async function CustomerDetailPage({
         },
         subsidiary: true,
         currency: true,
+        arAccount: true,
+        paymentInstruments: {
+          orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+          include: { currency: true },
+        },
         contacts: { orderBy: { createdAt: 'desc' } },
         opportunities: { orderBy: { createdAt: 'desc' } },
         quotes: { orderBy: { createdAt: 'desc' } },
@@ -73,13 +80,47 @@ export default async function CustomerDetailPage({
         },
       },
     }),
-    loadFieldOptionsMap(fieldMetaById, ['primarySubsidiaryId', 'primaryCurrencyId', 'industry']),
+    loadFieldOptionsMap(fieldMetaById, [
+      'primarySubsidiaryId',
+      'primaryCurrencyId',
+      'industry',
+      'customerType',
+      'customerGroup',
+      'customerStatus',
+      'territory',
+      'salesManager',
+      'projectManager',
+      'arAccountId',
+      'priceLevel',
+      'priceBook',
+      'taxable',
+      'taxItem',
+      'language',
+      'numberFormat',
+      'negativeNumberFormat',
+      'shipComplete',
+      'shippingCarrier',
+      'shippingMethod',
+      'blockCollectionEmail',
+      'collectionsRep',
+      'includeChildren',
+    ]),
     loadListOptionsForSource({ sourceType: 'system', sourceKey: 'activeInactive' }),
     loadCustomerFormCustomization(),
     loadFormRequirements(),
     prisma.currency.findMany({
       orderBy: { code: 'asc' },
       select: { id: true, currencyId: true, code: true },
+    }),
+    getDimensionConfigurationRows(),
+    prisma.dimensionAssignment.findMany({
+      where: { targetType: 'customer', targetId: id, scopeLevel: 'default' },
+      select: {
+        dimensionDefinitionId: true,
+        dimensionValueId: true,
+        sourceRecordId: true,
+        sourceRecordType: true,
+      },
     }),
   ])
 
@@ -90,10 +131,16 @@ export default async function CustomerDetailPage({
   const detailHref = `/customers/${customer.id}`
   const sectionDescriptions: Record<string, string> = {
     Core: 'Primary identity fields for the customer record.',
+    Sales: 'Sales ownership, territory, and customer segmentation.',
     Contact: 'Contact channels and billing address.',
-    Financial: 'Default industry, subsidiary, and currency settings.',
+    Financial: 'Billing defaults and customer financial controls.',
+    Tax: 'Taxability and resale certificate settings.',
+    Preferences: 'Document, shipping, and presentation preferences.',
+    Collections: 'Collections ownership and automated dunning controls.',
+    'Subsidiary Access': 'Subsidiary, currency, and hierarchy availability.',
     Status: 'Availability and active-state controls.',
   }
+  const dateInputValue = (value?: Date | null) => value ? value.toISOString().slice(0, 10) : ''
 
   const fieldDefinitions: Record<CustomerFormFieldKey, InlineRecordSection['fields'][number]> = {
     customerId: {
@@ -137,6 +184,204 @@ export default async function CustomerDetailPage({
       helpText: 'Customer industry or segment classification.',
       sourceText: getFieldSourceText(fieldMetaById, 'industry'),
     },
+    customerType: {
+      name: 'customerType',
+      label: 'Customer Type',
+      value: customer.customerType ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.customerType ?? [])],
+      helpText: 'Commercial classification such as direct, partner, distributor, or enterprise.',
+      sourceText: getFieldSourceText(fieldMetaById, 'customerType'),
+    },
+    customerGroup: {
+      name: 'customerGroup',
+      label: 'Customer Group',
+      value: customer.customerGroup ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.customerGroup ?? [])],
+      helpText: 'Reporting and segmentation group for this customer.',
+      sourceText: getFieldSourceText(fieldMetaById, 'customerGroup'),
+    },
+    customerStatus: {
+      name: 'customerStatus',
+      label: 'Customer Status',
+      value: customer.customerStatus ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.customerStatus ?? [])],
+      helpText: 'Commercial lifecycle status for this customer.',
+      sourceText: getFieldSourceText(fieldMetaById, 'customerStatus'),
+    },
+    territory: {
+      name: 'territory',
+      label: 'Territory',
+      value: customer.territory ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.territory ?? [])],
+      helpText: 'Sales territory used for assignment and reporting.',
+      sourceText: getFieldSourceText(fieldMetaById, 'territory'),
+    },
+    salesManager: {
+      name: 'salesManager',
+      label: 'Sales Manager',
+      value: customer.salesManager ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.salesManager ?? [])],
+      helpText: 'Sales owner responsible for this customer relationship.',
+      sourceText: getFieldSourceText(fieldMetaById, 'salesManager'),
+    },
+    projectManager: {
+      name: 'projectManager',
+      label: 'Project Manager',
+      value: customer.projectManager ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.projectManager ?? [])],
+      helpText: 'Default project manager for delivery work tied to this customer.',
+      sourceText: getFieldSourceText(fieldMetaById, 'projectManager'),
+    },
+    arAccountId: {
+      name: 'arAccountId',
+      label: 'AR Account',
+      value: customer.arAccountId ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.arAccountId ?? [])],
+      helpText: 'Default receivables control account for customer postings.',
+      sourceText: getFieldSourceText(fieldMetaById, 'arAccountId'),
+    },
+    startDate: {
+      name: 'startDate',
+      label: 'Start Date',
+      value: dateInputValue(customer.startDate),
+      type: 'date',
+      helpText: 'Date the customer relationship starts.',
+    },
+    endDate: {
+      name: 'endDate',
+      label: 'End Date',
+      value: dateInputValue(customer.endDate),
+      type: 'date',
+      helpText: 'Date the customer relationship ends, if applicable.',
+    },
+    reminderDays: {
+      name: 'reminderDays',
+      label: 'Reminder Days',
+      value: customer.reminderDays?.toString() ?? '',
+      type: 'number',
+      helpText: 'Default reminder lead time for customer follow-up and collections.',
+    },
+    priceLevel: {
+      name: 'priceLevel',
+      label: 'Price Level',
+      value: customer.priceLevel ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.priceLevel ?? [])],
+      helpText: 'Default pricing level for sales transactions.',
+      sourceText: getFieldSourceText(fieldMetaById, 'priceLevel'),
+    },
+    priceBook: {
+      name: 'priceBook',
+      label: 'Price Book',
+      value: customer.priceBook ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.priceBook ?? [])],
+      helpText: 'Default price book used for quotes, orders, and invoices.',
+      sourceText: getFieldSourceText(fieldMetaById, 'priceBook'),
+    },
+    taxable: {
+      name: 'taxable',
+      label: 'Taxable',
+      value: customer.taxable ? 'true' : 'false',
+      type: 'select',
+      options: fieldOptions.taxable ?? inactiveOptions,
+      helpText: 'Whether sales to this customer are taxable by default.',
+      sourceText: getFieldSourceText(fieldMetaById, 'taxable'),
+    },
+    taxItem: {
+      name: 'taxItem',
+      label: 'Tax Code',
+      value: customer.taxItem ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.taxItem ?? [])],
+      helpText: 'Default sales tax code master record.',
+      sourceText: getFieldSourceText(fieldMetaById, 'taxItem'),
+    },
+    resaleNumber: {
+      name: 'resaleNumber',
+      label: 'Resale Number',
+      value: customer.resaleNumber ?? '',
+      helpText: 'Customer resale or exemption certificate number.',
+    },
+    language: {
+      name: 'language',
+      label: 'Language',
+      value: customer.language ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.language ?? [])],
+      helpText: 'Default language for customer-facing communication.',
+      sourceText: getFieldSourceText(fieldMetaById, 'language'),
+    },
+    numberFormat: {
+      name: 'numberFormat',
+      label: 'Number Format',
+      value: customer.numberFormat ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.numberFormat ?? [])],
+      helpText: 'Preferred number formatting for customer-facing documents.',
+      sourceText: getFieldSourceText(fieldMetaById, 'numberFormat'),
+    },
+    negativeNumberFormat: {
+      name: 'negativeNumberFormat',
+      label: 'Negative Number Format',
+      value: customer.negativeNumberFormat ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.negativeNumberFormat ?? [])],
+      helpText: 'Preferred negative number presentation.',
+      sourceText: getFieldSourceText(fieldMetaById, 'negativeNumberFormat'),
+    },
+    shipComplete: {
+      name: 'shipComplete',
+      label: 'Ship Complete',
+      value: customer.shipComplete ? 'true' : 'false',
+      type: 'select',
+      options: fieldOptions.shipComplete ?? inactiveOptions,
+      helpText: 'Whether orders should ship only when all lines are available.',
+      sourceText: getFieldSourceText(fieldMetaById, 'shipComplete'),
+    },
+    shippingCarrier: {
+      name: 'shippingCarrier',
+      label: 'Shipping Carrier',
+      value: customer.shippingCarrier ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.shippingCarrier ?? [])],
+      helpText: 'Default carrier for customer shipments.',
+      sourceText: getFieldSourceText(fieldMetaById, 'shippingCarrier'),
+    },
+    shippingMethod: {
+      name: 'shippingMethod',
+      label: 'Shipping Method',
+      value: customer.shippingMethod ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.shippingMethod ?? [])],
+      helpText: 'Default shipping method for customer shipments.',
+      sourceText: getFieldSourceText(fieldMetaById, 'shippingMethod'),
+    },
+    blockCollectionEmail: {
+      name: 'blockCollectionEmail',
+      label: 'Block Collection Email',
+      value: customer.blockCollectionEmail ? 'true' : 'false',
+      type: 'select',
+      options: fieldOptions.blockCollectionEmail ?? inactiveOptions,
+      helpText: 'Prevents automated collection emails for this customer.',
+      sourceText: getFieldSourceText(fieldMetaById, 'blockCollectionEmail'),
+    },
+    collectionsRep: {
+      name: 'collectionsRep',
+      label: 'Collections Rep',
+      value: customer.collectionsRep ?? '',
+      type: 'select',
+      options: [{ value: '', label: 'None' }, ...(fieldOptions.collectionsRep ?? [])],
+      helpText: 'Default collections owner for overdue balances.',
+      sourceText: getFieldSourceText(fieldMetaById, 'collectionsRep'),
+    },
     primarySubsidiaryId: {
       name: 'primarySubsidiaryId',
       label: 'Primary Subsidiary',
@@ -154,6 +399,15 @@ export default async function CustomerDetailPage({
       options: [{ value: '', label: 'None' }, ...(fieldOptions.primaryCurrencyId ?? [])],
       helpText: 'Default transaction currency for this customer.',
       sourceText: getFieldSourceText(fieldMetaById, 'primaryCurrencyId'),
+    },
+    includeChildren: {
+      name: 'includeChildren',
+      label: 'Include Children',
+      value: customer.includeChildren ? 'true' : 'false',
+      type: 'select',
+      options: fieldOptions.includeChildren ?? inactiveOptions,
+      helpText: 'Extends subsidiary availability to child subsidiaries when subsidiary hierarchy is used.',
+      sourceText: getFieldSourceText(fieldMetaById, 'includeChildren'),
     },
     inactive: {
       name: 'inactive',
@@ -267,6 +521,27 @@ export default async function CustomerDetailPage({
             }
           : null,
       ].filter((row): row is { id: string; type: string; reference: string; name: string; details: string; href: string } => Boolean(row)),
+    },
+    {
+      key: 'bank-details',
+      label: 'Bank Details',
+      count: customer.paymentInstruments.length,
+      emptyMessage: 'No direct debit or ACH bank details are linked to this customer yet.',
+      rows: customer.paymentInstruments.map((instrument) => ({
+        id: instrument.id,
+        type: instrument.paymentType.toUpperCase(),
+        reference: instrument.instrumentId ?? instrument.id,
+        name: instrument.bankName ?? instrument.accountHolderName ?? 'Bank details',
+        details:
+          [
+            instrument.maskedAccountNumber ? `Account ${instrument.maskedAccountNumber}` : null,
+            instrument.routingNumberMasked ? `Routing ${instrument.routingNumberMasked}` : null,
+            instrument.currency?.code,
+            instrument.mandateStatus ? `Mandate ${instrument.mandateStatus}` : null,
+            instrument.isDefault ? 'Default' : null,
+            instrument.inactive ? 'Inactive' : null,
+          ].filter(Boolean).join(' | ') || '-',
+      })),
     },
   ]
   const relatedDocumentsCount =
@@ -436,6 +711,23 @@ export default async function CustomerDetailPage({
                           invoiceNumber: invoice.number,
                         })),
                       )}
+                    />
+                  ),
+                },
+                {
+                  key: 'dimension-defaults',
+                  label: 'Dimension Defaults',
+                  count: dimensionAssignments.length,
+                  content: (
+                    <DimensionDefaultsSection
+                      targetType="customer"
+                      targetId={customer.id}
+                      rows={dimensionRows}
+                      initialAssignments={dimensionAssignments.map((assignment) => ({
+                        dimensionDefinitionId: assignment.dimensionDefinitionId,
+                        valueId: assignment.dimensionValueId ?? assignment.sourceRecordId,
+                        sourceModel: assignment.dimensionValueId ? 'dimension_value' : assignment.sourceRecordType,
+                      }))}
                     />
                   ),
                 },

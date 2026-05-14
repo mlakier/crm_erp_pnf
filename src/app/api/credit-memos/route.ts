@@ -7,6 +7,8 @@ import { generateNextCreditMemoNumber } from '@/lib/credit-memo-number'
 import { clearCreditDocumentPostingArtifacts, syncCreditMemoPosting } from '@/lib/credit-document-posting'
 import { deleteDocumentRelationshipsForRecord } from '@/lib/document-relationships'
 import { calcLineTotal, parseMoneyValue, sumMoney } from '@/lib/money'
+import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
+import { getTransactionPostingContextError } from '@/lib/transaction-posting-context'
 
 const INCLUDE = {
   customer: true,
@@ -148,11 +150,24 @@ export async function POST(request: NextRequest) {
     }
 
     const number = await generateNextCreditMemoNumber()
+    const lineRequirementsError = getTransactionLineRequirementsError('credit-memo', lineItems)
+    if (lineRequirementsError) {
+      return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
+    }
     const normalizedLineItems = Array.isArray(lineItems) ? normalizeLineItems(lineItems) : []
     const normalizedApplications = normalizeCreditMemoApplications(applications)
     const computedTotal = normalizedLineItems.length
       ? sumMoney(normalizedLineItems.map((line) => line.lineTotal))
       : parseMoneyValue(total)
+    const resolvedSubsidiaryId = subsidiaryId || null
+    const resolvedCurrencyId = currencyId || null
+    const postingContextError = getTransactionPostingContextError('credit-memo', {
+      subsidiaryId: resolvedSubsidiaryId,
+      currencyId: resolvedCurrencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
 
     const createdCreditMemo = await prisma.creditMemo.create({
       data: {
@@ -160,8 +175,8 @@ export async function POST(request: NextRequest) {
         customerId,
         invoiceId: invoiceId || null,
         userId: userId || null,
-        subsidiaryId: subsidiaryId || null,
-        currencyId: currencyId || null,
+        subsidiaryId: resolvedSubsidiaryId,
+        currencyId: resolvedCurrencyId,
         status: status || 'draft',
         date: new Date(date),
         reason: reason?.trim() || null,
@@ -234,6 +249,10 @@ export async function PUT(request: NextRequest) {
       lineItems,
       applications,
     } = body
+    const lineRequirementsError = getTransactionLineRequirementsError('credit-memo', lineItems)
+    if (lineRequirementsError) {
+      return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
+    }
 
     const before = await prisma.creditMemo.findUnique({
       where: { id },
@@ -248,6 +267,15 @@ export async function PUT(request: NextRequest) {
     const computedTotal = normalizedLineItems.length
       ? sumMoney(normalizedLineItems.map((line) => line.lineTotal))
       : parseMoneyValue(total)
+    const nextSubsidiaryId = subsidiaryId || before.subsidiaryId || null
+    const nextCurrencyId = currencyId || before.currencyId || null
+    const postingContextError = getTransactionPostingContextError('credit-memo', {
+      subsidiaryId: nextSubsidiaryId,
+      currencyId: nextCurrencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
 
     const updatedCreditMemo = await prisma.creditMemo.update({
       where: { id },
@@ -255,8 +283,8 @@ export async function PUT(request: NextRequest) {
         customerId: customerId || before.customerId,
         invoiceId: invoiceId || null,
         userId: userId || before.userId,
-        subsidiaryId: subsidiaryId || null,
-        currencyId: currencyId || null,
+        subsidiaryId: nextSubsidiaryId,
+        currencyId: nextCurrencyId,
         status: status || before.status,
         date: date ? new Date(date) : before.date,
         reason: reason?.trim() || null,

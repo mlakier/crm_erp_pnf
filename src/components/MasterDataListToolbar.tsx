@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import ListSearchActions from '@/components/ListSearchActions'
+import { getMasterDataInlineEditToolbarSlotId } from '@/lib/master-data-inline-edit'
 import type { SavedSearchFieldOption, SavedSearchFilterDefinition } from '@/lib/saved-search-metadata'
 
 export type MasterDataListColumn = {
@@ -71,6 +72,7 @@ export default function MasterDataListToolbar({
             Reset
           </Link>
         ) : null}
+        <div id={getMasterDataInlineEditToolbarSlotId(tableId)} className="contents" />
         {extraControls}
         <ListSearchActions
           tableId={tableId}

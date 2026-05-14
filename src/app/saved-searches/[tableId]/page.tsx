@@ -9,6 +9,7 @@ import { buildPurchaseRequisitionsSavedSearchMetadata } from '@/lib/purchase-req
 import { buildReceiptsSavedSearchMetadata } from '@/lib/receipts-saved-search-metadata'
 import { loadSavedSearchBuiltInBaseline } from '@/lib/saved-search-builtins-store'
 import { loadListValues } from '@/lib/load-list-values'
+import { MONETARY_CLASSIFICATION_OPTIONS, TRANSLATION_TREATMENT_OPTIONS } from '@/lib/gl-account-accounting-policy'
 
 export default async function SavedSearchEditorPage({
   params,
@@ -17,7 +18,7 @@ export default async function SavedSearchEditorPage({
 }) {
   const { tableId } = await params
   const session = await getServerSession(authOptions)
-  const [roles, departments, subsidiaries, employees, approverUsers, purchaseOrderStatuses, purchaseOrderVendors, purchaseOrderCurrencies, purchaseOrderRequisitions, receiptStatuses, receiptPurchaseOrders, requisitionStatuses, requisitionVendors, chartOfAccounts, accountTypeValues, normalBalanceValues, fsCategoryValues, accountRoleValues, rollforwardCategoryValues] = await Promise.all([
+  const [roles, departments, subsidiaries, employees, approverUsers, purchaseOrderStatuses, purchaseOrderVendors, purchaseOrderCurrencies, purchaseOrderRequisitions, receiptStatuses, receiptPurchaseOrders, requisitionStatuses, requisitionVendors, chartOfAccounts, accountTypeValues, accountCategoryValues, normalBalanceValues, fsCategoryValues, accountRoleValues, rollforwardCategoryValues] = await Promise.all([
     prisma.role.findMany({
       orderBy: { name: 'asc' },
       select: { id: true, name: true },
@@ -72,6 +73,7 @@ export default async function SavedSearchEditorPage({
         })
       : Promise.resolve([]),
     tableId === 'chart-of-accounts-list' ? loadListValues('accountType') : Promise.resolve([]),
+    tableId === 'chart-of-accounts-list' ? loadListValues('LIST-COA-ACCOUNT-CATEGORY') : Promise.resolve([]),
     tableId === 'chart-of-accounts-list' ? loadListValues('normalBalance') : Promise.resolve([]),
     tableId === 'chart-of-accounts-list' ? loadListValues('LIST-COA-FS-CATEGORY') : Promise.resolve([]),
     tableId === 'chart-of-accounts-list' ? loadListValues('LIST-COA-ACCOUNT-ROLE') : Promise.resolve([]),
@@ -102,10 +104,13 @@ export default async function SavedSearchEditorPage({
         : tableId === 'chart-of-accounts-list'
           ? buildChartOfAccountsSavedSearchMetadata({
               accountTypeOptions: accountTypeValues.map((value) => ({ value, label: value })),
+              accountCategoryOptions: accountCategoryValues.map((value) => ({ value, label: value })),
               normalBalanceOptions: normalBalanceValues.map((value) => ({ value, label: value })),
               financialStatementCategoryOptions: fsCategoryValues.map((value) => ({ value, label: value })),
               accountRoleOptions: accountRoleValues.map((value) => ({ value, label: value })),
               rollforwardCategoryOptions: rollforwardCategoryValues.map((value) => ({ value, label: value })),
+              monetaryClassificationOptions: MONETARY_CLASSIFICATION_OPTIONS,
+              translationTreatmentOptions: TRANSLATION_TREATMENT_OPTIONS,
               parentAccountOptions: chartOfAccounts.map((account) => ({
                 value: account.id,
                 label: `${account.accountId} - ${account.accountNumber} - ${account.name}`,

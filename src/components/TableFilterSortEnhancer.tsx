@@ -44,26 +44,54 @@ function enforceStickyHeaderRows(table: HTMLTableElement) {
   const filterRow = header.querySelector<HTMLTableRowElement>('tr[data-filter-row="true"]')
   const headerHeight = Math.ceil(headerRow.getBoundingClientRect().height || 0)
   const separatorCompensation = 1
+  const pinsFirstTwo = table.closest('[data-pin-first-two="true"]')
+  const stickyStartColumnStyles = (index: number): Record<string, string> | null => {
+    if (!pinsFirstTwo) return null
 
-  Array.from(headerRow.cells).forEach((cell) => {
+    if (index === 0) {
+      return {
+        left: '0px',
+        width: 'var(--master-data-pin-first-width)',
+        'min-width': 'var(--master-data-pin-first-width)',
+        'max-width': 'var(--master-data-pin-first-width)',
+        'z-index': '240',
+      }
+    }
+    if (index === 1) {
+      return {
+        left: 'var(--master-data-pin-first-width)',
+        width: 'var(--master-data-pin-second-width)',
+        'min-width': 'var(--master-data-pin-second-width)',
+        'max-width': 'var(--master-data-pin-second-width)',
+        'z-index': '235',
+      }
+    }
+    return null
+  }
+
+  Array.from(headerRow.cells).forEach((cell, index) => {
     setImportantStyles(cell, {
       position: 'sticky',
       top: '0px',
-      'z-index': '30',
+      'z-index': '170',
       'background-color': 'var(--card)',
       'box-shadow': 'inset 0 -1px 0 0 var(--border-muted)',
     })
+    const pinnedStyles = stickyStartColumnStyles(index)
+    if (pinnedStyles) setImportantStyles(cell, pinnedStyles)
   })
 
   if (filterRow) {
-    Array.from(filterRow.cells).forEach((cell) => {
+    Array.from(filterRow.cells).forEach((cell, index) => {
       setImportantStyles(cell, {
         position: 'sticky',
         top: `${Math.max(0, headerHeight - separatorCompensation)}px`,
-        'z-index': '25',
+        'z-index': '160',
         'background-color': 'var(--card)',
         'box-shadow': 'inset 0 -1px 0 0 var(--border-muted)',
       })
+      const pinnedStyles = stickyStartColumnStyles(index)
+      if (pinnedStyles) setImportantStyles(cell, pinnedStyles)
     })
   }
 }

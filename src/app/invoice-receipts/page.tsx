@@ -21,6 +21,7 @@ const IR_COLUMNS = [
   { id: 'amount', label: 'Amount' },
   { id: 'date', label: 'Date' },
   { id: 'status', label: 'Status' },
+  { id: 'gl-posting', label: 'GL Posting' },
   { id: 'method', label: 'Method' },
   { id: 'reference', label: 'Reference' },
   { id: 'db-id', label: 'DB Id' },
@@ -73,6 +74,21 @@ export default async function InvoiceReceiptsPage({ searchParams }: { searchPara
     skip: pagination.skip,
     take: pagination.pageSize,
   })
+  const postingJournals = rows.length > 0
+    ? await prisma.journalEntry.findMany({
+        where: {
+          sourceType: 'invoice-receipt',
+          sourceId: { in: rows.map((row) => row.id) },
+        },
+        select: { id: true, number: true, sourceId: true },
+        orderBy: { createdAt: 'desc' },
+      })
+    : []
+  const postingJournalByReceiptId = new Map(
+    postingJournals
+      .filter((journal) => journal.sourceId)
+      .map((journal) => [journal.sourceId as string, journal]),
+  )
 
   const buildPageHref = (p: number) => {
     const s = new URLSearchParams()
@@ -152,8 +168,10 @@ export default async function InvoiceReceiptsPage({ searchParams }: { searchPara
             </tr></thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={12} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No invoice receipts yet.</td></tr>
-              ) : rows.map((row, i) => (
+                <tr><td colSpan={13} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No invoice receipts yet.</td></tr>
+              ) : rows.map((row, i) => {
+                const postingJournal = postingJournalByReceiptId.get(row.id)
+                return (
                 <tr key={row.id} style={i < rows.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
                   <td data-column="invoice-receipt-id" className="px-4 py-2 text-sm font-medium">
                     <Link href={`/invoice-receipts/${row.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
@@ -187,6 +205,15 @@ export default async function InvoiceReceiptsPage({ searchParams }: { searchPara
                   </td>
                   <td data-column="date" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtDocumentDate(row.date, moneySettings)}</td>
                   <td data-column="status" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{formatRecordLabel(row.status, statusLabelMap)}</td>
+                  <td data-column="gl-posting" className="px-4 py-2 text-sm">
+                    {postingJournal ? (
+                      <Link href={`/journals/${postingJournal.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                        {postingJournal.number}
+                      </Link>
+                    ) : (
+                      <span style={{ color: 'var(--text-secondary)' }}>{'\u2014'}</span>
+                    )}
+                  </td>
                   <td data-column="method" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.method}</td>
                   <td data-column="reference" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.reference ?? '\u2014'}</td>
                   <td data-column="db-id" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>{row.id}</td>
@@ -200,7 +227,8 @@ export default async function InvoiceReceiptsPage({ searchParams }: { searchPara
                     />
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>

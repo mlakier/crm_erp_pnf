@@ -4,6 +4,8 @@ import { createFieldChangeSummary, logActivity } from '@/lib/activity'
 import { generateNextSalesOrderNumber } from '@/lib/sales-order-number'
 import { calcLineTotal, sumMoney } from '@/lib/money'
 import { toNumericValue } from '@/lib/format'
+import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
+import { getTransactionPostingContextError } from '@/lib/transaction-posting-context'
 import {
   coerceWorkflowValueForStep,
   getDefaultWorkflowStatus,
@@ -57,6 +59,7 @@ export async function POST(request: NextRequest) {
       }))
 
       const duplicatedSalesOrder = await prisma.salesOrder.create({
+        // Preserve the posting context from the source document on duplication.
         data: {
           number: generatedNumber,
           status: getDefaultWorkflowStatus(workflow, 'sales-order'),
@@ -90,23 +93,36 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Missing required sales order fields' }, { status: 400 })
       }
 
+      const lineRequirementsError = getTransactionLineRequirementsError('sales-order', lineItems)
+      if (lineRequirementsError) {
+        return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
+      }
+
       const normalizedLineItems = Array.isArray(lineItems)
         ? lineItems
             .map((line) => {
               const quantity = Number(line?.quantity ?? 0)
               const unitPrice = Number(line?.unitPrice ?? 0)
               const description = String(line?.description ?? '').trim()
-              if (!description) return null
+              const itemId = typeof line?.itemId === 'string' && line.itemId.trim() ? line.itemId.trim() : null
+              if (!description && !itemId) return null
               return {
                 description,
                 quantity,
                 unitPrice,
                 lineTotal: calcLineTotal(quantity, unitPrice),
-                itemId: line?.itemId || null,
+                itemId,
               }
             })
             .filter((line): line is { description: string; quantity: number; unitPrice: number; lineTotal: number; itemId: string | null } => Boolean(line))
         : []
+      const postingContextError = getTransactionPostingContextError('sales-order', {
+        subsidiaryId,
+        currencyId,
+      })
+      if (postingContextError) {
+        return NextResponse.json({ error: postingContextError }, { status: 400 })
+      }
 
       const createdSalesOrder = await prisma.salesOrder.create({
         data: {
@@ -175,6 +191,13 @@ export async function POST(request: NextRequest) {
     const total = normalizedLineItems.length
       ? sumMoney(normalizedLineItems.map((line) => line.lineTotal))
       : toNumericValue(quote.total)
+    const postingContextError = getTransactionPostingContextError('sales-order', {
+      subsidiaryId: quote.subsidiaryId,
+      currencyId: quote.currencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
 
     const salesOrder = await prisma.salesOrder.create({
       data: {
@@ -256,6 +279,13 @@ export async function PUT(request: NextRequest) {
       subsidiaryId === undefined ? existingSalesOrder.subsidiaryId : subsidiaryId || null
     const nextCurrencyId =
       currencyId === undefined ? existingSalesOrder.currencyId : currencyId || null
+    const postingContextError = getTransactionPostingContextError('sales-order', {
+      subsidiaryId: nextSubsidiaryId,
+      currencyId: nextCurrencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
 
     if (!nextNumber) {
       return NextResponse.json({ error: 'Missing sales order number' }, { status: 400 })

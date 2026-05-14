@@ -33,6 +33,13 @@ The goal is to avoid adding more one-off pages before the platform foundation is
 - shared saved-search behavior
 - consistent list/detail/customize/GL/related-record patterns
 
+Related architecture references:
+
+- [phase-0-extensibility-schema.md](./phase-0-extensibility-schema.md)
+- [phase-0-dimension-billing-revenue-propagation-spec.md](./phase-0-dimension-billing-revenue-propagation-spec.md)
+- [phase-0-dimension-billing-revenue-implementation-matrix.md](./phase-0-dimension-billing-revenue-implementation-matrix.md)
+- [phase-0-dimension-policy-admin-ui-spec.md](./phase-0-dimension-policy-admin-ui-spec.md)
+
 ## Core Rule
 
 Every new module must be modeled as a real ERP object, not just a page.
@@ -206,6 +213,11 @@ Implementation rules:
 - create/update APIs must validate and preserve a single posting context
 - shared customize pages must show these fields as required, checked, and locked/greyed out
 - transaction detail pages must expose them as first-class transaction fields, not hidden inferred context
+
+Reference matrix:
+
+- [Transaction Required Fields Matrix](c:/Users/mlakier/App/crm_erp_pnf/docs/transaction-required-fields-matrix.md)
+- [Nightly Exchange Rate Sync](c:/Users/mlakier/App/crm_erp_pnf/docs/nightly-exchange-rate-sync.md)
 
 ### Core ledger and transaction storage requirement
 
@@ -533,6 +545,11 @@ Add a reusable custom field and custom dimension foundation.
 - `CustomDimensionAssignment`
 - optional dimension-group / reporting metadata
 
+See also:
+
+- [phase-0-dimension-billing-revenue-propagation-spec.md](./phase-0-dimension-billing-revenue-propagation-spec.md)
+- [phase-0-dimension-billing-revenue-implementation-matrix.md](./phase-0-dimension-billing-revenue-implementation-matrix.md)
+
 ### Frontend targets
 
 - shared rendering for header fields
@@ -856,6 +873,11 @@ This phase should provide the operational platform layer for:
 Subscriptions, billing schedules, and usages should be modeled as real line/schedule-capable records, not shallow admin pages.
 
 Usage-based billing should be modeled as a real operational billing layer, not only as raw usage rows.
+
+Dimension propagation, billing-account grouping, subscription-plan sourcing, and downstream revenue / GL behavior should follow:
+
+- [phase-0-dimension-billing-revenue-propagation-spec.md](./phase-0-dimension-billing-revenue-propagation-spec.md)
+- [phase-0-dimension-billing-revenue-implementation-matrix.md](./phase-0-dimension-billing-revenue-implementation-matrix.md)
 
 That means support for:
 

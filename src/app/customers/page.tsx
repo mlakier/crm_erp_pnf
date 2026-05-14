@@ -33,6 +33,11 @@ export default async function CRMPage({
           { name: { contains: query, mode: 'insensitive' as const } },
           { email: { contains: query, mode: 'insensitive' as const } },
           { industry: { contains: query, mode: 'insensitive' as const } },
+          { customerStatus: { contains: query, mode: 'insensitive' as const } },
+          { customerType: { contains: query, mode: 'insensitive' as const } },
+          { customerGroup: { contains: query, mode: 'insensitive' as const } },
+          { territory: { contains: query, mode: 'insensitive' as const } },
+          { resaleNumber: { contains: query, mode: 'insensitive' as const } },
         ],
       }
     : {}
@@ -52,19 +57,70 @@ export default async function CRMPage({
     prisma.subsidiary.findMany({ orderBy: { subsidiaryId: 'asc' }, select: { id: true, subsidiaryId: true, name: true } }),
     prisma.currency.findMany({ orderBy: { code: 'asc' }, select: { id: true, currencyId: true, code: true, name: true } }),
     loadCompanyPageLogo(),
-    loadFieldOptionsMap(customerFieldMetaById, ['industry', 'inactive']),
+    loadFieldOptionsMap(customerFieldMetaById, [
+      'industry',
+      'customerType',
+      'customerGroup',
+      'customerStatus',
+      'territory',
+      'salesManager',
+      'projectManager',
+      'arAccountId',
+      'priceLevel',
+      'priceBook',
+      'taxable',
+      'taxItem',
+      'language',
+      'numberFormat',
+      'negativeNumberFormat',
+      'shipComplete',
+      'shippingCarrier',
+      'shippingMethod',
+      'blockCollectionEmail',
+      'collectionsRep',
+      'includeChildren',
+      'inactive',
+    ]),
     loadCustomerFormCustomization(),
   ])
 
   const pagination = getPagination(totalCustomers, params.page)
 
-  const customers = await prisma.customer.findMany({
-    where,
-    include: { subsidiary: true, currency: true },
-    orderBy,
-    skip: pagination.skip,
-    take: pagination.pageSize,
-  })
+  const [customers, priceLevels, priceBooks] = await Promise.all([
+    prisma.customer.findMany({
+      where,
+      include: { subsidiary: true, currency: true, arAccount: true },
+      orderBy,
+      skip: pagination.skip,
+      take: pagination.pageSize,
+    }),
+    prisma.priceLevel.findMany({
+      select: { id: true, priceLevelId: true, name: true, levelType: true },
+      orderBy: [{ priceLevelId: 'asc' }, { name: 'asc' }],
+    }),
+    prisma.priceBook.findMany({
+      select: { id: true, priceBookId: true, name: true, bookType: true },
+      orderBy: [{ priceBookId: 'asc' }, { name: 'asc' }],
+    }),
+  ])
+  const priceLevelLabels = new Map<string, string>()
+  for (const priceLevel of priceLevels) {
+    const label = priceLevel.priceLevelId ? `${priceLevel.priceLevelId} - ${priceLevel.name}` : priceLevel.name
+    priceLevelLabels.set(priceLevel.id, label)
+    if (priceLevel.priceLevelId) priceLevelLabels.set(priceLevel.priceLevelId, label)
+    priceLevelLabels.set(priceLevel.name, label)
+    if (priceLevel.levelType) priceLevelLabels.set(priceLevel.levelType, label)
+  }
+  const priceBookLabels = new Map<string, string>()
+  for (const priceBook of priceBooks) {
+    const label = priceBook.priceBookId ? `${priceBook.priceBookId} - ${priceBook.name}` : priceBook.name
+    priceBookLabels.set(priceBook.id, label)
+    if (priceBook.priceBookId) priceBookLabels.set(priceBook.priceBookId, label)
+    priceBookLabels.set(priceBook.name, label)
+    if (priceBook.bookType) priceBookLabels.set(priceBook.bookType, label)
+  }
+  const displayPriceLevel = (value: string | null) => (value ? priceLevelLabels.get(value) ?? displayMasterDataValue(value) : displayMasterDataValue(null))
+  const displayPriceBook = (value: string | null) => (value ? priceBookLabels.get(value) ?? displayMasterDataValue(value) : displayMasterDataValue(null))
 
   const buildPageHref = (nextPage: number) => {
     const search = new URLSearchParams()
@@ -107,12 +163,24 @@ export default async function CRMPage({
             <tr style={MASTER_DATA_TABLE_DIVIDER_STYLE}>
               <MasterDataHeaderCell columnId="number">Customer Id</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="name">Name</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="email">Email</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="phone">Phone</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="industry">Industry</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="customer-status">Status</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="customer-type">Type</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="customer-group">Group</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="territory">Territory</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="sales-manager">Sales Manager</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="subsidiary">Primary Subsidiary</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="currency">Primary Currency</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="ar-account">AR Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="reminder-days">Reminder Days</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="price-level">Price Level</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="price-book">Price Book</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="taxable">Taxable</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="tax-item">Tax Code</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="collections-rep">Collections Rep</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="industry">Industry</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="address">Billing Address</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="email">Email</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="phone">Phone</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="inactive">Inactive</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="db-id">DB Id</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
@@ -122,7 +190,7 @@ export default async function CRMPage({
           </thead>
           <tbody>
             {customers.length === 0 ? (
-              <MasterDataEmptyStateRow colSpan={13}>No customers found</MasterDataEmptyStateRow>
+              <MasterDataEmptyStateRow colSpan={25}>No customers found</MasterDataEmptyStateRow>
             ) : (
               customers.map((customer, index) => (
                 <tr key={customer.id} style={getMasterDataRowStyle(index, customers.length)}>
@@ -132,12 +200,24 @@ export default async function CRMPage({
                     </Link>
                   </MasterDataBodyCell>
                   <MasterDataBodyCell columnId="name" className="px-4 py-2 text-sm text-white">{customer.name}</MasterDataBodyCell>
-                  <MasterDataMutedCell columnId="email">{displayMasterDataValue(customer.email)}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="phone">{displayMasterDataValue(normalizePhone(customer.phone))}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="industry">{displayMasterDataValue(customer.industry)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="customer-status">{displayMasterDataValue(customer.customerStatus)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="customer-type">{displayMasterDataValue(customer.customerType)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="customer-group">{displayMasterDataValue(customer.customerGroup)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="territory">{displayMasterDataValue(customer.territory)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="sales-manager">{displayMasterDataValue(customer.salesManager)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="subsidiary">{customer.subsidiary ? `${customer.subsidiary.subsidiaryId} (${customer.subsidiary.name})` : displayMasterDataValue(null)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="currency">{displayMasterDataValue(customer.currency?.code)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="ar-account">{customer.arAccount ? `${customer.arAccount.accountNumber} - ${customer.arAccount.name}` : displayMasterDataValue(null)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="reminder-days">{displayMasterDataValue(customer.reminderDays)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="price-level">{displayPriceLevel(customer.priceLevel)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="price-book">{displayPriceBook(customer.priceBook)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="taxable">{customer.taxable ? 'Yes' : 'No'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="tax-item">{displayMasterDataValue(customer.taxItem)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="collections-rep">{displayMasterDataValue(customer.collectionsRep)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="industry">{displayMasterDataValue(customer.industry)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="address">{displayMasterDataValue(customer.address)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="email">{displayMasterDataValue(customer.email)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="phone">{displayMasterDataValue(normalizePhone(customer.phone))}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="inactive">{customer.inactive ? 'Yes' : 'No'}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="db-id">{customer.id}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="created">{formatMasterDataDate(customer.createdAt)}</MasterDataMutedCell>
@@ -179,6 +259,24 @@ export default async function CRMPage({
                                 value: customer.currencyId ?? '',
                                 type: 'select' as const,
                                 options: [{ value: '', label: 'None' }, ...currencies.map((currency) => ({ value: currency.id, label: `${currency.code} - ${currency.name}` }))],
+                              }]
+                            : []),
+                          ...(formCustomization.fields.priceLevel.visible
+                            ? [{
+                                name: 'priceLevel',
+                                label: 'Price Level',
+                                value: customer.priceLevel ?? '',
+                                type: 'select' as const,
+                                options: [{ value: '', label: 'None' }, ...(fieldOptions.priceLevel ?? [])],
+                              }]
+                            : []),
+                          ...(formCustomization.fields.priceBook.visible
+                            ? [{
+                                name: 'priceBook',
+                                label: 'Price Book',
+                                value: customer.priceBook ?? '',
+                                type: 'select' as const,
+                                options: [{ value: '', label: 'None' }, ...(fieldOptions.priceBook ?? [])],
                               }]
                             : []),
                           ...(formCustomization.fields.inactive.visible

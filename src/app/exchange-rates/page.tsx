@@ -1,7 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import CreateModalButton from '@/components/CreateModalButton'
-import EditButton from '@/components/EditButton'
-import DeleteButton from '@/components/DeleteButton'
+import ListRowActions from '@/components/ListRowActions'
 import ListSearchActions from '@/components/ListSearchActions'
 import PaginationFooter from '@/components/PaginationFooter'
 import ExchangeRateCreateForm from '@/components/ExchangeRateCreateForm'
@@ -10,7 +9,7 @@ import { getPagination } from '@/lib/pagination'
 import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
 import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
-import { CANONICAL_EXCHANGE_RATE_TYPES } from '@/lib/exchange-rate-types'
+import { CANONICAL_EXCHANGE_RATE_TYPES, normalizeExchangeRateType } from '@/lib/exchange-rate-types'
 import { fmtDocumentDate } from '@/lib/format'
 
 const COLS = [
@@ -57,7 +56,17 @@ export default async function ExchangeRatesPage({
 
   const orderBy = [{ effectiveDate: 'desc' as const }, { createdAt: 'desc' as const }]
 
-  const [{ moneySettings }, total, currencies, latestSyncLog, latestFxRun, companySettings, cabinetFiles] = await Promise.all([
+  const [
+    { moneySettings },
+    total,
+    currencies,
+    latestSyncLog,
+    latestFxRun,
+    latestScheduledFxRun,
+    latestSuccessfulScheduledFxRun,
+    companySettings,
+    cabinetFiles,
+  ] = await Promise.all([
     loadCompanyDisplaySettings(),
     prisma.exchangeRate.count({ where }),
     prisma.currency.findMany({ orderBy: { code: 'asc' } }),
@@ -67,6 +76,14 @@ export default async function ExchangeRatesPage({
     }),
     prisma.runHeader.findFirst({
       where: { runType: 'fx_ingestion' },
+      orderBy: { requestedAt: 'desc' },
+    }),
+    prisma.runHeader.findFirst({
+      where: { runType: 'fx_ingestion', triggerType: 'scheduled' },
+      orderBy: { requestedAt: 'desc' },
+    }),
+    prisma.runHeader.findFirst({
+      where: { runType: 'fx_ingestion', triggerType: 'scheduled', status: 'completed' },
       orderBy: { requestedAt: 'desc' },
     }),
     loadCompanyInformationSettings(),
@@ -145,6 +162,82 @@ export default async function ExchangeRatesPage({
         ) : null}
       </section>
 
+      <section className="mb-6 rounded-2xl border px-6 py-4" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
+        <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+              Nightly Scheduler
+            </p>
+            <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              Repo-visible GitHub Actions job that calls the scheduled FX sync endpoint every night.
+            </p>
+          </div>
+          <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            Schedule: 08:05 UTC nightly
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div
+            className="rounded-xl border px-4 py-3"
+            style={{ borderColor: 'var(--border-muted)', backgroundColor: 'rgba(255,255,255,0.01)' }}
+          >
+            <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+              Trigger Path
+            </div>
+            <div className="mt-2 text-sm text-white">GitHub Actions → `/api/exchange-rates/sync`</div>
+          </div>
+
+          <div
+            className="rounded-xl border px-4 py-3"
+            style={{ borderColor: 'var(--border-muted)', backgroundColor: 'rgba(255,255,255,0.01)' }}
+          >
+            <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+              Scheduler Auth
+            </div>
+            <div className="mt-2 text-sm text-white">
+              {process.env.EXCHANGE_RATE_SYNC_TOKEN?.trim() ? 'Configured' : 'Not configured'}
+            </div>
+          </div>
+
+          <div
+            className="rounded-xl border px-4 py-3"
+            style={{ borderColor: 'var(--border-muted)', backgroundColor: 'rgba(255,255,255,0.01)' }}
+          >
+            <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+              Last Scheduled Run
+            </div>
+            <div className="mt-2 text-sm text-white">
+              {latestScheduledFxRun
+                ? `${latestScheduledFxRun.runNumber} - ${latestScheduledFxRun.status}`
+                : 'None yet'}
+            </div>
+            <div className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+              {latestScheduledFxRun ? fmtDocumentDate(latestScheduledFxRun.requestedAt, moneySettings) : 'No scheduled run recorded yet.'}
+            </div>
+          </div>
+
+          <div
+            className="rounded-xl border px-4 py-3"
+            style={{ borderColor: 'var(--border-muted)', backgroundColor: 'rgba(255,255,255,0.01)' }}
+          >
+            <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+              Last Scheduled Success
+            </div>
+            <div className="mt-2 text-sm text-white">
+              {latestSuccessfulScheduledFxRun
+                ? latestSuccessfulScheduledFxRun.runNumber
+                : 'None yet'}
+            </div>
+            <div className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+              {latestSuccessfulScheduledFxRun
+                ? fmtDocumentDate(latestSuccessfulScheduledFxRun.requestedAt, moneySettings)
+                : 'No successful scheduled run recorded yet.'}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="overflow-hidden rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
         <form className="border-b px-6 py-4" method="get" style={{ borderColor: 'var(--border-muted)' }}>
           <input type="hidden" name="page" value="1" />
@@ -216,20 +309,22 @@ export default async function ExchangeRatesPage({
                       {fmtDocumentDate(row.updatedAt, moneySettings)}
                     </td>
                     <td data-column="actions" className="px-4 py-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <EditButton
-                          resource="exchange-rates"
-                          id={row.id}
-                          fields={[
+                      <ListRowActions
+                        viewHref={`/exchange-rates/${row.id}`}
+                        editButton={{
+                          resource: 'exchange-rates',
+                          id: row.id,
+                          fields: [
                             { name: 'effectiveDate', label: 'Effective Date', value: new Date(row.effectiveDate).toISOString().slice(0, 10), type: 'date' },
                             { name: 'rate', label: 'Rate', value: String(row.rate), type: 'number' },
-                            { name: 'rateType', label: 'Rate Type', value: row.rateType, type: 'select', options: rateTypeOptions },
+                            { name: 'rateType', label: 'Rate Type', value: normalizeExchangeRateType(row.rateType), type: 'select', options: rateTypeOptions },
                             { name: 'source', label: 'Source', value: row.source ?? '' },
+                            { name: 'notes', label: 'Notes', value: row.notes ?? '' },
                             { name: 'active', label: 'Active', value: row.active ? 'true' : 'false', type: 'checkbox', placeholder: 'Active' },
-                          ]}
-                        />
-                        <DeleteButton resource="exchange-rates" id={row.id} />
-                      </div>
+                          ],
+                        }}
+                        deleteButton={{ resource: 'exchange-rates', id: row.id }}
+                      />
                     </td>
                   </tr>
                 ))

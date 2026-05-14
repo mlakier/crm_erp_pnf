@@ -10,7 +10,7 @@ export const MASTER_DATA_HEADER_CELL_STYLE = {
   backgroundColor: 'var(--card)',
 } as const
 
-export const MASTER_DATA_BODY_CELL_CLASSNAME = 'px-2.5 py-2 text-sm'
+export const MASTER_DATA_BODY_CELL_CLASSNAME = 'px-2.5 py-1.5 text-sm'
 
 export const MASTER_DATA_MUTED_CELL_STYLE = {
   color: 'var(--text-secondary)',

@@ -2,6 +2,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import {
   defaultReceiptDetailCustomization,
+  RECEIPT_LINE_COLUMNS,
   RECEIPT_REFERENCE_SOURCES,
   type ReceiptDetailCustomizationConfig,
 } from '@/lib/receipt-detail-customization'
@@ -63,6 +64,41 @@ function normalizeGlImpactColumns(
   ) as ReceiptDetailCustomizationConfig['glImpactColumns']
 }
 
+function normalizeLineColumns(
+  candidate: unknown,
+  fallback: ReceiptDetailCustomizationConfig['lineColumns'],
+): ReceiptDetailCustomizationConfig['lineColumns'] {
+  const source =
+    candidate && typeof candidate === 'object'
+      ? (candidate as Partial<
+          Record<
+            keyof ReceiptDetailCustomizationConfig['lineColumns'],
+            Partial<ReceiptDetailCustomizationConfig['lineColumns'][keyof ReceiptDetailCustomizationConfig['lineColumns']]>
+          >
+        >)
+      : {}
+
+  const normalizedEntries = RECEIPT_LINE_COLUMNS.map((column, index) => {
+    const override = source[column.id]
+    return [
+      column.id,
+      {
+        visible: override?.visible === undefined ? fallback[column.id].visible : override.visible === true,
+        order:
+          typeof override?.order === 'number' && Number.isFinite(override.order)
+            ? Math.max(0, Math.trunc(override.order))
+            : fallback[column.id].order ?? index,
+      },
+    ] as const
+  })
+
+  return Object.fromEntries(
+    normalizedEntries
+      .sort((left, right) => left[1].order - right[1].order)
+      .map(([id, value], index) => [id, { ...value, order: index }]),
+  ) as ReceiptDetailCustomizationConfig['lineColumns']
+}
+
 export async function loadReceiptDetailCustomization(): Promise<ReceiptDetailCustomizationConfig> {
   try {
     const raw = await fs.readFile(STORE_PATH, 'utf8')
@@ -80,6 +116,7 @@ export async function loadReceiptDetailCustomization(): Promise<ReceiptDetailCus
         ...(parsed.sectionRows ?? {}),
       },
       referenceLayouts: mergeTransactionReferenceLayouts(parsed.referenceLayouts, defaults.referenceLayouts, RECEIPT_REFERENCE_SOURCES),
+      lineColumns: normalizeLineColumns(parsed.lineColumns, defaults.lineColumns),
       glImpactSettings:
         parsed.glImpactSettings && typeof parsed.glImpactSettings === 'object'
           ? {
@@ -110,6 +147,7 @@ export async function saveReceiptDetailCustomization(nextConfig: ReceiptDetailCu
       ...(nextConfig.sectionRows ?? {}),
     },
     referenceLayouts: mergeTransactionReferenceLayouts(nextConfig.referenceLayouts, defaults.referenceLayouts, RECEIPT_REFERENCE_SOURCES),
+    lineColumns: normalizeLineColumns(nextConfig.lineColumns, defaults.lineColumns),
     glImpactSettings:
       nextConfig.glImpactSettings && typeof nextConfig.glImpactSettings === 'object'
         ? {

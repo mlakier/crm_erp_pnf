@@ -67,7 +67,9 @@
     "customerId": true,
     "amount": false,
     "stage": true,
-    "closeDate": true
+    "closeDate": true,
+    "subsidiaryId": true,
+    "currencyId": true
   },
   "quoteCreate": {
     "opportunity": true,
@@ -75,8 +77,8 @@
     "number": false,
     "status": true,
     "validUntil": true,
-    "subsidiaryId": false,
-    "currencyId": false,
+    "subsidiaryId": true,
+    "currencyId": true,
     "notes": false
   },
   "salesOrderCreate": {
@@ -84,8 +86,8 @@
     "userId": false,
     "quoteId": false,
     "number": false,
-    "subsidiaryId": false,
-    "currencyId": false,
+    "subsidiaryId": true,
+    "currencyId": true,
     "status": true,
     "total": false
   },
@@ -94,8 +96,8 @@
     "status": true,
     "date": false,
     "notes": false,
-    "subsidiaryId": false,
-    "currencyId": false
+    "subsidiaryId": true,
+    "currencyId": true
   },
   "invoiceCreate": {
     "salesOrderId": false,
@@ -103,21 +105,23 @@
     "status": true,
     "dueDate": true,
     "paidDate": false,
-    "subsidiaryId": false,
-    "currencyId": false
+    "subsidiaryId": true,
+    "currencyId": true
   },
   "invoiceReceiptCreate": {
     "invoiceId": true,
     "amount": true,
     "date": true,
     "method": true,
-    "reference": false
+    "reference": false,
+    "subsidiaryId": true,
+    "currencyId": true
   },
   "creditMemoCreate": {
     "customerId": true,
     "invoiceId": false,
-    "subsidiaryId": false,
-    "currencyId": false,
+    "subsidiaryId": true,
+    "currencyId": true,
     "status": true,
     "date": true,
     "reason": false,
@@ -132,7 +136,9 @@
     "method": true,
     "reference": false,
     "notes": false,
-    "status": true
+    "status": true,
+    "subsidiaryId": true,
+    "currencyId": true
   },
   "vendorRefundCreate": {
     "vendorId": true,
@@ -143,7 +149,9 @@
     "method": true,
     "reference": false,
     "notes": false,
-    "status": true
+    "status": true,
+    "subsidiaryId": true,
+    "currencyId": true
   },
   "purchaseRequisitionCreate": {
     "number": false,
@@ -155,13 +163,14 @@
     "notes": false,
     "vendorId": true,
     "departmentId": true,
-    "subsidiaryId": false,
-    "currencyId": false
+    "subsidiaryId": true,
+    "currencyId": true
   },
   "purchaseOrderCreate": {
     "number": false,
     "vendorId": true,
-    "subsidiaryId": false,
+    "subsidiaryId": true,
+    "currencyId": true,
     "status": true
   },
   "receiptCreate": {
@@ -169,14 +178,16 @@
     "quantity": true,
     "date": true,
     "status": true,
-    "notes": false
+    "notes": false,
+    "subsidiaryId": true,
+    "currencyId": true
   },
   "billCreate": {
     "number": false,
     "vendorId": true,
     "purchaseOrderId": false,
-    "subsidiaryId": false,
-    "currencyId": false,
+    "subsidiaryId": true,
+    "currencyId": true,
     "total": false,
     "date": true,
     "dueDate": false,
@@ -186,8 +197,8 @@
   "billCreditCreate": {
     "vendorId": true,
     "billId": false,
-    "subsidiaryId": false,
-    "currencyId": false,
+    "subsidiaryId": true,
+    "currencyId": true,
     "status": true,
     "date": true,
     "reason": false,
@@ -200,7 +211,9 @@
     "method": true,
     "status": true,
     "reference": false,
-    "notes": false
+    "notes": false,
+    "subsidiaryId": true,
+    "currencyId": true
   },
   "journalCreate": {
     "number": false,
@@ -208,8 +221,8 @@
     "description": false,
     "total": false,
     "status": true,
-    "subsidiaryId": false,
-    "currencyId": false,
+    "subsidiaryId": true,
+    "currencyId": true,
     "accountingPeriodId": false,
     "sourceType": false,
     "sourceId": false,
@@ -316,6 +329,8 @@
     "cashFlowCategory": false,
     "inventory": false,
     "revalueOpenBalance": false,
+    "monetaryClassification": false,
+    "translationTreatment": false,
     "eliminateIntercoTransactions": false,
     "summary": false
   },
@@ -370,6 +385,38 @@
     "intercompanyClearingAccountId": false,
     "dueToAccountId": false,
     "dueFromAccountId": false,
+    "inactive": false
+  },
+  "priceLevelCreate": {
+    "priceLevelId": false,
+    "name": true,
+    "description": false,
+    "levelType": false,
+    "subsidiaryId": false,
+    "includeChildren": false,
+    "defaultDiscountPct": false,
+    "minimumMarginPct": false,
+    "approvalRequired": false,
+    "approvalWorkflow": false,
+    "allowManualOverride": false,
+    "effectiveStartDate": false,
+    "effectiveEndDate": false,
+    "inactive": false
+  },
+  "priceBookCreate": {
+    "priceBookId": false,
+    "name": true,
+    "description": false,
+    "bookType": false,
+    "subsidiaryId": false,
+    "includeChildren": false,
+    "currencyId": false,
+    "defaultPriceLevelId": false,
+    "approvalRequired": false,
+    "approvalWorkflow": false,
+    "allowManualOverride": false,
+    "effectiveStartDate": false,
+    "effectiveEndDate": false,
     "inactive": false
   },
   "roleCreate": {

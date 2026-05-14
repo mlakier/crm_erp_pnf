@@ -22,6 +22,11 @@ import { loadFormRequirements } from '@/lib/form-requirements-store'
 import { buildFieldMetaById, getFieldSourceText, loadFieldOptionsMap } from '@/lib/field-source-helpers'
 import { loadMasterDataSystemInfo } from '@/lib/master-data-system-info'
 import { loadMasterDataSystemNotes } from '@/lib/master-data-system-notes'
+import {
+  getGlAccountingPolicyWarnings,
+  monetaryClassificationLabel,
+  translationTreatmentLabel,
+} from '@/lib/gl-account-accounting-policy'
 
 async function getDescendantSubsidiaryIds(parentId: string): Promise<Set<string>> {
   const descendants = new Set<string>([parentId])
@@ -82,7 +87,23 @@ export default async function ChartOfAccountDetailPage({
         },
       },
     }),
-    loadFieldOptionsMap(fieldMetaById, ['accountType', 'normalBalance', 'financialStatementCategory', 'accountRole', 'rollforwardCategory']),
+    loadFieldOptionsMap(fieldMetaById, [
+      'accountType',
+      'category',
+      'normalBalance',
+      'financialStatementCategory',
+      'accountRole',
+      'rollforwardCategory',
+      'monetaryClassification',
+      'translationTreatment',
+      'requiresSubledgerType',
+      'cashFlowCategory',
+      'reconciliationType',
+      'closeReviewOwnerId',
+      'closeReviewFrequency',
+      'aiRiskLevel',
+      'autoMatchStrategy',
+    ]),
     loadChartOfAccountsFormCustomization(),
     loadFormRequirements(),
   ])
@@ -123,7 +144,10 @@ export default async function ChartOfAccountDetailPage({
     Reporting: 'Statement mapping and reporting defaults used for financial presentation.',
     Structure: 'Rollup and relationship fields that shape how the account behaves in hierarchies and close logic.',
     Controls: 'Posting, control, inventory, and elimination behavior for operational accounting.',
+    'Close Automation': 'Reconciliation, AI review, and monthly close behavior.',
+    'System Behavior': 'ERP behavior flags used by downstream posting, subledger, and close processes.',
   }
+  const accountingPolicyWarnings = getGlAccountingPolicyWarnings(account)
 
   const fieldDefinitions: Record<ChartOfAccountsFormFieldKey, InlineRecordSection['fields'][number]> = {
     accountId: { name: 'accountId', label: 'Account Id', value: account.accountId, helpText: 'System-generated GL identifier used throughout the platform.' },
@@ -139,12 +163,22 @@ export default async function ChartOfAccountDetailPage({
       helpText: 'Broad accounting classification for the account.',
       sourceText: getFieldSourceText(fieldMetaById, 'accountType'),
     },
+    category: {
+      name: 'category',
+      label: 'Account Category',
+      value: account.category ?? '',
+      type: 'select',
+      options: fieldOptions.category ?? [],
+      helpText: 'Controlled accounting category that can derive FS presentation and FX policy defaults without changing existing populated values unexpectedly.',
+      sourceText: getFieldSourceText(fieldMetaById, 'category'),
+    },
     normalBalance: {
       name: 'normalBalance',
       label: 'Normal Balance',
       value: account.normalBalance ?? '',
       type: 'select',
       options: fieldOptions.normalBalance ?? [],
+      readOnly: true,
       helpText: 'Default debit or credit orientation for the account.',
       sourceText: getFieldSourceText(fieldMetaById, 'normalBalance'),
     },
@@ -152,12 +186,14 @@ export default async function ChartOfAccountDetailPage({
       name: 'financialStatementSection',
       label: 'FS Section',
       value: account.financialStatementSection ?? '',
+      readOnly: true,
       helpText: 'Financial statement section used for rollups and presentation.',
     },
     financialStatementGroup: {
       name: 'financialStatementGroup',
       label: 'FS Group',
       value: account.financialStatementGroup ?? '',
+      readOnly: true,
       helpText: 'More granular reporting group under the statement section.',
     },
     financialStatementCategory: {
@@ -166,6 +202,7 @@ export default async function ChartOfAccountDetailPage({
       value: account.financialStatementCategory ?? '',
       type: 'select',
       options: fieldOptions.financialStatementCategory ?? [],
+      readOnly: true,
       helpText: 'Detailed reporting category such as Cash, AR, Inventory, AP, or FX.',
       sourceText: getFieldSourceText(fieldMetaById, 'financialStatementCategory'),
     },
@@ -229,12 +266,116 @@ export default async function ChartOfAccountDetailPage({
     isPosting: { name: 'isPosting', label: 'Posting Account', value: String(account.isPosting), type: 'checkbox', helpText: 'Controls whether journals can post directly to this account.' },
     isControlAccount: { name: 'isControlAccount', label: 'Control Account', value: String(account.isControlAccount), type: 'checkbox', helpText: 'Marks accounts managed primarily by subledgers or protected processes.' },
     allowsManualPosting: { name: 'allowsManualPosting', label: 'Allow Manual Posting', value: String(account.allowsManualPosting), type: 'checkbox', helpText: 'Determines whether users can manually post journals to this account.' },
-    requiresSubledgerType: { name: 'requiresSubledgerType', label: 'Requires Subledger Type', value: account.requiresSubledgerType ?? '', helpText: 'Optional validation hint for the related subledger dimension.' },
-    cashFlowCategory: { name: 'cashFlowCategory', label: 'Cash Flow Category', value: account.cashFlowCategory ?? '', helpText: 'Classification used for operating, investing, or financing cash flow reporting.' },
+    requiresSubledgerType: {
+      name: 'requiresSubledgerType',
+      label: 'Requires Subledger Type',
+      value: account.requiresSubledgerType ?? '',
+      type: 'select',
+      options: fieldOptions.requiresSubledgerType ?? [],
+      readOnly: true,
+      helpText: 'Policy-derived subledger dimension required when this account is posted.',
+      sourceText: getFieldSourceText(fieldMetaById, 'requiresSubledgerType'),
+    },
+    cashFlowCategory: {
+      name: 'cashFlowCategory',
+      label: 'Cash Flow Category',
+      value: account.cashFlowCategory ?? '',
+      type: 'select',
+      options: fieldOptions.cashFlowCategory ?? [],
+      readOnly: true,
+      helpText: 'Policy-derived cash flow classification for operating, investing, financing, or cash presentation.',
+      sourceText: getFieldSourceText(fieldMetaById, 'cashFlowCategory'),
+    },
     inventory: { name: 'inventory', label: 'Inventory', value: String(account.inventory), type: 'checkbox', helpText: 'Flags the account as inventory-related for downstream logic and reporting.' },
-    revalueOpenBalance: { name: 'revalueOpenBalance', label: 'Revalue Open Balance', value: String(account.revalueOpenBalance), type: 'checkbox', helpText: 'Controls whether open balances are revalued for FX processes.' },
+    revalueOpenBalance: { name: 'revalueOpenBalance', label: 'Remeasure Open Balance', value: String(account.revalueOpenBalance), type: 'checkbox', readOnly: true, helpText: 'Enables period-end FX remeasurement for monetary foreign-currency open balances. Historical-cost releases should use their source transaction FX layer instead.' },
+    monetaryClassification: {
+      name: 'monetaryClassification',
+      label: 'Monetary Classification',
+      value: account.monetaryClassification ?? '',
+      displayValue: monetaryClassificationLabel(account.monetaryClassification),
+      type: 'select',
+      options: fieldOptions.monetaryClassification ?? [],
+      readOnly: true,
+      helpText: 'Determines whether this account participates in monetary remeasurement or follows historical-cost / equity / P&L flow treatment.',
+      sourceText: getFieldSourceText(fieldMetaById, 'monetaryClassification'),
+    },
+    translationTreatment: {
+      name: 'translationTreatment',
+      label: 'Translation Treatment',
+      value: account.translationTreatment ?? '',
+      displayValue: translationTreatmentLabel(account.translationTreatment),
+      type: 'select',
+      options: fieldOptions.translationTreatment ?? [],
+      readOnly: true,
+      helpText: 'Group-reporting translation basis. CTA is configured at consolidation/subsidiary policy level, not on every GL account.',
+      sourceText: getFieldSourceText(fieldMetaById, 'translationTreatment'),
+    },
     eliminateIntercoTransactions: { name: 'eliminateIntercoTransactions', label: 'Eliminate Interco Transactions', value: String(account.eliminateIntercoTransactions), type: 'checkbox', helpText: 'Marks the account for intercompany elimination handling.' },
     summary: { name: 'summary', label: 'Summary', value: String(account.summary), type: 'checkbox', helpText: 'Indicates a header or summary account rather than a direct posting account.' },
+    requiresMonthlyReconciliation: { name: 'requiresMonthlyReconciliation', label: 'Requires Monthly Reconciliation', value: String(account.requiresMonthlyReconciliation), type: 'checkbox', helpText: 'Requires this balance to be reconciled during the monthly close.' },
+    reconciliationType: {
+      name: 'reconciliationType',
+      label: 'Reconciliation Type',
+      value: account.reconciliationType ?? '',
+      type: 'select',
+      options: fieldOptions.reconciliationType ?? [],
+      helpText: 'Close method expected for this account, such as bank rec, subledger tie-out, rollforward, waterfall, or support schedule.',
+      sourceText: getFieldSourceText(fieldMetaById, 'reconciliationType'),
+    },
+    closeReviewOwnerId: {
+      name: 'closeReviewOwnerId',
+      label: 'Close Review Owner',
+      value: account.closeReviewOwnerId ?? '',
+      type: 'select',
+      options: fieldOptions.closeReviewOwnerId ?? [],
+      helpText: 'Default owner responsible for reviewing this account during close.',
+      sourceText: getFieldSourceText(fieldMetaById, 'closeReviewOwnerId'),
+    },
+    closeReviewFrequency: {
+      name: 'closeReviewFrequency',
+      label: 'Close Review Frequency',
+      value: account.closeReviewFrequency ?? '',
+      type: 'select',
+      options: fieldOptions.closeReviewFrequency ?? [],
+      helpText: 'How often the account should be reviewed during close.',
+      sourceText: getFieldSourceText(fieldMetaById, 'closeReviewFrequency'),
+    },
+    aiReviewEnabled: { name: 'aiReviewEnabled', label: 'AI Review Enabled', value: String(account.aiReviewEnabled), type: 'checkbox', helpText: 'Allows close automation to review balances, detect anomalies, and recommend supporting schedules.' },
+    aiRiskLevel: {
+      name: 'aiRiskLevel',
+      label: 'AI Risk Level',
+      value: account.aiRiskLevel ?? '',
+      type: 'select',
+      options: fieldOptions.aiRiskLevel ?? [],
+      helpText: 'Risk tier used to prioritize AI review, exception surfacing, and human approval.',
+      sourceText: getFieldSourceText(fieldMetaById, 'aiRiskLevel'),
+    },
+    autoMatchStrategy: {
+      name: 'autoMatchStrategy',
+      label: 'Auto-Match Strategy',
+      value: account.autoMatchStrategy ?? '',
+      type: 'select',
+      options: fieldOptions.autoMatchStrategy ?? [],
+      helpText: 'Default automation strategy for reconciling or matching this account.',
+      sourceText: getFieldSourceText(fieldMetaById, 'autoMatchStrategy'),
+    },
+    materialityThreshold: { name: 'materialityThreshold', label: 'Materiality Threshold', value: account.materialityThreshold?.toString() ?? '', type: 'number', helpText: 'Optional account-level threshold for AI close review and exception surfacing.' },
+    agingReviewRequired: { name: 'agingReviewRequired', label: 'Aging Review Required', value: String(account.agingReviewRequired), type: 'checkbox', helpText: 'Requires aging review during close, typically for AR and AP.' },
+    reserveReviewRequired: { name: 'reserveReviewRequired', label: 'Reserve Review Required', value: String(account.reserveReviewRequired), type: 'checkbox', helpText: 'Requires reserve review, such as allowance or inventory reserve analysis.' },
+    writeOffReviewRequired: { name: 'writeOffReviewRequired', label: 'Write-Off Review Required', value: String(account.writeOffReviewRequired), type: 'checkbox', helpText: 'Requires write-off candidate review, typically for AR exposure.' },
+    waterfallReviewRequired: { name: 'waterfallReviewRequired', label: 'Waterfall Review Required', value: String(account.waterfallReviewRequired), type: 'checkbox', helpText: 'Requires deferred, prepaid, fixed asset, or amortization waterfall review.' },
+    taxSensitive: { name: 'taxSensitive', label: 'Tax Sensitive', value: String(account.taxSensitive), type: 'checkbox', helpText: 'Flags accounts that may require tax close review or tax reporting controls.' },
+    intercompanyAccount: { name: 'intercompanyAccount', label: 'Intercompany Account', value: String(account.intercompanyAccount), type: 'checkbox', helpText: 'Flags accounts used for intercompany receivables, payables, settlement, or eliminations.' },
+    eliminationAccount: { name: 'eliminationAccount', label: 'Elimination Account', value: String(account.eliminationAccount), type: 'checkbox', helpText: 'Flags accounts used for consolidation elimination or CTA-style close activity.' },
+    bankAccountRequired: { name: 'bankAccountRequired', label: 'Bank Account Required', value: String(account.bankAccountRequired), type: 'checkbox', helpText: 'Requires a bank account reference for posting or reconciliation.' },
+    inventoryCostLayerAccount: { name: 'inventoryCostLayerAccount', label: 'Inventory Cost Layer Account', value: String(account.inventoryCostLayerAccount), type: 'checkbox', helpText: 'Flags accounts tied to inventory cost layers or inventory relief.' },
+    revenueRecognitionAccount: { name: 'revenueRecognitionAccount', label: 'Revenue Recognition Account', value: String(account.revenueRecognitionAccount), type: 'checkbox', helpText: 'Flags accounts tied to revenue arrangements, elements, plans, and recognition runs.' },
+    deferredCostAccount: { name: 'deferredCostAccount', label: 'Deferred Cost Account', value: String(account.deferredCostAccount), type: 'checkbox', helpText: 'Flags accounts used for deferred cost capitalization and amortization.' },
+    fixedAssetAccount: { name: 'fixedAssetAccount', label: 'Fixed Asset Account', value: String(account.fixedAssetAccount), type: 'checkbox', helpText: 'Flags accounts used for fixed asset capitalization, depreciation, or accumulated depreciation.' },
+    prepaidAccount: { name: 'prepaidAccount', label: 'Prepaid Account', value: String(account.prepaidAccount), type: 'checkbox', helpText: 'Flags accounts used for prepaid schedules and amortization.' },
+    accrualAccount: { name: 'accrualAccount', label: 'Accrual Account', value: String(account.accrualAccount), type: 'checkbox', helpText: 'Flags accounts used for accrued expenses, accrued revenue, or payroll liabilities.' },
+    clearingAccount: { name: 'clearingAccount', label: 'Clearing Account', value: String(account.clearingAccount), type: 'checkbox', helpText: 'Flags temporary clearing accounts requiring close monitoring.' },
+    suspenseAccount: { name: 'suspenseAccount', label: 'Suspense Account', value: String(account.suspenseAccount), type: 'checkbox', helpText: 'Flags suspense accounts that should be cleared or explained during close.' },
   }
 
   const customizeFields = buildCustomizePreviewFields(CHART_OF_ACCOUNTS_FORM_FIELDS, fieldDefinitions)
@@ -381,15 +522,32 @@ export default async function ChartOfAccountDetailPage({
             statPreviewCards={statPreviewCards}
           />
         ) : (
-          <MasterDataHeaderDetails
-            resource="chart-of-accounts"
-            id={account.id}
-            title="Chart Of Accounts Details"
-            sections={detailSections}
-            editing={isEditing}
-            columns={chartFormCustomization.formColumns}
-            systemInformationItems={buildMasterDataSystemInformationItems(systemInfo, account.id)}
-          />
+          <>
+            {accountingPolicyWarnings.length > 0 ? (
+              <div className="mb-5 rounded-2xl border p-4" style={{ borderColor: 'rgba(250,204,21,0.35)', backgroundColor: 'rgba(250,204,21,0.08)' }}>
+                <div className="mb-2 text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--accent-warning-strong, #facc15)' }}>
+                  Accounting Policy Review
+                </div>
+                <div className="space-y-2 text-sm text-slate-200">
+                  {accountingPolicyWarnings.map((warning, index) => (
+                    <div key={`${warning.severity}-${index}`}>
+                      <span className="font-semibold capitalize">{warning.severity}: </span>
+                      {warning.message}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <MasterDataHeaderDetails
+              resource="chart-of-accounts"
+              id={account.id}
+              title="Chart Of Accounts Details"
+              sections={detailSections}
+              editing={isEditing}
+              columns={chartFormCustomization.formColumns}
+              systemInformationItems={buildMasterDataSystemInformationItems(systemInfo, account.id)}
+            />
+          </>
         )}
 
         {!isCustomizing ? (

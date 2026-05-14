@@ -549,71 +549,6 @@
       "availableFilterIds": []
     },
     {
-      "tableId": "subsidiaries-list",
-      "columnIds": [
-        "actions",
-        "subsidiary-id",
-        "name",
-        "country",
-        "address",
-        "tax-id",
-        "parent-subsidiary",
-        "legal-name",
-        "type",
-        "default-currency",
-        "functional-currency",
-        "reporting-currency",
-        "consolidation-method",
-        "ownership-percent",
-        "inactive",
-        "created",
-        "last-modified"
-      ],
-      "columnOrder": [
-        "subsidiary-id",
-        "name",
-        "country",
-        "address",
-        "tax-id",
-        "parent-subsidiary",
-        "legal-name",
-        "type",
-        "default-currency",
-        "functional-currency",
-        "reporting-currency",
-        "consolidation-method",
-        "ownership-percent",
-        "inactive",
-        "created",
-        "last-modified"
-      ],
-      "filterState": {
-        "filterValues": {},
-        "globalFilterIds": [],
-        "criteria": [],
-        "audience": {
-          "visibility": "private",
-          "allowEdit": false,
-          "userIds": [],
-          "internalRoleIds": [],
-          "departmentIds": [],
-          "subsidiaryIds": [],
-          "employeeIds": []
-        },
-        "rolePreferences": {
-          "preferredSearchResults": false,
-          "assignments": []
-        },
-        "emailSchedules": [],
-        "results": {
-          "columnLabels": {},
-          "columnPinning": {},
-          "addedLinkedFieldIds": []
-        }
-      },
-      "availableFilterIds": []
-    },
-    {
       "tableId": "exchange-rates-list",
       "columnIds": [
         "actions",
@@ -775,85 +710,6 @@
         }
       },
       "availableFilterIds": []
-    },
-    {
-      "tableId": "chart-of-accounts-list",
-      "columnIds": [
-        "account-id",
-        "account-number",
-        "name",
-        "type",
-        "normal-balance",
-        "fs-section",
-        "fs-group",
-        "fs-category",
-        "account-role",
-        "rollforward-category",
-        "parent-account",
-        "posting",
-        "control",
-        "inventory",
-        "revalue-open-balance",
-        "summary",
-        "subsidiaries",
-        "include-children",
-        "active",
-        "db-id",
-        "created",
-        "last-modified"
-      ],
-      "columnOrder": [
-        "account-number",
-        "name",
-        "description",
-        "type",
-        "normal-balance",
-        "fs-section",
-        "fs-group",
-        "fs-category",
-        "account-role",
-        "rollforward-category",
-        "parent-account",
-        "posting",
-        "control",
-        "inventory",
-        "revalue-open-balance",
-        "summary",
-        "subsidiaries",
-        "include-children",
-        "active",
-        "db-id",
-        "created",
-        "last-modified"
-      ],
-      "filterState": {
-        "filterValues": {},
-        "globalFilterIds": [],
-        "criteria": [],
-        "audience": {
-          "visibility": "private",
-          "allowEdit": false,
-          "userIds": [],
-          "internalRoleIds": [],
-          "departmentIds": [],
-          "subsidiaryIds": [],
-          "employeeIds": []
-        },
-        "rolePreferences": {
-          "preferredSearchResults": false,
-          "assignments": []
-        },
-        "emailSchedules": [],
-        "results": {
-          "columnLabels": {},
-          "columnPinning": {},
-          "addedLinkedFieldIds": []
-        }
-      },
-      "availableFilterIds": [
-        "keyword",
-        "sort"
-      ]
     },
     {
       "tableId": "bills-list",
@@ -1102,6 +958,627 @@
         "method",
         "status",
         "reference",
+        "created",
+        "last-modified"
+      ],
+      "filterState": {
+        "filterValues": {},
+        "globalFilterIds": [],
+        "criteria": [],
+        "audience": {
+          "visibility": "private",
+          "allowEdit": false,
+          "userIds": [],
+          "internalRoleIds": [],
+          "departmentIds": [],
+          "subsidiaryIds": [],
+          "employeeIds": []
+        },
+        "rolePreferences": {
+          "preferredSearchResults": false,
+          "assignments": []
+        },
+        "emailSchedules": [],
+        "results": {
+          "columnLabels": {},
+          "columnPinning": {},
+          "addedLinkedFieldIds": []
+        }
+      },
+      "availableFilterIds": []
+    },
+    {
+      "tableId": "bank-deposits-list",
+      "columnIds": [
+        "actions",
+        "deposit-number",
+        "date",
+        "bank-account",
+        "subsidiary",
+        "offset-account",
+        "amount",
+        "status",
+        "currency",
+        "bank-feed",
+        "journal",
+        "db-id"
+      ],
+      "columnOrder": [
+        "deposit-number",
+        "date",
+        "bank-account",
+        "subsidiary",
+        "offset-account",
+        "amount",
+        "status",
+        "currency",
+        "bank-feed",
+        "journal",
+        "db-id"
+      ],
+      "filterState": {
+        "filterValues": {},
+        "globalFilterIds": [],
+        "criteria": [],
+        "audience": {
+          "visibility": "private",
+          "allowEdit": false,
+          "userIds": [],
+          "internalRoleIds": [],
+          "departmentIds": [],
+          "subsidiaryIds": [],
+          "employeeIds": []
+        },
+        "rolePreferences": {
+          "preferredSearchResults": false,
+          "assignments": []
+        },
+        "emailSchedules": [],
+        "results": {
+          "columnLabels": {},
+          "columnPinning": {},
+          "addedLinkedFieldIds": []
+        }
+      },
+      "availableFilterIds": []
+    },
+    {
+      "tableId": "bank-transfers-list",
+      "columnIds": [
+        "actions",
+        "transfer-number",
+        "date",
+        "from-bank",
+        "to-bank",
+        "subsidiary",
+        "amount",
+        "status",
+        "currency",
+        "bank-feed",
+        "journal",
+        "db-id"
+      ],
+      "columnOrder": [
+        "transfer-number",
+        "date",
+        "from-bank",
+        "to-bank",
+        "subsidiary",
+        "amount",
+        "status",
+        "currency",
+        "bank-feed",
+        "journal",
+        "db-id"
+      ],
+      "filterState": {
+        "filterValues": {},
+        "globalFilterIds": [],
+        "criteria": [],
+        "audience": {
+          "visibility": "private",
+          "allowEdit": false,
+          "userIds": [],
+          "internalRoleIds": [],
+          "departmentIds": [],
+          "subsidiaryIds": [],
+          "employeeIds": []
+        },
+        "rolePreferences": {
+          "preferredSearchResults": false,
+          "assignments": []
+        },
+        "emailSchedules": [],
+        "results": {
+          "columnLabels": {},
+          "columnPinning": {},
+          "addedLinkedFieldIds": []
+        }
+      },
+      "availableFilterIds": []
+    },
+    {
+      "tableId": "bank-checks-list",
+      "columnIds": [
+        "actions",
+        "check-transaction-number",
+        "check-number",
+        "date",
+        "payee",
+        "bank-account",
+        "bill-payment",
+        "amount",
+        "status",
+        "subsidiary",
+        "currency",
+        "bank-feed",
+        "db-id"
+      ],
+      "columnOrder": [
+        "check-transaction-number",
+        "check-number",
+        "date",
+        "payee",
+        "bank-account",
+        "bill-payment",
+        "amount",
+        "status",
+        "subsidiary",
+        "currency",
+        "bank-feed",
+        "db-id"
+      ],
+      "filterState": {
+        "filterValues": {},
+        "globalFilterIds": [],
+        "criteria": [],
+        "audience": {
+          "visibility": "private",
+          "allowEdit": false,
+          "userIds": [],
+          "internalRoleIds": [],
+          "departmentIds": [],
+          "subsidiaryIds": [],
+          "employeeIds": []
+        },
+        "rolePreferences": {
+          "preferredSearchResults": false,
+          "assignments": []
+        },
+        "emailSchedules": [],
+        "results": {
+          "columnLabels": {},
+          "columnPinning": {},
+          "addedLinkedFieldIds": []
+        }
+      },
+      "availableFilterIds": []
+    },
+    {
+      "tableId": "subsidiaries-list",
+      "columnIds": [
+        "actions",
+        "subsidiary-id",
+        "name",
+        "country",
+        "address",
+        "tax-id",
+        "parent-subsidiary",
+        "legal-name",
+        "type",
+        "default-currency",
+        "functional-currency",
+        "reporting-currency",
+        "fiscal-calendar",
+        "accounting-standard",
+        "consolidation-method",
+        "ownership-percent",
+        "direct-ownership-percent",
+        "ultimate-ownership-percent",
+        "ownership-effective-from",
+        "ownership-effective-through",
+        "consolidation-effective-from",
+        "consolidation-effective-through",
+        "control-indicator",
+        "nci-required",
+        "elimination-target-parent",
+        "elimination-scope",
+        "elimination-currency-basis",
+        "retained-earnings-account",
+        "cta-account",
+        "intercompany-clearing-account",
+        "due-to-account",
+        "due-from-account",
+        "investment-in-subsidiary-account",
+        "nci-equity-account",
+        "nci-income-statement-account",
+        "realized-fx-gain-account",
+        "realized-fx-loss-account",
+        "unrealized-fx-gain-account",
+        "unrealized-fx-loss-account",
+        "allow-transactions",
+        "allow-bank-accounts",
+        "allow-inventory",
+        "allow-payroll",
+        "allow-projects",
+        "inactive",
+        "created",
+        "last-modified"
+      ],
+      "columnOrder": [
+        "subsidiary-id",
+        "name",
+        "country",
+        "address",
+        "tax-id",
+        "parent-subsidiary",
+        "legal-name",
+        "type",
+        "default-currency",
+        "functional-currency",
+        "reporting-currency",
+        "fiscal-calendar",
+        "accounting-standard",
+        "consolidation-method",
+        "ownership-percent",
+        "direct-ownership-percent",
+        "ultimate-ownership-percent",
+        "ownership-effective-from",
+        "ownership-effective-through",
+        "consolidation-effective-from",
+        "consolidation-effective-through",
+        "control-indicator",
+        "nci-required",
+        "elimination-target-parent",
+        "elimination-scope",
+        "elimination-currency-basis",
+        "retained-earnings-account",
+        "cta-account",
+        "intercompany-clearing-account",
+        "due-to-account",
+        "due-from-account",
+        "investment-in-subsidiary-account",
+        "nci-equity-account",
+        "nci-income-statement-account",
+        "realized-fx-gain-account",
+        "realized-fx-loss-account",
+        "unrealized-fx-gain-account",
+        "unrealized-fx-loss-account",
+        "allow-transactions",
+        "allow-bank-accounts",
+        "allow-inventory",
+        "allow-payroll",
+        "allow-projects",
+        "inactive",
+        "created",
+        "last-modified"
+      ],
+      "filterState": {
+        "filterValues": {},
+        "globalFilterIds": [],
+        "criteria": [],
+        "audience": {
+          "visibility": "private",
+          "allowEdit": false,
+          "userIds": [],
+          "internalRoleIds": [],
+          "departmentIds": [],
+          "subsidiaryIds": [],
+          "employeeIds": []
+        },
+        "rolePreferences": {
+          "preferredSearchResults": false,
+          "assignments": []
+        },
+        "emailSchedules": [],
+        "results": {
+          "columnLabels": {},
+          "columnPinning": {},
+          "addedLinkedFieldIds": []
+        }
+      },
+      "availableFilterIds": []
+    },
+    {
+      "tableId": "chart-of-accounts-list",
+      "columnIds": [
+        "account-id",
+        "account-number",
+        "name",
+        "description",
+        "type",
+        "account-category",
+        "normal-balance",
+        "fs-section",
+        "fs-group",
+        "fs-category",
+        "account-role",
+        "rollforward-category",
+        "parent-account",
+        "posting",
+        "control",
+        "inventory",
+        "revalue-open-balance",
+        "monetary-classification",
+        "translation-treatment",
+        "summary",
+        "subsidiaries",
+        "include-children",
+        "active",
+        "db-id",
+        "created",
+        "last-modified"
+      ],
+      "columnOrder": [
+        "name",
+        "description",
+        "type",
+        "account-category",
+        "normal-balance",
+        "fs-section",
+        "fs-group",
+        "fs-category",
+        "account-role",
+        "rollforward-category",
+        "parent-account",
+        "posting",
+        "control",
+        "inventory",
+        "revalue-open-balance",
+        "monetary-classification",
+        "translation-treatment",
+        "summary",
+        "subsidiaries",
+        "include-children",
+        "active",
+        "db-id",
+        "created",
+        "last-modified"
+      ],
+      "filterState": {
+        "filterValues": {},
+        "globalFilterIds": [],
+        "criteria": [],
+        "audience": {
+          "visibility": "private",
+          "allowEdit": false,
+          "userIds": [],
+          "internalRoleIds": [],
+          "departmentIds": [],
+          "subsidiaryIds": [],
+          "employeeIds": []
+        },
+        "rolePreferences": {
+          "preferredSearchResults": false,
+          "assignments": []
+        },
+        "emailSchedules": [],
+        "results": {
+          "columnLabels": {},
+          "columnPinning": {},
+          "addedLinkedFieldIds": []
+        }
+      },
+      "availableFilterIds": [
+        "keyword",
+        "sort"
+      ]
+    },
+    {
+      "tableId": "managed-lists-list",
+      "columnIds": [
+        "list-key",
+        "list-name",
+        "actions",
+        "where-used",
+        "values",
+        "display-order",
+        "type"
+      ],
+      "columnOrder": [
+        "where-used",
+        "values",
+        "display-order",
+        "type"
+      ],
+      "filterState": {
+        "filterValues": {},
+        "globalFilterIds": [],
+        "criteria": [],
+        "audience": {
+          "visibility": "private",
+          "allowEdit": false,
+          "userIds": [],
+          "internalRoleIds": [],
+          "departmentIds": [],
+          "subsidiaryIds": [],
+          "employeeIds": []
+        },
+        "rolePreferences": {
+          "preferredSearchResults": false,
+          "assignments": []
+        },
+        "emailSchedules": [],
+        "results": {
+          "columnLabels": {},
+          "columnPinning": {},
+          "addedLinkedFieldIds": []
+        }
+      },
+      "availableFilterIds": []
+    },
+    {
+      "tableId": "price-books-list",
+      "columnIds": [
+        "price-book-id",
+        "name",
+        "actions",
+        "book-type",
+        "subsidiary",
+        "include-children",
+        "currency",
+        "default-price-level",
+        "approval-required",
+        "allow-manual-override",
+        "effective-start",
+        "effective-end",
+        "inactive",
+        "db-id",
+        "created",
+        "last-modified"
+      ],
+      "columnOrder": [
+        "book-type",
+        "subsidiary",
+        "include-children",
+        "currency",
+        "default-price-level",
+        "approval-required",
+        "allow-manual-override",
+        "effective-start",
+        "effective-end",
+        "inactive",
+        "db-id",
+        "created",
+        "last-modified"
+      ],
+      "filterState": {
+        "filterValues": {},
+        "globalFilterIds": [],
+        "criteria": [],
+        "audience": {
+          "visibility": "private",
+          "allowEdit": false,
+          "userIds": [],
+          "internalRoleIds": [],
+          "departmentIds": [],
+          "subsidiaryIds": [],
+          "employeeIds": []
+        },
+        "rolePreferences": {
+          "preferredSearchResults": false,
+          "assignments": []
+        },
+        "emailSchedules": [],
+        "results": {
+          "columnLabels": {},
+          "columnPinning": {},
+          "addedLinkedFieldIds": []
+        }
+      },
+      "availableFilterIds": []
+    },
+    {
+      "tableId": "customers-list",
+      "columnIds": [
+        "number",
+        "name",
+        "actions",
+        "customer-status",
+        "customer-type",
+        "customer-group",
+        "territory",
+        "sales-manager",
+        "subsidiary",
+        "currency",
+        "ar-account",
+        "reminder-days",
+        "price-level",
+        "price-book",
+        "taxable",
+        "tax-item",
+        "collections-rep",
+        "industry",
+        "address",
+        "email",
+        "phone",
+        "inactive",
+        "db-id",
+        "created",
+        "last-modified"
+      ],
+      "columnOrder": [
+        "customer-status",
+        "customer-type",
+        "customer-group",
+        "territory",
+        "sales-manager",
+        "subsidiary",
+        "currency",
+        "ar-account",
+        "reminder-days",
+        "price-level",
+        "price-book",
+        "taxable",
+        "tax-item",
+        "collections-rep",
+        "industry",
+        "address",
+        "email",
+        "phone",
+        "inactive",
+        "db-id",
+        "created",
+        "last-modified"
+      ],
+      "filterState": {
+        "filterValues": {},
+        "globalFilterIds": [],
+        "criteria": [],
+        "audience": {
+          "visibility": "private",
+          "allowEdit": false,
+          "userIds": [],
+          "internalRoleIds": [],
+          "departmentIds": [],
+          "subsidiaryIds": [],
+          "employeeIds": []
+        },
+        "rolePreferences": {
+          "preferredSearchResults": false,
+          "assignments": []
+        },
+        "emailSchedules": [],
+        "results": {
+          "columnLabels": {},
+          "columnPinning": {},
+          "addedLinkedFieldIds": []
+        }
+      },
+      "availableFilterIds": []
+    },
+    {
+      "tableId": "price-levels-list",
+      "columnIds": [
+        "price-level-id",
+        "name",
+        "actions",
+        "level-type",
+        "subsidiary",
+        "include-children",
+        "default-discount",
+        "minimum-margin",
+        "approval-required",
+        "allow-manual-override",
+        "effective-start",
+        "effective-end",
+        "inactive",
+        "db-id",
+        "created",
+        "last-modified"
+      ],
+      "columnOrder": [
+        "level-type",
+        "subsidiary",
+        "include-children",
+        "default-discount",
+        "minimum-margin",
+        "approval-required",
+        "allow-manual-override",
+        "effective-start",
+        "effective-end",
+        "inactive",
+        "db-id",
         "created",
         "last-modified"
       ],

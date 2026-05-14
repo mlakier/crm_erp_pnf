@@ -4,11 +4,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import DeleteButton from '@/components/DeleteButton'
 import SearchableSelect from '@/components/SearchableSelect'
+import { useSeededDimensionLabels } from '@/components/SeededDimensionLabelsProvider'
 import { fmtCurrency } from '@/lib/format'
 import { calcLineTotal, parseMoneyValue, parseQuantity, sumMoney } from '@/lib/money'
 import type { PurchaseOrderLineColumnKey } from '@/lib/purchase-order-detail-customization'
+import { applySeededDimensionLabels } from '@/lib/transaction-gl-impact'
 
-type TransactionLineColumnKey = PurchaseOrderLineColumnKey | 'notes' | 'line-type' | 'expense-account'
+type TransactionLineColumnKey =
+  | PurchaseOrderLineColumnKey
+  | 'notes'
+  | 'line-type'
+  | 'expense-account'
+  | 'department'
+  | 'location'
+  | 'class'
+  | 'project'
 
 type PurchaseOrderLineItemRow = {
   id: string
@@ -20,6 +30,18 @@ type PurchaseOrderLineItemRow = {
   expenseAccountRecordId?: string | null
   expenseAccountId?: string | null
   expenseAccountName?: string | null
+  departmentRecordId?: string | null
+  departmentId?: string | null
+  departmentName?: string | null
+  locationRecordId?: string | null
+  locationId?: string | null
+  locationName?: string | null
+  classRecordId?: string | null
+  classId?: string | null
+  className?: string | null
+  projectRecordId?: string | null
+  projectId?: string | null
+  projectName?: string | null
   description: string
   notes?: string | null
   quantity: number
@@ -45,12 +67,46 @@ type AccountOption = {
   name: string
 }
 
+type DepartmentOption = {
+  id: string
+  departmentId: string
+  departmentNumber?: string | null
+  name: string
+}
+
+type LocationOption = {
+  id: string
+  locationId: string
+  code?: string | null
+  name: string
+}
+
+type ClassOption = {
+  id: string
+  classId: string
+  name: string
+}
+
+type ProjectOption = {
+  id: string
+  name: string
+  description?: string | null
+}
+
 type EditableRowState = {
   lineType: 'item' | 'expense'
   itemRecordId: string | null
   itemSearch: string
   expenseAccountRecordId: string | null
   expenseAccountSearch: string
+  departmentRecordId: string | null
+  departmentSearch: string
+  locationRecordId: string | null
+  locationSearch: string
+  classRecordId: string | null
+  classSearch: string
+  projectRecordId: string | null
+  projectSearch: string
   description: string
   notes: string
   quantity: string
@@ -100,6 +156,10 @@ const COLUMN_DEFINITIONS = [
   { id: 'unit-price', label: 'Unit Price', defaultVisible: true },
   { id: 'line-total', label: 'Line Total', defaultVisible: true },
   { id: 'notes', label: 'Notes', defaultVisible: true },
+  { id: 'department', label: 'Department', defaultVisible: true },
+  { id: 'location', label: 'Location', defaultVisible: true },
+  { id: 'class', label: 'Class', defaultVisible: true },
+  { id: 'project', label: 'Project', defaultVisible: true },
 ] as const
 
 const BASE_COLUMN_LAYOUT: Record<
@@ -118,6 +178,10 @@ const BASE_COLUMN_LAYOUT: Record<
   'unit-price': { align: 'right', width: 120 },
   'line-total': { align: 'right', width: 150 },
   notes: { width: 220 },
+  department: { width: 220 },
+  location: { width: 220 },
+  class: { width: 220 },
+  project: { width: 220 },
 }
 
 const AUTO_FIT_COLUMN_LIMITS: Partial<Record<TransactionLineColumnKey, { min: number; max: number }>> = {
@@ -125,6 +189,10 @@ const AUTO_FIT_COLUMN_LIMITS: Partial<Record<TransactionLineColumnKey, { min: nu
   'expense-account': { min: 120, max: 520 },
   description: { min: 140, max: 420 },
   notes: { min: 160, max: 420 },
+  department: { min: 160, max: 420 },
+  location: { min: 160, max: 420 },
+  class: { min: 160, max: 420 },
+  project: { min: 160, max: 420 },
 }
 
 const FIXED_WIDTH_COLUMNS: Partial<Record<TransactionLineColumnKey, number>> = {
@@ -151,6 +219,10 @@ const HEADER_TOOLTIPS: Record<string, string> = {
   'unit-price': 'Price per unit for this purchase order line.',
   'line-total': 'Extended line amount calculated from quantity and unit price.',
   notes: 'Additional internal notes captured for this line.',
+  department: 'Department classification for this line.',
+  location: 'Location classification for this line.',
+  class: 'Class classification for this line.',
+  project: 'Project classification for this line.',
 }
 
 function buildItemSelectionUpdates(item: ItemOption): Partial<EditableRowState> {
@@ -173,6 +245,19 @@ function buildExpenseAccountSelectionUpdates(account: AccountOption): Partial<Ed
     itemSearch: '',
     expenseAccountRecordId: account.id,
     expenseAccountSearch: account.accountNumber ?? account.accountId,
+    error: '',
+  }
+}
+
+function buildDimensionSelectionUpdates(
+  recordId: string,
+  searchKey: 'departmentSearch' | 'locationSearch' | 'classSearch' | 'projectSearch',
+  recordKey: 'departmentRecordId' | 'locationRecordId' | 'classRecordId' | 'projectRecordId',
+  searchValue: string,
+): Partial<EditableRowState> {
+  return {
+    [recordKey]: recordId,
+    [searchKey]: searchValue,
     error: '',
   }
 }
@@ -248,6 +333,11 @@ export default function TransactionLineItemsSection({
   tableId = 'purchase-order-line-items',
   allowAddLines = editing,
   accountOptions = [],
+  departmentOptions = [],
+  locationOptions = [],
+  classOptions = [],
+  projectOptions = [],
+  allowNegativeUnitPrice = false,
   currencyCode,
 }: {
   rows: PurchaseOrderLineItemRow[]
@@ -263,6 +353,10 @@ export default function TransactionLineItemsSection({
     lineType: 'item' | 'expense'
     itemId: string | null
     expenseAccountId?: string | null
+    departmentId?: string | null
+    locationId?: string | null
+    classId?: string | null
+    projectId?: string | null
     description: string
     notes?: string | null
     quantity: number
@@ -275,6 +369,10 @@ export default function TransactionLineItemsSection({
       lineType: 'item' | 'expense'
       itemId: string | null
       expenseAccountId?: string | null
+      departmentId?: string | null
+      locationId?: string | null
+      classId?: string | null
+      projectId?: string | null
       description: string
       notes?: string | null
       quantity: number
@@ -291,8 +389,30 @@ export default function TransactionLineItemsSection({
   tableId?: string
   allowAddLines?: boolean
   accountOptions?: AccountOption[]
+  departmentOptions?: DepartmentOption[]
+  locationOptions?: LocationOption[]
+  classOptions?: ClassOption[]
+  projectOptions?: ProjectOption[]
+  allowNegativeUnitPrice?: boolean
   currencyCode?: string | null
 }) {
+  const dimensionLabels = useSeededDimensionLabels()
+  const columnDefinitions = useMemo(
+    () => applySeededDimensionLabels(COLUMN_DEFINITIONS, dimensionLabels),
+    [dimensionLabels],
+  )
+  const headerTooltips = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(HEADER_TOOLTIPS).map(([key, value]) => [
+          key,
+          applySeededDimensionLabels([{ id: key, label: key, description: value }], dimensionLabels)[0].description ?? value,
+        ]),
+      ) as Record<string, string>,
+    [dimensionLabels],
+  )
+  const classLabel = dimensionLabels.class?.trim() || 'Class'
+  const classLabelLower = classLabel.toLowerCase()
   const [editableRows, setEditableRows] = useState<Record<string, EditableRowState>>({})
   const [draftRows, setDraftRows] = useState<DraftRowState[]>(
     () =>
@@ -302,6 +422,10 @@ export default function TransactionLineItemsSection({
           row.lineType === 'expense' && row.expenseAccountId
             ? accountOptions.find((account) => account.id === row.expenseAccountId)
             : null
+        const linkedDepartment = row.departmentId ? departmentOptions.find((department) => department.id === row.departmentId) : null
+        const linkedLocation = row.locationId ? locationOptions.find((location) => location.id === row.locationId) : null
+        const linkedClass = row.classId ? classOptions.find((classOption) => classOption.id === row.classId) : null
+        const linkedProject = row.projectId ? projectOptions.find((project) => project.id === row.projectId) : null
         return {
           id: `draft-initial-${index}`,
           lineType: row.lineType,
@@ -309,6 +433,14 @@ export default function TransactionLineItemsSection({
           itemSearch: linkedItem ? formatLookupValue(linkedItem.itemId, linkedItem.name, lineColumnCustomization?.['item-id']?.editDisplay ?? 'idAndLabel') : '',
           expenseAccountRecordId: row.lineType === 'expense' ? row.expenseAccountId ?? null : null,
           expenseAccountSearch: linkedAccount ? formatLookupValue(linkedAccount.accountNumber ?? linkedAccount.accountId, linkedAccount.name, lineColumnCustomization?.['expense-account']?.editDisplay ?? 'idAndLabel') : '',
+          departmentRecordId: row.departmentId ?? null,
+          departmentSearch: linkedDepartment ? formatLookupValue(linkedDepartment.departmentNumber ?? linkedDepartment.departmentId, linkedDepartment.name, lineColumnCustomization?.department?.editDisplay ?? 'idAndLabel') : '',
+          locationRecordId: row.locationId ?? null,
+          locationSearch: linkedLocation ? formatLookupValue(linkedLocation.code ?? linkedLocation.locationId, linkedLocation.name, lineColumnCustomization?.location?.editDisplay ?? 'idAndLabel') : '',
+          classRecordId: row.classId ?? null,
+          classSearch: linkedClass ? formatLookupValue(linkedClass.classId, linkedClass.name, lineColumnCustomization?.class?.editDisplay ?? 'idAndLabel') : '',
+          projectRecordId: row.projectId ?? null,
+          projectSearch: linkedProject ? formatLookupValue(linkedProject.id, linkedProject.name, lineColumnCustomization?.project?.editDisplay ?? 'label') : '',
           description: row.description,
           notes: row.notes ?? '',
           quantity: String(row.quantity),
@@ -327,9 +459,9 @@ export default function TransactionLineItemsSection({
 
   const baseVisibleLineColumns = useMemo(
     () =>
-      (lineColumns && lineColumns.length > 0 ? lineColumns : [...COLUMN_DEFINITIONS])
-        .filter((column) => COLUMN_DEFINITIONS.some((definition) => definition.id === column.id)),
-    [lineColumns]
+      (lineColumns && lineColumns.length > 0 ? applySeededDimensionLabels(lineColumns, dimensionLabels) : columnDefinitions)
+        .filter((column) => columnDefinitions.some((definition) => definition.id === column.id)),
+    [columnDefinitions, dimensionLabels, lineColumns]
   )
 
   const activeLineTypes = useMemo(() => {
@@ -385,6 +517,22 @@ export default function TransactionLineItemsSection({
           state?.expenseAccountRecordId != null
             ? accountOptions.find((account) => account.id === state.expenseAccountRecordId)
             : null
+        const selectedDepartment =
+          state?.departmentRecordId != null
+            ? departmentOptions.find((department) => department.id === state.departmentRecordId)
+            : null
+        const selectedLocation =
+          state?.locationRecordId != null
+            ? locationOptions.find((location) => location.id === state.locationRecordId)
+            : null
+        const selectedClass =
+          state?.classRecordId != null
+            ? classOptions.find((classOption) => classOption.id === state.classRecordId)
+            : null
+        const selectedProject =
+          state?.projectRecordId != null
+            ? projectOptions.find((project) => project.id === state.projectRecordId)
+            : null
 
         return {
           ...row,
@@ -395,6 +543,18 @@ export default function TransactionLineItemsSection({
           expenseAccountRecordId: state?.expenseAccountRecordId ?? row.expenseAccountRecordId,
           expenseAccountId: selectedExpenseAccount?.accountNumber ?? selectedExpenseAccount?.accountId ?? row.expenseAccountId,
           expenseAccountName: selectedExpenseAccount?.name ?? row.expenseAccountName,
+          departmentRecordId: state?.departmentRecordId ?? row.departmentRecordId,
+          departmentId: selectedDepartment?.departmentNumber ?? selectedDepartment?.departmentId ?? row.departmentId,
+          departmentName: selectedDepartment?.name ?? row.departmentName,
+          locationRecordId: state?.locationRecordId ?? row.locationRecordId,
+          locationId: selectedLocation?.code ?? selectedLocation?.locationId ?? row.locationId,
+          locationName: selectedLocation?.name ?? row.locationName,
+          classRecordId: state?.classRecordId ?? row.classRecordId,
+          classId: selectedClass?.classId ?? row.classId,
+          className: selectedClass?.name ?? row.className,
+          projectRecordId: state?.projectRecordId ?? row.projectRecordId,
+          projectId: selectedProject?.id ?? row.projectId,
+          projectName: selectedProject?.name ?? row.projectName,
           description: state?.description ?? row.description,
           notes: state?.notes ?? row.notes ?? '',
           quantity,
@@ -404,7 +564,7 @@ export default function TransactionLineItemsSection({
           openQuantity: Math.max(0, quantity - row.receivedQuantity),
         }
       }),
-    [accountOptions, editing, editableRows, orderedRows, itemOptions]
+    [accountOptions, classOptions, departmentOptions, editing, editableRows, itemOptions, locationOptions, orderedRows, projectOptions]
   )
 
   const draftRowsForSave = useMemo(
@@ -416,6 +576,10 @@ export default function TransactionLineItemsSection({
           lineType: row.lineType,
           itemId: row.itemRecordId,
           expenseAccountId: row.expenseAccountRecordId,
+          departmentId: row.departmentRecordId,
+          locationId: row.locationRecordId,
+          classId: row.classRecordId,
+          projectId: row.projectRecordId,
           description: row.description,
           notes: row.notes || null,
           quantity,
@@ -441,7 +605,7 @@ export default function TransactionLineItemsSection({
     for (const [columnId, limits] of Object.entries(AUTO_FIT_COLUMN_LIMITS) as Array<
       [TransactionLineColumnKey, { min: number; max: number }]
     >) {
-      const values: Array<string | null | undefined> = [COLUMN_DEFINITIONS.find((column) => column.id === columnId)?.label]
+      const values: Array<string | null | undefined> = [columnDefinitions.find((column) => column.id === columnId)?.label]
 
       for (const row of displayRows) {
         switch (columnId) {
@@ -484,6 +648,18 @@ export default function TransactionLineItemsSection({
             break
           case 'notes':
             values.push(row.notes ?? '-')
+            break
+          case 'department':
+            values.push(formatLookupValue(row.departmentId, row.departmentName, lineColumnCustomization?.department?.viewDisplay ?? 'idAndLabel'))
+            break
+          case 'location':
+            values.push(formatLookupValue(row.locationId, row.locationName, lineColumnCustomization?.location?.viewDisplay ?? 'idAndLabel'))
+            break
+          case 'class':
+            values.push(formatLookupValue(row.classId, row.className, lineColumnCustomization?.class?.viewDisplay ?? 'idAndLabel'))
+            break
+          case 'project':
+            values.push(formatLookupValue(row.projectId, row.projectName, lineColumnCustomization?.project?.viewDisplay ?? 'label'))
             break
         }
       }
@@ -528,6 +704,18 @@ export default function TransactionLineItemsSection({
           case 'notes':
             values.push(draftRow.notes || 'Notes')
             break
+          case 'department':
+            values.push(draftRow.departmentSearch || 'Select department')
+            break
+          case 'location':
+            values.push(draftRow.locationSearch || 'Select location')
+            break
+          case 'class':
+            values.push(draftRow.classSearch || `Select ${classLabelLower}`)
+            break
+          case 'project':
+            values.push(draftRow.projectSearch || 'Select project')
+            break
         }
       }
 
@@ -539,7 +727,7 @@ export default function TransactionLineItemsSection({
     }
 
     return widths
-  }, [currencyCode, displayRows, draftRows, editing, lineColumnCustomization, rows.length])
+  }, [classLabelLower, columnDefinitions, currencyCode, displayRows, draftRows, editing, lineColumnCustomization, rows.length])
 
   const getColumnLayout = useCallback(
     (columnId: TransactionLineColumnKey) => {
@@ -576,6 +764,30 @@ export default function TransactionLineItemsSection({
         row.expenseAccountName,
         lineColumnCustomization?.['expense-account']?.editDisplay ?? 'idAndLabel',
       ),
+      departmentRecordId: row.departmentRecordId ?? null,
+      departmentSearch: formatLookupValue(
+        row.departmentId,
+        row.departmentName,
+        lineColumnCustomization?.department?.editDisplay ?? 'idAndLabel',
+      ),
+      locationRecordId: row.locationRecordId ?? null,
+      locationSearch: formatLookupValue(
+        row.locationId,
+        row.locationName,
+        lineColumnCustomization?.location?.editDisplay ?? 'idAndLabel',
+      ),
+      classRecordId: row.classRecordId ?? null,
+      classSearch: formatLookupValue(
+        row.classId,
+        row.className,
+        lineColumnCustomization?.class?.editDisplay ?? 'idAndLabel',
+      ),
+      projectRecordId: row.projectRecordId ?? null,
+      projectSearch: formatLookupValue(
+        row.projectId,
+        row.projectName,
+        lineColumnCustomization?.project?.editDisplay ?? 'label',
+      ),
       description: row.description,
       notes: row.notes ?? '',
       quantity: String(row.quantity),
@@ -604,6 +816,10 @@ export default function TransactionLineItemsSection({
           lineType: state.lineType,
           itemId: state.itemRecordId,
           expenseAccountId: state.expenseAccountRecordId,
+          departmentId: state.departmentRecordId,
+          locationId: state.locationRecordId,
+          classId: state.classRecordId,
+          projectId: state.projectRecordId,
           description: state.description,
           notes: state.notes || null,
           quantity: state.quantity,
@@ -650,6 +866,14 @@ export default function TransactionLineItemsSection({
         itemSearch: '',
         expenseAccountRecordId: null,
         expenseAccountSearch: '',
+        departmentRecordId: null,
+        departmentSearch: '',
+        locationRecordId: null,
+        locationSearch: '',
+        classRecordId: null,
+        classSearch: '',
+        projectRecordId: null,
+        projectSearch: '',
         description: '',
         notes: '',
         quantity: '1',
@@ -673,6 +897,10 @@ export default function TransactionLineItemsSection({
           lineType: state.lineType,
           itemId: state.itemRecordId,
           expenseAccountId: state.expenseAccountRecordId,
+          departmentId: state.departmentRecordId,
+          locationId: state.locationRecordId,
+          classId: state.classRecordId,
+          projectId: state.projectRecordId,
           description: state.description,
           notes: state.notes || null,
           quantity: state.quantity,
@@ -823,7 +1051,7 @@ export default function TransactionLineItemsSection({
                         left={pinnedLeft}
                         width={layout.width}
                       >
-                        <HeaderLabel label={column.label} tooltip={HEADER_TOOLTIPS[column.id]} />
+                        <HeaderLabel label={column.label} tooltip={headerTooltips[column.id]} />
                       </HeaderCell>
                     )
                   })}
@@ -870,9 +1098,15 @@ export default function TransactionLineItemsSection({
                               updateExistingRow,
                               itemOptions,
                               accountOptions,
+                              departmentOptions,
+                              locationOptions,
+                              classOptions,
+                              projectOptions,
+                              allowNegativeUnitPrice,
                               lineColumnCustomization,
                               currencyCode,
                               tableInputClass,
+                              classLabelLower,
                             })}
                           </BodyCell>
                         )
@@ -932,9 +1166,15 @@ export default function TransactionLineItemsSection({
                                   updateDraftRow,
                                   itemOptions,
                                   accountOptions,
+                                  departmentOptions,
+                                  locationOptions,
+                                  classOptions,
+                                  projectOptions,
+                                  allowNegativeUnitPrice,
                                   lineColumnCustomization,
                                   currencyCode,
                                   tableInputClass,
+                                  classLabelLower,
                                 })}
                               </BodyCell>
                             )
@@ -1017,9 +1257,15 @@ function renderLineCell({
   updateExistingRow,
   itemOptions,
   accountOptions,
+  departmentOptions,
+  locationOptions,
+  classOptions,
+  projectOptions,
+  allowNegativeUnitPrice,
   lineColumnCustomization,
   currencyCode,
   tableInputClass,
+  classLabelLower,
 }: {
   columnId: TransactionLineColumnKey
   row: PurchaseOrderLineItemRow
@@ -1029,9 +1275,15 @@ function renderLineCell({
   updateExistingRow: (row: PurchaseOrderLineItemRow, updates: Partial<EditableRowState>) => void
   itemOptions: ItemOption[]
   accountOptions: AccountOption[]
+  departmentOptions: DepartmentOption[]
+  locationOptions: LocationOption[]
+  classOptions: ClassOption[]
+  projectOptions: ProjectOption[]
+  allowNegativeUnitPrice: boolean
   lineColumnCustomization?: LineColumnSettings
   currencyCode?: string | null
   tableInputClass: string
+  classLabelLower: string
 }) {
   const itemEditDisplay = lineColumnCustomization?.['item-id']?.editDisplay ?? 'idAndLabel'
   const itemViewDisplay = lineColumnCustomization?.['item-id']?.viewDisplay ?? 'idAndLabel'
@@ -1041,8 +1293,20 @@ function renderLineCell({
   const accountViewDisplay = lineColumnCustomization?.['expense-account']?.viewDisplay ?? 'idAndLabel'
   const accountDropdownDisplay = lineColumnCustomization?.['expense-account']?.dropdownDisplay ?? 'idAndLabel'
   const accountDropdownSort = lineColumnCustomization?.['expense-account']?.dropdownSort ?? 'id'
+  const departmentEditDisplay = lineColumnCustomization?.department?.editDisplay ?? 'idAndLabel'
+  const departmentViewDisplay = lineColumnCustomization?.department?.viewDisplay ?? 'idAndLabel'
+  const locationEditDisplay = lineColumnCustomization?.location?.editDisplay ?? 'idAndLabel'
+  const locationViewDisplay = lineColumnCustomization?.location?.viewDisplay ?? 'idAndLabel'
+  const classEditDisplay = lineColumnCustomization?.class?.editDisplay ?? 'idAndLabel'
+  const classViewDisplay = lineColumnCustomization?.class?.viewDisplay ?? 'idAndLabel'
+  const projectEditDisplay = lineColumnCustomization?.project?.editDisplay ?? 'label'
+  const projectViewDisplay = lineColumnCustomization?.project?.viewDisplay ?? 'label'
   const fullItemValue = formatLookupValue(row.itemId, row.itemName, 'idAndLabel')
   const fullAccountValue = formatLookupValue(row.expenseAccountId, row.expenseAccountName, 'idAndLabel')
+  const fullDepartmentValue = formatLookupValue(row.departmentId, row.departmentName, 'idAndLabel')
+  const fullLocationValue = formatLookupValue(row.locationId, row.locationName, 'idAndLabel')
+  const fullClassValue = formatLookupValue(row.classId, row.className, 'idAndLabel')
+  const fullProjectValue = formatLookupValue(row.projectId, row.projectName, 'label')
   const itemInputWidth = estimateEditableControlWidth({
     value: state.itemSearch,
     min: 260,
@@ -1066,6 +1330,30 @@ function renderLineCell({
     min: 180,
     max: 420,
     fallback: 'Notes',
+  })
+  const departmentInputWidth = estimateEditableControlWidth({
+    value: state.departmentSearch,
+    min: 180,
+    max: 420,
+    fallback: 'Select department',
+  })
+  const locationInputWidth = estimateEditableControlWidth({
+    value: state.locationSearch,
+    min: 180,
+    max: 420,
+    fallback: 'Select location',
+  })
+  const classInputWidth = estimateEditableControlWidth({
+    value: state.classSearch,
+    min: 180,
+    max: 420,
+    fallback: `Select ${classLabelLower}`,
+  })
+  const projectInputWidth = estimateEditableControlWidth({
+    value: state.projectSearch,
+    min: 180,
+    max: 420,
+    fallback: 'Select project',
   })
   switch (columnId) {
     case 'line':
@@ -1197,6 +1485,146 @@ function renderLineCell({
       ) : (
         <span className="block whitespace-nowrap" title={row.description} style={{ color: 'var(--text-secondary)' }}>{row.description}</span>
       )
+    case 'department':
+      return editing ? (
+        <div style={{ width: `${departmentInputWidth}px` }}>
+          <SearchableSelect
+            selectedValue={state.departmentRecordId ?? ''}
+            options={departmentOptions.map((department) => ({
+              value: department.id,
+              label: `${department.departmentNumber ?? department.departmentId} - ${department.name}`,
+              searchText: `${department.departmentNumber ?? department.departmentId ?? ''} ${department.name}`,
+            }))}
+            placeholder="None"
+            searchPlaceholder="Search department"
+            dropdownWidthMode="trigger"
+            textClassName={tableInputClass}
+            onSelect={(value) => {
+              const department = departmentOptions.find((option) => option.id === value)
+              updateExistingRow(
+                row,
+                department
+                  ? buildDimensionSelectionUpdates(
+                      department.id,
+                      'departmentSearch',
+                      'departmentRecordId',
+                      formatLookupValue(department.departmentNumber ?? department.departmentId, department.name, departmentEditDisplay),
+                    )
+                  : { departmentRecordId: null, departmentSearch: '', error: '' },
+              )
+            }}
+          />
+        </div>
+      ) : (
+        <span className="block whitespace-nowrap" title={fullDepartmentValue || '-'}>
+          {formatLookupValue(row.departmentId, row.departmentName, departmentViewDisplay) || '-'}
+        </span>
+      )
+    case 'location':
+      return editing ? (
+        <div style={{ width: `${locationInputWidth}px` }}>
+          <SearchableSelect
+            selectedValue={state.locationRecordId ?? ''}
+            options={locationOptions.map((location) => ({
+              value: location.id,
+              label: `${location.code ?? location.locationId} - ${location.name}`,
+              searchText: `${location.code ?? location.locationId ?? ''} ${location.name}`,
+            }))}
+            placeholder="None"
+            searchPlaceholder="Search location"
+            dropdownWidthMode="trigger"
+            textClassName={tableInputClass}
+            onSelect={(value) => {
+              const location = locationOptions.find((option) => option.id === value)
+              updateExistingRow(
+                row,
+                location
+                  ? buildDimensionSelectionUpdates(
+                      location.id,
+                      'locationSearch',
+                      'locationRecordId',
+                      formatLookupValue(location.code ?? location.locationId, location.name, locationEditDisplay),
+                    )
+                  : { locationRecordId: null, locationSearch: '', error: '' },
+              )
+            }}
+          />
+        </div>
+      ) : (
+        <span className="block whitespace-nowrap" title={fullLocationValue || '-'}>
+          {formatLookupValue(row.locationId, row.locationName, locationViewDisplay) || '-'}
+        </span>
+      )
+    case 'class':
+      return editing ? (
+        <div style={{ width: `${classInputWidth}px` }}>
+          <SearchableSelect
+            selectedValue={state.classRecordId ?? ''}
+            options={classOptions.map((classOption) => ({
+              value: classOption.id,
+              label: `${classOption.classId} - ${classOption.name}`,
+              searchText: `${classOption.classId} ${classOption.name}`,
+            }))}
+            placeholder="None"
+            searchPlaceholder={`Search ${classLabelLower}`}
+            dropdownWidthMode="trigger"
+            textClassName={tableInputClass}
+            onSelect={(value) => {
+              const classOption = classOptions.find((option) => option.id === value)
+              updateExistingRow(
+                row,
+                classOption
+                  ? buildDimensionSelectionUpdates(
+                      classOption.id,
+                      'classSearch',
+                      'classRecordId',
+                      formatLookupValue(classOption.classId, classOption.name, classEditDisplay),
+                    )
+                  : { classRecordId: null, classSearch: '', error: '' },
+              )
+            }}
+          />
+        </div>
+      ) : (
+        <span className="block whitespace-nowrap" title={fullClassValue || '-'}>
+          {formatLookupValue(row.classId, row.className, classViewDisplay) || '-'}
+        </span>
+      )
+    case 'project':
+      return editing ? (
+        <div style={{ width: `${projectInputWidth}px` }}>
+          <SearchableSelect
+            selectedValue={state.projectRecordId ?? ''}
+            options={projectOptions.map((project) => ({
+              value: project.id,
+              label: project.name,
+              searchText: project.description?.trim() ? `${project.name} ${project.description}` : project.name,
+            }))}
+            placeholder="None"
+            searchPlaceholder="Search project"
+            dropdownWidthMode="trigger"
+            textClassName={tableInputClass}
+            onSelect={(value) => {
+              const project = projectOptions.find((option) => option.id === value)
+              updateExistingRow(
+                row,
+                project
+                  ? buildDimensionSelectionUpdates(
+                      project.id,
+                      'projectSearch',
+                      'projectRecordId',
+                      formatLookupValue(project.id, project.name, projectEditDisplay),
+                    )
+                  : { projectRecordId: null, projectSearch: '', error: '' },
+              )
+            }}
+          />
+        </div>
+      ) : (
+        <span className="block whitespace-nowrap" title={fullProjectValue || '-'}>
+          {formatLookupValue(row.projectId, row.projectName, projectViewDisplay) || '-'}
+        </span>
+      )
     case 'notes':
       return editing ? (
         <input
@@ -1232,7 +1660,7 @@ function renderLineCell({
       return editing ? (
         <input
           type="number"
-          min="0"
+          min={allowNegativeUnitPrice ? undefined : '0'}
           step="0.01"
           value={state.unitPrice}
           onChange={(event) => updateExistingRow(row, { unitPrice: event.target.value, error: '' })}
@@ -1258,9 +1686,15 @@ function renderDraftLineCell({
   updateDraftRow,
   itemOptions,
   accountOptions,
+  departmentOptions,
+  locationOptions,
+  classOptions,
+  projectOptions,
+  allowNegativeUnitPrice,
   lineColumnCustomization,
   currencyCode,
   tableInputClass,
+  classLabelLower,
 }: {
   columnId: TransactionLineColumnKey
   lineNumber: number
@@ -1270,9 +1704,15 @@ function renderDraftLineCell({
   updateDraftRow: (draftId: string, updates: Partial<DraftRowState>) => void
   itemOptions: ItemOption[]
   accountOptions: AccountOption[]
+  departmentOptions: DepartmentOption[]
+  locationOptions: LocationOption[]
+  classOptions: ClassOption[]
+  projectOptions: ProjectOption[]
+  allowNegativeUnitPrice: boolean
   lineColumnCustomization?: LineColumnSettings
   currencyCode?: string | null
   tableInputClass: string
+  classLabelLower: string
 }) {
   const itemEditDisplay = lineColumnCustomization?.['item-id']?.editDisplay ?? 'idAndLabel'
   const itemDropdownDisplay = lineColumnCustomization?.['item-id']?.dropdownDisplay ?? 'idAndLabel'
@@ -1280,6 +1720,10 @@ function renderDraftLineCell({
   const accountEditDisplay = lineColumnCustomization?.['expense-account']?.editDisplay ?? 'idAndLabel'
   const accountDropdownDisplay = lineColumnCustomization?.['expense-account']?.dropdownDisplay ?? 'idAndLabel'
   const accountDropdownSort = lineColumnCustomization?.['expense-account']?.dropdownSort ?? 'id'
+  const departmentEditDisplay = lineColumnCustomization?.department?.editDisplay ?? 'idAndLabel'
+  const locationEditDisplay = lineColumnCustomization?.location?.editDisplay ?? 'idAndLabel'
+  const classEditDisplay = lineColumnCustomization?.class?.editDisplay ?? 'idAndLabel'
+  const projectEditDisplay = lineColumnCustomization?.project?.editDisplay ?? 'label'
   const itemInputWidth = estimateEditableControlWidth({
     value: draftRow.itemSearch,
     min: 260,
@@ -1303,6 +1747,30 @@ function renderDraftLineCell({
     min: 180,
     max: 420,
     fallback: 'Notes',
+  })
+  const departmentInputWidth = estimateEditableControlWidth({
+    value: draftRow.departmentSearch,
+    min: 180,
+    max: 420,
+    fallback: 'Select department',
+  })
+  const locationInputWidth = estimateEditableControlWidth({
+    value: draftRow.locationSearch,
+    min: 180,
+    max: 420,
+    fallback: 'Select location',
+  })
+  const classInputWidth = estimateEditableControlWidth({
+    value: draftRow.classSearch,
+    min: 180,
+    max: 420,
+    fallback: `Select ${classLabelLower}`,
+  })
+  const projectInputWidth = estimateEditableControlWidth({
+    value: draftRow.projectSearch,
+    min: 180,
+    max: 420,
+    fallback: 'Select project',
   })
   switch (columnId) {
     case 'line':
@@ -1416,6 +1884,130 @@ function renderDraftLineCell({
           style={{ borderColor: 'var(--border-muted)', width: `${descriptionInputWidth}px` }}
         />
       )
+    case 'department':
+      return (
+        <div style={{ width: `${departmentInputWidth}px` }}>
+          <SearchableSelect
+            selectedValue={draftRow.departmentRecordId ?? ''}
+            options={departmentOptions.map((department) => ({
+              value: department.id,
+              label: `${department.departmentNumber ?? department.departmentId} - ${department.name}`,
+              searchText: `${department.departmentNumber ?? department.departmentId ?? ''} ${department.name}`,
+            }))}
+            placeholder="None"
+            searchPlaceholder="Search department"
+            dropdownWidthMode="trigger"
+            textClassName={tableInputClass}
+            onSelect={(value) => {
+              const department = departmentOptions.find((option) => option.id === value)
+              updateDraftRow(
+                draftRow.id,
+                department
+                  ? buildDimensionSelectionUpdates(
+                      department.id,
+                      'departmentSearch',
+                      'departmentRecordId',
+                      formatLookupValue(department.departmentNumber ?? department.departmentId, department.name, departmentEditDisplay),
+                    )
+                  : { departmentRecordId: null, departmentSearch: '', error: '' },
+              )
+            }}
+          />
+        </div>
+      )
+    case 'location':
+      return (
+        <div style={{ width: `${locationInputWidth}px` }}>
+          <SearchableSelect
+            selectedValue={draftRow.locationRecordId ?? ''}
+            options={locationOptions.map((location) => ({
+              value: location.id,
+              label: `${location.code ?? location.locationId} - ${location.name}`,
+              searchText: `${location.code ?? location.locationId ?? ''} ${location.name}`,
+            }))}
+            placeholder="None"
+            searchPlaceholder="Search location"
+            dropdownWidthMode="trigger"
+            textClassName={tableInputClass}
+            onSelect={(value) => {
+              const location = locationOptions.find((option) => option.id === value)
+              updateDraftRow(
+                draftRow.id,
+                location
+                  ? buildDimensionSelectionUpdates(
+                      location.id,
+                      'locationSearch',
+                      'locationRecordId',
+                      formatLookupValue(location.code ?? location.locationId, location.name, locationEditDisplay),
+                    )
+                  : { locationRecordId: null, locationSearch: '', error: '' },
+              )
+            }}
+          />
+        </div>
+      )
+    case 'class':
+      return (
+        <div style={{ width: `${classInputWidth}px` }}>
+          <SearchableSelect
+            selectedValue={draftRow.classRecordId ?? ''}
+            options={classOptions.map((classOption) => ({
+              value: classOption.id,
+              label: `${classOption.classId} - ${classOption.name}`,
+              searchText: `${classOption.classId} ${classOption.name}`,
+            }))}
+            placeholder="None"
+            searchPlaceholder={`Search ${classLabelLower}`}
+            dropdownWidthMode="trigger"
+            textClassName={tableInputClass}
+            onSelect={(value) => {
+              const classOption = classOptions.find((option) => option.id === value)
+              updateDraftRow(
+                draftRow.id,
+                classOption
+                  ? buildDimensionSelectionUpdates(
+                      classOption.id,
+                      'classSearch',
+                      'classRecordId',
+                      formatLookupValue(classOption.classId, classOption.name, classEditDisplay),
+                    )
+                  : { classRecordId: null, classSearch: '', error: '' },
+              )
+            }}
+          />
+        </div>
+      )
+    case 'project':
+      return (
+        <div style={{ width: `${projectInputWidth}px` }}>
+          <SearchableSelect
+            selectedValue={draftRow.projectRecordId ?? ''}
+            options={projectOptions.map((project) => ({
+              value: project.id,
+              label: project.name,
+              searchText: project.description?.trim() ? `${project.name} ${project.description}` : project.name,
+            }))}
+            placeholder="None"
+            searchPlaceholder="Search project"
+            dropdownWidthMode="trigger"
+            textClassName={tableInputClass}
+            onSelect={(value) => {
+              const project = projectOptions.find((option) => option.id === value)
+              updateDraftRow(
+                draftRow.id,
+                project
+                  ? buildDimensionSelectionUpdates(
+                      project.id,
+                      'projectSearch',
+                      'projectRecordId',
+                      formatLookupValue(project.id, project.name, projectEditDisplay),
+                    )
+                  : { projectRecordId: null, projectSearch: '', error: '' },
+              )
+            }}
+          />
+        </div>
+      )
     case 'notes':
       return (
         <input
@@ -1448,7 +2040,7 @@ function renderDraftLineCell({
       return (
         <input
           type="number"
-          min="0"
+          min={allowNegativeUnitPrice ? undefined : '0'}
           step="0.01"
           value={draftRow.unitPrice}
           onChange={(event) => updateDraftRow(draftRow.id, { unitPrice: event.target.value, error: '' })}

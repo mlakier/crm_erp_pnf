@@ -5,7 +5,7 @@ import { loadCompanySetupSettings } from '@/lib/company-setup-settings-store'
 import {
   syncAutoDocumentRelationshipsForSource,
 } from '@/lib/document-relationships'
-import { generateNextJournalNumber } from '@/lib/journal-number'
+import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { sumMoney } from '@/lib/money'
 import { deriveOpenItemCurrencyContext } from '@/lib/open-item-currency-context'
 import {
@@ -728,7 +728,7 @@ export async function syncCreditMemoPosting(
       settlementPlans.length > 0 &&
       (isMaterialAmount(realizedFxLocalAmount) || isMaterialAmount(realizedFxFunctionalAmount) || isMaterialAmount(realizedFxGroupAmount))
         ? buildRealizedFxJournalLines({
-            description: `${creditMemo.number} realized FX`,
+            description: creditMemo.number,
             memo: creditMemo.notes ?? null,
             subsidiaryId: creditMemo.subsidiaryId ?? null,
             customerId: creditMemo.customerId,
@@ -742,7 +742,7 @@ export async function syncCreditMemoPosting(
           })
         : []
 
-    const journalNumber = await generateNextJournalNumber()
+    const journalNumber = await generateNextSystemJournalNumber()
 
     await tx.journalEntry.create({
       data: {
@@ -1089,7 +1089,7 @@ export async function syncBillCreditPosting(
       settlementPlans.length > 0 &&
       (isMaterialAmount(realizedFxLocalAmount) || isMaterialAmount(realizedFxFunctionalAmount) || isMaterialAmount(realizedFxGroupAmount))
         ? buildRealizedFxJournalLines({
-            description: `${billCredit.number} realized FX`,
+            description: billCredit.number,
             memo: billCredit.notes ?? null,
             subsidiaryId: billCredit.subsidiaryId ?? null,
             vendorId: billCredit.vendorId,
@@ -1103,7 +1103,7 @@ export async function syncBillCreditPosting(
           })
         : []
 
-    const journalNumber = await generateNextJournalNumber()
+    const journalNumber = await generateNextSystemJournalNumber()
 
     await tx.journalEntry.create({
       data: {

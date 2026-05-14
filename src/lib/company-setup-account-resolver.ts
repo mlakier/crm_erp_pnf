@@ -38,3 +38,11 @@ export async function loadConfiguredUnrealizedFxPostingAccounts(tx: AccountResol
     unrealizedFxLossAccountId: await resolvePostingAccountId(settings.unrealizedFxLossAccountId, tx),
   }
 }
+
+export async function loadConfiguredCtaPostingAccount(tx: AccountResolverTransactionClient = prisma) {
+  const settings = await loadCompanySetupSettings()
+
+  return {
+    ctaAccountId: await resolvePostingAccountId(settings.ctaAccountId, tx),
+  }
+}

@@ -9,6 +9,8 @@ import {
   isWorkflowActionIdAllowed,
   loadOtcWorkflowRuntime,
 } from '@/lib/otc-workflow-runtime'
+import { getRequiredStandardTransactionPostingContext } from '@/lib/transaction-posting-context'
+import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
 
 function toOptionalString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
@@ -222,6 +224,10 @@ export async function POST(req: NextRequest) {
         quantity: parseQuantity(line.quantity),
         notes: toOptionalString(line.notes),
       }))
+    const lineRequirementsError = getTransactionLineRequirementsError('fulfillment', normalizedLines)
+    if (lineRequirementsError) {
+      return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
+    }
     const typedLines = normalizedLines.filter(
       (line): line is FulfillmentLineInput & { salesOrderLineItemId: string } =>
         Boolean(line.salesOrderLineItemId) && line.quantity > 0,
@@ -242,6 +248,14 @@ export async function POST(req: NextRequest) {
     }
 
     const number = await generateFulfillmentNumber()
+    const postingContext = getRequiredStandardTransactionPostingContext('fulfillment', {
+      subsidiaryId: subsidiaryId ?? availability.salesOrder.subsidiaryId,
+      currencyId: currencyId ?? availability.salesOrder.currencyId,
+    })
+    if ('error' in postingContext) {
+      return NextResponse.json({ error: postingContext.error }, { status: 400 })
+    }
+
     const row = await prisma.fulfillment.create({
       data: {
         number,
@@ -253,8 +267,8 @@ export async function POST(req: NextRequest) {
         date,
         notes,
         salesOrderId,
-        subsidiaryId: subsidiaryId ?? availability.salesOrder.subsidiaryId,
-        currencyId: currencyId ?? availability.salesOrder.currencyId,
+        subsidiaryId: postingContext.subsidiaryId,
+        currencyId: postingContext.currencyId,
         lines: {
           create: typedLines.map((line) => ({
             salesOrderLineItemId: line.salesOrderLineItemId,
@@ -335,6 +349,13 @@ export async function PUT(req: NextRequest) {
       body.subsidiaryId === '' ? null : toOptionalString(body.subsidiaryId) ?? existing.subsidiaryId
     const nextCurrencyId =
       body.currencyId === '' ? null : toOptionalString(body.currencyId) ?? existing.currencyId
+    const postingContext = getRequiredStandardTransactionPostingContext('fulfillment', {
+      subsidiaryId: nextSubsidiaryId,
+      currencyId: nextCurrencyId,
+    })
+    if ('error' in postingContext) {
+      return NextResponse.json({ error: postingContext.error }, { status: 400 })
+    }
 
     if (
       body.workflowStep === 'fulfillment'
@@ -350,8 +371,8 @@ export async function PUT(req: NextRequest) {
         status: nextStatus,
         notes: nextNotes,
         date: nextDate,
-        subsidiaryId: nextSubsidiaryId,
-        currencyId: nextCurrencyId,
+        subsidiaryId: postingContext.subsidiaryId,
+        currencyId: postingContext.currencyId,
       },
       include: {
         subsidiary: { select: { id: true, subsidiaryId: true, name: true } },

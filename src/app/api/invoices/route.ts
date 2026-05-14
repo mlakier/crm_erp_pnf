@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logActivity, logCommunicationActivity, logFieldChangeActivities, logRecordSnapshotActivities } from '@/lib/activity'
 import { generateNextInvoiceNumber } from '@/lib/invoice-number'
-import { generateNextJournalNumber } from '@/lib/journal-number'
+import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { calcLineTotal, sumMoney } from '@/lib/money'
 import { toNumericValue } from '@/lib/format'
 import { loadCompanySetupSettings } from '@/lib/company-setup-settings-store'
 import { deriveOpenItemCurrencyContext } from '@/lib/open-item-currency-context'
 import { ensureOpenItemForSource } from '@/lib/open-item-service'
+import { getTransactionPostingContextError } from '@/lib/transaction-posting-context'
+import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
+import { deriveSettlementLineDimensions } from '@/lib/settlement-dimension-policy'
 import {
   coerceWorkflowValueForStep,
   getDefaultWorkflowStatus,
@@ -151,6 +154,9 @@ async function postInvoiceApprovalJournal(invoiceId: string) {
               deferredRevenueAccountId: true,
             },
           },
+          department: { select: { id: true } },
+          location: { select: { id: true } },
+          classDimension: { select: { id: true } },
         },
       },
     },
@@ -202,6 +208,8 @@ async function postInvoiceApprovalJournal(invoiceId: string) {
 
   if (!arAccount) return
 
+  const invoiceSummaryDimensions = await deriveSettlementLineDimensions(invoice.lineItems)
+
   const revenueLines = invoice.lineItems
     .map((line, index) => {
       const lineTotal = Number(line.lineTotal)
@@ -224,6 +232,9 @@ async function postInvoiceApprovalJournal(invoiceId: string) {
         memo: line.description || item?.name || `Revenue for invoice ${invoice.number}`,
         customerId: invoice.customerId,
         itemId: line.itemId,
+        departmentId: line.departmentId,
+        locationId: line.locationId,
+        classId: line.classId,
       }
     })
     .filter((line): line is NonNullable<typeof line> => Boolean(line))
@@ -231,7 +242,7 @@ async function postInvoiceApprovalJournal(invoiceId: string) {
   const totalCredit = revenueLines.reduce((sum, line) => sum + Number(line.credit ?? 0), 0)
   if (!revenueLines.length || totalCredit <= 0) return
 
-  const number = await generateNextJournalNumber()
+  const number = await generateNextSystemJournalNumber()
 
   await prisma.journalEntry.create({
     data: {
@@ -256,6 +267,7 @@ async function postInvoiceApprovalJournal(invoiceId: string) {
             credit: 0,
             memo: `AR for invoice ${invoice.number}`,
             customerId: invoice.customerId,
+            ...invoiceSummaryDimensions,
           },
           ...revenueLines,
         ],
@@ -377,6 +389,7 @@ export async function POST(request: NextRequest) {
         itemId: line.itemId,
         departmentId: line.departmentId,
         locationId: line.locationId,
+        classId: line.classId,
         projectId: line.projectId,
         serviceStartDate: line.serviceStartDate,
         serviceEndDate: line.serviceEndDate,
@@ -385,9 +398,20 @@ export async function POST(request: NextRequest) {
         standaloneSellingPrice: line.standaloneSellingPrice,
         allocatedAmount: line.allocatedAmount,
       }))
+      const lineRequirementsError = getTransactionLineRequirementsError('invoice', normalizedLineItems)
+      if (lineRequirementsError) {
+        return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
+      }
       const total = normalizedLineItems.length
         ? sumMoney(normalizedLineItems.map((line) => line.lineTotal))
         : toNumericValue(sourceInvoice.total)
+      const postingContextError = getTransactionPostingContextError('invoice', {
+        subsidiaryId: subsidiaryId ?? sourceInvoice.subsidiaryId,
+        currencyId: currencyId ?? sourceInvoice.currencyId,
+      })
+      if (postingContextError) {
+        return NextResponse.json({ error: postingContextError }, { status: 400 })
+      }
 
       const invoice = await prisma.invoice.create({
         data: {
@@ -457,6 +481,13 @@ export async function POST(request: NextRequest) {
 
       if (!customer) {
         return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
+      }
+      const postingContextError = getTransactionPostingContextError('invoice', {
+        subsidiaryId: subsidiaryId ?? customer.subsidiaryId,
+        currencyId: currencyId ?? customer.currencyId,
+      })
+      if (postingContextError) {
+        return NextResponse.json({ error: postingContextError }, { status: 400 })
       }
 
       const invoice = await prisma.invoice.create({
@@ -535,9 +566,20 @@ export async function POST(request: NextRequest) {
       notes: line.notes,
       itemId: line.itemId,
     }))
+    const lineRequirementsError = getTransactionLineRequirementsError('invoice', normalizedLineItems)
+    if (lineRequirementsError) {
+      return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
+    }
     const total = normalizedLineItems.length
       ? sumMoney(normalizedLineItems.map((line) => line.lineTotal))
       : toNumericValue(salesOrder.total)
+    const postingContextError = getTransactionPostingContextError('invoice', {
+      subsidiaryId: subsidiaryId ?? salesOrder.subsidiaryId,
+      currencyId: currencyId ?? salesOrder.currencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
 
     const invoice = await prisma.invoice.create({
         data: {
@@ -629,6 +671,13 @@ export async function PUT(request: NextRequest) {
       body.subsidiaryId === '' ? null : typeof body.subsidiaryId === 'string' ? body.subsidiaryId : existing.subsidiaryId
     const nextCurrencyId =
       body.currencyId === '' ? null : typeof body.currencyId === 'string' ? body.currencyId : existing.currencyId
+    const postingContextError = getTransactionPostingContextError('invoice', {
+      subsidiaryId: nextSubsidiaryId,
+      currencyId: nextCurrencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
     if (
       body.workflowStep === 'invoice'
       && typeof body.workflowActionId === 'string'

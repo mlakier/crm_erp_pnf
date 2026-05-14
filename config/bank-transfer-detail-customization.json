@@ -1,0 +1,336 @@
+{
+  "formColumns": 4,
+  "sections": [
+    "Currency Context",
+    "Reference Details",
+    "Transaction Details",
+    "Record Keys and System Dates"
+  ],
+  "sectionRows": {
+    "Currency Context": 2,
+    "Reference Details": 2,
+    "Transaction Details": 3,
+    "Record Keys and System Dates": 1
+  },
+  "fields": {
+    "transactionAmount": {
+      "visible": true,
+      "section": "Currency Context",
+      "order": 0,
+      "column": 1
+    },
+    "localAmount": {
+      "visible": true,
+      "section": "Currency Context",
+      "order": 0,
+      "column": 2
+    },
+    "functionalAmount": {
+      "visible": true,
+      "section": "Currency Context",
+      "order": 0,
+      "column": 3
+    },
+    "groupAmount": {
+      "visible": true,
+      "section": "Currency Context",
+      "order": 0,
+      "column": 4
+    },
+    "fxRateAudit": {
+      "visible": true,
+      "section": "Currency Context",
+      "order": 1,
+      "column": 1
+    },
+    "fxRateType": {
+      "visible": true,
+      "section": "Currency Context",
+      "order": 1,
+      "column": 2
+    },
+    "translationStatus": {
+      "visible": true,
+      "section": "Currency Context",
+      "order": 1,
+      "column": 3
+    },
+    "transferNumber": {
+      "visible": true,
+      "section": "Transaction Details",
+      "order": 0,
+      "column": 1
+    },
+    "status": {
+      "visible": true,
+      "section": "Transaction Details",
+      "order": 0,
+      "column": 2
+    },
+    "transferDate": {
+      "visible": true,
+      "section": "Transaction Details",
+      "order": 0,
+      "column": 3
+    },
+    "amount": {
+      "visible": true,
+      "section": "Transaction Details",
+      "order": 0,
+      "column": 4
+    },
+    "fromBankAccountId": {
+      "visible": true,
+      "section": "Transaction Details",
+      "order": 1,
+      "column": 1
+    },
+    "fromCashGl": {
+      "visible": true,
+      "section": "Transaction Details",
+      "order": 1,
+      "column": 2
+    },
+    "toBankAccountId": {
+      "visible": true,
+      "section": "Transaction Details",
+      "order": 1,
+      "column": 3
+    },
+    "toCashGl": {
+      "visible": true,
+      "section": "Transaction Details",
+      "order": 1,
+      "column": 4
+    },
+    "subsidiaryId": {
+      "visible": true,
+      "section": "Transaction Details",
+      "order": 2,
+      "column": 1
+    },
+    "currencyId": {
+      "visible": true,
+      "section": "Transaction Details",
+      "order": 2,
+      "column": 2
+    },
+    "memo": {
+      "visible": true,
+      "section": "Transaction Details",
+      "order": 2,
+      "column": 3
+    },
+    "bankFeedTransactionId": {
+      "visible": true,
+      "section": "Reference Details",
+      "order": 0,
+      "column": 1
+    },
+    "journalEntryId": {
+      "visible": true,
+      "section": "Reference Details",
+      "order": 0,
+      "column": 2
+    },
+    "createdAt": {
+      "visible": true,
+      "section": "Record Keys and System Dates",
+      "order": 0,
+      "column": 1
+    },
+    "updatedAt": {
+      "visible": true,
+      "section": "Record Keys and System Dates",
+      "order": 0,
+      "column": 2
+    }
+  },
+  "referenceLayouts": [],
+  "glImpactSettings": {
+    "fontSize": "xs"
+  },
+  "glImpactColumns": {
+    "date": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "normal"
+    },
+    "journalNumber": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "normal"
+    },
+    "sourceType": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "normal"
+    },
+    "sourceNumber": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "normal"
+    },
+    "account": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "wide"
+    },
+    "department": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "normal"
+    },
+    "location": {
+      "visible": true,
+      "order": 6,
+      "widthMode": "normal"
+    },
+    "class": {
+      "visible": true,
+      "order": 7,
+      "widthMode": "normal"
+    },
+    "description": {
+      "visible": true,
+      "order": 8,
+      "widthMode": "wide"
+    },
+    "debit": {
+      "visible": true,
+      "order": 9,
+      "widthMode": "normal"
+    },
+    "credit": {
+      "visible": true,
+      "order": 10,
+      "widthMode": "normal"
+    },
+    "txnAmount": {
+      "visible": true,
+      "order": 11,
+      "widthMode": "normal"
+    },
+    "localAmount": {
+      "visible": false,
+      "order": 12,
+      "widthMode": "normal"
+    },
+    "functionalAmount": {
+      "visible": false,
+      "order": 13,
+      "widthMode": "normal"
+    },
+    "groupAmount": {
+      "visible": false,
+      "order": 14,
+      "widthMode": "normal"
+    }
+  },
+  "statCards": [
+    {
+      "id": "status-card",
+      "metric": "status",
+      "visible": true,
+      "order": 0
+    },
+    {
+      "id": "amount-card",
+      "metric": "amount",
+      "visible": true,
+      "order": 1
+    },
+    {
+      "id": "bank-card",
+      "metric": "bank",
+      "visible": true,
+      "order": 2
+    },
+    {
+      "id": "date-card",
+      "metric": "date",
+      "visible": true,
+      "order": 3
+    }
+  ],
+  "secondarySettings": {
+    "fontSize": "xs"
+  },
+  "secondaryColumns": {
+    "date": {
+      "visible": true,
+      "order": 0,
+      "widthMode": "normal"
+    },
+    "journalNumber": {
+      "visible": true,
+      "order": 1,
+      "widthMode": "normal"
+    },
+    "sourceType": {
+      "visible": true,
+      "order": 2,
+      "widthMode": "normal"
+    },
+    "sourceNumber": {
+      "visible": true,
+      "order": 3,
+      "widthMode": "normal"
+    },
+    "account": {
+      "visible": true,
+      "order": 4,
+      "widthMode": "wide"
+    },
+    "department": {
+      "visible": true,
+      "order": 5,
+      "widthMode": "normal"
+    },
+    "location": {
+      "visible": true,
+      "order": 6,
+      "widthMode": "normal"
+    },
+    "class": {
+      "visible": true,
+      "order": 7,
+      "widthMode": "normal"
+    },
+    "description": {
+      "visible": true,
+      "order": 8,
+      "widthMode": "wide"
+    },
+    "debit": {
+      "visible": true,
+      "order": 9,
+      "widthMode": "normal"
+    },
+    "credit": {
+      "visible": true,
+      "order": 10,
+      "widthMode": "normal"
+    },
+    "txnAmount": {
+      "visible": true,
+      "order": 11,
+      "widthMode": "normal"
+    },
+    "localAmount": {
+      "visible": false,
+      "order": 12,
+      "widthMode": "normal"
+    },
+    "functionalAmount": {
+      "visible": false,
+      "order": 13,
+      "widthMode": "normal"
+    },
+    "groupAmount": {
+      "visible": false,
+      "order": 14,
+      "widthMode": "normal"
+    }
+  }
+}

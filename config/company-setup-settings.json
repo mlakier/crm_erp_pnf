@@ -4,5 +4,32 @@
   "realizedFxGainAccountId": "cmoby74zq003ud9m9ogujk3qi",
   "realizedFxLossAccountId": "cmoby74zq003ud9m9ogujk3qi",
   "unrealizedFxGainAccountId": "cmoby74zo003qd9m9sovh8x33",
-  "unrealizedFxLossAccountId": "cmoby74zo003qd9m9sovh8x33"
+  "unrealizedFxLossAccountId": "cmoby74zo003qd9m9sovh8x33",
+  "ctaAccountId": "cmoby74zb002qd9m9a1kxgc9z",
+  "defaultBankFeeExpenseAccountId": "cmoby75bg012ed9m9aprq5qf6",
+  "defaultMerchantFeeExpenseAccountId": "cmoby759e00vud9m9ewg2rsqp",
+  "defaultInterestIncomeAccountId": "cmoby754600fyd9m94hwkqt19",
+  "defaultMiscBankIncomeAccountId": "cmoby75bu013md9m91b3bblz6",
+  "bankFeeKeywords": "bank fee, bank fees, service charge, monthly analysis fee, analysis fee, wire fee, ach fee, bank charge",
+  "merchantFeeKeywords": "merchant fee, card fee, processor fee, stripe fee, paypal fee",
+  "interestIncomeKeywords": "interest, int credit, earnings credit",
+  "miscBankIncomeKeywords": "misc income, miscellaneous income, bank rebate, rewards credit, cash back",
+  "consolidationPolicies": [
+    {
+      "parentSubsidiaryCode": "SUB-001",
+      "reportingCurrencyCode": "USD",
+      "defaultAmountLayer": "group",
+      "includeChildrenByDefault": true,
+      "translationPolicy": "configured_rates",
+      "eliminationPolicy": "planned_manual_review"
+    },
+    {
+      "parentSubsidiaryCode": "SUB-005",
+      "reportingCurrencyCode": "EUR",
+      "defaultAmountLayer": "functional",
+      "includeChildrenByDefault": true,
+      "translationPolicy": "configured_rates",
+      "eliminationPolicy": "planned_manual_review"
+    }
+  ]
 }

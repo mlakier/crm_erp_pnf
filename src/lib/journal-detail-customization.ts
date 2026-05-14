@@ -45,6 +45,7 @@ export type JournalLineColumnKey =
   | 'subsidiaryId'
   | 'departmentId'
   | 'locationId'
+  | 'classId'
   | 'projectId'
   | 'customerId'
   | 'vendorId'
@@ -60,6 +61,7 @@ export type JournalGlImpactColumnKey =
   | 'subsidiaryId'
   | 'departmentId'
   | 'locationId'
+  | 'classId'
   | 'projectId'
   | 'customerId'
   | 'vendorId'
@@ -202,6 +204,7 @@ export const JOURNAL_LINE_COLUMNS: JournalLineColumnMeta[] = [
   { id: 'subsidiaryId', label: 'Subsidiary', description: 'Intercompany subsidiary assigned to the line.' },
   { id: 'departmentId', label: 'Department', description: 'Department classification on the line.' },
   { id: 'locationId', label: 'Location', description: 'Location classification on the line.' },
+  { id: 'classId', label: 'Class', description: 'Class classification on the line.' },
   { id: 'projectId', label: 'Project', description: 'Project associated with the line.' },
   { id: 'customerId', label: 'Customer', description: 'Customer associated with the line.' },
   { id: 'vendorId', label: 'Vendor', description: 'Vendor associated with the line.' },
@@ -218,6 +221,7 @@ export const JOURNAL_GL_IMPACT_COLUMNS: JournalGlImpactColumnMeta[] = [
   { id: 'subsidiaryId', label: 'Subsidiary', description: 'Subsidiary context for the GL impact row.' },
   { id: 'departmentId', label: 'Department', description: 'Department classification on the GL impact row.' },
   { id: 'locationId', label: 'Location', description: 'Location classification on the GL impact row.' },
+  { id: 'classId', label: 'Class', description: 'Class classification on the GL impact row.' },
   { id: 'projectId', label: 'Project', description: 'Project associated with the GL impact row.' },
   { id: 'customerId', label: 'Customer', description: 'Customer associated with the GL impact row.' },
   { id: 'vendorId', label: 'Vendor', description: 'Vendor associated with the GL impact row.' },
@@ -256,6 +260,7 @@ const DEFAULT_JOURNAL_LINE_WIDTHS: Record<JournalLineColumnKey, JournalLineWidth
   subsidiaryId: 'normal',
   departmentId: 'compact',
   locationId: 'compact',
+  classId: 'compact',
   projectId: 'compact',
   customerId: 'normal',
   vendorId: 'normal',
@@ -281,6 +286,7 @@ const DEFAULT_JOURNAL_LINE_EDIT_DISPLAY: Record<JournalLineColumnKey, JournalLin
   subsidiaryId: 'label',
   departmentId: 'label',
   locationId: 'label',
+  classId: 'label',
   projectId: 'label',
   customerId: 'label',
   vendorId: 'label',
@@ -314,6 +320,7 @@ const DEFAULT_JOURNAL_LINE_DROPDOWN_SORT: Record<JournalLineColumnKey, JournalLi
   subsidiaryId: 'id',
   departmentId: 'id',
   locationId: 'id',
+  classId: 'id',
   projectId: 'label',
   customerId: 'id',
   vendorId: 'id',
@@ -330,6 +337,7 @@ const DEFAULT_JOURNAL_GL_IMPACT_WIDTHS: Record<JournalGlImpactColumnKey, Journal
   subsidiaryId: 'normal',
   departmentId: 'compact',
   locationId: 'compact',
+  classId: 'compact',
   projectId: 'normal',
   customerId: 'wide',
   vendorId: 'wide',
@@ -352,6 +360,7 @@ const DEFAULT_JOURNAL_GL_IMPACT_VIEW_DISPLAY: Record<JournalGlImpactColumnKey, J
   subsidiaryId: 'idAndLabel',
   departmentId: 'idAndLabel',
   locationId: 'idAndLabel',
+  classId: 'idAndLabel',
   projectId: 'idAndLabel',
   customerId: 'idAndLabel',
   vendorId: 'idAndLabel',

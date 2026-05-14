@@ -77,6 +77,7 @@ export default async function NewJournalEntryPage({
           subsidiaryId: line.subsidiaryId ?? '',
           departmentId: line.departmentId ?? '',
           locationId: line.locationId ?? '',
+          classId: line.classId ?? '',
           projectId: line.projectId ?? '',
           customerId: line.customerId ?? '',
           vendorId: line.vendorId ?? '',

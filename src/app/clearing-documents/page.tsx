@@ -130,12 +130,19 @@ export default async function ClearingDocumentsPage({
         {companyLogoPages ? <img src={companyLogoPages.url} alt="Company logo" className="h-16 w-auto rounded" /> : null}
         <div>
           <h1 className="text-xl font-semibold text-white">Clearing Documents</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{totalRows} total</p>
+          <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+            {totalRows} non-cash open-item offsets, netting documents, and write-off style applications
+          </p>
         </div>
-        <Link href="/clearing-documents/new" className="inline-flex items-center rounded-lg px-3.5 py-1.5 text-base font-semibold transition" style={{ backgroundColor: 'var(--accent-primary-strong)', color: '#fff' }}>
-          <span className="mr-1.5 text-lg leading-none">+</span>
-          New Clearing Document
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/open-item-clearing" className="inline-flex items-center rounded-lg px-3.5 py-1.5 text-base font-semibold transition" style={{ backgroundColor: 'var(--accent-primary-strong)', color: '#fff' }}>
+            Non-Cash Clearing Workbench
+          </Link>
+          <Link href="/clearing-documents/new" className="inline-flex items-center rounded-lg border px-3.5 py-1.5 text-base font-semibold transition" style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}>
+            <span className="mr-1.5 text-lg leading-none">+</span>
+            Manual Document
+          </Link>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">

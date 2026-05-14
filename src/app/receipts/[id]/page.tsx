@@ -35,9 +35,11 @@ import {
   buildTransactionGlImpactRows,
   buildTransactionCustomizePreviewFields,
   buildTransactionExportHeaderFields,
+  getOrderedVisibleTransactionLineColumns,
 } from '@/lib/transaction-detail-helpers'
 import {
   RECEIPT_DETAIL_FIELDS,
+  RECEIPT_LINE_COLUMNS,
   RECEIPT_REFERENCE_SOURCES,
   RECEIPT_STAT_CARDS,
   type ReceiptDetailFieldKey,
@@ -165,6 +167,9 @@ export default async function ReceiptDetailPage({
           account: {
             select: { accountId: true, accountNumber: true, name: true },
           },
+          department: { select: { departmentId: true, departmentNumber: true, name: true } },
+          location: { select: { locationId: true, code: true, name: true } },
+          classDimension: { select: { classId: true, name: true } },
         },
       },
     },
@@ -544,6 +549,10 @@ export default async function ReceiptDetailPage({
 
   const referenceColumns = Math.max(1, ...referenceSections.map((section) => section.columns))
   const receiptStatusActions = getReceiptStatusActions(receipt.status)
+  const visibleReceiptLineColumns = getOrderedVisibleTransactionLineColumns(
+    RECEIPT_LINE_COLUMNS,
+    customization,
+  ).map((column) => column.id)
 
   return (
     <RecordDetailPageShell
@@ -676,6 +685,7 @@ export default async function ReceiptDetailPage({
               rows={lineRows}
               editing={isEditing}
               lineOptions={lineOptions}
+              visibleColumnIds={visibleReceiptLineColumns}
               allowAddLines
               remoteConfig={
                 isEditing

@@ -6,7 +6,7 @@ import { generateVendorRefundNumber } from '@/lib/vendor-refund-number'
 import { loadCompanySetupSettings } from '@/lib/company-setup-settings-store'
 import { loadConfiguredRealizedFxPostingAccounts } from '@/lib/company-setup-account-resolver'
 import { deriveOpenItemCurrencyContext } from '@/lib/open-item-currency-context'
-import { generateNextJournalNumber } from '@/lib/journal-number'
+import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { logActivity, logCommunicationActivity } from '@/lib/activity'
 import {
   buildRealizedFxJournalLines,
@@ -292,7 +292,7 @@ async function postVendorRefundJournal(refundId: string) {
   const apGroupCredit = deriveCarriedSettlementAmount(groupAmount, realizedFxGroupAmount)
 
   const fxLines = buildRealizedFxJournalLines({
-    description: `${refund.number} realized FX`,
+    description: refund.number,
     memo: refund.reference ?? refund.notes ?? null,
     subsidiaryId: refund.subsidiaryId ?? firstBill.subsidiaryId ?? null,
     vendorId: refund.vendorId,
@@ -305,7 +305,7 @@ async function postVendorRefundJournal(refundId: string) {
     startingDisplayOrder: 2,
   })
 
-  const journalNumber = await generateNextJournalNumber()
+  const journalNumber = await generateNextSystemJournalNumber()
   await prisma.journalEntry.create({
     data: {
       number: journalNumber,

@@ -135,6 +135,7 @@ export default async function BillPaymentDetailPage({
       _sum: {
         realizedFxLocalAmount: true,
         realizedFxFunctionalAmount: true,
+        realizedFxGroupAmount: true,
       },
     }),
     loadListValues('BILL-PAYMENT-STATUS'),
@@ -242,6 +243,9 @@ export default async function BillPaymentDetailPage({
           account: {
             select: { accountId: true, accountNumber: true, name: true },
           },
+          department: { select: { departmentId: true, departmentNumber: true, name: true } },
+          location: { select: { locationId: true, code: true, name: true } },
+          classDimension: { select: { classId: true, name: true } },
         },
       },
     },
@@ -762,6 +766,7 @@ export default async function BillPaymentDetailPage({
     groupCurrencyLabel: currencyLabelById.get(paymentOpenItem?.groupCurrencyId ?? '') ?? null,
     realizedFxLocalAmount: paymentApplicationFx._sum.realizedFxLocalAmount,
     realizedFxFunctionalAmount: paymentApplicationFx._sum.realizedFxFunctionalAmount,
+    realizedFxGroupAmount: paymentApplicationFx._sum.realizedFxGroupAmount,
     fxRateType: payment.fxRateType ?? null,
     fxRateSource: payment.fxRateSource ?? null,
     fxEffectiveDateLabel: payment.fxEffectiveDate ? fmtDocumentDate(payment.fxEffectiveDate, moneySettings) : null,

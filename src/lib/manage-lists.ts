@@ -154,6 +154,7 @@ export async function ensureRegisteredManagedLists() {
           createdAt: new Date(),
           updatedAt: new Date(),
         })),
+        skipDuplicates: true,
       })
       continue
     }
@@ -180,6 +181,7 @@ export async function ensureRegisteredManagedLists() {
         createdAt: new Date(),
         updatedAt: new Date(),
       })),
+      skipDuplicates: true,
     })
   }
 }

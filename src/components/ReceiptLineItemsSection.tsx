@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import TransactionExecutionLinesSection, {
   type TransactionExecutionLineOption,
   type TransactionExecutionLineRow,
+  type TransactionExecutionLineVisibleColumn,
 } from '@/components/TransactionExecutionLinesSection'
 
 export type ReceiptLineOption = TransactionExecutionLineOption
@@ -30,6 +31,7 @@ export default function ReceiptLineItemsSection({
   title = 'Receipt Line Items',
   remoteConfig,
   allowAddLines = editing,
+  visibleColumnIds,
 }: {
   rows: ReceiptLineRow[]
   editing?: boolean
@@ -42,6 +44,7 @@ export default function ReceiptLineItemsSection({
     apiBasePath?: string
   }
   allowAddLines?: boolean
+  visibleColumnIds?: TransactionExecutionLineVisibleColumn[]
 }) {
   const executionRows = useMemo(
     () =>
@@ -102,6 +105,7 @@ export default function ReceiptLineItemsSection({
           : undefined
       }
       allowAddLines={allowAddLines}
+      visibleColumnIds={visibleColumnIds}
       emptyEditMessage="Add one or more purchase order lines to receive."
       emptyViewMessage="No receipt lines yet."
     />

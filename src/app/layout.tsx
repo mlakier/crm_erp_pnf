@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
+import { SeededDimensionLabelsProvider } from "@/components/SeededDimensionLabelsProvider";
 import { loadCompanyPreferencesSettings } from "@/lib/company-preferences-store";
 import { loadCompanyPageLogo } from "@/lib/company-page-logo";
+import { loadSeededDimensionDisplayLabels } from "@/lib/seeded-dimension-labels";
 
 export const metadata: Metadata = {
   title: "CRM/ERP System",
@@ -14,9 +16,10 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [companyPreferences, companyPageLogo] = await Promise.all([
+  const [companyPreferences, companyPageLogo, seededDimensionLabels] = await Promise.all([
     loadCompanyPreferencesSettings(),
     loadCompanyPageLogo(),
+    loadSeededDimensionDisplayLabels(),
   ])
 
   return (
@@ -26,7 +29,9 @@ export default async function RootLayout({
       data-company-money-settings={encodeURIComponent(JSON.stringify(companyPreferences.moneySettings))}
     >
       <body className="min-h-full flex flex-col">
-        <AppShell companyLogoUrl={companyPageLogo?.url ?? null}>{children}</AppShell>
+        <SeededDimensionLabelsProvider labels={seededDimensionLabels}>
+          <AppShell companyLogoUrl={companyPageLogo?.url ?? null}>{children}</AppShell>
+        </SeededDimensionLabelsProvider>
       </body>
     </html>
   );

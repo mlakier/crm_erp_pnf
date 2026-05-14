@@ -4,6 +4,9 @@ export type TransactionGlImpactColumnKey =
   | 'sourceType'
   | 'sourceNumber'
   | 'account'
+  | 'department'
+  | 'location'
+  | 'class'
   | 'description'
   | 'debit'
   | 'credit'
@@ -31,6 +34,36 @@ export type TransactionGlImpactColumnMeta = {
   description?: string
 }
 
+export type SeededDimensionDisplayKey = 'department' | 'location' | 'class'
+
+export type SeededDimensionDisplayLabels = Partial<Record<SeededDimensionDisplayKey, string>>
+
+const DIMENSION_COLUMN_LABEL_KEYS: Partial<Record<string, SeededDimensionDisplayKey>> = {
+  department: 'department',
+  departmentId: 'department',
+  location: 'location',
+  locationId: 'location',
+  class: 'class',
+  classId: 'class',
+}
+
+export function applySeededDimensionLabels<T extends { id: string; label: string; description?: string }>(
+  columns: readonly T[],
+  dimensionLabels?: SeededDimensionDisplayLabels,
+): T[] {
+  return columns.map((column) => {
+    const dimensionKey = DIMENSION_COLUMN_LABEL_KEYS[column.id]
+    const label = dimensionKey ? dimensionLabels?.[dimensionKey]?.trim() : ''
+    if (!label || label === column.label) return { ...column }
+
+    return {
+      ...column,
+      label,
+      description: column.description?.replace(/\b(Department|Location|Class)\b/g, label),
+    }
+  })
+}
+
 export type TransactionGlImpactRow = {
   id: string
   date: string
@@ -38,6 +71,9 @@ export type TransactionGlImpactRow = {
   sourceType: string
   sourceNumber: string
   account: string
+  department: string
+  location: string
+  class: string
   description: string
   debit: number
   credit: number
@@ -49,10 +85,13 @@ export type TransactionGlImpactRow = {
 
 export const TRANSACTION_GL_IMPACT_COLUMNS: TransactionGlImpactColumnMeta[] = [
   { id: 'date', label: 'Date', description: 'Posting date of the journal entry line.' },
-  { id: 'journalNumber', label: 'Journal #', description: 'Journal entry number that posted the impact.' },
+  { id: 'journalNumber', label: 'GL Posting #', description: 'System or manual GL posting number that posted the impact.' },
   { id: 'sourceType', label: 'Source', description: 'Source document type for the posted entry.' },
   { id: 'sourceNumber', label: 'Source Txn', description: 'Source transaction number for the posted entry.' },
   { id: 'account', label: 'Account', description: 'GL account impacted by the posting.' },
+  { id: 'department', label: 'Department', description: 'Department dimension carried by the posted line.' },
+  { id: 'location', label: 'Location', description: 'Location dimension carried by the posted line.' },
+  { id: 'class', label: 'Class', description: 'Class dimension carried by the posted line.' },
   { id: 'description', label: 'Description', description: 'Posted line description or memo.' },
   { id: 'debit', label: 'Debit', description: 'Debit amount posted by the entry.' },
   { id: 'credit', label: 'Credit', description: 'Credit amount posted by the entry.' },
@@ -75,6 +114,9 @@ const DEFAULT_TRANSACTION_GL_IMPACT_WIDTHS: Record<
   sourceType: 'normal',
   sourceNumber: 'normal',
   account: 'wide',
+  department: 'normal',
+  location: 'normal',
+  class: 'normal',
   description: 'wide',
   debit: 'normal',
   credit: 'normal',
@@ -113,11 +155,13 @@ export function getOrderedVisibleTransactionGlImpactColumns(
   columnDefinitions: readonly TransactionGlImpactColumnMeta[],
   columnCustomization?: Partial<Record<TransactionGlImpactColumnKey, Partial<TransactionGlImpactColumnCustomization>>>,
 ) {
+  const defaultOrderById = new Map(columnDefinitions.map((column, index) => [column.id, index]))
+
   return [...columnDefinitions]
     .filter((column) => (columnCustomization?.[column.id]?.visible ?? true) !== false)
     .sort(
       (left, right) =>
-        (columnCustomization?.[left.id]?.order ?? 0) -
-        (columnCustomization?.[right.id]?.order ?? 0),
+        (columnCustomization?.[left.id]?.order ?? defaultOrderById.get(left.id) ?? 0) -
+        (columnCustomization?.[right.id]?.order ?? defaultOrderById.get(right.id) ?? 0),
     )
 }

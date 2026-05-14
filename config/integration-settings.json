@@ -1,6 +1,16 @@
 {
   "googleAddressValidation": {
-    "apiKey": "AIzaSyCfa_222VEwoRB1dKeIZkxCAOnW3N-ZipY",
-    "enabled": true
+    "apiKey": "",
+    "enabled": false
+  },
+  "integrations": {
+    "docusign": {
+      "integrationKey": ""
+    },
+    "stripe": {
+      "secretKey": "",
+      "publishableKey": "",
+      "webhookSecret": ""
+    }
   }
 }

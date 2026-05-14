@@ -4,14 +4,80 @@ import { toNumericValue } from '@/lib/format'
 import { loadBillDetailCustomization } from '@/lib/bill-detail-customization-store'
 import BillCreatePageClient from '@/components/BillCreatePageClient'
 
+function normalizeMatchText(value: string | null | undefined) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/\b(inc|inc\.|corp|corporation|ltd|limited|llc|gmbh|s\.l\.|sl)\b/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function compactMatchText(value: string | null | undefined) {
+  return normalizeMatchText(value).replace(/\s/g, '')
+}
+
+function findPrefillVendor<TVendor extends { name: string; vendorNumber: string | null }>(
+  vendors: TVendor[],
+  bankText: string,
+) {
+  const normalizedBankText = normalizeMatchText(bankText)
+  const compactBankText = compactMatchText(bankText)
+  return vendors
+    .map((vendor) => {
+      const vendorName = normalizeMatchText(vendor.name)
+      const compactVendorName = compactMatchText(vendor.name)
+      const vendorNumber = normalizeMatchText(vendor.vendorNumber)
+      let score = 0
+      if (vendorNumber && normalizedBankText.includes(vendorNumber)) score += 75
+      if (vendorName && normalizedBankText.includes(vendorName)) score += 100
+      if (compactVendorName && compactBankText.includes(compactVendorName)) score += 90
+      for (const token of vendorName.split(' ').filter((part) => part.length >= 4)) {
+        if (normalizedBankText.includes(token)) score += 12
+      }
+      return { vendor, score }
+    })
+    .filter((entry) => entry.score >= 35)
+    .sort((left, right) => right.score - left.score)[0]?.vendor ?? null
+}
+
+function findPrefillExpenseAccount<TAccount extends { id: string; accountNumber?: string | null; name: string }>(
+  accounts: TAccount[],
+  bankText: string,
+) {
+  const text = normalizeMatchText(bankText)
+  const scored = accounts
+    .map((account) => {
+      const accountText = normalizeMatchText(`${account.accountNumber ?? ''} ${account.name}`)
+      let score = 0
+      if (text.includes('fee') && accountText.includes('fee')) score += 80
+      if (text.includes('supply') && accountText.includes('suppl')) score += 75
+      if (text.includes('software') && accountText.includes('software')) score += 75
+      if (text.includes('legal') && accountText.includes('legal')) score += 75
+      if (text.includes('rent') && accountText.includes('rent')) score += 75
+      if (text.includes('travel') && accountText.includes('travel')) score += 75
+      if (accountText.includes('misc') || accountText.includes('other')) score += 10
+      return { account, score }
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score)
+  return scored[0]?.account ?? accounts[0] ?? null
+}
+
+function dateInputValue(value: Date | null | undefined) {
+  return value ? value.toISOString().slice(0, 10) : ''
+}
+
 export default async function NewBillPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ duplicateFrom?: string }>
+  searchParams?: Promise<{ duplicateFrom?: string; bankFeedTransactionId?: string }>
 }) {
-  const duplicateFrom = (await searchParams)?.duplicateFrom?.trim()
+  const params = await searchParams
+  const duplicateFrom = params?.duplicateFrom?.trim()
+  const bankFeedTransactionId = params?.bankFeedTransactionId?.trim()
 
-  const [adminUser, vendors, purchaseOrders, subsidiaries, currencies, items, expenseAccounts, nextNumber, duplicateSource, customization] = await Promise.all([
+  const [adminUser, vendors, purchaseOrders, subsidiaries, currencies, items, expenseAccounts, nextNumber, duplicateSource, bankFeedSource, customization] = await Promise.all([
     prisma.user.findUnique({ where: { email: 'admin@example.com' } }),
     prisma.vendor.findMany({
       orderBy: { vendorNumber: 'asc' },
@@ -62,8 +128,57 @@ export default async function NewBillPage({
           },
         })
       : Promise.resolve(null),
+    bankFeedTransactionId
+      ? prisma.bankFeedTransaction.findUnique({
+          where: { id: bankFeedTransactionId },
+          include: {
+            bankAccount: { select: { subsidiaryId: true } },
+            currency: { select: { id: true, currencyId: true, code: true, name: true } },
+          },
+        })
+      : Promise.resolve(null),
     loadBillDetailCustomization(),
   ])
+  const bankFeedAmount = bankFeedSource ? Math.abs(toNumericValue(bankFeedSource.amount, 0)) : 0
+  const bankFeedText = bankFeedSource
+    ? [bankFeedSource.counterparty, bankFeedSource.description, bankFeedSource.externalId, bankFeedSource.bankTransactionId]
+        .filter(Boolean)
+        .join(' ')
+    : ''
+  const bankFeedVendor = bankFeedSource ? findPrefillVendor(vendors, bankFeedText) : null
+  const bankFeedExpenseAccount = bankFeedSource ? findPrefillExpenseAccount(expenseAccounts, bankFeedText) : null
+  const bankFeedDate = dateInputValue(bankFeedSource?.postedDate ?? bankFeedSource?.transactionDate)
+  const bankFeedInitialHeaderValues = bankFeedSource
+    ? {
+        number: nextNumber,
+        vendorBillNumber: bankFeedSource.externalId || bankFeedSource.bankTransactionId,
+        vendorBillDate: bankFeedDate,
+        vendorId: bankFeedVendor?.id ?? '',
+        purchaseOrderId: '',
+        subsidiaryId: bankFeedVendor?.subsidiary?.id ?? bankFeedSource.bankAccount.subsidiaryId ?? '',
+        currencyId: bankFeedVendor?.currency?.id ?? bankFeedSource.currencyId,
+        date: bankFeedDate,
+        dueDate: bankFeedDate,
+        status: 'received',
+        notes: `Created from bank activity ${bankFeedSource.bankTransactionId}: ${bankFeedSource.description}`,
+      }
+    : undefined
+  const bankFeedInitialDraftRows = bankFeedSource
+    ? [{
+        lineType: 'expense' as const,
+        itemId: null,
+        expenseAccountId: bankFeedExpenseAccount?.id ?? null,
+        description: bankFeedSource.description,
+        notes: [
+          bankFeedSource.counterparty ? `Counterparty: ${bankFeedSource.counterparty}` : '',
+          bankFeedSource.externalId ? `External reference: ${bankFeedSource.externalId}` : '',
+        ].filter(Boolean).join(' | ') || null,
+        quantity: 1,
+        unitPrice: bankFeedAmount,
+        lineTotal: bankFeedAmount,
+        displayOrder: 0,
+      }]
+    : undefined
 
   return (
     <BillCreatePageClient
@@ -91,7 +206,7 @@ export default async function NewBillPage({
               status: duplicateSource.status,
               notes: duplicateSource.notes ?? '',
             }
-          : undefined
+          : bankFeedInitialHeaderValues
       }
       initialDraftRows={
         duplicateSource
@@ -106,7 +221,7 @@ export default async function NewBillPage({
               lineTotal: toNumericValue(line.lineTotal, 0),
               displayOrder: index,
             }))
-          : undefined
+          : bankFeedInitialDraftRows
       }
     />
   )

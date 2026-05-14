@@ -14,6 +14,10 @@ It is the next layer after:
 
 The goal is to evolve the app from page-specific customization and lightweight custom field storage into a reusable enterprise extensibility layer.
 
+For the downstream dimension-flow design across subscriptions, billing, revenue arrangements, and GL postings, see:
+
+- [phase-0-dimension-billing-revenue-propagation-spec.md](./phase-0-dimension-billing-revenue-propagation-spec.md)
+
 ## Design Goals
 
 1. Allow both master data and transaction records to be extended without schema hacks.

@@ -6,20 +6,23 @@ type MasterDataListSectionProps = MasterDataListToolbarProps & {
   children: ReactNode
   topContent?: ReactNode
   tableContainerId?: string
-  tableContainerClassName?: string
 }
 
 export default function MasterDataListSection({
   children,
   topContent,
   tableContainerId,
-  tableContainerClassName = 'record-list-scroll-region overflow-x-auto',
   ...toolbarProps
 }: MasterDataListSectionProps) {
   const childNodes = Children.toArray(children)
   const lastChild = childNodes.at(-1)
   const hasPaginationFooter = isValidElement(lastChild) && lastChild.type === PaginationFooter
   const tableContent = hasPaginationFooter ? childNodes.slice(0, -1) : childNodes
+  const columns = toolbarProps.columns.map((column, index) => ({
+    ...column,
+    locked: column.locked === true || index < 2 || column.id === 'actions',
+  }))
+  const shouldPinIdentityColumns = columns.length >= 2
 
   return (
     <section
@@ -31,11 +34,12 @@ export default function MasterDataListSection({
           {topContent}
         </div>
       ) : null}
-      <MasterDataListToolbar {...toolbarProps} />
+      <MasterDataListToolbar {...toolbarProps} columns={columns} />
       <div
         id={tableContainerId}
-        className={tableContainerClassName}
+        className={`record-list-scroll-region overflow-x-auto${shouldPinIdentityColumns ? ' master-data-pin-first-two' : ''}`}
         data-column-selector-table={toolbarProps.tableId}
+        data-pin-first-two={shouldPinIdentityColumns ? 'true' : undefined}
       >
         {tableContent}
       </div>

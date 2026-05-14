@@ -5,17 +5,41 @@ import { prisma } from '@/lib/prisma'
 import { generateNextCurrencyId } from '@/lib/currency-number'
 import { generateNextLocationId } from '@/lib/location-number'
 import { deriveAccountRole, deriveRollforwardCategory } from '@/lib/chart-of-accounts-classification'
+import {
+  deriveGlAccountCategoryDefaults,
+  deriveSuggestedMonetaryClassification,
+  deriveSuggestedTranslationTreatment,
+  getGlAccountingPolicyWarnings,
+  normalizeMonetaryClassification,
+  normalizeTranslationTreatment,
+} from '@/lib/gl-account-accounting-policy'
 import { normalizeItemOrderFlags, validateItemOrderFlags } from '@/lib/item-business-rules'
-import { getRequiredHeaders, isSupportedEntity } from '@/lib/master-data-import-schema'
+import { normalizeCustomFieldEntityType } from '@/lib/custom-fields'
+import { canonicalizeMasterDataImportRows } from '@/lib/master-data-import-fields'
+import { getFieldNames, getRequiredHeaders, isSupportedEntity, type SupportedEntity } from '@/lib/master-data-import-schema'
+import { getBillingMasterDataConfig, type BillingMasterDataKey } from '@/lib/billing-subscription-master-data'
 
 export const runtime = 'nodejs'
 
 type ImportMode = 'add' | 'update' | 'addOrUpdate'
 
 type ImportError = { row: number; message: string }
+type ImportCustomFieldDefinition = {
+  id: string
+  name: string
+  label: string
+  required: boolean
+  defaultValue: string | null
+  entityType: string
+}
 
 function normalizeKey(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+  return value
+    .trim()
+    .replace(/\s*\((required|optional)\)\s*$/i, '')
+    .replace(/\s*\*\s*$/i, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
 }
 
 function parseBoolean(input: unknown, fallback: boolean): boolean {
@@ -30,6 +54,83 @@ function parseNumber(input: unknown, fallback: number): number {
   if (input === undefined || input === null || String(input).trim() === '') return fallback
   const value = Number(input)
   return Number.isFinite(value) ? value : fallback
+}
+
+function parseDateValue(input: unknown): Date | null {
+  if (input === undefined || input === null || String(input).trim() === '') return null
+  const value = new Date(String(input).trim())
+  return Number.isNaN(value.getTime()) ? null : value
+}
+
+function getRowText(row: Record<string, string>, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = row[normalizeKey(key)]
+    if (value !== undefined && value !== null && String(value).trim() !== '') {
+      return String(value).trim()
+    }
+  }
+  return ''
+}
+
+function getCustomFieldEntityType(entity: SupportedEntity) {
+  return normalizeCustomFieldEntityType(entity === 'chart-of-accounts' ? 'chart-of-accounts' : entity.replace(/s$/, ''))
+}
+
+function getCustomFieldImportValue(row: Record<string, string>, field: ImportCustomFieldDefinition) {
+  return getRowText(row, `custom_${field.name}`, field.name, field.label)
+}
+
+function validateRequiredCustomFields(
+  row: Record<string, string>,
+  rowNumber: number,
+  customFields: ImportCustomFieldDefinition[],
+  errors: ImportError[],
+) {
+  let valid = true
+  for (const field of customFields) {
+    const value = getCustomFieldImportValue(row, field)
+    if (field.required && !value && !field.defaultValue) {
+      errors.push({ row: rowNumber, message: `${field.label} is required (custom field cannot be empty)` })
+      valid = false
+    }
+  }
+  return valid
+}
+
+async function saveCustomFieldImportValues(
+  row: Record<string, string>,
+  recordId: string,
+  customFields: ImportCustomFieldDefinition[],
+) {
+  for (const field of customFields) {
+    const value = getCustomFieldImportValue(row, field) || field.defaultValue || ''
+    if (!value && !field.required) continue
+
+    const existing = await prisma.customFieldValue.findFirst({
+      where: {
+        fieldId: field.id,
+        recordId,
+        entityType: field.entityType,
+      },
+      select: { id: true },
+    })
+
+    if (existing) {
+      await prisma.customFieldValue.update({
+        where: { id: existing.id },
+        data: { value },
+      })
+    } else {
+      await prisma.customFieldValue.create({
+        data: {
+          fieldId: field.id,
+          recordId,
+          entityType: field.entityType,
+          value,
+        },
+      })
+    }
+  }
 }
 
 function validateHeaders(data: Array<Record<string, string>>, requiredHeaders: string[], entity: string): { valid: boolean; error?: string } {
@@ -89,7 +190,7 @@ function parseRows(fileName: string, bytes: ArrayBuffer): Array<Record<string, s
   })
 }
 
-async function importCurrencies(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[]) {
+async function importCurrencies(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[], customFields: ImportCustomFieldDefinition[] = []) {
   let succeeded = 0
 
   for (let index = 0; index < rows.length; index += 1) {
@@ -114,6 +215,10 @@ async function importCurrencies(rows: Array<Record<string, string>>, mode: Impor
 
     if (code.length > 3) {
       errors.push({ row: rowNumber, message: `code must be 3 characters or less (got: "${code}")` })
+      continue
+    }
+
+    if (!validateRequiredCustomFields(row, rowNumber, customFields, errors)) {
       continue
     }
 
@@ -149,7 +254,7 @@ async function importCurrencies(rows: Array<Record<string, string>>, mode: Impor
       }
 
       if (mode === 'addOrUpdate' || (mode === 'add' && !exists) || (mode === 'update' && exists)) {
-        await prisma.currency.upsert({
+        const upserted = await prisma.currency.upsert({
           where: { code },
           update: {
             name,
@@ -168,6 +273,7 @@ async function importCurrencies(rows: Array<Record<string, string>>, mode: Impor
             active: parseBoolean(activeStr, true),
           },
         })
+        await saveCustomFieldImportValues(row, upserted.id, customFields)
       }
     }
 
@@ -177,7 +283,7 @@ async function importCurrencies(rows: Array<Record<string, string>>, mode: Impor
   return succeeded
 }
 
-async function importSubsidiaries(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[]) {
+async function importSubsidiaries(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[], customFields: ImportCustomFieldDefinition[] = []) {
   let succeeded = 0
 
   const currencyCodes = Array.from(
@@ -215,7 +321,11 @@ async function importSubsidiaries(rows: Array<Record<string, string>>, mode: Imp
       continue
     }
 
-    if (!dryRun) {
+    if (!validateRequiredCustomFields(row, rowNumber, customFields, errors)) {
+      continue
+    }
+
+      if (!dryRun) {
       const exists = await prisma.subsidiary.findUnique({ where: { subsidiaryId: code } })
       
       if (mode === 'add' && exists) {
@@ -229,7 +339,7 @@ async function importSubsidiaries(rows: Array<Record<string, string>>, mode: Imp
       }
 
       if (mode === 'addOrUpdate' || (mode === 'add' && !exists) || (mode === 'update' && exists)) {
-        await prisma.subsidiary.upsert({
+        const upserted = await prisma.subsidiary.upsert({
           where: { subsidiaryId: code },
           update: {
             name,
@@ -251,6 +361,7 @@ async function importSubsidiaries(rows: Array<Record<string, string>>, mode: Imp
             active: parseBoolean(row.active, true),
           },
         })
+        await saveCustomFieldImportValues(row, upserted.id, customFields)
       }
     }
 
@@ -260,7 +371,7 @@ async function importSubsidiaries(rows: Array<Record<string, string>>, mode: Imp
   return succeeded
 }
 
-async function importLocations(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[]) {
+async function importLocations(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[], customFields: ImportCustomFieldDefinition[] = []) {
   let succeeded = 0
   const parentIds = Array.from(new Set(rows.map((row) => (row.parentlocationid ?? '').toUpperCase().trim()).filter(Boolean)))
   const subsidiaryCodes = Array.from(new Set(rows.map((row) => (row.subsidiaryid ?? row.subsidiarycode ?? '').toUpperCase().trim()).filter(Boolean)))
@@ -299,6 +410,10 @@ async function importLocations(rows: Array<Record<string, string>>, mode: Import
       continue
     }
 
+    if (!validateRequiredCustomFields(row, rowNumber, customFields, errors)) {
+      continue
+    }
+
     if (!dryRun) {
       const exists = await prisma.location.findUnique({ where: { code } })
       if (mode === 'add' && exists) {
@@ -312,7 +427,7 @@ async function importLocations(rows: Array<Record<string, string>>, mode: Import
 
       if (mode === 'addOrUpdate' || (mode === 'add' && !exists) || (mode === 'update' && exists)) {
         const locationId = providedLocationId || exists?.locationId || await generateNextLocationId()
-        await prisma.location.upsert({
+        const upserted = await prisma.location.upsert({
           where: { code },
           update: {
             locationId,
@@ -336,6 +451,7 @@ async function importLocations(rows: Array<Record<string, string>>, mode: Import
             inactive: !parseBoolean(row.active, true),
           },
         })
+        await saveCustomFieldImportValues(row, upserted.id, customFields)
       }
     }
 
@@ -345,7 +461,7 @@ async function importLocations(rows: Array<Record<string, string>>, mode: Import
   return succeeded
 }
 
-async function importDepartments(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[]) {
+async function importDepartments(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[], customFields: ImportCustomFieldDefinition[] = []) {
   let succeeded = 0
 
   const managerNumbers = Array.from(new Set(rows.map((row) => (row.manageremployeeid ?? row.manageremployeenumber ?? '').trim()).filter(Boolean)))
@@ -400,6 +516,10 @@ async function importDepartments(rows: Array<Record<string, string>>, mode: Impo
       continue
     }
 
+    if (!validateRequiredCustomFields(row, rowNumber, customFields, errors)) {
+      continue
+    }
+
     if (!dryRun) {
       const exists = await prisma.department.findUnique({ where: { departmentId } })
       
@@ -416,7 +536,7 @@ async function importDepartments(rows: Array<Record<string, string>>, mode: Impo
       if (mode === 'addOrUpdate' || (mode === 'add' && !exists) || (mode === 'update' && exists)) {
         const assignedEntityId = subsidiaryCode ? subsidiaryMap.get(subsidiaryCode) ?? null : null
 
-        await prisma.department.upsert({
+        const upserted = await prisma.department.upsert({
           where: { departmentId },
           update: {
             name,
@@ -449,6 +569,7 @@ async function importDepartments(rows: Array<Record<string, string>>, mode: Impo
               : {}),
           },
         })
+        await saveCustomFieldImportValues(row, upserted.id, customFields)
       }
     }
 
@@ -458,7 +579,7 @@ async function importDepartments(rows: Array<Record<string, string>>, mode: Impo
   return succeeded
 }
 
-async function importChartOfAccounts(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[]) {
+async function importChartOfAccounts(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[], customFields: ImportCustomFieldDefinition[] = []) {
   let succeeded = 0
 
   const parentCodes = Array.from(
@@ -487,12 +608,38 @@ async function importChartOfAccounts(rows: Array<Record<string, string>>, mode: 
     const accountNumber = (row.accountnumber ?? '').trim()
     const name = (row.name ?? '').trim()
     const accountType = (row.accounttype ?? '').trim()
-    const scopeMode = ((row.scopemode ?? 'selected').trim().toLowerCase() || 'selected') as 'selected' | 'parent'
+    const category = getRowText(row, 'category', 'accountCategory', 'Account Category') || null
+    const providedNormalBalance = getRowText(row, 'normalBalance', 'Normal Balance') || null
+    const providedFinancialStatementSection = getRowText(row, 'financialStatementSection', 'fsSection', 'FS Section') || null
+    const providedFinancialStatementGroup = getRowText(row, 'financialStatementGroup', 'fsGroup', 'FS Group') || null
+    const providedFinancialStatementCategory = getRowText(row, 'financialStatementCategory', 'fsCategory', 'FS Category') || null
+    const providedMonetaryClassification = normalizeMonetaryClassification(getRowText(row, 'monetaryClassification', 'Monetary Classification'))
+    const providedTranslationTreatment = normalizeTranslationTreatment(getRowText(row, 'translationTreatment', 'Translation Treatment'))
+    const requestedScopeMode = (row.scopemode ?? '').trim().toLowerCase()
+    const scopeMode = ((requestedScopeMode || 'selected') as 'selected' | 'parent')
     const parentSubsidiaryCode = (row.parentsubsidiarycode ?? '').toUpperCase().trim()
     const selectedSubsidiaryCodes = (row.subsidiarycodes ?? '')
       .split(',')
       .map((value) => value.trim().toUpperCase())
       .filter(Boolean)
+    const hasSelectedScopeUpdate = scopeMode === 'selected' && selectedSubsidiaryCodes.length > 0
+    const hasParentScopeUpdate = scopeMode === 'parent' && Boolean(parentSubsidiaryCode || row.includechildren)
+    const hasScopeUpdate =
+      mode === 'update'
+        ? hasSelectedScopeUpdate || hasParentScopeUpdate
+        : Boolean(requestedScopeMode || row.parentsubsidiarycode || row.subsidiarycodes || row.includechildren)
+    const exists = accountId
+      ? await prisma.chartOfAccounts.findUnique({ where: { accountId } })
+      : await prisma.chartOfAccounts.findUnique({ where: { accountNumber } })
+    const effectiveCategory = category ?? exists?.category ?? null
+    const effectiveCategoryDefaults = deriveGlAccountCategoryDefaults({ accountType, category: effectiveCategory })
+    const normalBalance = providedNormalBalance ?? exists?.normalBalance ?? effectiveCategoryDefaults?.normalBalance ?? null
+    const financialStatementSection =
+      providedFinancialStatementSection ?? exists?.financialStatementSection ?? effectiveCategoryDefaults?.financialStatementSection ?? null
+    const financialStatementGroup =
+      providedFinancialStatementGroup ?? exists?.financialStatementGroup ?? effectiveCategoryDefaults?.financialStatementGroup ?? null
+    const financialStatementCategory =
+      providedFinancialStatementCategory ?? exists?.financialStatementCategory ?? effectiveCategoryDefaults?.financialStatementCategory ?? null
 
     if (!accountNumber) {
       errors.push({ row: rowNumber, message: 'accountNumber is required (cannot be empty)' })
@@ -524,7 +671,7 @@ async function importChartOfAccounts(rows: Array<Record<string, string>>, mode: 
       continue
     }
 
-    if (scopeMode === 'selected' && selectedSubsidiaryCodes.length === 0) {
+    if (scopeMode === 'selected' && selectedSubsidiaryCodes.length === 0 && (mode !== 'update' || hasScopeUpdate)) {
       errors.push({ row: rowNumber, message: 'subsidiaryCodes is required when scopeMode=selected' })
       continue
     }
@@ -538,11 +685,78 @@ async function importChartOfAccounts(rows: Array<Record<string, string>>, mode: 
       continue
     }
 
-    if (!dryRun) {
-      const exists = accountId
-        ? await prisma.chartOfAccounts.findUnique({ where: { accountId } })
-        : await prisma.chartOfAccounts.findUnique({ where: { accountNumber } })
+    if (!validateRequiredCustomFields(row, rowNumber, customFields, errors)) {
+      continue
+    }
 
+    const validationRollforwardCategory =
+      (getRowText(row, 'rollforwardCategory', 'Rollforward Category') || null)
+      ?? exists?.rollforwardCategory
+      ?? effectiveCategoryDefaults?.rollforwardCategory
+      ?? deriveRollforwardCategory({
+        accountId: accountId || exists?.accountId || accountNumber,
+        accountNumber,
+        name,
+        accountType,
+        financialStatementCategory,
+      })
+    const validationAccountRole =
+      (getRowText(row, 'accountRole', 'Account Role') || null)
+      ?? exists?.accountRole
+      ?? effectiveCategoryDefaults?.accountRole
+      ?? deriveAccountRole({
+        accountId: accountId || exists?.accountId || accountNumber,
+        accountNumber,
+        name,
+        accountType,
+        financialStatementCategory,
+        rollforwardCategory: validationRollforwardCategory,
+      })
+    const validationInventory = row.inventory !== undefined ? parseBoolean(row.inventory, false) : exists?.inventory ?? effectiveCategoryDefaults?.inventory ?? false
+    const validationRemeasureOpenBalance =
+      exists?.revalueOpenBalance ?? effectiveCategoryDefaults?.revalueOpenBalance ?? parseBoolean(row.revalueopenbalance ?? row.revalueOpenBalance, false)
+    const validationMonetaryClassification =
+      exists?.monetaryClassification
+      ?? effectiveCategoryDefaults?.monetaryClassification
+      ?? providedMonetaryClassification
+      ?? deriveSuggestedMonetaryClassification({
+        accountType,
+        name,
+        financialStatementCategory,
+        accountRole: validationAccountRole,
+        rollforwardCategory: validationRollforwardCategory,
+        inventory: validationInventory,
+        revalueOpenBalance: validationRemeasureOpenBalance,
+      })
+    const validationTranslationTreatment =
+      exists?.translationTreatment
+      ?? effectiveCategoryDefaults?.translationTreatment
+      ?? providedTranslationTreatment
+      ?? deriveSuggestedTranslationTreatment({
+        accountType,
+        name,
+        financialStatementCategory,
+        accountRole: validationAccountRole,
+        rollforwardCategory: validationRollforwardCategory,
+        inventory: validationInventory,
+      })
+    const validationPolicyErrors = getGlAccountingPolicyWarnings({
+      accountType,
+      name,
+      financialStatementCategory,
+      accountRole: validationAccountRole,
+      rollforwardCategory: validationRollforwardCategory,
+      inventory: validationInventory,
+      revalueOpenBalance: validationRemeasureOpenBalance,
+      monetaryClassification: validationMonetaryClassification,
+      translationTreatment: validationTranslationTreatment,
+    }).filter((warning) => warning.severity === 'error')
+    if (validationPolicyErrors.length > 0) {
+      errors.push({ row: rowNumber, message: validationPolicyErrors.map((warning) => warning.message).join(' ') })
+      continue
+    }
+
+    if (!dryRun) {
       if (mode === 'add' && exists) {
         errors.push({ row: rowNumber, message: `Chart account "${accountId || accountNumber}" already exists (add mode)` })
         continue
@@ -554,26 +768,75 @@ async function importChartOfAccounts(rows: Array<Record<string, string>>, mode: 
       }
 
       if (mode === 'addOrUpdate' || (mode === 'add' && !exists) || (mode === 'update' && exists)) {
-        const providedRollforwardCategory = (row.rollforwardcategory ?? '').trim() || null
+        const providedRollforwardCategory = getRowText(row, 'rollforwardCategory', 'Rollforward Category') || null
         const resolvedRollforwardCategory =
           providedRollforwardCategory
+          ?? exists?.rollforwardCategory
+          ?? effectiveCategoryDefaults?.rollforwardCategory
           ?? deriveRollforwardCategory({
             accountId: accountId || exists?.accountId || accountNumber,
             accountNumber,
             name,
             accountType,
+            financialStatementCategory,
           })
-        const providedAccountRole = (row.accountrole ?? '').trim() || null
-        const resolvedAccountRole =
-          providedAccountRole
-          ?? deriveAccountRole({
-            accountId: accountId || exists?.accountId || accountNumber,
-            accountNumber,
+        const providedAccountRole = getRowText(row, 'accountRole', 'Account Role') || null
+          const resolvedAccountRole =
+            providedAccountRole
+            ?? exists?.accountRole
+            ?? effectiveCategoryDefaults?.accountRole
+            ?? deriveAccountRole({
+              accountId: accountId || exists?.accountId || accountNumber,
+              accountNumber,
             name,
             accountType,
+              financialStatementCategory,
+              rollforwardCategory: resolvedRollforwardCategory,
+            })
+          const inventory = row.inventory !== undefined ? parseBoolean(row.inventory, false) : exists?.inventory ?? effectiveCategoryDefaults?.inventory ?? false
+          const remeasureOpenBalance =
+            exists?.revalueOpenBalance ?? effectiveCategoryDefaults?.revalueOpenBalance ?? parseBoolean(row.revalueopenbalance ?? row.revalueOpenBalance, false)
+          const monetaryClassification =
+            exists?.monetaryClassification
+            ?? effectiveCategoryDefaults?.monetaryClassification
+            ?? providedMonetaryClassification
+            ?? deriveSuggestedMonetaryClassification({
+              accountType,
+              name,
+              financialStatementCategory,
+              accountRole: resolvedAccountRole,
+              rollforwardCategory: resolvedRollforwardCategory,
+              inventory,
+              revalueOpenBalance: remeasureOpenBalance,
+            })
+          const translationTreatment =
+            exists?.translationTreatment
+            ?? effectiveCategoryDefaults?.translationTreatment
+            ?? providedTranslationTreatment
+            ?? deriveSuggestedTranslationTreatment({
+              accountType,
+              name,
+              financialStatementCategory,
+              accountRole: resolvedAccountRole,
+              rollforwardCategory: resolvedRollforwardCategory,
+              inventory,
+            })
+          const policyErrors = getGlAccountingPolicyWarnings({
+            accountType,
+            name,
+            financialStatementCategory,
+            accountRole: resolvedAccountRole,
             rollforwardCategory: resolvedRollforwardCategory,
-          })
-        const upserted = await prisma.chartOfAccounts.upsert({
+            inventory,
+            revalueOpenBalance: remeasureOpenBalance,
+            monetaryClassification,
+            translationTreatment,
+          }).filter((warning) => warning.severity === 'error')
+          if (policyErrors.length > 0) {
+            errors.push({ row: rowNumber, message: policyErrors.map((warning) => warning.message).join(' ') })
+            continue
+          }
+          const upserted = await prisma.chartOfAccounts.upsert({
           where: { accountId: exists?.accountId ?? (accountId || `__missing__${rowNumber}`) },
           update: {
             ...(accountId ? { accountId } : {}),
@@ -581,14 +844,25 @@ async function importChartOfAccounts(rows: Array<Record<string, string>>, mode: 
             name,
             description: (row.description ?? '').trim() || null,
             accountType,
-            accountRole: resolvedAccountRole,
-            rollforwardCategory: resolvedRollforwardCategory,
-            inventory: parseBoolean(row.inventory, false),
-            revalueOpenBalance: parseBoolean(row.revalueopenbalance, false),
-            eliminateIntercoTransactions: parseBoolean(row.eliminateintercotransactions, false),
+            category: effectiveCategory,
+            normalBalance,
+            financialStatementSection,
+            financialStatementGroup,
+              financialStatementCategory,
+              accountRole: resolvedAccountRole,
+              rollforwardCategory: resolvedRollforwardCategory,
+              inventory,
+              revalueOpenBalance: remeasureOpenBalance,
+              monetaryClassification,
+              translationTreatment,
+              eliminateIntercoTransactions: parseBoolean(row.eliminateintercotransactions, false),
             summary: parseBoolean(row.summary, false),
-            parentSubsidiaryId: scopeMode === 'parent' ? subsidiaryMap.get(parentSubsidiaryCode) ?? null : null,
-            includeChildren: scopeMode === 'parent' ? parseBoolean(row.includechildren, false) : false,
+            ...(hasScopeUpdate
+              ? {
+                  parentSubsidiaryId: scopeMode === 'parent' ? subsidiaryMap.get(parentSubsidiaryCode) ?? null : null,
+                  includeChildren: scopeMode === 'parent' ? parseBoolean(row.includechildren, false) : false,
+                }
+              : {}),
           },
           create: {
             accountId: accountId || accountNumber,
@@ -596,18 +870,25 @@ async function importChartOfAccounts(rows: Array<Record<string, string>>, mode: 
             name,
             description: (row.description ?? '').trim() || null,
             accountType,
-            accountRole: resolvedAccountRole,
-            rollforwardCategory: resolvedRollforwardCategory,
-            inventory: parseBoolean(row.inventory, false),
-            revalueOpenBalance: parseBoolean(row.revalueopenbalance, false),
-            eliminateIntercoTransactions: parseBoolean(row.eliminateintercotransactions, false),
+            category: effectiveCategory,
+            normalBalance,
+            financialStatementSection,
+            financialStatementGroup,
+              financialStatementCategory,
+              accountRole: resolvedAccountRole,
+              rollforwardCategory: resolvedRollforwardCategory,
+              inventory,
+              revalueOpenBalance: remeasureOpenBalance,
+              monetaryClassification,
+              translationTreatment,
+              eliminateIntercoTransactions: parseBoolean(row.eliminateintercotransactions, false),
             summary: parseBoolean(row.summary, false),
             parentSubsidiaryId: scopeMode === 'parent' ? subsidiaryMap.get(parentSubsidiaryCode) ?? null : null,
             includeChildren: scopeMode === 'parent' ? parseBoolean(row.includechildren, false) : false,
           },
         })
 
-        if (scopeMode === 'selected') {
+        if (hasScopeUpdate && scopeMode === 'selected') {
           await prisma.chartOfAccountSubsidiary.deleteMany({ where: { chartOfAccountId: upserted.id } })
           if (selectedSubsidiaryCodes.length > 0) {
             await prisma.chartOfAccountSubsidiary.createMany({
@@ -618,9 +899,10 @@ async function importChartOfAccounts(rows: Array<Record<string, string>>, mode: 
               skipDuplicates: true,
             })
           }
-        } else {
+        } else if (hasScopeUpdate) {
           await prisma.chartOfAccountSubsidiary.deleteMany({ where: { chartOfAccountId: upserted.id } })
         }
+        await saveCustomFieldImportValues(row, upserted.id, customFields)
       }
     }
 
@@ -630,7 +912,7 @@ async function importChartOfAccounts(rows: Array<Record<string, string>>, mode: 
   return succeeded
 }
 
-async function importItems(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[]) {
+async function importItems(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[], customFields: ImportCustomFieldDefinition[] = []) {
   let succeeded = 0
 
   const currencyCodes = Array.from(new Set(rows.map((row) => (row.currencycode ?? '').toUpperCase()).filter(Boolean)))
@@ -690,6 +972,10 @@ async function importItems(rows: Array<Record<string, string>>, mode: ImportMode
       continue
     }
 
+    if (!validateRequiredCustomFields(row, rowNumber, customFields, errors)) {
+      continue
+    }
+
     const { dropShipItem, specialOrderItem } = normalizeItemOrderFlags({
       dropShipItem: parsedDropShipItem,
       specialOrderItem: parsedSpecialOrderItem,
@@ -745,17 +1031,19 @@ async function importItems(rows: Array<Record<string, string>>, mode: ImportMode
         }
 
         if (itemId) {
-          await prisma.item.upsert({
+          const upserted = await prisma.item.upsert({
             where: { itemId },
             update: { ...updateData, sku },
             create: { ...updateData, itemId, sku },
           })
+          await saveCustomFieldImportValues(row, upserted.id, customFields)
         } else if (sku) {
-          await prisma.item.upsert({
+          const upserted = await prisma.item.upsert({
             where: { sku },
             update: { ...updateData, itemId },
             create: { ...updateData, itemId, sku },
           })
+          await saveCustomFieldImportValues(row, upserted.id, customFields)
         }
       }
     }
@@ -766,7 +1054,7 @@ async function importItems(rows: Array<Record<string, string>>, mode: ImportMode
   return succeeded
 }
 
-async function importEmployees(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[]) {
+async function importEmployees(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[], customFields: ImportCustomFieldDefinition[] = []) {
   let succeeded = 0
   const parseCodeList = (value: string | undefined) => String(value ?? '').split(',').map((entry) => entry.trim().toUpperCase()).filter(Boolean)
 
@@ -842,6 +1130,10 @@ async function importEmployees(rows: Array<Record<string, string>>, mode: Import
       continue
     }
 
+    if (!validateRequiredCustomFields(row, rowNumber, customFields, errors)) {
+      continue
+    }
+
     if (!dryRun) {
       // Check if record exists for mode validation
       let exists = false
@@ -887,17 +1179,19 @@ async function importEmployees(rows: Array<Record<string, string>>, mode: Import
         }
 
         if (employeeNumber) {
-          await prisma.employee.upsert({
+          const upserted = await prisma.employee.upsert({
             where: { employeeId: employeeNumber },
             update: { ...updateData, employeeSubsidiaries },
             create: { ...updateData, employeeId: employeeNumber, employeeSubsidiaries },
           })
+          await saveCustomFieldImportValues(row, upserted.id, customFields)
         } else if (email) {
-          await prisma.employee.upsert({
+          const upserted = await prisma.employee.upsert({
             where: { email },
             update: { ...updateData, employeeId: employeeNumber, employeeSubsidiaries },
             create: { ...updateData, employeeId: employeeNumber, employeeSubsidiaries },
           })
+          await saveCustomFieldImportValues(row, upserted.id, customFields)
         }
       }
     }
@@ -909,7 +1203,7 @@ async function importEmployees(rows: Array<Record<string, string>>, mode: Import
   return succeeded
 }
 
-async function importCustomers(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[]) {
+async function importCustomers(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[], customFields: ImportCustomFieldDefinition[] = []) {
   let succeeded = 0
 
   // Get or create default system user for imports
@@ -931,14 +1225,59 @@ async function importCustomers(rows: Array<Record<string, string>>, mode: Import
 
   const subsidiaryCodes = Array.from(new Set(rows.map((row) => (row.subsidiarycode ?? row.entitycode ?? '').toUpperCase()).filter(Boolean)))
   const currencyCodes = Array.from(new Set(rows.map((row) => (row.currencycode ?? '').toUpperCase()).filter(Boolean)))
+  const arAccountNumbers = Array.from(new Set(rows.map((row) => (row.araccountnumber ?? row.araccount ?? row.account ?? '').trim()).filter(Boolean)))
+  const priceLevelValues = Array.from(new Set(rows.map((row) => (row.pricelevel ?? '').trim()).filter(Boolean)))
+  const priceBookValues = Array.from(new Set(rows.map((row) => (row.pricebook ?? '').trim()).filter(Boolean)))
 
-  const [entities, currencies] = await Promise.all([
+  const [entities, currencies, arAccounts, priceLevels, priceBooks] = await Promise.all([
     prisma.subsidiary.findMany({ where: { subsidiaryId: { in: subsidiaryCodes } }, select: { id: true, subsidiaryId: true } }),
     prisma.currency.findMany({ where: { code: { in: currencyCodes } }, select: { id: true, code: true } }),
+    prisma.chartOfAccounts.findMany({ where: { accountNumber: { in: arAccountNumbers } }, select: { id: true, accountNumber: true } }),
+    prisma.priceLevel.findMany({
+      where: priceLevelValues.length
+        ? {
+            OR: [
+              { id: { in: priceLevelValues } },
+              { priceLevelId: { in: priceLevelValues } },
+              { name: { in: priceLevelValues } },
+              { levelType: { in: priceLevelValues } },
+            ],
+          }
+        : {},
+      select: { id: true, priceLevelId: true, name: true, levelType: true },
+    }),
+    prisma.priceBook.findMany({
+      where: priceBookValues.length
+        ? {
+            OR: [
+              { id: { in: priceBookValues } },
+              { priceBookId: { in: priceBookValues } },
+              { name: { in: priceBookValues } },
+              { bookType: { in: priceBookValues } },
+            ],
+          }
+        : {},
+      select: { id: true, priceBookId: true, name: true, bookType: true },
+    }),
   ])
 
   const subsidiaryMap = new Map(entities.map((e) => [e.subsidiaryId.toUpperCase(), e.id]))
   const currencyMap = new Map(currencies.map((c) => [c.code.toUpperCase(), c.id]))
+  const arAccountMap = new Map(arAccounts.map((account) => [account.accountNumber, account.id]))
+  const priceLevelMap = new Map<string, string>()
+  for (const priceLevel of priceLevels) {
+    priceLevelMap.set(priceLevel.id, priceLevel.id)
+    if (priceLevel.priceLevelId) priceLevelMap.set(priceLevel.priceLevelId.toLowerCase(), priceLevel.id)
+    priceLevelMap.set(priceLevel.name.toLowerCase(), priceLevel.id)
+    if (priceLevel.levelType) priceLevelMap.set(priceLevel.levelType.toLowerCase(), priceLevel.id)
+  }
+  const priceBookMap = new Map<string, string>()
+  for (const priceBook of priceBooks) {
+    priceBookMap.set(priceBook.id, priceBook.id)
+    if (priceBook.priceBookId) priceBookMap.set(priceBook.priceBookId.toLowerCase(), priceBook.id)
+    priceBookMap.set(priceBook.name.toLowerCase(), priceBook.id)
+    if (priceBook.bookType) priceBookMap.set(priceBook.bookType.toLowerCase(), priceBook.id)
+  }
 
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index]
@@ -948,6 +1287,11 @@ async function importCustomers(rows: Array<Record<string, string>>, mode: Import
     const email = (row.email ?? '').trim() || null
     const subsidiaryCode = (row.subsidiarycode ?? row.entitycode ?? '').toUpperCase()
     const currencyCode = (row.currencycode ?? '').toUpperCase().trim()
+    const arAccountNumber = (row.araccountnumber ?? row.araccount ?? row.account ?? '').trim()
+    const priceLevelInput = (row.pricelevel ?? '').trim()
+    const resolvedPriceLevelId = priceLevelInput ? priceLevelMap.get(priceLevelInput) ?? priceLevelMap.get(priceLevelInput.toLowerCase()) ?? null : null
+    const priceBookInput = (row.pricebook ?? '').trim()
+    const resolvedPriceBookId = priceBookInput ? priceBookMap.get(priceBookInput) ?? priceBookMap.get(priceBookInput.toLowerCase()) ?? null : null
 
     if (!name) {
       errors.push({ row: rowNumber, message: 'name is required (cannot be empty)' })
@@ -969,6 +1313,36 @@ async function importCustomers(rows: Array<Record<string, string>>, mode: Import
         row: rowNumber,
         message: `currencyCode "${currencyCode}" not found. Available: ${availableCurrencies || '(none - add currencies first)'}`,
       })
+      continue
+    }
+
+    if (arAccountNumber && !arAccountMap.has(arAccountNumber)) {
+      const availableAccounts = Array.from(arAccountMap.keys()).slice(0, 10).join(', ')
+      errors.push({
+        row: rowNumber,
+        message: `arAccountNumber "${arAccountNumber}" not found. Available examples: ${availableAccounts || '(none - add chart of accounts first)'}`,
+      })
+      continue
+    }
+
+    if (priceLevelInput && !resolvedPriceLevelId) {
+      const availablePriceLevels = Array.from(priceLevelMap.keys()).slice(0, 10).join(', ')
+      errors.push({
+        row: rowNumber,
+        message: `priceLevel "${priceLevelInput}" not found. Available examples: ${availablePriceLevels || '(none - add price levels first)'}`,
+      })
+      continue
+    }
+    if (priceBookInput && !resolvedPriceBookId) {
+      const availablePriceBooks = Array.from(priceBookMap.keys()).slice(0, 10).join(', ')
+      errors.push({
+        row: rowNumber,
+        message: `priceBook "${priceBookInput}" not found. Available examples: ${availablePriceBooks || '(none - add price books first)'}`,
+      })
+      continue
+    }
+
+    if (!validateRequiredCustomFields(row, rowNumber, customFields, errors)) {
       continue
     }
 
@@ -995,35 +1369,87 @@ async function importCustomers(rows: Array<Record<string, string>>, mode: Import
         if (mode === 'addOrUpdate' || (mode === 'add' && !exists) || (mode === 'update' && exists)) {
           const updateData = {
             name,
+            customerType: (row.customertype ?? '').trim() || null,
+            customerGroup: (row.customergroup ?? '').trim() || null,
+            customerStatus: (row.customerstatus ?? '').trim() || null,
+            territory: (row.territory ?? '').trim() || null,
+            salesManager: (row.salesmanager ?? '').trim() || null,
+            projectManager: (row.projectmanager ?? '').trim() || null,
             email: email || null,
             phone: (row.phone ?? '').trim() || null,
             address: (row.address ?? '').trim() || null,
             industry: (row.industry ?? '').trim() || null,
+            arAccountId: arAccountNumber ? arAccountMap.get(arAccountNumber) ?? null : null,
+            startDate: parseDateValue(row.startdate),
+            endDate: parseDateValue(row.enddate),
+            reminderDays: row.reminderdays ? parseNumber(row.reminderdays, 0) : null,
+            priceLevel: resolvedPriceLevelId,
+            priceBook: resolvedPriceBookId,
+            taxable: parseBoolean(row.taxable, false),
+            taxItem: (row.taxitem ?? '').trim() || null,
+            resaleNumber: (row.resalenumber ?? '').trim() || null,
+            language: (row.language ?? '').trim() || null,
+            numberFormat: (row.numberformat ?? '').trim() || null,
+            negativeNumberFormat: (row.negativenumberformat ?? '').trim() || null,
+            shipComplete: parseBoolean(row.shipcomplete, false),
+            shippingCarrier: (row.shippingcarrier ?? '').trim() || null,
+            shippingMethod: (row.shippingmethod ?? '').trim() || null,
+            blockCollectionEmail: parseBoolean(row.blockcollectionemail, false),
+            collectionsRep: (row.collectionsrep ?? '').trim() || null,
             subsidiaryId: subsidiaryCode ? subsidiaryMap.get(subsidiaryCode) ?? null : null,
             currencyId: currencyCode ? currencyMap.get(currencyCode) ?? null : null,
+            includeChildren: parseBoolean(row.includechildren, false),
+            inactive: !parseBoolean(row.active, true),
           }
 
-          await prisma.customer.upsert({
+          const upserted = await prisma.customer.upsert({
             where: { customerId: customerNumber },
             update: updateData,
             create: { ...updateData, customerId: customerNumber, userId: systemUser.id },
           })
+          await saveCustomFieldImportValues(row, upserted.id, customFields)
         }
       } else {
         // Create without customerId - it will be auto-generated
         const updateData = {
           name,
+          customerType: (row.customertype ?? '').trim() || null,
+          customerGroup: (row.customergroup ?? '').trim() || null,
+          customerStatus: (row.customerstatus ?? '').trim() || null,
+          territory: (row.territory ?? '').trim() || null,
+          salesManager: (row.salesmanager ?? '').trim() || null,
+          projectManager: (row.projectmanager ?? '').trim() || null,
           email: email || null,
           phone: (row.phone ?? '').trim() || null,
           address: (row.address ?? '').trim() || null,
           industry: (row.industry ?? '').trim() || null,
+          arAccountId: arAccountNumber ? arAccountMap.get(arAccountNumber) ?? null : null,
+          startDate: parseDateValue(row.startdate),
+          endDate: parseDateValue(row.enddate),
+          reminderDays: row.reminderdays ? parseNumber(row.reminderdays, 0) : null,
+          priceLevel: resolvedPriceLevelId,
+          priceBook: resolvedPriceBookId,
+          taxable: parseBoolean(row.taxable, false),
+          taxItem: (row.taxitem ?? '').trim() || null,
+          resaleNumber: (row.resalenumber ?? '').trim() || null,
+          language: (row.language ?? '').trim() || null,
+          numberFormat: (row.numberformat ?? '').trim() || null,
+          negativeNumberFormat: (row.negativenumberformat ?? '').trim() || null,
+          shipComplete: parseBoolean(row.shipcomplete, false),
+          shippingCarrier: (row.shippingcarrier ?? '').trim() || null,
+          shippingMethod: (row.shippingmethod ?? '').trim() || null,
+          blockCollectionEmail: parseBoolean(row.blockcollectionemail, false),
+          collectionsRep: (row.collectionsrep ?? '').trim() || null,
           subsidiaryId: subsidiaryCode ? subsidiaryMap.get(subsidiaryCode) ?? null : null,
           currencyId: currencyCode ? currencyMap.get(currencyCode) ?? null : null,
+          includeChildren: parseBoolean(row.includechildren, false),
+          inactive: !parseBoolean(row.active, true),
         }
 
-        await prisma.customer.create({
+        const created = await prisma.customer.create({
           data: { ...updateData, userId: systemUser.id },
         })
+        await saveCustomFieldImportValues(row, created.id, customFields)
       }
     }
 
@@ -1033,7 +1459,378 @@ async function importCustomers(rows: Array<Record<string, string>>, mode: Import
   return succeeded
 }
 
-async function importContacts(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[]) {
+async function nextPriceLevelId() {
+  const last = await prisma.priceLevel.findFirst({
+    where: { priceLevelId: { not: null } },
+    orderBy: { priceLevelId: 'desc' },
+    select: { priceLevelId: true },
+  })
+  const next = last?.priceLevelId ? Number.parseInt(last.priceLevelId.replace(/\D/g, ''), 10) + 1 : 1
+  return `PL-${String(Number.isFinite(next) ? next : 1).padStart(5, '0')}`
+}
+
+async function nextPriceBookId() {
+  const last = await prisma.priceBook.findFirst({
+    where: { priceBookId: { not: null } },
+    orderBy: { priceBookId: 'desc' },
+    select: { priceBookId: true },
+  })
+  const next = last?.priceBookId ? Number.parseInt(last.priceBookId.replace(/\D/g, ''), 10) + 1 : 1
+  return `PB-${String(Number.isFinite(next) ? next : 1).padStart(5, '0')}`
+}
+
+async function importPriceLevels(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[], customFields: ImportCustomFieldDefinition[] = []) {
+  let succeeded = 0
+  const subsidiaryCodes = Array.from(new Set(rows.map((row) => (row.subsidiarycode ?? '').toUpperCase().trim()).filter(Boolean)))
+  const subsidiaries = await prisma.subsidiary.findMany({
+    where: { subsidiaryId: { in: subsidiaryCodes } },
+    select: { id: true, subsidiaryId: true },
+  })
+  const subsidiaryMap = new Map(subsidiaries.map((subsidiary) => [subsidiary.subsidiaryId.toUpperCase(), subsidiary.id]))
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
+    const rowNumber = index + 2
+    const priceLevelId = (row.pricelevelid ?? '').trim() || null
+    const name = (row.name ?? '').trim()
+    const subsidiaryCode = (row.subsidiarycode ?? '').toUpperCase().trim()
+
+    if (!name) {
+      errors.push({ row: rowNumber, message: 'name is required (cannot be empty)' })
+      continue
+    }
+
+    if (subsidiaryCode && !subsidiaryMap.has(subsidiaryCode)) {
+      const availableSubsidiaries = Array.from(subsidiaryMap.keys()).join(', ')
+      errors.push({
+        row: rowNumber,
+        message: `subsidiaryCode "${subsidiaryCode}" not found. Available: ${availableSubsidiaries || '(none - add subsidiaries first)'}`,
+      })
+      continue
+    }
+
+    if (!validateRequiredCustomFields(row, rowNumber, customFields, errors)) {
+      continue
+    }
+
+    if (!dryRun) {
+      const existing = priceLevelId
+        ? await prisma.priceLevel.findUnique({ where: { priceLevelId } })
+        : await prisma.priceLevel.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
+
+      if (mode === 'add' && existing) {
+        errors.push({ row: rowNumber, message: `Price Level "${priceLevelId ?? name}" already exists (add mode)` })
+        continue
+      }
+
+      if (mode === 'update' && !existing) {
+        errors.push({ row: rowNumber, message: `Price Level "${priceLevelId ?? name}" does not exist (update mode)` })
+        continue
+      }
+
+      const data = {
+        priceLevelId: priceLevelId ?? existing?.priceLevelId ?? await nextPriceLevelId(),
+        name,
+        description: (row.description ?? '').trim() || null,
+        levelType: (row.leveltype ?? '').trim() || null,
+        subsidiaryId: subsidiaryCode ? subsidiaryMap.get(subsidiaryCode) ?? null : null,
+        includeChildren: parseBoolean(row.includechildren, false),
+        defaultDiscountPct: row.defaultdiscountpct ? row.defaultdiscountpct : null,
+        minimumMarginPct: row.minimummarginpct ? row.minimummarginpct : null,
+        approvalRequired: parseBoolean(row.approvalrequired, false),
+        approvalWorkflow: (row.approvalworkflow ?? '').trim() || null,
+        allowManualOverride: parseBoolean(row.allowmanualoverride, true),
+        effectiveStartDate: parseDateValue(row.effectivestartdate),
+        effectiveEndDate: parseDateValue(row.effectiveenddate),
+        inactive: !parseBoolean(row.active, true),
+      }
+
+      const saved = existing
+        ? await prisma.priceLevel.update({ where: { id: existing.id }, data })
+        : await prisma.priceLevel.create({ data })
+      await saveCustomFieldImportValues(row, saved.id, customFields)
+    }
+
+    succeeded += 1
+  }
+
+  return succeeded
+}
+
+async function importPriceBooks(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[], customFields: ImportCustomFieldDefinition[] = []) {
+  let succeeded = 0
+  const subsidiaryCodes = Array.from(new Set(rows.map((row) => (row.subsidiarycode ?? '').toUpperCase().trim()).filter(Boolean)))
+  const currencyCodes = Array.from(new Set(rows.map((row) => (row.currencycode ?? '').toUpperCase().trim()).filter(Boolean)))
+  const priceLevelValues = Array.from(new Set(rows.map((row) => (row.defaultpricelevel ?? '').trim()).filter(Boolean)))
+  const [subsidiaries, currencies, priceLevels] = await Promise.all([
+    prisma.subsidiary.findMany({
+      where: { subsidiaryId: { in: subsidiaryCodes } },
+      select: { id: true, subsidiaryId: true },
+    }),
+    prisma.currency.findMany({
+      where: { code: { in: currencyCodes } },
+      select: { id: true, code: true },
+    }),
+    prisma.priceLevel.findMany({
+      where: priceLevelValues.length
+        ? {
+            OR: [
+              { id: { in: priceLevelValues } },
+              { priceLevelId: { in: priceLevelValues } },
+              { name: { in: priceLevelValues } },
+              { levelType: { in: priceLevelValues } },
+            ],
+          }
+        : {},
+      select: { id: true, priceLevelId: true, name: true, levelType: true },
+    }),
+  ])
+  const subsidiaryMap = new Map(subsidiaries.map((subsidiary) => [subsidiary.subsidiaryId.toUpperCase(), subsidiary.id]))
+  const currencyMap = new Map(currencies.map((currency) => [currency.code.toUpperCase(), currency.id]))
+  const priceLevelMap = new Map<string, string>()
+  for (const priceLevel of priceLevels) {
+    priceLevelMap.set(priceLevel.id, priceLevel.id)
+    if (priceLevel.priceLevelId) priceLevelMap.set(priceLevel.priceLevelId.toLowerCase(), priceLevel.id)
+    priceLevelMap.set(priceLevel.name.toLowerCase(), priceLevel.id)
+    if (priceLevel.levelType) priceLevelMap.set(priceLevel.levelType.toLowerCase(), priceLevel.id)
+  }
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
+    const rowNumber = index + 2
+    const priceBookId = (row.pricebookid ?? '').trim() || null
+    const name = (row.name ?? '').trim()
+    const subsidiaryCode = (row.subsidiarycode ?? '').toUpperCase().trim()
+    const currencyCode = (row.currencycode ?? '').toUpperCase().trim()
+    const priceLevelInput = (row.defaultpricelevel ?? '').trim()
+    const resolvedPriceLevelId = priceLevelInput ? priceLevelMap.get(priceLevelInput) ?? priceLevelMap.get(priceLevelInput.toLowerCase()) ?? null : null
+
+    if (!name) {
+      errors.push({ row: rowNumber, message: 'name is required (cannot be empty)' })
+      continue
+    }
+
+    if (subsidiaryCode && !subsidiaryMap.has(subsidiaryCode)) {
+      const availableSubsidiaries = Array.from(subsidiaryMap.keys()).join(', ')
+      errors.push({
+        row: rowNumber,
+        message: `subsidiaryCode "${subsidiaryCode}" not found. Available: ${availableSubsidiaries || '(none - add subsidiaries first)'}`,
+      })
+      continue
+    }
+
+    if (currencyCode && !currencyMap.has(currencyCode)) {
+      const availableCurrencies = Array.from(currencyMap.keys()).join(', ')
+      errors.push({
+        row: rowNumber,
+        message: `currencyCode "${currencyCode}" not found. Available: ${availableCurrencies || '(none - add currencies first)'}`,
+      })
+      continue
+    }
+
+    if (priceLevelInput && !resolvedPriceLevelId) {
+      const availablePriceLevels = Array.from(priceLevelMap.keys()).slice(0, 10).join(', ')
+      errors.push({
+        row: rowNumber,
+        message: `defaultPriceLevel "${priceLevelInput}" not found. Available examples: ${availablePriceLevels || '(none - add price levels first)'}`,
+      })
+      continue
+    }
+
+    if (!validateRequiredCustomFields(row, rowNumber, customFields, errors)) {
+      continue
+    }
+
+    if (!dryRun) {
+      const existing = priceBookId
+        ? await prisma.priceBook.findUnique({ where: { priceBookId } })
+        : await prisma.priceBook.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
+
+      if (mode === 'add' && existing) {
+        errors.push({ row: rowNumber, message: `Price Book "${priceBookId ?? name}" already exists (add mode)` })
+        continue
+      }
+
+      if (mode === 'update' && !existing) {
+        errors.push({ row: rowNumber, message: `Price Book "${priceBookId ?? name}" does not exist (update mode)` })
+        continue
+      }
+
+      const data = {
+        priceBookId: priceBookId ?? existing?.priceBookId ?? await nextPriceBookId(),
+        name,
+        description: (row.description ?? '').trim() || null,
+        bookType: (row.booktype ?? '').trim() || null,
+        subsidiaryId: subsidiaryCode ? subsidiaryMap.get(subsidiaryCode) ?? null : null,
+        includeChildren: parseBoolean(row.includechildren, false),
+        currencyId: currencyCode ? currencyMap.get(currencyCode) ?? null : null,
+        defaultPriceLevelId: resolvedPriceLevelId,
+        approvalRequired: parseBoolean(row.approvalrequired, false),
+        approvalWorkflow: (row.approvalworkflow ?? '').trim() || null,
+        allowManualOverride: parseBoolean(row.allowmanualoverride, true),
+        effectiveStartDate: parseDateValue(row.effectivestartdate),
+        effectiveEndDate: parseDateValue(row.effectiveenddate),
+        inactive: !parseBoolean(row.active, true),
+      }
+
+      const saved = existing
+        ? await prisma.priceBook.update({ where: { id: existing.id }, data })
+        : await prisma.priceBook.create({ data })
+      await saveCustomFieldImportValues(row, saved.id, customFields)
+    }
+
+    succeeded += 1
+  }
+
+  return succeeded
+}
+
+async function nextBillingMasterDataId(key: BillingMasterDataKey) {
+  const config = getBillingMasterDataConfig(key)
+  const model = prisma[config.prismaModel] as any
+  const last = await model.findFirst({
+    where: { [config.idField]: { not: null } },
+    orderBy: { [config.idField]: 'desc' },
+    select: { [config.idField]: true },
+  })
+  const raw = last?.[config.idField]
+  const next = raw ? Number.parseInt(String(raw).replace(/\D/g, ''), 10) + 1 : 1
+  return `${config.idPrefix}-${String(Number.isFinite(next) ? next : 1).padStart(5, '0')}`
+}
+
+function nullableNumber(value: string) {
+  if (!value) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+async function importBillingMasterData(
+  entity: BillingMasterDataKey,
+  rows: Array<Record<string, string>>,
+  mode: ImportMode,
+  dryRun: boolean,
+  errors: ImportError[],
+) {
+  const config = getBillingMasterDataConfig(entity)
+  const model = prisma[config.prismaModel] as any
+  let succeeded = 0
+  const [customers, subsidiaries, currencies, schedules, priceBooks, priceLevels, items] = await Promise.all([
+    prisma.customer.findMany({ select: { id: true, customerId: true, name: true } }),
+    prisma.subsidiary.findMany({ select: { id: true, subsidiaryId: true, name: true } }),
+    prisma.currency.findMany({ select: { id: true, code: true, name: true } }),
+    prisma.billingSchedule.findMany({ select: { id: true, billingScheduleId: true, name: true } }),
+    prisma.priceBook.findMany({ select: { id: true, priceBookId: true, name: true } }),
+    prisma.priceLevel.findMany({ select: { id: true, priceLevelId: true, name: true } }),
+    prisma.item.findMany({ select: { id: true, itemId: true, name: true } }),
+  ])
+  const map = <T extends { id: string } & Record<string, string | null>>(records: T[], keys: Array<keyof T>) => {
+    const out = new Map<string, string>()
+    for (const record of records) {
+      for (const key of keys) {
+        const value = record[key]
+        if (value) out.set(String(value).toLowerCase(), record.id)
+      }
+    }
+    return out
+  }
+  const customerMap = map(customers, ['id', 'customerId', 'name'])
+  const subsidiaryMap = map(subsidiaries, ['id', 'subsidiaryId', 'name'])
+  const currencyMap = map(currencies, ['id', 'code', 'name'])
+  const scheduleMap = map(schedules, ['id', 'billingScheduleId', 'name'])
+  const priceBookMap = map(priceBooks, ['id', 'priceBookId', 'name'])
+  const priceLevelMap = map(priceLevels, ['id', 'priceLevelId', 'name'])
+  const itemMap = map(items, ['id', 'itemId', 'name'])
+  const resolve = (value: string, lookup: Map<string, string>) => (value ? lookup.get(value.toLowerCase()) ?? null : null)
+
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i]
+    const rowNumber = i + 2
+    const name = getRowText(row, 'name')
+    if (!name) {
+      errors.push({ row: rowNumber, message: 'name is required' })
+      continue
+    }
+    const businessId = getRowText(row, config.idField)
+    const existing = businessId
+      ? await model.findUnique({ where: { [config.idField]: businessId } })
+      : await model.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
+    if (mode === 'add' && existing) {
+      errors.push({ row: rowNumber, message: `${config.singularTitle} "${businessId || name}" already exists (add mode)` })
+      continue
+    }
+    if (mode === 'update' && !existing) {
+      errors.push({ row: rowNumber, message: `${config.singularTitle} "${businessId || name}" does not exist (update mode)` })
+      continue
+    }
+
+    const data: Record<string, unknown> = {
+      [config.idField]: businessId || existing?.[config.idField] || await nextBillingMasterDataId(entity),
+      name,
+      description: getRowText(row, 'description') || null,
+    }
+    if (entity === 'billing-schedules') {
+      Object.assign(data, {
+        scheduleType: getRowText(row, 'scheduleType') || null,
+        frequency: getRowText(row, 'frequency') || null,
+        billingTiming: getRowText(row, 'billingTiming') || null,
+        billingAnchor: getRowText(row, 'billingAnchor') || null,
+        billingDay: nullableNumber(getRowText(row, 'billingDay')),
+        prorationPolicy: getRowText(row, 'prorationPolicy') || null,
+        renewalMode: getRowText(row, 'renewalMode') || null,
+        invoiceGroupingPolicy: getRowText(row, 'invoiceGroupingPolicy') || null,
+        graceDays: nullableNumber(getRowText(row, 'graceDays')),
+        minimumBillAmount: nullableNumber(getRowText(row, 'minimumBillAmount')),
+        currencyId: resolve(getRowText(row, 'currencyCode', 'currency'), currencyMap),
+        inactive: parseBoolean(getRowText(row, 'inactive'), existing?.inactive ?? false),
+      })
+    } else if (entity === 'billing-accounts') {
+      Object.assign(data, {
+        customerId: resolve(getRowText(row, 'customer'), customerMap),
+        accountType: getRowText(row, 'accountType') || null,
+        status: getRowText(row, 'status') || 'active',
+        subsidiaryId: resolve(getRowText(row, 'subsidiary'), subsidiaryMap),
+        currencyId: resolve(getRowText(row, 'currencyCode', 'currency'), currencyMap),
+        defaultBillingScheduleId: resolve(getRowText(row, 'defaultBillingSchedule'), scheduleMap),
+        defaultPriceBookId: resolve(getRowText(row, 'defaultPriceBook'), priceBookMap),
+        defaultPriceLevelId: resolve(getRowText(row, 'defaultPriceLevel'), priceLevelMap),
+        invoiceDeliveryMethod: getRowText(row, 'invoiceDeliveryMethod') || null,
+        paymentTerms: getRowText(row, 'paymentTerms') || null,
+        paymentMethod: getRowText(row, 'paymentMethod') || null,
+        taxable: parseBoolean(getRowText(row, 'taxable'), existing?.taxable ?? false),
+        taxCode: getRowText(row, 'taxCode') || null,
+        inactive: parseBoolean(getRowText(row, 'inactive'), existing?.inactive ?? false),
+      })
+      if (getRowText(row, 'customer') && !data.customerId) errors.push({ row: rowNumber, message: `customer "${getRowText(row, 'customer')}" not found` })
+    } else {
+      Object.assign(data, {
+        planType: getRowText(row, 'planType') || null,
+        billingModel: getRowText(row, 'billingModel') || null,
+        status: getRowText(row, 'status') || 'draft',
+        itemId: resolve(getRowText(row, 'item'), itemMap),
+        subsidiaryId: resolve(getRowText(row, 'subsidiary'), subsidiaryMap),
+        currencyId: resolve(getRowText(row, 'currencyCode', 'currency'), currencyMap),
+        defaultBillingScheduleId: resolve(getRowText(row, 'defaultBillingSchedule'), scheduleMap),
+        defaultPriceBookId: resolve(getRowText(row, 'defaultPriceBook'), priceBookMap),
+        defaultPriceLevelId: resolve(getRowText(row, 'defaultPriceLevel'), priceLevelMap),
+        termMonths: nullableNumber(getRowText(row, 'termMonths')),
+        autoRenew: parseBoolean(getRowText(row, 'autoRenew'), existing?.autoRenew ?? false),
+        renewalMode: getRowText(row, 'renewalMode') || null,
+        usageRatingModel: getRowText(row, 'usageRatingModel') || null,
+        revenueRecognitionPolicy: getRowText(row, 'revenueRecognitionPolicy') || null,
+        inactive: parseBoolean(getRowText(row, 'inactive'), existing?.inactive ?? false),
+      })
+    }
+    if (errors.some((error) => error.row === rowNumber)) continue
+    if (!dryRun) {
+      if (existing) await model.update({ where: { id: existing.id }, data })
+      else await model.create({ data })
+    }
+    succeeded += 1
+  }
+  return succeeded
+}
+
+async function importContacts(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[], customFields: ImportCustomFieldDefinition[] = []) {
   let succeeded = 0
 
   // Get or create default system user for imports
@@ -1091,6 +1888,10 @@ async function importContacts(rows: Array<Record<string, string>>, mode: ImportM
       continue
     }
 
+    if (!validateRequiredCustomFields(row, rowNumber, customFields, errors)) {
+      continue
+    }
+
     if (!dryRun) {
       // Check if record exists for mode validation (only if contactNumber is provided)
       let exists = false
@@ -1121,11 +1922,12 @@ async function importContacts(rows: Array<Record<string, string>>, mode: ImportM
             customerId: customerMap.get(customerNumber) ?? '',
           }
 
-          await prisma.contact.upsert({
+          const upserted = await prisma.contact.upsert({
             where: { contactNumber },
             update: updateData,
             create: { ...updateData, contactNumber, userId: systemUser.id },
           })
+          await saveCustomFieldImportValues(row, upserted.id, customFields)
         }
       } else {
         // Create without contactNumber - it will be auto-generated
@@ -1138,9 +1940,10 @@ async function importContacts(rows: Array<Record<string, string>>, mode: ImportM
           customerId: customerMap.get(customerNumber) ?? '',
         }
 
-        await prisma.contact.create({
+        const created = await prisma.contact.create({
           data: { ...updateData, userId: systemUser.id },
         })
+        await saveCustomFieldImportValues(row, created.id, customFields)
       }
     }
 
@@ -1150,7 +1953,7 @@ async function importContacts(rows: Array<Record<string, string>>, mode: ImportM
   return succeeded
 }
 
-async function importVendors(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[]) {
+async function importVendors(rows: Array<Record<string, string>>, mode: ImportMode, dryRun: boolean, errors: ImportError[], customFields: ImportCustomFieldDefinition[] = []) {
   let succeeded = 0
 
   const subsidiaryCodes = Array.from(new Set(rows.map((row) => (row.subsidiarycode ?? row.entitycode ?? '').toUpperCase()).filter(Boolean)))
@@ -1196,6 +1999,10 @@ async function importVendors(rows: Array<Record<string, string>>, mode: ImportMo
       continue
     }
 
+    if (!validateRequiredCustomFields(row, rowNumber, customFields, errors)) {
+      continue
+    }
+
     if (!dryRun) {
       // Check if record exists for mode validation (only if vendorNumber is provided)
       let exists = false
@@ -1227,11 +2034,12 @@ async function importVendors(rows: Array<Record<string, string>>, mode: ImportMo
             currencyId: currencyCode ? currencyMap.get(currencyCode) ?? null : null,
           }
 
-          await prisma.vendor.upsert({
+          const upserted = await prisma.vendor.upsert({
             where: { vendorNumber },
             update: updateData,
             create: { ...updateData, vendorNumber },
           })
+          await saveCustomFieldImportValues(row, upserted.id, customFields)
         }
       } else {
         // Create without vendorNumber - it will be auto-generated
@@ -1245,9 +2053,10 @@ async function importVendors(rows: Array<Record<string, string>>, mode: ImportMo
           currencyId: currencyCode ? currencyMap.get(currencyCode) ?? null : null,
         }
 
-        await prisma.vendor.create({
+        const created = await prisma.vendor.create({
           data: updateData,
         })
+        await saveCustomFieldImportValues(row, created.id, customFields)
       }
     }
 
@@ -1280,11 +2089,18 @@ export async function POST(request: Request) {
     }
 
     const bytes = await file.arrayBuffer()
-    const rows = parseRows(file.name, bytes)
+    const parsedRows = parseRows(file.name, bytes)
 
-    if (rows.length === 0) {
+    if (parsedRows.length === 0) {
       return NextResponse.json({ error: 'No rows found in file.' }, { status: 400 })
     }
+
+    const rows = canonicalizeMasterDataImportRows(entity, parsedRows, getFieldNames(entity))
+    const customFields = await prisma.customFieldDefinition.findMany({
+      where: { entityType: getCustomFieldEntityType(entity), active: true },
+      orderBy: [{ label: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, name: true, label: true, required: true, defaultValue: true, entityType: true },
+    })
 
     // Validate headers before processing
     const headerValidation = validateHeaders(rows, getRequiredHeaders(entity), entity)
@@ -1296,25 +2112,31 @@ export async function POST(request: Request) {
     let succeeded = 0
 
     if (entity === 'currencies') {
-      succeeded = await importCurrencies(rows, mode, dryRun, errors)
+      succeeded = await importCurrencies(rows, mode, dryRun, errors, customFields)
     } else if (entity === 'locations') {
-      succeeded = await importLocations(rows, mode, dryRun, errors)
+      succeeded = await importLocations(rows, mode, dryRun, errors, customFields)
     } else if (entity === 'subsidiaries') {
-      succeeded = await importSubsidiaries(rows, mode, dryRun, errors)
+      succeeded = await importSubsidiaries(rows, mode, dryRun, errors, customFields)
     } else if (entity === 'departments') {
-      succeeded = await importDepartments(rows, mode, dryRun, errors)
+      succeeded = await importDepartments(rows, mode, dryRun, errors, customFields)
     } else if (entity === 'items') {
-      succeeded = await importItems(rows, mode, dryRun, errors)
+      succeeded = await importItems(rows, mode, dryRun, errors, customFields)
     } else if (entity === 'employees') {
-      succeeded = await importEmployees(rows, mode, dryRun, errors)
+      succeeded = await importEmployees(rows, mode, dryRun, errors, customFields)
     } else if (entity === 'customers') {
-      succeeded = await importCustomers(rows, mode, dryRun, errors)
+      succeeded = await importCustomers(rows, mode, dryRun, errors, customFields)
+    } else if (entity === 'price-levels') {
+      succeeded = await importPriceLevels(rows, mode, dryRun, errors, customFields)
+    } else if (entity === 'price-books') {
+      succeeded = await importPriceBooks(rows, mode, dryRun, errors, customFields)
+    } else if (entity === 'billing-schedules' || entity === 'billing-accounts' || entity === 'subscription-plans') {
+      succeeded = await importBillingMasterData(entity as BillingMasterDataKey, rows, mode, dryRun, errors)
     } else if (entity === 'contacts') {
-      succeeded = await importContacts(rows, mode, dryRun, errors)
+      succeeded = await importContacts(rows, mode, dryRun, errors, customFields)
     } else if (entity === 'vendors') {
-      succeeded = await importVendors(rows, mode, dryRun, errors)
+      succeeded = await importVendors(rows, mode, dryRun, errors, customFields)
     } else if (entity === 'chart-of-accounts') {
-      succeeded = await importChartOfAccounts(rows, mode, dryRun, errors)
+      succeeded = await importChartOfAccounts(rows, mode, dryRun, errors, customFields)
     }
 
     return NextResponse.json({

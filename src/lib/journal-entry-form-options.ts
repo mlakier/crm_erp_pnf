@@ -3,7 +3,7 @@ import { loadListValues } from '@/lib/load-list-values'
 import { getAccountingActivityTypeOptions } from '@/lib/accounting-activity-types'
 
 export async function loadJournalEntryFormOptions() {
-  const [entities, accounts, departments, locations, projects, customers, vendors, items, currencies, accountingPeriods, employees, journalEntries, openItems, statusValues, sourceTypeValues] = await Promise.all([
+  const [entities, accounts, departments, locations, classes, projects, customers, vendors, items, currencies, accountingPeriods, employees, journalEntries, openItems, statusValues, sourceTypeValues] = await Promise.all([
     prisma.subsidiary.findMany({ orderBy: { subsidiaryId: 'asc' }, select: { id: true, subsidiaryId: true, name: true } }),
     prisma.chartOfAccounts.findMany({
       where: { active: true, isPosting: true },
@@ -19,6 +19,11 @@ export async function loadJournalEntryFormOptions() {
       where: { inactive: false },
       orderBy: [{ code: 'asc' }, { locationId: 'asc' }],
       select: { id: true, locationId: true, code: true, name: true },
+    }),
+    prisma.classDimension.findMany({
+      where: { inactive: false },
+      orderBy: [{ classId: 'asc' }, { name: 'asc' }],
+      select: { id: true, classId: true, name: true },
     }),
     prisma.project.findMany({
       where: { inactive: false },
@@ -72,6 +77,7 @@ export async function loadJournalEntryFormOptions() {
     accounts,
     departments,
     locations,
+    classes,
     projects,
     customers,
     vendors,

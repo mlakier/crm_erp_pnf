@@ -19,6 +19,7 @@ import {
   type BillDetailCustomizationConfig,
   type BillDetailFieldKey,
 } from '@/lib/bill-detail-customization'
+import { CURRENCY_READOUT_SECTION_TITLE } from '@/lib/four-currency-readout'
 
 type VendorOption = {
   id: string
@@ -370,6 +371,12 @@ export default function BillCreatePageClient({
       'System Dates': 'System-managed timestamps for this bill.',
     },
   })
+    .filter((section) => section.title !== CURRENCY_READOUT_SECTION_TITLE)
+    .map((section) => ({
+      ...section,
+      fields: section.fields.filter((field) => !String(field.key).startsWith('currency-')),
+    }))
+    .filter((section) => section.fields.length > 0)
   const orderedVisibleLineColumns = getOrderedVisibleTransactionLineColumns(BILL_LINE_COLUMNS, customization)
 
   async function handleSubmit(values: Record<string, string>) {

@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import {
   RecordDetailCell,
   RecordDetailEmptyState,
@@ -25,6 +25,7 @@ export default function RecordGlImpactSection<Row, ColumnId extends string>({
   renderCell,
   getHeaderClassName,
   getCellClassName,
+  getColumnStyle,
 }: {
   title?: string
   count?: number
@@ -37,6 +38,7 @@ export default function RecordGlImpactSection<Row, ColumnId extends string>({
   renderCell: (row: Row, columnId: ColumnId, index: number) => ReactNode
   getHeaderClassName?: (columnId: ColumnId) => string | undefined
   getCellClassName?: (columnId: ColumnId, row: Row) => string | undefined
+  getColumnStyle?: (columnId: ColumnId) => CSSProperties | undefined
 }) {
   const resolvedCount = count ?? rows.length
 
@@ -50,7 +52,12 @@ export default function RecordGlImpactSection<Row, ColumnId extends string>({
       {rows.length === 0 ? (
         <RecordDetailEmptyState message={emptyMessage} />
       ) : (
-        <table className={`min-w-full ${fontSize === 'sm' ? 'text-sm' : 'text-xs'}`}>
+        <table className={`min-w-full table-fixed ${fontSize === 'sm' ? 'text-sm' : 'text-xs'}`}>
+          <colgroup>
+            {columns.map((column) => (
+              <col key={column.id} style={getColumnStyle?.(column.id)} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
               {columns.map((column) => (

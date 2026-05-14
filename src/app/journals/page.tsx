@@ -11,6 +11,17 @@ import { buildMasterDataExportUrl } from '@/lib/master-data-export-url'
 import { loadJournalEntryFormOptions } from '@/lib/journal-entry-form-options'
 import { createRecordLabelMapFromOptions, formatRecordLabel } from '@/lib/record-status-label'
 
+const SUBLEDGER_JOURNAL_SOURCE_TYPES = [
+  'invoice',
+  'invoice-receipt',
+  'credit-memo',
+  'customer-refund',
+  'bill',
+  'bill-payment',
+  'bill-credit',
+  'vendor-refund',
+]
+
 const JE_COLUMNS = [
   { id: 'number', label: 'Journal Id' },
   { id: 'date', label: 'Date' },
@@ -38,7 +49,15 @@ export default async function JournalsPage({ searchParams }: { searchParams: Pro
   const statusFilter = params.status ?? 'all'
   const where = {
     journalType: 'standard',
-    ...(query ? { OR: [{ number: { contains: query } }, { description: { contains: query } }, { status: { contains: query } }, { sourceId: { contains: query } }] } : {}),
+    AND: [
+      {
+        OR: [
+          { sourceType: null },
+          { sourceType: { notIn: SUBLEDGER_JOURNAL_SOURCE_TYPES } },
+        ],
+      },
+      ...(query ? [{ OR: [{ number: { contains: query } }, { description: { contains: query } }, { status: { contains: query } }, { sourceId: { contains: query } }] }] : []),
+    ],
     ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
   }
 

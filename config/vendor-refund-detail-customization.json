@@ -1,5 +1,5 @@
 {
-  "formColumns": 3,
+  "formColumns": 4,
   "sections": [
     "4-Currency Context",
     "Document Identity",
@@ -152,44 +152,44 @@
     "currency-fx-audit": {
       "visible": true,
       "section": "4-Currency Context",
-      "order": 4,
+      "order": 0,
       "column": 3
     },
     "currency-local-fx-rate": {
       "visible": true,
       "section": "4-Currency Context",
-      "order": 2,
+      "order": 1,
       "column": 2
     },
     "currency-functional-fx-rate": {
       "visible": true,
       "section": "4-Currency Context",
-      "order": 3,
+      "order": 2,
       "column": 2
     },
     "currency-group-fx-rate": {
       "visible": true,
       "section": "4-Currency Context",
-      "order": 4,
-      "column": 1
+      "order": 3,
+      "column": 2
     },
     "currency-fx-rate-type": {
       "visible": true,
       "section": "4-Currency Context",
-      "order": 4,
+      "order": 0,
       "column": 2
     },
     "currency-realized-fx-functional": {
       "visible": true,
       "section": "4-Currency Context",
-      "order": 1,
-      "column": 2
+      "order": 2,
+      "column": 3
     },
     "currency-realized-fx-local": {
       "visible": true,
       "section": "4-Currency Context",
-      "order": 0,
-      "column": 2
+      "order": 1,
+      "column": 3
     },
     "currency-realized-fx-group": {
       "visible": true,
@@ -201,27 +201,27 @@
       "visible": true,
       "section": "4-Currency Context",
       "order": 0,
-      "column": 3
+      "column": 4
     },
     "currency-posting-status": {
       "visible": true,
       "section": "4-Currency Context",
       "order": 1,
-      "column": 3
+      "column": 4
     },
     "currency-open-item-number": {
       "visible": true,
       "section": "4-Currency Context",
       "order": 2,
-      "column": 3
+      "column": 4
     }
   },
   "referenceLayouts": [
     {
       "id": "reference-vendor-1",
       "referenceId": "vendor",
-      "formColumns": 2,
-      "rows": 3,
+      "formColumns": 4,
+      "rows": 2,
       "fields": {
         "vendorDbId": {
           "visible": false,
@@ -240,13 +240,13 @@
         },
         "vendorEmail": {
           "visible": true,
-          "column": 2,
-          "order": 1
+          "column": 4,
+          "order": 0
         },
         "vendorPhone": {
           "visible": true,
-          "column": 1,
-          "order": 1
+          "column": 3,
+          "order": 0
         },
         "vendorAddress": {
           "visible": false,
@@ -293,8 +293,8 @@
     {
       "id": "reference-bill-payment-1",
       "referenceId": "billPayment",
-      "formColumns": 2,
-      "rows": 3,
+      "formColumns": 4,
+      "rows": 2,
       "fields": {
         "billPaymentDbId": {
           "visible": false,
@@ -308,8 +308,8 @@
         },
         "billPaymentStatus": {
           "visible": true,
-          "column": 1,
-          "order": 1
+          "column": 3,
+          "order": 0
         },
         "billPaymentAmount": {
           "visible": true,
@@ -361,88 +361,92 @@
     "date": {
       "visible": true,
       "order": 0,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "journalNumber": {
       "visible": true,
       "order": 1,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "sourceType": {
       "visible": true,
       "order": 2,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "sourceNumber": {
       "visible": true,
       "order": 3,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "account": {
       "visible": true,
       "order": 4,
-      "widthMode": "wide"
+      "widthMode": "compact"
     },
     "description": {
       "visible": true,
       "order": 5,
-      "widthMode": "wide"
+      "widthMode": "compact"
     },
     "debit": {
       "visible": true,
       "order": 6,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "credit": {
       "visible": true,
       "order": 7,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "txnAmount": {
       "visible": true,
       "order": 8,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "localAmount": {
       "visible": true,
       "order": 9,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "functionalAmount": {
       "visible": true,
       "order": 10,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "groupAmount": {
       "visible": true,
       "order": 11,
-      "widthMode": "normal"
+      "widthMode": "compact"
     }
   },
   "statCards": [
     {
-      "id": "refund-amount",
-      "metric": "amount",
+      "id": "refund-vendor",
+      "metric": "vendor",
       "visible": true,
-      "order": 0
+      "order": 0,
+      "size": "sm"
     },
     {
       "id": "refund-status",
       "metric": "status",
       "visible": true,
-      "order": 1
+      "order": 1,
+      "size": "sm"
     },
     {
       "id": "refund-method",
       "metric": "method",
       "visible": true,
-      "order": 2
+      "order": 2,
+      "size": "sm"
     },
     {
-      "id": "refund-vendor",
-      "metric": "vendor",
+      "id": "refund-amount",
+      "metric": "amount",
       "visible": true,
-      "order": 3
+      "order": 3,
+      "size": "sm"
     }
   ],
   "secondarySettings": {
@@ -452,62 +456,62 @@
     "date": {
       "visible": true,
       "order": 0,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "journalNumber": {
       "visible": true,
       "order": 1,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "sourceType": {
       "visible": true,
       "order": 2,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "sourceNumber": {
       "visible": true,
       "order": 3,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "account": {
       "visible": true,
       "order": 4,
-      "widthMode": "wide"
+      "widthMode": "compact"
     },
     "description": {
       "visible": true,
       "order": 5,
-      "widthMode": "wide"
+      "widthMode": "compact"
     },
     "debit": {
       "visible": true,
       "order": 6,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "credit": {
       "visible": true,
       "order": 7,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "txnAmount": {
       "visible": true,
       "order": 8,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "localAmount": {
       "visible": true,
       "order": 9,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "functionalAmount": {
       "visible": true,
       "order": 10,
-      "widthMode": "normal"
+      "widthMode": "compact"
     },
     "groupAmount": {
       "visible": true,
       "order": 11,
-      "widthMode": "normal"
+      "widthMode": "compact"
     }
   }
 }

@@ -68,6 +68,10 @@ export type BillLineColumnKey =
   | 'unit-price'
   | 'line-total'
   | 'notes'
+  | 'department'
+  | 'location'
+  | 'class'
+  | 'project'
 
 export type BillLineFontSize = 'xs' | 'sm'
 
@@ -125,6 +129,10 @@ export const BILL_LINE_COLUMNS: Array<{ id: BillLineColumnKey; label: string; de
   { id: 'unit-price', label: 'Unit Price', description: 'Price per unit for the bill line item.' },
   { id: 'line-total', label: 'Line Total', description: 'Extended line amount calculated from quantity and unit price.' },
   { id: 'notes', label: 'Notes', description: 'Bill line notes.' },
+  { id: 'department', label: 'Department', description: 'Department coding on the bill line.' },
+  { id: 'location', label: 'Location', description: 'Location coding on the bill line.' },
+  { id: 'class', label: 'Class', description: 'Class coding on the bill line.' },
+  { id: 'project', label: 'Project', description: 'Project coding on the bill line.' },
 ]
 
 export const BILL_DETAIL_FIELDS: BillDetailFieldMeta[] = [
@@ -193,7 +201,7 @@ export const BILL_REFERENCE_SOURCES: LinkedRecordReferenceSource[] = [
 export function defaultBillDetailCustomization(): BillDetailCustomizationConfig {
   return {
     formColumns: 2,
-    sections: [CURRENCY_READOUT_SECTION_TITLE, 'Document Identity', 'Workflow & Timing', 'Sourcing & Financials', 'Record Keys', 'System Dates'],
+    sections: ['Document Identity', 'Workflow & Timing', 'Sourcing & Financials', 'Record Keys', 'System Dates'],
     sectionRows: {
       [CURRENCY_READOUT_SECTION_TITLE]: 4,
       'Document Identity': 2,
@@ -228,20 +236,50 @@ export function defaultBillDetailCustomization(): BillDetailCustomizationConfig 
       BILL_LINE_COLUMNS.map((column, index) => [
         column.id,
         {
-          visible: true,
+          visible: !['notes', 'department', 'location', 'class', 'project'].includes(column.id),
           order: index,
           widthMode:
-            column.id === 'line' ? 'compact' : column.id === 'description' || column.id === 'notes' || column.id === 'expense-account' ? 'wide' : 'normal',
+            column.id === 'line'
+              ? 'compact'
+              : column.id === 'description' ||
+                  column.id === 'notes' ||
+                  column.id === 'expense-account' ||
+                  column.id === 'department' ||
+                  column.id === 'location' ||
+                  column.id === 'class' ||
+                  column.id === 'project'
+                ? 'wide'
+                : 'normal',
           showColumnMode:
             column.id === 'item-id'
               ? 'itemOnly'
               : column.id === 'expense-account'
                 ? 'expenseOnly'
                 : 'always',
-          editDisplay: column.id === 'item-id' ? 'id' : column.id === 'expense-account' ? 'idAndLabel' : 'label',
-          viewDisplay: column.id === 'item-id' ? 'id' : column.id === 'expense-account' ? 'idAndLabel' : 'label',
-          dropdownDisplay: column.id === 'item-id' || column.id === 'expense-account' ? 'idAndLabel' : 'label',
-          dropdownSort: column.id === 'item-id' || column.id === 'expense-account' ? 'id' : 'label',
+          editDisplay:
+            column.id === 'item-id'
+              ? 'id'
+              : column.id === 'expense-account' || column.id === 'department' || column.id === 'location' || column.id === 'class'
+                ? 'idAndLabel'
+                : 'label',
+          viewDisplay:
+            column.id === 'item-id'
+              ? 'id'
+              : column.id === 'expense-account' || column.id === 'department' || column.id === 'location' || column.id === 'class'
+                ? 'idAndLabel'
+                : 'label',
+          dropdownDisplay:
+            column.id === 'item-id' ||
+            column.id === 'expense-account' ||
+            column.id === 'department' ||
+            column.id === 'location' ||
+            column.id === 'class'
+              ? 'idAndLabel'
+              : 'label',
+          dropdownSort:
+            column.id === 'item-id' || column.id === 'expense-account'
+              ? 'id'
+              : 'label',
         },
       ]),
     ) as Record<BillLineColumnKey, BillLineColumnCustomization>,

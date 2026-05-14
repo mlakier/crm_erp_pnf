@@ -19,7 +19,12 @@ function buildSourceHref(sourceTransactionType: string | null, sourceTransaction
     'invoice-receipt': '/invoice-receipts',
     'bill-payment': '/bill-payments',
     'customer-refund': '/customer-refunds',
+    'vendor-refund': '/vendor-refunds',
+    'credit-memo': '/credit-memos',
+    'bill-credit': '/bill-credits',
     journal: '/journals',
+    'journal-entry': '/journals',
+    'journal-entry-line': '/journals',
   }
 
   const basePath = routeByType[sourceTransactionType]

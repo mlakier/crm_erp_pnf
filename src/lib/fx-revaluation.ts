@@ -3,8 +3,9 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { deriveOpenItemCurrencyContext, type TranslationAuditSourceSummary } from '@/lib/open-item-currency-context'
 import { getOpenItemRemainingAmount } from '@/lib/open-item-service'
-import { generateNextJournalNumber } from '@/lib/journal-number'
+import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { loadConfiguredUnrealizedFxPostingAccounts } from '@/lib/company-setup-account-resolver'
+import { getRequiredStandardTransactionPostingContext } from '@/lib/transaction-posting-context'
 
 const MONEY_TOLERANCE = 0.005
 
@@ -39,6 +40,61 @@ type AggregatedJournalLine = {
   groupCredit: number
 }
 
+type GlBalanceCandidateLine = {
+  id: string
+  debit: Prisma.Decimal
+  credit: Prisma.Decimal
+  localDebit: Prisma.Decimal | null
+  localCredit: Prisma.Decimal | null
+  functionalDebit: Prisma.Decimal | null
+  functionalCredit: Prisma.Decimal | null
+  groupDebit: Prisma.Decimal | null
+  groupCredit: Prisma.Decimal | null
+  accountId: string
+  subsidiaryId: string | null
+  account: {
+    id: string
+    accountNumber: string
+    name: string
+    accountType: string
+    accountRole: string | null
+    category: string | null
+    requiresSubledgerType: string | null
+    isControlAccount: boolean
+  }
+  journalEntry: {
+    id: string
+    number: string
+    date: Date
+    currencyId: string
+    currency: {
+      code: string
+    }
+    subsidiaryId: string
+    sourceType: string | null
+    journalType: string
+  }
+}
+
+type GlBalanceGroup = {
+  account: GlBalanceCandidateLine['account']
+  subsidiaryId: string
+  transactionCurrencyId: string
+  transactionCurrencyCode: string
+  transactionAmount: number
+  carryingLocalAmount: number
+  carryingFunctionalAmount: number
+  carryingGroupAmount: number
+  revaluedLocalAmount: number
+  revaluedFunctionalAmount: number
+  revaluedGroupAmount: number
+  sourceLineIds: string[]
+  sourceJournalNumbers: string[]
+  firstPostingDate: Date | null
+  lastPostingDate: Date | null
+  translationSources: Set<string>
+}
+
 function roundMoney(value: Prisma.Decimal.Value | number | null | undefined) {
   return Math.round((Number(value ?? 0) + Number.EPSILON) * 100) / 100
 }
@@ -63,6 +119,23 @@ function isAssetAccountType(accountType: string) {
 
 function isLiabilityAccountType(accountType: string) {
   return accountType.toLowerCase().includes('liability')
+}
+
+function isSubledgerControlledAccount(account: {
+  accountRole: string | null
+  requiresSubledgerType: string | null
+  isControlAccount: boolean
+}) {
+  const subledgerType = String(account.requiresSubledgerType ?? '').toLowerCase()
+  return (
+    account.isControlAccount
+    || subledgerType === 'customer'
+    || subledgerType === 'vendor'
+  )
+}
+
+function signedNet(debit: Prisma.Decimal.Value | number | null | undefined, credit: Prisma.Decimal.Value | number | null | undefined) {
+  return roundMoney(Number(debit ?? 0) - Number(credit ?? 0))
 }
 
 function ensureJournalLine(
@@ -114,6 +187,22 @@ function addLayerAmount(
 
   if (side === 'debit') line.groupDebit = roundMoney(line.groupDebit + amount)
   else line.groupCredit = roundMoney(line.groupCredit + amount)
+}
+
+function addSignedGlRemeasurementDelta(
+  sourceLine: AggregatedJournalLine,
+  offsetLine: AggregatedJournalLine,
+  layer: LayerKey,
+  delta: number,
+) {
+  const absDelta = Math.abs(delta)
+  if (delta > 0) {
+    addLayerAmount(sourceLine, layer, 'debit', absDelta)
+    addLayerAmount(offsetLine, layer, 'credit', absDelta)
+  } else {
+    addLayerAmount(sourceLine, layer, 'credit', absDelta)
+    addLayerAmount(offsetLine, layer, 'debit', absDelta)
+  }
 }
 
 function computeLayerDeltas(args: {
@@ -186,6 +275,11 @@ function buildScopeSummary(period: {
   }
 }
 
+function isRemeasurementLayer(layer: LayerKey) {
+  // Group currency movement belongs to translation/CTA, not the unrealized FX remeasurement journal.
+  return layer === 'local' || layer === 'functional'
+}
+
 export async function runFxRevaluation(input: RunFxRevaluationInput) {
   const asOfDate = normalizeDateOnly(input.asOfDate)
   const triggerType = input.triggerType?.trim() || 'manual'
@@ -217,6 +311,31 @@ export async function runFxRevaluation(input: RunFxRevaluationInput) {
     if (input.subsidiaryId && period.subsidiaryId && input.subsidiaryId !== period.subsidiaryId) {
       throw new Error('The selected accounting period belongs to a different subsidiary than the chosen FX revaluation scope.')
     }
+    if (!effectiveSubsidiaryId) {
+      throw new Error('FX revaluation requires a subsidiary-scoped run so the posting journal has a real transaction subsidiary and currency.')
+    }
+
+    const postingSubsidiary = await tx.subsidiary.findUnique({
+      where: { id: effectiveSubsidiaryId },
+      select: {
+        id: true,
+        localCurrencyId: true,
+        functionalCurrencyId: true,
+        groupCurrencyId: true,
+      },
+    })
+
+    if (!postingSubsidiary?.localCurrencyId) {
+      throw new Error('The selected subsidiary is missing a local currency, so FX revaluation cannot create a posting journal.')
+    }
+
+    const journalPostingContext = getRequiredStandardTransactionPostingContext('journal', {
+      subsidiaryId: postingSubsidiary.id,
+      currencyId: postingSubsidiary.localCurrencyId,
+    })
+    if ('error' in journalPostingContext) {
+      throw new Error(journalPostingContext.error)
+    }
 
     const { unrealizedFxGainAccountId, unrealizedFxLossAccountId } =
       await loadConfiguredUnrealizedFxPostingAccounts(tx)
@@ -225,12 +344,69 @@ export async function runFxRevaluation(input: RunFxRevaluationInput) {
       throw new Error('Configure Unrealized FX Gain and Unrealized FX Loss accounts in Company Setup before running FX revaluation.')
     }
 
+    const existingRun = await tx.runHeader.findFirst({
+      where: {
+        runType: 'fx_revaluation',
+        accountingPeriodId: period.id,
+        subsidiaryScope: effectiveSubsidiaryId,
+        asOfDate,
+        status: { in: ['queued', 'running', 'completed', 'completed_with_exceptions'] },
+      },
+      orderBy: { requestedAt: 'desc' },
+      select: {
+        id: true,
+        runNumber: true,
+        status: true,
+        message: true,
+        summaryJson: true,
+      },
+    })
+    if (existingRun) {
+      let existingJournalId: string | null = null
+      if (existingRun.summaryJson) {
+        try {
+          const summary = JSON.parse(existingRun.summaryJson) as { journalEntryId?: string | null }
+          existingJournalId = summary.journalEntryId ?? null
+        } catch {
+          existingJournalId = null
+        }
+      }
+      return {
+        runId: existingRun.id,
+        runNumber: existingRun.runNumber,
+        status: existingRun.status,
+        message:
+          existingRun.message
+          ?? `FX revaluation ${existingRun.runNumber} already exists for this subsidiary, period, and as-of date.`,
+        summary: {
+          asOfDate: asOfDate.toISOString(),
+          accountingPeriodId: period.id,
+          subsidiaryId: effectiveSubsidiaryId,
+          eligibleOpenItems: 0,
+          revaluedItems: 0,
+          skippedItems: 0,
+          failedItems: 0,
+          eligibleGlBalances: 0,
+          revaluedGlBalances: 0,
+          skippedGlBalances: 0,
+          failedGlBalances: 0,
+          journalEntryId: existingJournalId,
+          duplicateOfRunId: existingRun.id,
+          duplicateOfRunNumber: existingRun.runNumber,
+          localDeltaTotal: 0,
+          functionalDeltaTotal: 0,
+          groupTranslationDeltaTotal: 0,
+          translationSourceSummary: null,
+        },
+      }
+    }
+
     const runHeader = await tx.runHeader.create({
       data: {
         runNumber: generateFxRevaluationRunNumber(),
         runType: 'fx_revaluation',
         triggerType,
-        scopeType: effectiveSubsidiaryId ? 'subsidiary_period' : 'global_period',
+        scopeType: 'subsidiary_period',
         scopeJson: JSON.stringify({
           ...buildScopeSummary({
             id: period.id,
@@ -256,12 +432,13 @@ export async function runFxRevaluation(input: RunFxRevaluationInput) {
         isOpen: true,
         openItemEligible: true,
         accountId: { not: null },
-        ...(effectiveSubsidiaryId ? { subsidiaryId: effectiveSubsidiaryId } : {}),
-        account: {
-          revalueOpenBalance: true,
-          active: true,
-          isPosting: true,
-        },
+        subsidiaryId: effectiveSubsidiaryId,
+          account: {
+            revalueOpenBalance: true,
+            active: true,
+            isPosting: true,
+            monetaryClassification: 'monetary',
+          },
       },
       select: {
         id: true,
@@ -296,9 +473,13 @@ export async function runFxRevaluation(input: RunFxRevaluationInput) {
     let revaluedItemCount = 0
     let skippedItemCount = 0
     let failedItemCount = 0
+    let eligibleGlBalanceCount = 0
+    let revaluedGlBalanceCount = 0
+    let skippedGlBalanceCount = 0
+    let failedGlBalanceCount = 0
     let localDeltaTotal = 0
     let functionalDeltaTotal = 0
-    let groupDeltaTotal = 0
+    let groupTranslationDeltaTotal = 0
 
     for (const [index, openItem] of candidates.entries()) {
       const runItem = await tx.runItem.create({
@@ -373,17 +554,26 @@ export async function runFxRevaluation(input: RunFxRevaluationInput) {
           revaluedGroupAmount: revaluedContext.originalGroupAmount,
         })
 
-        if (deltas.length === 0) {
+        const remeasurementDeltas = deltas.filter((delta) => isRemeasurementLayer(delta.layer))
+        const translationDeltas = deltas.filter((delta) => delta.layer === 'group')
+        for (const delta of translationDeltas) {
+          groupTranslationDeltaTotal = roundMoney(groupTranslationDeltaTotal + delta.delta)
+        }
+
+        if (remeasurementDeltas.length === 0) {
           skippedItemCount += 1
           await tx.runItem.update({
             where: { id: runItem.id },
             data: {
               status: 'completed',
               completedAt: new Date(),
-              message: 'No unrealized FX delta for this open item on the selected as-of date.',
+              message: translationDeltas.length > 0
+                ? 'No local/functional remeasurement delta. Group translation is handled by the separate translation/CTA process.'
+                : 'No unrealized FX delta for this open item on the selected as-of date.',
               resultPayloadJson: JSON.stringify({
                 remaining,
                 revaluedContext,
+                translationDeltas,
               }),
             },
           })
@@ -398,7 +588,7 @@ export async function runFxRevaluation(input: RunFxRevaluationInput) {
           `Open item ${openItem.openItemNumber}`,
         )
 
-        for (const delta of deltas) {
+        for (const delta of remeasurementDeltas) {
           const absDelta = Math.abs(delta.delta)
           const useGainOffset =
             (assetAccount && delta.delta > 0) || (liabilityAccount && delta.delta < 0)
@@ -431,7 +621,6 @@ export async function runFxRevaluation(input: RunFxRevaluationInput) {
 
           if (delta.layer === 'local') localDeltaTotal = roundMoney(localDeltaTotal + delta.delta)
           if (delta.layer === 'functional') functionalDeltaTotal = roundMoney(functionalDeltaTotal + delta.delta)
-          if (delta.layer === 'group') groupDeltaTotal = roundMoney(groupDeltaTotal + delta.delta)
         }
 
         revaluedItemCount += 1
@@ -440,11 +629,12 @@ export async function runFxRevaluation(input: RunFxRevaluationInput) {
           data: {
             status: 'completed',
             completedAt: new Date(),
-            message: `Calculated ${deltas.length} unrealized FX delta${deltas.length === 1 ? '' : 's'}.`,
+            message: `Calculated ${remeasurementDeltas.length} local/functional unrealized FX delta${remeasurementDeltas.length === 1 ? '' : 's'}.`,
             resultPayloadJson: JSON.stringify({
               remaining,
               revaluedContext,
-              deltas,
+              remeasurementDeltas,
+              translationDeltas,
             }),
           },
         })
@@ -482,6 +672,337 @@ export async function runFxRevaluation(input: RunFxRevaluationInput) {
       }
     }
 
+    const openItemSourceLineIds = new Set(
+      (
+        await tx.openItemEntry.findMany({
+          where: {
+            sourceGlLineId: { not: null },
+            openItem: { subsidiaryId: effectiveSubsidiaryId },
+          },
+          select: { sourceGlLineId: true },
+        })
+      )
+        .map((entry) => entry.sourceGlLineId)
+        .filter((value): value is string => Boolean(value)),
+    )
+
+    const glCandidateLines = await tx.journalEntryLineItem.findMany({
+      where: {
+        settlesOpenItemId: null,
+        OR: [{ subsidiaryId: effectiveSubsidiaryId }, { subsidiaryId: null }],
+        account: {
+          revalueOpenBalance: true,
+          active: true,
+          isPosting: true,
+          monetaryClassification: 'monetary',
+        },
+        journalEntry: {
+          subsidiaryId: effectiveSubsidiaryId,
+          date: { lte: asOfDate },
+          status: { in: ['approved', 'posted'] },
+          isOpenItemRelevant: false,
+        },
+      },
+      select: {
+        id: true,
+        debit: true,
+        credit: true,
+        localDebit: true,
+        localCredit: true,
+        functionalDebit: true,
+        functionalCredit: true,
+        groupDebit: true,
+        groupCredit: true,
+        accountId: true,
+        subsidiaryId: true,
+        account: {
+          select: {
+            id: true,
+            accountNumber: true,
+            name: true,
+            accountType: true,
+            accountRole: true,
+            category: true,
+            requiresSubledgerType: true,
+            isControlAccount: true,
+          },
+        },
+        journalEntry: {
+          select: {
+            id: true,
+            number: true,
+            date: true,
+            currencyId: true,
+            subsidiaryId: true,
+            sourceType: true,
+            journalType: true,
+            currency: { select: { code: true } },
+          },
+        },
+      },
+      orderBy: [{ journalEntry: { date: 'asc' } }, { displayOrder: 'asc' }],
+    })
+
+    const glBalanceGroups = new Map<string, GlBalanceGroup>()
+
+    for (const line of glCandidateLines) {
+      if (openItemSourceLineIds.has(line.id)) continue
+      if (isSubledgerControlledAccount(line.account)) continue
+      if (line.journalEntry.sourceType === 'fx-revaluation' || line.journalEntry.journalType === 'fx_revaluation') continue
+
+      const transactionAmount = signedNet(line.debit, line.credit)
+      if (Math.abs(transactionAmount) <= MONEY_TOLERANCE) continue
+
+      const subsidiaryId = line.subsidiaryId ?? line.journalEntry.subsidiaryId
+      const historicalContext = await deriveOpenItemCurrencyContext({
+        tx,
+        subsidiaryId,
+        transactionCurrencyId: line.journalEntry.currencyId,
+        transactionAmount,
+        effectiveDate: line.journalEntry.date,
+        rateType: 'spot',
+      })
+      const revaluedContext = await deriveOpenItemCurrencyContext({
+        tx,
+        subsidiaryId,
+        transactionCurrencyId: line.journalEntry.currencyId,
+        transactionAmount,
+        effectiveDate: asOfDate,
+        rateType: 'spot',
+      })
+
+      const hasLocalLayer = line.localDebit != null || line.localCredit != null
+      const hasFunctionalLayer = line.functionalDebit != null || line.functionalCredit != null
+      const hasGroupLayer = line.groupDebit != null || line.groupCredit != null
+      const carryingLocalAmount = hasLocalLayer
+        ? signedNet(line.localDebit, line.localCredit)
+        : historicalContext.originalLocalAmount
+      const carryingFunctionalAmount = hasFunctionalLayer
+        ? signedNet(line.functionalDebit, line.functionalCredit)
+        : historicalContext.originalFunctionalAmount
+      const carryingGroupAmount = hasGroupLayer
+        ? signedNet(line.groupDebit, line.groupCredit)
+        : historicalContext.originalGroupAmount
+
+      const groupKey = `${line.accountId}:${subsidiaryId}:${line.journalEntry.currencyId}`
+      const existingGroup = glBalanceGroups.get(groupKey)
+      const group = existingGroup ?? {
+        account: line.account,
+        subsidiaryId,
+        transactionCurrencyId: line.journalEntry.currencyId,
+        transactionCurrencyCode: line.journalEntry.currency.code,
+        transactionAmount: 0,
+        carryingLocalAmount: 0,
+        carryingFunctionalAmount: 0,
+        carryingGroupAmount: 0,
+        revaluedLocalAmount: 0,
+        revaluedFunctionalAmount: 0,
+        revaluedGroupAmount: 0,
+        sourceLineIds: [],
+        sourceJournalNumbers: [],
+        firstPostingDate: null,
+        lastPostingDate: null,
+        translationSources: new Set<string>(),
+      }
+
+      group.transactionAmount = roundMoney(group.transactionAmount + transactionAmount)
+      group.carryingLocalAmount = roundMoney(group.carryingLocalAmount + Number(carryingLocalAmount ?? 0))
+      group.carryingFunctionalAmount = roundMoney(group.carryingFunctionalAmount + Number(carryingFunctionalAmount ?? 0))
+      group.carryingGroupAmount = roundMoney(group.carryingGroupAmount + Number(carryingGroupAmount ?? 0))
+      group.revaluedLocalAmount = roundMoney(group.revaluedLocalAmount + Number(revaluedContext.originalLocalAmount ?? 0))
+      group.revaluedFunctionalAmount = roundMoney(group.revaluedFunctionalAmount + Number(revaluedContext.originalFunctionalAmount ?? 0))
+      group.revaluedGroupAmount = roundMoney(group.revaluedGroupAmount + Number(revaluedContext.originalGroupAmount ?? 0))
+      group.sourceLineIds.push(line.id)
+      group.sourceJournalNumbers.push(line.journalEntry.number)
+      group.firstPostingDate =
+        !group.firstPostingDate || line.journalEntry.date < group.firstPostingDate
+          ? line.journalEntry.date
+          : group.firstPostingDate
+      group.lastPostingDate =
+        !group.lastPostingDate || line.journalEntry.date > group.lastPostingDate
+          ? line.journalEntry.date
+          : group.lastPostingDate
+      const revaluedAudit = revaluedContext.translationAudit as TranslationAuditSourceSummary | null
+      if (revaluedAudit?.sourceSummary) group.translationSources.add(revaluedAudit.sourceSummary)
+
+      glBalanceGroups.set(groupKey, group)
+    }
+
+    const glBalanceCandidates = Array.from(glBalanceGroups.values()).filter((group) => (
+      Math.abs(group.transactionAmount) > MONEY_TOLERANCE
+    ))
+    eligibleGlBalanceCount = glBalanceCandidates.length
+
+    for (const [index, group] of glBalanceCandidates.entries()) {
+      const runItem = await tx.runItem.create({
+        data: {
+          runHeaderId: runHeader.id,
+          itemNumber: candidates.length + index + 1,
+          itemType: 'gl_balance_revaluation',
+          status: 'running',
+          sourceRecordType: 'chart_of_accounts',
+          sourceRecordId: group.account.id,
+          requestPayloadJson: JSON.stringify({
+            accountId: group.account.id,
+            accountNumber: group.account.accountNumber,
+            transactionCurrencyId: group.transactionCurrencyId,
+            transactionCurrencyCode: group.transactionCurrencyCode,
+            subsidiaryId: group.subsidiaryId,
+            sourceLineCount: group.sourceLineIds.length,
+            asOfDate: asOfDate.toISOString(),
+          }),
+          startedAt: new Date(),
+        },
+      })
+
+      try {
+        const deltas = computeLayerDeltas({
+          transactionCurrencyId: group.transactionCurrencyId,
+          localCurrencyId: journalPostingContext.currencyId,
+          functionalCurrencyId: postingSubsidiary.functionalCurrencyId,
+          groupCurrencyId: postingSubsidiary.groupCurrencyId,
+          carryingLocalAmount: group.carryingLocalAmount,
+          carryingFunctionalAmount: group.carryingFunctionalAmount,
+          carryingGroupAmount: group.carryingGroupAmount,
+          revaluedLocalAmount: group.revaluedLocalAmount,
+          revaluedFunctionalAmount: group.revaluedFunctionalAmount,
+          revaluedGroupAmount: group.revaluedGroupAmount,
+        })
+
+        const remeasurementDeltas = deltas.filter((delta) => isRemeasurementLayer(delta.layer))
+        const translationDeltas = deltas.filter((delta) => delta.layer === 'group')
+        for (const delta of translationDeltas) {
+          groupTranslationDeltaTotal = roundMoney(groupTranslationDeltaTotal + delta.delta)
+        }
+
+        if (remeasurementDeltas.length === 0) {
+          skippedGlBalanceCount += 1
+          await tx.runItem.update({
+            where: { id: runItem.id },
+            data: {
+              status: 'completed',
+              completedAt: new Date(),
+              message: translationDeltas.length > 0
+                ? 'No local/functional remeasurement delta. Group translation is handled by the separate translation/CTA process.'
+                : 'No unrealized FX delta for this GL balance on the selected as-of date.',
+              resultPayloadJson: JSON.stringify({
+                accountNumber: group.account.accountNumber,
+                accountName: group.account.name,
+                transactionCurrencyId: group.transactionCurrencyId,
+                transactionCurrencyCode: group.transactionCurrencyCode,
+                transactionAmount: group.transactionAmount,
+                carryingContext: {
+                  originalLocalAmount: group.carryingLocalAmount,
+                  originalFunctionalAmount: group.carryingFunctionalAmount,
+                  originalGroupAmount: group.carryingGroupAmount,
+                },
+                revaluedContext: {
+                  originalLocalAmount: group.revaluedLocalAmount,
+                  originalFunctionalAmount: group.revaluedFunctionalAmount,
+                  originalGroupAmount: group.revaluedGroupAmount,
+                },
+                remeasurementDeltas,
+                translationDeltas,
+                sourceLineCount: group.sourceLineIds.length,
+                firstPostingDate: group.firstPostingDate?.toISOString() ?? null,
+                lastPostingDate: group.lastPostingDate?.toISOString() ?? null,
+              }),
+            },
+          })
+          continue
+        }
+
+        const sourceLine = ensureJournalLine(
+          journalLines,
+          group.account.id,
+          group.subsidiaryId,
+          `${group.account.accountNumber} ${group.account.name} FX revaluation`,
+          `GL balance ${group.transactionCurrencyCode} across ${group.sourceLineIds.length} posted line${group.sourceLineIds.length === 1 ? '' : 's'}`,
+        )
+
+        for (const delta of remeasurementDeltas) {
+          const offsetAccountId = delta.delta > 0 ? unrealizedFxGainAccountId : unrealizedFxLossAccountId
+          const offsetLine = ensureJournalLine(
+            journalLines,
+            offsetAccountId,
+            group.subsidiaryId,
+            delta.delta > 0 ? 'Unrealized FX gain' : 'Unrealized FX loss',
+            `GL balance FX revaluation ${delta.layer} layer`,
+          )
+
+          addSignedGlRemeasurementDelta(sourceLine, offsetLine, delta.layer, delta.delta)
+          if (delta.layer === 'local') localDeltaTotal = roundMoney(localDeltaTotal + delta.delta)
+          if (delta.layer === 'functional') functionalDeltaTotal = roundMoney(functionalDeltaTotal + delta.delta)
+        }
+
+        for (const source of group.translationSources) translationSources.add(source)
+        revaluedGlBalanceCount += 1
+        await tx.runItem.update({
+          where: { id: runItem.id },
+          data: {
+            status: 'completed',
+            completedAt: new Date(),
+            message: `Calculated ${remeasurementDeltas.length} local/functional unrealized FX delta${remeasurementDeltas.length === 1 ? '' : 's'} for non-open-item GL balance.`,
+            resultPayloadJson: JSON.stringify({
+              accountNumber: group.account.accountNumber,
+              accountName: group.account.name,
+              transactionCurrencyId: group.transactionCurrencyId,
+              transactionCurrencyCode: group.transactionCurrencyCode,
+              transactionAmount: group.transactionAmount,
+              carryingContext: {
+                originalLocalAmount: group.carryingLocalAmount,
+                originalFunctionalAmount: group.carryingFunctionalAmount,
+                originalGroupAmount: group.carryingGroupAmount,
+              },
+              revaluedContext: {
+                originalLocalAmount: group.revaluedLocalAmount,
+                originalFunctionalAmount: group.revaluedFunctionalAmount,
+                originalGroupAmount: group.revaluedGroupAmount,
+              },
+              remeasurementDeltas,
+              translationDeltas,
+              sourceLineCount: group.sourceLineIds.length,
+              sourceJournalNumbers: Array.from(new Set(group.sourceJournalNumbers)),
+              firstPostingDate: group.firstPostingDate?.toISOString() ?? null,
+              lastPostingDate: group.lastPostingDate?.toISOString() ?? null,
+            }),
+          },
+        })
+      } catch (error) {
+        failedGlBalanceCount += 1
+        const message = error instanceof Error ? error.message : 'FX revaluation failed for this GL balance.'
+
+        await tx.runItem.update({
+          where: { id: runItem.id },
+          data: {
+            status: 'failed',
+            completedAt: new Date(),
+            message,
+          },
+        })
+
+        await tx.runException.create({
+          data: {
+            runHeaderId: runHeader.id,
+            runItemId: runItem.id,
+            severity: 'error',
+            exceptionType: 'fx_revaluation_gl_balance_error',
+            status: 'open',
+            sourceRecordType: 'chart_of_accounts',
+            sourceRecordId: group.account.id,
+            message,
+            detailsJson: JSON.stringify({
+              accountNumber: group.account.accountNumber,
+              accountName: group.account.name,
+              transactionCurrencyId: group.transactionCurrencyId,
+              transactionCurrencyCode: group.transactionCurrencyCode,
+              sourceLineCount: group.sourceLineIds.length,
+            }),
+          },
+        })
+      }
+    }
+
     let journalEntryId: string | null = null
     const journalLineCreates = Array.from(journalLines.values()).filter((line) => {
       return (
@@ -492,7 +1013,7 @@ export async function runFxRevaluation(input: RunFxRevaluationInput) {
     })
 
     if (journalLineCreates.length > 0) {
-      const journalNumber = await generateNextJournalNumber()
+      const journalNumber = await generateNextSystemJournalNumber()
       const journalEntry = await tx.journalEntry.create({
         data: {
           number: journalNumber,
@@ -504,7 +1025,8 @@ export async function runFxRevaluation(input: RunFxRevaluationInput) {
           accountingPeriodId: period.id,
           sourceType: 'fx-revaluation',
           sourceId: runHeader.id,
-          subsidiaryId: effectiveSubsidiaryId,
+          subsidiaryId: journalPostingContext.subsidiaryId,
+          currencyId: journalPostingContext.currencyId,
           userId: input.requestedById ?? null,
           lineItems: {
             create: journalLineCreates.map((line, index) => ({
@@ -541,10 +1063,14 @@ export async function runFxRevaluation(input: RunFxRevaluationInput) {
       })
     }
 
+    const totalFailedItems = failedItemCount + failedGlBalanceCount
+    const totalRevaluedItems = revaluedItemCount + revaluedGlBalanceCount
+    const totalSkippedItems = skippedItemCount + skippedGlBalanceCount
+
     const status =
-      failedItemCount === 0
+      totalFailedItems === 0
         ? 'completed'
-        : revaluedItemCount > 0 || skippedItemCount > 0
+        : totalRevaluedItems > 0 || totalSkippedItems > 0
           ? 'completed_with_exceptions'
           : 'failed'
 
@@ -553,13 +1079,21 @@ export async function runFxRevaluation(input: RunFxRevaluationInput) {
       accountingPeriodId: period.id,
       subsidiaryId: effectiveSubsidiaryId,
       eligibleOpenItems: candidates.length,
-      revaluedItems: revaluedItemCount,
-      skippedItems: skippedItemCount,
-      failedItems: failedItemCount,
+      revaluedOpenItems: revaluedItemCount,
+      skippedOpenItems: skippedItemCount,
+      failedOpenItems: failedItemCount,
+      eligibleGlBalances: eligibleGlBalanceCount,
+      revaluedGlBalances: revaluedGlBalanceCount,
+      skippedGlBalances: skippedGlBalanceCount,
+      failedGlBalances: failedGlBalanceCount,
+      revaluedItems: totalRevaluedItems,
+      skippedItems: totalSkippedItems,
+      failedItems: totalFailedItems,
       journalEntryId,
       localDeltaTotal,
       functionalDeltaTotal,
-      groupDeltaTotal,
+      groupTranslationDeltaTotal,
+      translationStatus: 'not_posted_by_remeasurement',
       translationSourceSummary:
         translationSources.size === 0
           ? null
@@ -576,7 +1110,7 @@ export async function runFxRevaluation(input: RunFxRevaluationInput) {
         completedById: input.requestedById ?? null,
         message:
           journalEntryId
-            ? `FX revaluation completed. Journal ${journalEntryId} created for ${revaluedItemCount} open item${revaluedItemCount === 1 ? '' : 's'}.`
+            ? `FX revaluation completed. Journal ${journalEntryId} created for ${totalRevaluedItems} remeasured balance${totalRevaluedItems === 1 ? '' : 's'}.`
             : `FX revaluation completed with no posting deltas for the selected scope.`,
         summaryJson: JSON.stringify(summary),
       },

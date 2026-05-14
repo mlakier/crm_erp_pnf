@@ -4,6 +4,8 @@ import { createFieldChangeSummary, logActivity } from '@/lib/activity'
 import { generateNextQuoteNumber } from '@/lib/quote-number'
 import { calcLineTotal, sumMoney } from '@/lib/money'
 import { toNumericValue } from '@/lib/format'
+import { getTransactionPostingContextError } from '@/lib/transaction-posting-context'
+import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
 import {
   coerceWorkflowValueForStep,
   getDefaultWorkflowStatus,
@@ -74,9 +76,22 @@ export async function POST(request: NextRequest) {
       notes: line.notes,
       itemId: line.itemId,
     }))
+    const lineRequirementsError = getTransactionLineRequirementsError('quote', normalizedLineItems)
+    if (lineRequirementsError) {
+      return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
+    }
     const total = normalizedLineItems.length
       ? sumMoney(normalizedLineItems.map((line) => line.lineTotal))
       : toNumericValue(opportunity.amount)
+    const resolvedSubsidiaryId = subsidiaryId ?? opportunity.subsidiaryId
+    const resolvedCurrencyId = currencyId ?? opportunity.currencyId
+    const postingContextError = getTransactionPostingContextError('quote', {
+      subsidiaryId: resolvedSubsidiaryId,
+      currencyId: resolvedCurrencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
 
     const quote = await prisma.quote.create({
       data: {
@@ -92,8 +107,8 @@ export async function POST(request: NextRequest) {
         customerId: opportunity.customerId,
         userId: opportunity.userId,
         opportunityId: opportunity.id,
-        subsidiaryId: subsidiaryId ?? opportunity.subsidiaryId,
-        currencyId: currencyId ?? opportunity.currencyId,
+        subsidiaryId: resolvedSubsidiaryId,
+        currencyId: resolvedCurrencyId,
         lineItems: normalizedLineItems.length
           ? {
               create: normalizedLineItems,
@@ -135,6 +150,15 @@ export async function PUT(request: NextRequest) {
 
     const workflow = await loadOtcWorkflowRuntime()
     const nextStatus = status === undefined ? before.status : coerceWorkflowValueForStep(workflow, 'quote', status)
+    const nextSubsidiaryId = subsidiaryId !== undefined ? subsidiaryId || null : before.subsidiaryId
+    const nextCurrencyId = currencyId !== undefined ? currencyId || null : before.currencyId
+    const postingContextError = getTransactionPostingContextError('quote', {
+      subsidiaryId: nextSubsidiaryId,
+      currencyId: nextCurrencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
 
     if (
       workflowStep === 'quote'
@@ -151,8 +175,8 @@ export async function PUT(request: NextRequest) {
         ...(status !== undefined ? { status: nextStatus } : {}),
         ...(validUntil !== undefined ? { validUntil: validUntil ? new Date(validUntil) : null } : {}),
         ...(notes !== undefined ? { notes: notes || null } : {}),
-        ...(subsidiaryId !== undefined ? { subsidiaryId: subsidiaryId || null } : {}),
-        ...(currencyId !== undefined ? { currencyId: currencyId || null } : {}),
+        ...(subsidiaryId !== undefined ? { subsidiaryId: nextSubsidiaryId } : {}),
+        ...(currencyId !== undefined ? { currencyId: nextCurrencyId } : {}),
         ...(customerId !== undefined ? { customerId: customerId || null } : {}),
       },
     })

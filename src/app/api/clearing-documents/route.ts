@@ -3,8 +3,13 @@ import { prisma } from '@/lib/prisma'
 import { parseMoneyValue } from '@/lib/money'
 import { loadListValues } from '@/lib/load-list-values'
 import { logActivity, logFieldChangeActivities, logRecordSnapshotActivities } from '@/lib/activity'
-import { generateNextClearingDocumentNumber } from '@/lib/clearing-document-number'
-import { applyOpenItems, createClearingDocument, reverseOpenItemApplication } from '@/lib/open-item-service'
+import {
+  applyOpenItems,
+  assertPostingPeriodIsOpen,
+  createClearingDocument,
+  reverseOpenItemApplication,
+} from '@/lib/open-item-service'
+import { getTransactionPostingContextError } from '@/lib/transaction-posting-context'
 
 const MANUAL_CLEARING_EDITABLE_STATUSES = new Set(['draft', 'pending approval', 'approved'])
 const MANUAL_CLEARING_POSTABLE_STATUSES = new Set(['approved'])
@@ -46,6 +51,36 @@ function normalizeLines(value: unknown) {
     .filter((line) => line.transactionAmount > 0 && (line.fromOpenItemId || line.toOpenItemId))
 }
 
+async function assertClearingPostingDateIsNotBeforeOpenItems(input: {
+  postingDate: Date
+  lines: Array<{ fromOpenItemId: string | null; toOpenItemId: string | null }>
+}) {
+  const openItemIds = Array.from(
+    new Set(
+      input.lines.flatMap((line) => [line.fromOpenItemId, line.toOpenItemId]).filter((value): value is string => Boolean(value)),
+    ),
+  )
+  if (openItemIds.length === 0) return
+
+  const openItems = await prisma.openItem.findMany({
+    where: { id: { in: openItemIds } },
+    select: { openItemNumber: true, sourceNumber: true, postingDate: true },
+  })
+  const tooEarlyItem = openItems
+    .map((item) => ({
+      ...item,
+      earliestAllowedDate: item.postingDate,
+    }))
+    .filter((item) => item.earliestAllowedDate && input.postingDate < item.earliestAllowedDate)
+    .sort((left, right) => (left.earliestAllowedDate?.getTime() ?? 0) - (right.earliestAllowedDate?.getTime() ?? 0))[0]
+
+  if (tooEarlyItem?.earliestAllowedDate) {
+    throw new Error(
+      `Clearing posting date cannot be earlier than selected open item ${tooEarlyItem.openItemNumber} (${tooEarlyItem.sourceNumber ?? 'no source'}). Use ${tooEarlyItem.earliestAllowedDate.toISOString().slice(0, 10)} or later.`,
+    )
+  }
+}
+
 function validateManualClearingStatus(status: string) {
   if (!MANUAL_CLEARING_EDITABLE_STATUSES.has(status)) {
     throw new Error('Manual clearing documents currently support Draft, Pending Approval, and Approved only')
@@ -83,6 +118,17 @@ async function postManualClearingDocument(id: string) {
     }
 
     const postingDate = record.postingDate ?? record.clearingDate
+    let postedLocalAmount: number | null = null
+    let postedFunctionalAmount: number | null = null
+    let postedGroupAmount: number | null = null
+    let postedRealizedFxLocalAmount: number | null = null
+    let postedRealizedFxFunctionalAmount: number | null = null
+    let postedRealizedFxGroupAmount: number | null = null
+
+    const addNullable = (current: number | null, value: unknown) => {
+      if (value == null) return current
+      return (current ?? 0) + Number(value)
+    }
 
     for (const line of record.lines) {
       if (!line.fromOpenItemId) {
@@ -111,12 +157,28 @@ async function postManualClearingDocument(id: string) {
         automationSource: 'manual-clearing-document-post',
       })
 
+      postedLocalAmount = addNullable(postedLocalAmount, result.application.localAmount)
+      postedFunctionalAmount = addNullable(postedFunctionalAmount, result.application.functionalAmount)
+      postedGroupAmount = addNullable(postedGroupAmount, result.application.groupAmount)
+      postedRealizedFxLocalAmount = addNullable(postedRealizedFxLocalAmount, result.application.realizedFxLocalAmount)
+      postedRealizedFxFunctionalAmount = addNullable(
+        postedRealizedFxFunctionalAmount,
+        result.application.realizedFxFunctionalAmount,
+      )
+      postedRealizedFxGroupAmount = addNullable(postedRealizedFxGroupAmount, result.application.realizedFxGroupAmount)
+
       await tx.clearingDocumentLine.update({
         where: { id: line.id },
         data: {
           openItemApplicationId: result.application.id,
           settlementTransactionType: 'clearing-document',
           settlementTransactionId: record.id,
+          localAmount: result.application.localAmount,
+          functionalAmount: result.application.functionalAmount,
+          groupAmount: result.application.groupAmount,
+          realizedFxLocalAmount: result.application.realizedFxLocalAmount,
+          realizedFxFunctionalAmount: result.application.realizedFxFunctionalAmount,
+          realizedFxGroupAmount: result.application.realizedFxGroupAmount,
         },
       })
     }
@@ -127,6 +189,12 @@ async function postManualClearingDocument(id: string) {
         status: 'posted',
         postingDate,
         postedById: record.createdById ?? null,
+        localAmount: postedLocalAmount,
+        functionalAmount: postedFunctionalAmount,
+        groupAmount: postedGroupAmount,
+        realizedFxLocalAmount: postedRealizedFxLocalAmount,
+        realizedFxFunctionalAmount: postedRealizedFxFunctionalAmount,
+        realizedFxGroupAmount: postedRealizedFxGroupAmount,
       },
     })
 
@@ -338,56 +406,60 @@ export async function POST(req: NextRequest) {
     validateManualClearingStatus(normalizedStatus)
     const normalizedLines = normalizeLines(body.lines)
 
-    const clearingNumber = await generateNextClearingDocumentNumber()
     const amount = normalizedLines.length > 0
       ? normalizedLines.reduce((sum, line) => sum + line.transactionAmount, 0)
       : parseMoneyValue(body.transactionAmount)
-    const localAmount = normalizeOptionalAmount(body.localAmount) ?? amount
-    const functionalAmount = normalizeOptionalAmount(body.functionalAmount) ?? amount
-    const groupAmount = normalizeOptionalAmount(body.groupAmount) ?? amount
+    const localAmount = normalizeOptionalAmount(body.localAmount)
+    const functionalAmount = normalizeOptionalAmount(body.functionalAmount)
+    const groupAmount = normalizeOptionalAmount(body.groupAmount)
     const clearingDate = body.clearingDate ? new Date(body.clearingDate) : new Date()
     const postingDate = body.postingDate ? new Date(body.postingDate) : null
+    const normalizedSubsidiaryId = normalizeOptionalString(body.subsidiaryId)
+    const normalizedTransactionCurrencyId = normalizeOptionalString(body.transactionCurrencyId)
+    const postingContextError = getTransactionPostingContextError('clearing-document', {
+      subsidiaryId: normalizedSubsidiaryId,
+      transactionCurrencyId: normalizedTransactionCurrencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
+    await assertClearingPostingDateIsNotBeforeOpenItems({
+      postingDate: postingDate ?? clearingDate,
+      lines: normalizedLines,
+    })
 
-    const row = await prisma.clearingDocumentHeader.create({
-      data: {
-        clearingNumber,
-        clearingType: normalizeOptionalString(body.clearingType) ?? 'manual-clearing',
-        status: normalizedStatus,
-        subsidiaryId: normalizeOptionalString(body.subsidiaryId),
-        transactionCurrencyId: normalizeOptionalString(body.transactionCurrencyId),
-        localCurrencyId: normalizeOptionalString(body.localCurrencyId),
-        functionalCurrencyId: normalizeOptionalString(body.functionalCurrencyId),
-        groupCurrencyId: normalizeOptionalString(body.groupCurrencyId),
-        clearingDate,
-        postingDate,
-        accountingPeriodId: normalizeOptionalString(body.accountingPeriodId),
-        sourceTransactionType: normalizeOptionalString(body.sourceTransactionType),
-        sourceTransactionId: normalizeOptionalString(body.sourceTransactionId),
-        counterpartyType: normalizeOptionalString(body.counterpartyType),
-        counterpartyId: normalizeOptionalString(body.counterpartyId),
-        transactionAmount: amount,
-        localAmount,
-        functionalAmount,
-        groupAmount,
-        memo: normalizeOptionalString(body.memo),
-        autoGenerated: false,
-        automationSource: 'manual-clearing',
-        lines: normalizedLines.length > 0
-          ? {
-              create: normalizedLines.map((line, index) => ({
-                lineNumber: index + 1,
-                lineRole: line.lineRole,
-                fromOpenItemId: line.fromOpenItemId,
-                toOpenItemId: line.toOpenItemId,
-                transactionAmount: line.transactionAmount,
-                localAmount: line.transactionAmount,
-                functionalAmount: line.transactionAmount,
-                groupAmount: line.transactionAmount,
-                memo: line.memo,
-              })),
-            }
-          : undefined,
-      },
+    const row = await createClearingDocument({
+      clearingType: normalizeOptionalString(body.clearingType) ?? 'manual-clearing',
+      status: normalizedStatus,
+      subsidiaryId: normalizedSubsidiaryId!,
+      transactionCurrencyId: normalizedTransactionCurrencyId!,
+      localCurrencyId: normalizeOptionalString(body.localCurrencyId),
+      functionalCurrencyId: normalizeOptionalString(body.functionalCurrencyId),
+      groupCurrencyId: normalizeOptionalString(body.groupCurrencyId),
+      clearingDate,
+      postingDate,
+      accountingPeriodId: normalizeOptionalString(body.accountingPeriodId),
+      sourceTransactionType: normalizeOptionalString(body.sourceTransactionType),
+      sourceTransactionId: normalizeOptionalString(body.sourceTransactionId),
+      counterpartyType: normalizeOptionalString(body.counterpartyType),
+      counterpartyId: normalizeOptionalString(body.counterpartyId),
+      transactionAmount: amount,
+      localAmount,
+      functionalAmount,
+      groupAmount,
+      memo: normalizeOptionalString(body.memo),
+      autoGenerated: false,
+      automationSource: 'manual-clearing',
+      lines: normalizedLines.map((line) => ({
+        lineRole: line.lineRole,
+        fromOpenItemId: line.fromOpenItemId,
+        toOpenItemId: line.toOpenItemId,
+        transactionAmount: line.transactionAmount,
+        localAmount: null,
+        functionalAmount: null,
+        groupAmount: null,
+        memo: line.memo,
+      })),
     })
 
     await logActivity({
@@ -459,14 +531,51 @@ export async function PUT(req: NextRequest) {
       body.functionalAmount !== undefined ? (normalizeOptionalAmount(body.functionalAmount) ?? 0) : undefined
     const nextGroupAmount =
       body.groupAmount !== undefined ? (normalizeOptionalAmount(body.groupAmount) ?? 0) : undefined
+    const nextSubsidiaryId =
+      body.subsidiaryId !== undefined ? normalizeOptionalString(body.subsidiaryId) : before.subsidiaryId
+    const nextTransactionCurrencyId =
+      body.transactionCurrencyId !== undefined
+        ? normalizeOptionalString(body.transactionCurrencyId)
+        : before.transactionCurrencyId
+    const postingContextError = getTransactionPostingContextError('clearing-document', {
+      subsidiaryId: nextSubsidiaryId,
+      transactionCurrencyId: nextTransactionCurrencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
+    await assertPostingPeriodIsOpen({
+      tx: prisma,
+      accountingPeriodId:
+        body.accountingPeriodId !== undefined
+          ? normalizeOptionalString(body.accountingPeriodId)
+          : before.accountingPeriodId,
+      postingDate:
+        body.postingDate !== undefined
+          ? body.postingDate
+            ? new Date(body.postingDate)
+            : null
+          : before.postingDate ?? before.clearingDate,
+      subsidiaryId: nextSubsidiaryId,
+      context: 'Clearing document',
+    })
+    await assertClearingPostingDateIsNotBeforeOpenItems({
+      postingDate:
+        body.postingDate !== undefined
+          ? body.postingDate
+            ? new Date(body.postingDate)
+            : before.clearingDate
+          : before.postingDate ?? before.clearingDate,
+      lines: normalizedLines ?? [],
+    })
 
     const row = await prisma.clearingDocumentHeader.update({
       where: { id },
       data: {
         ...(body.clearingType !== undefined ? { clearingType: normalizeOptionalString(body.clearingType) ?? before.clearingType } : {}),
         ...(body.status !== undefined ? { status: normalizedStatus } : {}),
-        ...(body.subsidiaryId !== undefined ? { subsidiaryId: normalizeOptionalString(body.subsidiaryId) } : {}),
-        ...(body.transactionCurrencyId !== undefined ? { transactionCurrencyId: normalizeOptionalString(body.transactionCurrencyId) } : {}),
+        ...(body.subsidiaryId !== undefined ? { subsidiaryId: nextSubsidiaryId! } : {}),
+        ...(body.transactionCurrencyId !== undefined ? { transactionCurrencyId: nextTransactionCurrencyId! } : {}),
         ...(body.localCurrencyId !== undefined ? { localCurrencyId: normalizeOptionalString(body.localCurrencyId) } : {}),
         ...(body.functionalCurrencyId !== undefined ? { functionalCurrencyId: normalizeOptionalString(body.functionalCurrencyId) } : {}),
         ...(body.groupCurrencyId !== undefined ? { groupCurrencyId: normalizeOptionalString(body.groupCurrencyId) } : {}),
@@ -480,9 +589,9 @@ export async function PUT(req: NextRequest) {
         ...(nextAmount != null
           ? {
               transactionAmount: nextAmount,
-              localAmount: nextLocalAmount ?? nextAmount,
-              functionalAmount: nextFunctionalAmount ?? nextAmount,
-              groupAmount: nextGroupAmount ?? nextAmount,
+              localAmount: nextLocalAmount ?? null,
+              functionalAmount: nextFunctionalAmount ?? null,
+              groupAmount: nextGroupAmount ?? null,
             }
           : {}),
         ...(nextAmount == null && nextLocalAmount !== undefined ? { localAmount: nextLocalAmount } : {}),
@@ -499,9 +608,9 @@ export async function PUT(req: NextRequest) {
                   fromOpenItemId: line.fromOpenItemId,
                   toOpenItemId: line.toOpenItemId,
                   transactionAmount: line.transactionAmount,
-                  localAmount: line.transactionAmount,
-                  functionalAmount: line.transactionAmount,
-                  groupAmount: line.transactionAmount,
+                  localAmount: null,
+                  functionalAmount: null,
+                  groupAmount: null,
                   memo: line.memo,
                 })),
               },

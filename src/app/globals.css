@@ -115,13 +115,7 @@ body {
 }
 
 [data-column-selector-table] th:hover {
-  z-index: 80 !important;
-}
-
-/* Sticky columns for wide list tables. */
-[data-column-selector-table] {
-  --pin-id-width: max-content;
-  --pin-name-width: max-content;
+  z-index: 180 !important;
 }
 
 [data-column-selector-table] th[data-column="actions"],
@@ -139,4 +133,49 @@ body {
   z-index: 12;
   background-color: var(--card);
   box-shadow: -1px 0 0 0 var(--border-muted);
+}
+
+/* Shared master-data contract: first two identity columns stay locked, then Actions stays last. */
+.master-data-pin-first-two {
+  --master-data-pin-first-width: 7.5rem;
+  --master-data-pin-second-width: 15rem;
+}
+
+#chart-of-accounts-list {
+  --master-data-pin-second-width: 11rem;
+}
+
+.master-data-pin-first-two :is(th, td):nth-child(1),
+.master-data-pin-first-two :is(th, td):nth-child(2) {
+  position: sticky !important;
+  background-color: var(--card) !important;
+  background-clip: padding-box;
+  border-bottom: 1px solid var(--border-muted) !important;
+}
+
+.master-data-pin-first-two :is(th, td):nth-child(1) {
+  left: 0 !important;
+  width: var(--master-data-pin-first-width);
+  min-width: var(--master-data-pin-first-width);
+  max-width: var(--master-data-pin-first-width);
+  z-index: 80 !important;
+}
+
+.master-data-pin-first-two :is(th, td):nth-child(2) {
+  left: var(--master-data-pin-first-width) !important;
+  width: var(--master-data-pin-second-width);
+  min-width: var(--master-data-pin-second-width);
+  max-width: var(--master-data-pin-second-width);
+  z-index: 75 !important;
+  box-shadow: 1px 0 0 0 var(--border-muted);
+}
+
+.master-data-pin-first-two thead tr:first-child th:nth-child(1),
+.master-data-pin-first-two thead tr:first-child th:nth-child(2) {
+  z-index: 240 !important;
+}
+
+.master-data-pin-first-two thead tr[data-filter-row="true"] th:nth-child(1),
+.master-data-pin-first-two thead tr[data-filter-row="true"] th:nth-child(2) {
+  z-index: 230 !important;
 }

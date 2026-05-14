@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateBillPaymentNumber } from '@/lib/bill-payment-number'
-import { generateNextJournalNumber } from '@/lib/journal-number'
+import { generateNextBankCheckId } from '@/lib/banking-number'
+import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { logActivity, logCommunicationActivity, logFieldChangeActivities, logRecordSnapshotActivities } from '@/lib/activity'
 import { parseMoneyValue } from '@/lib/money'
 import { loadCompanySetupSettings } from '@/lib/company-setup-settings-store'
@@ -29,8 +30,17 @@ import {
   type BillPaymentApplicationInput,
 } from '@/lib/bill-payment-applications'
 import { loadCashBankPostingAccounts } from '@/lib/posting-account-options'
+import { getRequiredStandardTransactionPostingContext } from '@/lib/transaction-posting-context'
+import { deriveSettlementLineDimensions } from '@/lib/settlement-dimension-policy'
 
 const BILL_PAYMENT_POSTING_STATUSES = new Set(['processed', 'cleared'])
+const CHECK_PAYMENT_METHODS = new Set(['check', 'cheque'])
+
+function isDateBefore(left: Date, right: Date) {
+  const l = new Date(left.getFullYear(), left.getMonth(), left.getDate()).getTime()
+  const r = new Date(right.getFullYear(), right.getMonth(), right.getDate()).getTime()
+  return l < r
+}
 
 async function deleteLegacyBillPaymentSettlementApplications(
   billPaymentId: string,
@@ -111,6 +121,94 @@ async function syncBillPaymentDocumentRelationships(billPaymentId: string) {
   })
 }
 
+async function syncBankCheckForBillPayment(billPaymentId: string) {
+  const payment = await prisma.billPayment.findUnique({
+    where: { id: billPaymentId },
+    include: {
+      vendor: true,
+      bill: {
+        select: {
+          vendor: true,
+        },
+      },
+    },
+  })
+
+  if (!payment) return
+
+  if (!CHECK_PAYMENT_METHODS.has((payment.method ?? '').toLowerCase())) {
+    await prisma.bankCheck.deleteMany({ where: { billPaymentId: payment.id } })
+    return
+  }
+
+  const bankAccount = payment.bankAccountId
+    ? await prisma.bankAccount.findUnique({
+        where: { glAccountId: payment.bankAccountId },
+        select: {
+          id: true,
+          checkNumberPrefix: true,
+          nextCheckNumber: true,
+        },
+      })
+    : null
+
+  if (!bankAccount) {
+    throw new Error('Check payments require a linked bank account on the selected cash GL account')
+  }
+
+  const existingCheck = await prisma.bankCheck.findFirst({
+    where: { billPaymentId: payment.id },
+    select: { id: true, checkNumber: true },
+  })
+  const shouldAllocateCheckNumber = !payment.reference?.trim() && !existingCheck?.checkNumber
+  const allocatedCheckNumber = shouldAllocateCheckNumber
+    ? `${bankAccount.checkNumberPrefix ?? ''}${bankAccount.nextCheckNumber ?? 1}`
+    : existingCheck?.checkNumber ?? payment.reference?.trim() ?? `${bankAccount.checkNumberPrefix ?? ''}${bankAccount.nextCheckNumber ?? 1}`
+  const payeeName = payment.vendor?.name ?? payment.bill?.vendor.name ?? 'Manual payee'
+
+  if (existingCheck) {
+    await prisma.bankCheck.update({
+      where: { id: existingCheck.id },
+      data: {
+        checkNumber: allocatedCheckNumber,
+        status: payment.status?.toLowerCase() === 'cleared' ? 'cleared' : 'issued',
+        checkDate: payment.date,
+        amount: payment.amount,
+        payeeName,
+        memo: payment.notes ?? null,
+        bankAccountId: bankAccount.id,
+        vendorId: payment.vendorId,
+        subsidiaryId: payment.subsidiaryId,
+        currencyId: payment.currencyId,
+      },
+    })
+  } else {
+    await prisma.bankCheck.create({
+      data: {
+        checkTransactionNumber: await generateNextBankCheckId(),
+        checkNumber: allocatedCheckNumber,
+        status: payment.status?.toLowerCase() === 'cleared' ? 'cleared' : 'issued',
+        checkDate: payment.date,
+        amount: payment.amount,
+        payeeName,
+        memo: payment.notes ?? null,
+        bankAccountId: bankAccount.id,
+        vendorId: payment.vendorId,
+        subsidiaryId: payment.subsidiaryId,
+        currencyId: payment.currencyId,
+        billPaymentId: payment.id,
+      },
+    })
+  }
+
+  if (shouldAllocateCheckNumber && bankAccount.nextCheckNumber != null) {
+    await prisma.bankAccount.update({
+      where: { id: bankAccount.id },
+      data: { nextCheckNumber: bankAccount.nextCheckNumber + 1 },
+    })
+  }
+}
+
 async function loadBillApplicationContext(
   billIds: string[],
   currentPaymentId?: string,
@@ -167,6 +265,7 @@ async function validateBillPaymentApplications(
   vendorId: string | null | undefined,
   paymentAmount: number,
   applications: BillPaymentApplicationInput[],
+  paymentDate?: Date | null,
   currentPaymentId?: string,
   requireFullyApplied = false,
 ) {
@@ -198,6 +297,13 @@ async function validateBillPaymentApplications(
     }
     return context.bill
   })
+
+  if (paymentDate) {
+    const futureBill = resolvedBills.find((bill) => isDateBefore(paymentDate, bill.date))
+    if (futureBill) {
+      throw new Error(`Bill payment date cannot be earlier than applied bill ${futureBill.number} date`)
+    }
+  }
 
   const firstBill = resolvedBills[0]
   const subsidiaryId = firstBill.subsidiaryId ?? null
@@ -313,6 +419,9 @@ async function postBillPaymentJournal(billPaymentId: string) {
           userId: true,
           subsidiaryId: true,
           currencyId: true,
+          lineItems: {
+            select: { departmentId: true, locationId: true, classId: true },
+          },
         },
       },
       applications: {
@@ -328,6 +437,9 @@ async function postBillPaymentJournal(billPaymentId: string) {
               userId: true,
               subsidiaryId: true,
               currencyId: true,
+              lineItems: {
+                select: { departmentId: true, locationId: true, classId: true },
+              },
             },
           },
         },
@@ -343,6 +455,14 @@ async function postBillPaymentJournal(billPaymentId: string) {
       ? [payment.bill]
       : []
   const firstBill = appliedBills[0] ?? null
+  if (!firstBill) return
+  const futureBill = appliedBills.find((bill) => isDateBefore(payment.date, bill.date))
+  if (futureBill) {
+    throw new Error(`Bill payment date cannot be earlier than applied bill ${futureBill.number} date`)
+  }
+  const settlementDimensions = await deriveSettlementLineDimensions(
+    appliedBills.flatMap((bill) => bill.lineItems),
+  )
 
   const amount = payment.applications.length > 0
     ? roundMoney(payment.applications.reduce((sum, application) => sum + Number(application.appliedAmount), 0))
@@ -502,7 +622,7 @@ async function postBillPaymentJournal(billPaymentId: string) {
 
   if (!apAccountId || !bankAccountId || !firstBill) return
 
-  const journalNumber = await generateNextJournalNumber()
+  const journalNumber = await generateNextSystemJournalNumber()
   const canPopulateLocalLayer =
     settlementSummaries.length > 0
     && settlementSummaries.every(
@@ -559,13 +679,14 @@ async function postBillPaymentJournal(billPaymentId: string) {
     ? roundMoney(settlementSummaries.reduce((sum, summary) => sum + (summary.realizedFxGroupAmount ?? 0), 0))
     : null
   const fxLines = buildRealizedFxJournalLines({
-    description: `${payment.number} realized FX`,
+    description: payment.number,
     memo: payment.reference ?? payment.notes ?? null,
     subsidiaryId: firstBill.subsidiaryId,
     vendorId: payment.vendorId ?? firstBill.vendorId,
     realizedFxGainAccountId,
     realizedFxLossAccountId,
     orientation: 'liability',
+    ...settlementDimensions,
     localAmount: realizedFxLocalTotal,
     functionalAmount: realizedFxFunctionalTotal,
     groupAmount: realizedFxGroupTotal,
@@ -600,6 +721,7 @@ async function postBillPaymentJournal(billPaymentId: string) {
             accountId: apAccountId,
             subsidiaryId: firstBill.subsidiaryId,
             vendorId: payment.vendorId ?? firstBill.vendorId,
+            ...settlementDimensions,
           },
           {
             displayOrder: 1,
@@ -623,6 +745,7 @@ async function postBillPaymentJournal(billPaymentId: string) {
             accountId: bankAccountId,
             subsidiaryId: firstBill.subsidiaryId,
             vendorId: payment.vendorId ?? firstBill.vendorId,
+            ...settlementDimensions,
           },
           ...fxLines,
         ],
@@ -758,9 +881,17 @@ export async function POST(req: NextRequest) {
       resolvedVendorId,
       body.amount ?? 0,
       applications,
+      body.date ?? null,
       undefined,
       BILL_PAYMENT_POSTING_STATUSES.has(normalizedStatus),
     )
+    const requiredPostingContext = getRequiredStandardTransactionPostingContext('bill-payment', {
+      subsidiaryId: postingContext.subsidiaryId,
+      currencyId: postingContext.currencyId,
+    })
+    if ('error' in requiredPostingContext) {
+      return NextResponse.json({ error: requiredPostingContext.error }, { status: 400 })
+    }
 
     if (
       body.subsidiaryId
@@ -789,8 +920,8 @@ export async function POST(req: NextRequest) {
         bankAccountId: body.bankAccountId ?? null,
         vendorId: resolvedVendorId,
         billId: applications[0]?.billId ?? legacyBillId,
-        subsidiaryId: postingContext.subsidiaryId,
-        currencyId: postingContext.currencyId,
+        subsidiaryId: requiredPostingContext.subsidiaryId,
+        currencyId: requiredPostingContext.currencyId,
         amount: body.amount ?? 0,
         applications: {
           create: applications.map((application) => ({
@@ -801,6 +932,7 @@ export async function POST(req: NextRequest) {
       },
     })
     await syncBillPaymentDocumentRelationships(row.id)
+    await syncBankCheckForBillPayment(row.id)
     if (BILL_PAYMENT_POSTING_STATUSES.has((row.status ?? '').toLowerCase())) {
       await postBillPaymentJournal(row.id)
     }
@@ -866,7 +998,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'At least one bill application is required' }, { status: 400 })
     }
 
-    await validateBillPaymentApplications(
+    const postingContext = await validateBillPaymentApplications(
       resolvedVendorId,
       body.amount ?? Number(before.amount),
       applications.length > 0
@@ -879,9 +1011,17 @@ export async function PUT(req: NextRequest) {
           : before.billId
             ? [{ billId: before.billId, appliedAmount: Number(before.amount) }]
             : [],
+      body.date ?? before.date,
       before.id,
       BILL_PAYMENT_POSTING_STATUSES.has(normalizedStatus),
     )
+    const requiredPostingContext = getRequiredStandardTransactionPostingContext('bill-payment', {
+      subsidiaryId: postingContext.subsidiaryId,
+      currencyId: postingContext.currencyId,
+    })
+    if ('error' in requiredPostingContext) {
+      return NextResponse.json({ error: requiredPostingContext.error }, { status: 400 })
+    }
 
     const row = await prisma.billPayment.update({
       where: { id },
@@ -896,6 +1036,8 @@ export async function PUT(req: NextRequest) {
         ...(body.billId !== undefined || applications.length > 0
           ? { billId: applications[0]?.billId ?? (typeof body.billId === 'string' && body.billId.trim() ? body.billId.trim() : null) }
           : {}),
+        subsidiaryId: requiredPostingContext.subsidiaryId,
+        currencyId: requiredPostingContext.currencyId,
         ...(body.amount !== undefined ? { amount: body.amount } : {}),
         ...(body.applications !== undefined
           ? {
@@ -911,6 +1053,7 @@ export async function PUT(req: NextRequest) {
       },
     })
     await syncBillPaymentDocumentRelationships(row.id)
+    await syncBankCheckForBillPayment(row.id)
 
     const changes = [
       body.vendorId !== undefined && (before.vendorId ?? '') !== (row.vendorId ?? '')

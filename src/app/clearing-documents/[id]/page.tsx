@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { connection } from 'next/server'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { fmtCurrency, fmtDocumentDate } from '@/lib/format'
@@ -98,7 +97,6 @@ export default async function ClearingDocumentDetailPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ edit?: string; customize?: string }>
 }) {
-  await connection()
   const { id } = await params
   const { edit, customize } = await searchParams
   const isEditing = edit === '1'
@@ -112,8 +110,20 @@ export default async function ClearingDocumentDetailPage({
         accountingPeriod: true,
         lines: {
           include: {
-            fromOpenItem: true,
-            toOpenItem: true,
+            fromOpenItem: {
+              include: {
+                account: {
+                  select: { accountId: true, accountNumber: true, name: true },
+                },
+              },
+            },
+            toOpenItem: {
+              include: {
+                account: {
+                  select: { accountId: true, accountNumber: true, name: true },
+                },
+              },
+            },
             openItemApplication: true,
           },
           orderBy: { lineNumber: 'asc' },
@@ -135,6 +145,30 @@ export default async function ClearingDocumentDetailPage({
         sourceNumber: true,
         openItemType: true,
         originalTransactionAmount: true,
+        postingDate: true,
+        dueDate: true,
+        subsidiaryId: true,
+        transactionCurrencyId: true,
+        localCurrencyId: true,
+        functionalCurrencyId: true,
+        groupCurrencyId: true,
+        counterpartyType: true,
+        counterpartyId: true,
+        account: {
+          select: {
+            accountId: true,
+            accountNumber: true,
+            name: true,
+          },
+        },
+        entries: {
+          select: {
+            transactionAmount: true,
+            localAmount: true,
+            functionalAmount: true,
+            groupAmount: true,
+          },
+        },
       },
     }),
     loadListValues('CLEARING-DOCUMENT-STATUS'),
@@ -172,10 +206,47 @@ export default async function ClearingDocumentDetailPage({
           value: period.id,
           label: period.name,
         }))}
-        openItemOptions={openItems.map((item) => ({
-          value: item.id,
-          label: `${item.openItemNumber} - ${item.sourceNumber ?? item.openItemType} - ${Number(item.originalTransactionAmount).toFixed(2)}`,
-        }))}
+        openItemOptions={openItems.map((item) => {
+          const remainingTransactionAmount = item.entries.reduce(
+            (sum, entry) => sum + Number(entry.transactionAmount),
+            0,
+          )
+          const remainingLocalAmount = item.entries.reduce(
+            (sum, entry) => sum + Number(entry.localAmount ?? 0),
+            0,
+          )
+          const remainingFunctionalAmount = item.entries.reduce(
+            (sum, entry) => sum + Number(entry.functionalAmount ?? 0),
+            0,
+          )
+          const remainingGroupAmount = item.entries.reduce(
+            (sum, entry) => sum + Number(entry.groupAmount ?? 0),
+            0,
+          )
+          return {
+            value: item.id,
+            label: `${item.openItemNumber} - ${item.sourceNumber ?? item.openItemType} - remaining ${remainingTransactionAmount.toFixed(2)}`,
+            openItemNumber: item.openItemNumber,
+            sourceNumber: item.sourceNumber,
+            openItemType: item.openItemType,
+            accountLabel: item.account
+              ? `${item.account.accountNumber ?? item.account.accountId} - ${item.account.name}`
+              : null,
+            subsidiaryId: item.subsidiaryId,
+            transactionCurrencyId: item.transactionCurrencyId,
+            localCurrencyId: item.localCurrencyId,
+            functionalCurrencyId: item.functionalCurrencyId,
+            groupCurrencyId: item.groupCurrencyId,
+            counterpartyType: item.counterpartyType,
+            counterpartyId: item.counterpartyId,
+            postingDate: item.postingDate ? item.postingDate.toISOString().slice(0, 10) : null,
+            dueDate: item.dueDate ? item.dueDate.toISOString().slice(0, 10) : null,
+            remainingTransactionAmount,
+            remainingLocalAmount,
+            remainingFunctionalAmount,
+            remainingGroupAmount,
+          }
+        })}
         statusOptions={editableStatusValues.map((value) => ({
           value: value.toLowerCase(),
           label: value,
@@ -328,6 +399,9 @@ export default async function ClearingDocumentDetailPage({
             account: {
               select: { accountId: true, accountNumber: true, name: true },
             },
+            department: { select: { departmentId: true, departmentNumber: true, name: true } },
+            location: { select: { locationId: true, code: true, name: true } },
+            classDimension: { select: { classId: true, name: true } },
           },
         },
       },
@@ -894,7 +968,7 @@ export default async function ClearingDocumentDetailPage({
       ? 'Only manual draft clearing documents can be deleted.'
       : null
   const clearingDocumentLifecycleHint = canPostManualClearing
-    ? 'Approved manual clearing documents can now be posted into open-item settlement.'
+    ? 'Approved manual clearing documents can now be posted into non-cash open-item applications.'
     : canReverseManualClearing
       ? 'Posted manual clearing documents can be reversed from this detail page.'
       : clearingDocumentEditLockReason ?? clearingDocumentDeleteLockReason
@@ -1040,7 +1114,7 @@ export default async function ClearingDocumentDetailPage({
   ).size
   const systemClearingNarrative = clearingDocument.autoGenerated
     ? `This clearing document was created automatically${clearingDocument.automationSource ? ` by ${humanize(clearingDocument.automationSource)}` : ''}. It is the audit record that explains which open items were settled, what source transaction triggered the settlement, and why the document is locked from direct editing.`
-    : 'This manual clearing document captures user-entered settlement intent before posting into open-item applications.'
+    : 'This manual clearing document captures user-entered non-cash offset intent before posting into open-item applications.'
   const transactionCurrencyLabel = currencyLabelById.get(clearingDocument.transactionCurrencyId ?? '') ?? null
   const localCurrencyLabel = currencyLabelById.get(clearingDocument.localCurrencyId ?? '') ?? null
   const functionalCurrencyLabel = currencyLabelById.get(clearingDocument.functionalCurrencyId ?? '') ?? null
@@ -1258,6 +1332,26 @@ export default async function ClearingDocumentDetailPage({
   }
 
   function getLineCellValue(line: NonNullable<typeof clearingDocument>['lines'][number], columnId: string) {
+    const formatOpenItemCell = (
+      item: NonNullable<typeof line.fromOpenItem> | NonNullable<typeof line.toOpenItem> | null,
+      fallbackId: string | null | undefined,
+    ) => {
+      const reference = item?.sourceNumber ?? item?.openItemNumber ?? fallbackId ?? '-'
+      const account = item?.account
+        ? `${item.account.accountNumber ?? item.account.accountId} - ${item.account.name}`
+        : null
+      return (
+        <div>
+          <div>{reference}</div>
+          {account ? (
+            <div className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+              Account: {account}
+            </div>
+          ) : null}
+        </div>
+      )
+    }
+
     switch (columnId) {
       case 'lineNumber':
         return line.lineNumber
@@ -1278,9 +1372,9 @@ export default async function ClearingDocumentDetailPage({
       case 'realizedFxGroupAmount':
         return line.realizedFxGroupAmount == null ? '-' : fmtCurrency(line.realizedFxGroupAmount, groupCurrencyCode, moneySettings)
       case 'fromOpenItem':
-        return line.fromOpenItem?.sourceNumber ?? line.fromOpenItemId ?? '-'
+        return formatOpenItemCell(line.fromOpenItem, line.fromOpenItemId)
       case 'toOpenItem':
-        return line.toOpenItem?.sourceNumber ?? line.toOpenItemId ?? '-'
+        return formatOpenItemCell(line.toOpenItem, line.toOpenItemId)
       case 'application':
         return line.openItemApplication?.applicationNumber ?? line.openItemApplicationId ?? '-'
       case 'source':

@@ -31,18 +31,24 @@ export const CHART_OF_ACCOUNTS_SAVED_SEARCH_FILTERS: SavedSearchFilterDefinition
 
 export function buildChartOfAccountsSavedSearchFields({
   accountTypeOptions,
+  accountCategoryOptions,
   normalBalanceOptions,
   financialStatementCategoryOptions,
   accountRoleOptions,
   rollforwardCategoryOptions,
+  monetaryClassificationOptions,
+  translationTreatmentOptions,
   parentAccountOptions,
   subsidiaryOptions,
 }: {
   accountTypeOptions: { value: string; label: string }[]
+  accountCategoryOptions: { value: string; label: string }[]
   normalBalanceOptions: { value: string; label: string }[]
   financialStatementCategoryOptions: { value: string; label: string }[]
   accountRoleOptions: { value: string; label: string }[]
   rollforwardCategoryOptions: { value: string; label: string }[]
+  monetaryClassificationOptions: { value: string; label: string }[]
+  translationTreatmentOptions: { value: string; label: string }[]
   parentAccountOptions: { value: string; label: string }[]
   subsidiaryOptions: { value: string; label: string }[]
 }): SavedSearchFieldOption[] {
@@ -53,7 +59,7 @@ export function buildChartOfAccountsSavedSearchFields({
 
   return [
     { id: 'account-id', label: 'Account Id', source: 'Chart of Accounts', group: 'Base Record', defaultVisible: true, locked: true },
-    { id: 'account-number', label: 'Account Number', source: 'Chart of Accounts', group: 'Base Record', defaultVisible: true },
+    { id: 'account-number', label: 'Account Number', source: 'Chart of Accounts', group: 'Base Record', defaultVisible: true, locked: true },
     { id: 'name', label: 'Name', source: 'Chart of Accounts', group: 'Base Record', defaultVisible: true },
     { id: 'description', label: 'Description', source: 'Chart of Accounts', group: 'Base Record', defaultVisible: true },
     {
@@ -64,6 +70,16 @@ export function buildChartOfAccountsSavedSearchFields({
       type: 'select',
       placeholder: 'Select account type',
       options: accountTypeOptions,
+      defaultVisible: true,
+    },
+    {
+      id: 'account-category',
+      label: 'Account Category',
+      source: 'Chart of Accounts',
+      group: 'Base Record',
+      type: 'select',
+      placeholder: 'Select account category',
+      options: accountCategoryOptions,
       defaultVisible: true,
     },
     {
@@ -121,7 +137,27 @@ export function buildChartOfAccountsSavedSearchFields({
     { id: 'posting', label: 'Posting', source: 'Chart of Accounts', group: 'Base Record', type: 'select', placeholder: 'Select option', options: booleanOptions, defaultVisible: true },
     { id: 'control', label: 'Control', source: 'Chart of Accounts', group: 'Base Record', type: 'select', placeholder: 'Select option', options: booleanOptions, defaultVisible: true },
     { id: 'inventory', label: 'Inventory', source: 'Chart of Accounts', group: 'Base Record', type: 'select', placeholder: 'Select option', options: booleanOptions, defaultVisible: true },
-    { id: 'revalue-open-balance', label: 'Revalue Open Balance', source: 'Chart of Accounts', group: 'Base Record', type: 'select', placeholder: 'Select option', options: booleanOptions, defaultVisible: true },
+    { id: 'revalue-open-balance', label: 'Remeasure Open Balance', source: 'Chart of Accounts', group: 'Base Record', type: 'select', placeholder: 'Select option', options: booleanOptions, defaultVisible: true },
+    {
+      id: 'monetary-classification',
+      label: 'Monetary Classification',
+      source: 'Chart of Accounts',
+      group: 'Base Record',
+      type: 'select',
+      placeholder: 'Select monetary classification',
+      options: monetaryClassificationOptions,
+      defaultVisible: true,
+    },
+    {
+      id: 'translation-treatment',
+      label: 'Translation Treatment',
+      source: 'Chart of Accounts',
+      group: 'Base Record',
+      type: 'select',
+      placeholder: 'Select translation treatment',
+      options: translationTreatmentOptions,
+      defaultVisible: true,
+    },
     { id: 'summary', label: 'Summary', source: 'Chart of Accounts', group: 'Base Record', type: 'select', placeholder: 'Select option', options: booleanOptions, defaultVisible: true },
     {
       id: 'subsidiaries',

@@ -1,0 +1,36 @@
+name: Nightly Exchange Rate Sync
+
+on:
+  schedule:
+    # 08:05 UTC = 00:05 Pacific Standard Time / 01:05 Pacific Daylight Time.
+    - cron: '5 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync-exchange-rates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Validate required secrets
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          EXCHANGE_RATE_SYNC_TOKEN: ${{ secrets.EXCHANGE_RATE_SYNC_TOKEN }}
+        run: |
+          if [ -z "$APP_BASE_URL" ]; then
+            echo "APP_BASE_URL secret is required."
+            exit 1
+          fi
+          if [ -z "$EXCHANGE_RATE_SYNC_TOKEN" ]; then
+            echo "EXCHANGE_RATE_SYNC_TOKEN secret is required."
+            exit 1
+          fi
+
+      - name: Trigger nightly FX sync
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          EXCHANGE_RATE_SYNC_TOKEN: ${{ secrets.EXCHANGE_RATE_SYNC_TOKEN }}
+        run: |
+          curl --fail --show-error --silent \
+            --request GET \
+            --header "Authorization: Bearer ${EXCHANGE_RATE_SYNC_TOKEN}" \
+            "${APP_BASE_URL%/}/api/exchange-rates/sync?triggerType=scheduled"

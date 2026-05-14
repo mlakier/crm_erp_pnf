@@ -1,5 +1,3 @@
-import { deriveRealizedFxActivityType } from '@/lib/accounting-activity-types'
-
 const MONEY_TOLERANCE = 0.005
 
 function roundMoney(value: number | null | undefined) {
@@ -57,6 +55,9 @@ type RealizedFxLineInput = {
   subsidiaryId?: string | null
   customerId?: string | null
   vendorId?: string | null
+  departmentId?: string | null
+  locationId?: string | null
+  classId?: string | null
   realizedFxGainAccountId: string | null
   realizedFxLossAccountId: string | null
   orientation: CounterpartyOrientation
@@ -83,6 +84,9 @@ type RealizedFxJournalLine = {
   subsidiaryId?: string | null
   customerId?: string | null
   vendorId?: string | null
+  departmentId?: string | null
+  locationId?: string | null
+  classId?: string | null
 }
 
 function resolveFxSide(
@@ -130,7 +134,7 @@ export function buildRealizedFxJournalLines(input: RealizedFxLineInput): Realize
       displayOrder,
       description: `${input.description} realized FX (${label})`,
       memo: input.memo ?? null,
-      activityTypeCode: deriveRealizedFxActivityType(amount ?? 0),
+      activityTypeCode: resolved.accountKind === 'gain' ? 'fx_realized_gain' : 'fx_realized_loss',
       debit: 0,
       credit: 0,
       ...(localOrFunctional === 'local'
@@ -146,6 +150,9 @@ export function buildRealizedFxJournalLines(input: RealizedFxLineInput): Realize
       subsidiaryId: input.subsidiaryId ?? null,
       customerId: input.customerId ?? null,
       vendorId: input.vendorId ?? null,
+      departmentId: input.departmentId ?? null,
+      locationId: input.locationId ?? null,
+      classId: input.classId ?? null,
     })
     displayOrder += 1
   }
@@ -167,7 +174,7 @@ export function buildRealizedFxJournalLines(input: RealizedFxLineInput): Realize
       displayOrder,
       description: `${input.description} realized FX (Group)`,
       memo: input.memo ?? null,
-      activityTypeCode: deriveRealizedFxActivityType(input.groupAmount ?? 0),
+      activityTypeCode: resolvedGroup.accountKind === 'gain' ? 'fx_realized_gain' : 'fx_realized_loss',
       debit: 0,
       credit: 0,
       groupDebit: resolvedGroup.side === 'debit' ? resolvedGroup.amount : 0,
@@ -176,6 +183,9 @@ export function buildRealizedFxJournalLines(input: RealizedFxLineInput): Realize
       subsidiaryId: input.subsidiaryId ?? null,
       customerId: input.customerId ?? null,
       vendorId: input.vendorId ?? null,
+      departmentId: input.departmentId ?? null,
+      locationId: input.locationId ?? null,
+      classId: input.classId ?? null,
     })
   }
 

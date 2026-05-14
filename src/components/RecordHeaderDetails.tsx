@@ -9,6 +9,10 @@ import AddressModal, { parseAddress } from '@/components/AddressModal'
 import MultiSelectDropdown from '@/components/MultiSelectDropdown'
 import { RecordDetailSection } from '@/components/RecordDetailPanels'
 import SearchableSelect from '@/components/SearchableSelect'
+import {
+  GL_ACCOUNT_CATEGORY_POLICIES,
+  findGlAccountCategoryPolicy,
+} from '@/lib/gl-account-accounting-policy'
 
 export type RecordHeaderField = {
   key: string
@@ -22,7 +26,7 @@ export type RecordHeaderField = {
   readOnly?: boolean
   type?: 'text' | 'number' | 'select' | 'date' | 'email' | 'checkbox' | 'address'
   multiple?: boolean
-  options?: Array<{ value: string; label: string }>
+  options?: Array<{ value: string; label: string; accountTypes?: string[] }>
   column?: number
   order?: number
   helpText?: string
@@ -167,6 +171,12 @@ export default function RecordHeaderDetails({
   function updateValue(fieldKey: string, nextValue: string) {
     if (values[fieldKey] === nextValue) return
     const nextValues = { ...values, [fieldKey]: nextValue }
+    if (fieldKey === 'accountType' && nextValues.category && !isAccountCategoryAllowed(nextValues.category, nextValue)) {
+      nextValues.category = ''
+    }
+    if (fieldKey === 'accountType' || fieldKey === 'category') {
+      applyGlAccountCategoryDefaults(nextValues)
+    }
     setValues(nextValues)
     onValuesChange?.(nextValues)
   }
@@ -220,10 +230,15 @@ export default function RecordHeaderDetails({
     const isDate = field.type === 'date'
     const isCheckbox = field.type === 'checkbox'
     const isAddress = field.type === 'address'
-    const isDisabled = Boolean(field.disabled)
+    const dynamicAvailability = getGlAccountFieldAvailability(field.key, values)
+    const isDisabled = Boolean(field.disabled) || dynamicAvailability.disabled
     const isReadOnly = Boolean(field.readOnly)
     const isUnavailable = isDisabled || isReadOnly
     const currentValue = values[field.key] ?? ''
+    const availableOptions = getAvailableOptions(field, values)
+    const tooltipField = dynamicAvailability.reason
+      ? { ...field, helpText: `${field.helpText ? `${field.helpText}\n\n` : ''}${dynamicAvailability.reason}` }
+      : field
 
     return (
       <div
@@ -243,8 +258,8 @@ export default function RecordHeaderDetails({
               *
             </span>
           ) : null}
-          {field.helpText ? (
-            <FieldTooltip content={buildTooltipContent(field)} />
+          {tooltipField.helpText ? (
+            <FieldTooltip content={buildTooltipContent(tooltipField)} />
           ) : null}
         </dt>
         <dd className="mt-1">
@@ -332,7 +347,7 @@ export default function RecordHeaderDetails({
             ) : isSelect && field.multiple ? (
               <MultiSelectDropdown
                 value={splitMultiValue(currentValue)}
-                options={field.options ?? []}
+                options={availableOptions}
                 disabled={isUnavailable}
                 placeholder={field.placeholder ?? 'Select options'}
                 onChange={(next) => updateValue(field.key, next.join(','))}
@@ -349,7 +364,7 @@ export default function RecordHeaderDetails({
             ) : isSelect ? (
               <SearchableSelect
                 selectedValue={currentValue}
-                options={(field.options ?? []).map((option) => ({
+                options={availableOptions.map((option) => ({
                   value: option.value,
                   label: option.label,
                   searchText: `${option.value} ${option.label}`,
@@ -878,6 +893,249 @@ function splitMultiValue(value: string) {
     .split(',')
     .map((entry) => entry.trim())
     .filter(Boolean)
+}
+
+function getGlAccountFieldAvailability(fieldKey: string, values: Record<string, string>) {
+  if (!Object.prototype.hasOwnProperty.call(values, 'accountType') || !Object.prototype.hasOwnProperty.call(values, 'category')) {
+    return { disabled: false, reason: '' }
+  }
+
+  const policy = findGlAccountCategoryPolicy(values.category, values.accountType)
+  if (!policy || !GL_ACCOUNT_CATEGORY_DRIVEN_FIELDS.has(fieldKey)) {
+    return { disabled: false, reason: '' }
+  }
+
+  const isRelevant = isGlAccountFieldRelevant(fieldKey, policy)
+  return isRelevant
+    ? { disabled: false, reason: '' }
+    : { disabled: true, reason: 'Not applicable for the selected Account Category. Change Account Category to enable this field.' }
+}
+
+const GL_ACCOUNT_CATEGORY_DRIVEN_FIELDS = new Set([
+  'reconciliationType',
+  'requiresMonthlyReconciliation',
+  'closeReviewOwnerId',
+  'closeReviewFrequency',
+  'aiReviewEnabled',
+  'aiRiskLevel',
+  'autoMatchStrategy',
+  'materialityThreshold',
+  'agingReviewRequired',
+  'reserveReviewRequired',
+  'writeOffReviewRequired',
+  'waterfallReviewRequired',
+  'taxSensitive',
+  'intercompanyAccount',
+  'eliminationAccount',
+  'bankAccountRequired',
+  'inventoryCostLayerAccount',
+  'revenueRecognitionAccount',
+  'deferredCostAccount',
+  'fixedAssetAccount',
+  'prepaidAccount',
+  'accrualAccount',
+  'clearingAccount',
+  'suspenseAccount',
+  'isControlAccount',
+  'allowsManualPosting',
+  'requiresSubledgerType',
+  'inventory',
+  'revalueOpenBalance',
+  'monetaryClassification',
+  'translationTreatment',
+  'eliminateIntercoTransactions',
+])
+
+function isGlAccountFieldRelevant(fieldKey: string, policy: NonNullable<ReturnType<typeof findGlAccountCategoryPolicy>>) {
+  switch (fieldKey) {
+    case 'reconciliationType':
+    case 'requiresMonthlyReconciliation':
+    case 'closeReviewOwnerId':
+    case 'closeReviewFrequency':
+      return policy.requiresMonthlyReconciliation
+    case 'aiReviewEnabled':
+    case 'aiRiskLevel':
+    case 'autoMatchStrategy':
+    case 'materialityThreshold':
+      return policy.aiReviewEnabled || policy.requiresMonthlyReconciliation
+    case 'isControlAccount':
+      return policy.isControlAccount
+    case 'allowsManualPosting':
+      return !policy.isControlAccount
+    case 'requiresSubledgerType':
+      return Boolean(policy.requiresSubledgerType)
+    case 'inventory':
+      return policy.inventory
+    case 'revalueOpenBalance':
+      return policy.revalueOpenBalance
+    case 'monetaryClassification':
+    case 'translationTreatment':
+      return true
+    case 'eliminateIntercoTransactions':
+      return policy.intercompanyAccount || policy.eliminationAccount
+    case 'agingReviewRequired':
+      return policy.agingReviewRequired
+    case 'reserveReviewRequired':
+      return policy.reserveReviewRequired
+    case 'writeOffReviewRequired':
+      return policy.writeOffReviewRequired
+    case 'waterfallReviewRequired':
+      return policy.waterfallReviewRequired
+    case 'taxSensitive':
+      return policy.taxSensitive
+    case 'intercompanyAccount':
+      return policy.intercompanyAccount
+    case 'eliminationAccount':
+      return policy.eliminationAccount
+    case 'bankAccountRequired':
+      return policy.bankAccountRequired
+    case 'inventoryCostLayerAccount':
+      return policy.inventoryCostLayerAccount
+    case 'revenueRecognitionAccount':
+      return policy.revenueRecognitionAccount
+    case 'deferredCostAccount':
+      return policy.deferredCostAccount
+    case 'fixedAssetAccount':
+      return policy.fixedAssetAccount
+    case 'prepaidAccount':
+      return policy.prepaidAccount
+    case 'accrualAccount':
+      return policy.accrualAccount
+    case 'clearingAccount':
+      return policy.clearingAccount
+    case 'suspenseAccount':
+      return policy.suspenseAccount
+    default:
+      return true
+  }
+}
+
+function getAvailableOptions(field: RecordHeaderField, values: Record<string, string>) {
+  const options = field.options ?? []
+  if (field.key !== 'category') return options
+
+  const accountType = normalizeConditionValue(values.accountType)
+  if (!accountType) return options
+
+  const labelsByValue = new Map(options.map((option) => [option.value, option.label]))
+  const blankOptions = options.filter((option) => !option.value)
+  const filtered = GL_ACCOUNT_CATEGORY_POLICIES
+    .filter((policy) =>
+      policy.accountTypes.some((type) => normalizeConditionValue(type) === accountType)
+    )
+    .map((policy) => ({
+      value: policy.category,
+      label: labelsByValue.get(policy.category) ?? policy.category,
+      accountTypes: policy.accountTypes,
+    }))
+
+  return [...blankOptions, ...filtered]
+}
+
+function isAccountCategoryAllowed(category: string, accountType: string) {
+  const normalizedAccountType = normalizeConditionValue(accountType)
+  if (!normalizedAccountType) return true
+
+  const policy = findGlAccountCategoryPolicy(category)
+  if (!policy) return false
+  return policy.accountTypes.some((type) => normalizeConditionValue(type) === normalizedAccountType)
+}
+
+function applyGlAccountCategoryDefaults(values: Record<string, string>) {
+  if (!Object.prototype.hasOwnProperty.call(values, 'accountType') || !Object.prototype.hasOwnProperty.call(values, 'category')) {
+    return
+  }
+
+  const policy = findGlAccountCategoryPolicy(values.category, values.accountType)
+  const derivedValues: Record<string, string> = policy
+    ? {
+        normalBalance: policy.normalBalance,
+        accountRole: policy.accountRole,
+        rollforwardCategory: policy.rollforwardCategory,
+        financialStatementSection: policy.financialStatementSection,
+        financialStatementGroup: policy.financialStatementGroup,
+        financialStatementCategory: policy.financialStatementCategory,
+        revalueOpenBalance: String(policy.revalueOpenBalance),
+        monetaryClassification: policy.monetaryClassification,
+        translationTreatment: policy.translationTreatment,
+        inventory: String(policy.inventory),
+        isControlAccount: String(policy.isControlAccount),
+        allowsManualPosting: String(policy.allowsManualPosting),
+        requiresSubledgerType: policy.requiresSubledgerType ?? '',
+        cashFlowCategory: policy.cashFlowCategory ?? '',
+        requiresMonthlyReconciliation: String(policy.requiresMonthlyReconciliation),
+        reconciliationType: policy.reconciliationType ?? '',
+        closeReviewFrequency: policy.closeReviewFrequency ?? '',
+        aiReviewEnabled: String(policy.aiReviewEnabled),
+        aiRiskLevel: policy.aiRiskLevel ?? '',
+        autoMatchStrategy: policy.autoMatchStrategy ?? '',
+        materialityThreshold: policy.materialityThreshold ?? '',
+        agingReviewRequired: String(policy.agingReviewRequired),
+        reserveReviewRequired: String(policy.reserveReviewRequired),
+        writeOffReviewRequired: String(policy.writeOffReviewRequired),
+        waterfallReviewRequired: String(policy.waterfallReviewRequired),
+        taxSensitive: String(policy.taxSensitive),
+        intercompanyAccount: String(policy.intercompanyAccount),
+        eliminationAccount: String(policy.eliminationAccount),
+        bankAccountRequired: String(policy.bankAccountRequired),
+        inventoryCostLayerAccount: String(policy.inventoryCostLayerAccount),
+        revenueRecognitionAccount: String(policy.revenueRecognitionAccount),
+        deferredCostAccount: String(policy.deferredCostAccount),
+        fixedAssetAccount: String(policy.fixedAssetAccount),
+        prepaidAccount: String(policy.prepaidAccount),
+        accrualAccount: String(policy.accrualAccount),
+        clearingAccount: String(policy.clearingAccount),
+        suspenseAccount: String(policy.suspenseAccount),
+      }
+    : {
+        normalBalance: '',
+        accountRole: '',
+        rollforwardCategory: '',
+        financialStatementSection: '',
+        financialStatementGroup: '',
+        financialStatementCategory: '',
+        revalueOpenBalance: 'false',
+        monetaryClassification: '',
+        translationTreatment: '',
+        inventory: 'false',
+        isControlAccount: 'false',
+        allowsManualPosting: 'true',
+        requiresSubledgerType: '',
+        cashFlowCategory: '',
+        requiresMonthlyReconciliation: 'false',
+        reconciliationType: '',
+        closeReviewFrequency: '',
+        aiReviewEnabled: 'false',
+        aiRiskLevel: '',
+        autoMatchStrategy: '',
+        materialityThreshold: '',
+        agingReviewRequired: 'false',
+        reserveReviewRequired: 'false',
+        writeOffReviewRequired: 'false',
+        waterfallReviewRequired: 'false',
+        taxSensitive: 'false',
+        intercompanyAccount: 'false',
+        eliminationAccount: 'false',
+        bankAccountRequired: 'false',
+        inventoryCostLayerAccount: 'false',
+        revenueRecognitionAccount: 'false',
+        deferredCostAccount: 'false',
+        fixedAssetAccount: 'false',
+        prepaidAccount: 'false',
+        accrualAccount: 'false',
+        clearingAccount: 'false',
+        suspenseAccount: 'false',
+      }
+
+  for (const [fieldKey, fieldValue] of Object.entries(derivedValues)) {
+    if (Object.prototype.hasOwnProperty.call(values, fieldKey)) {
+      values[fieldKey] = fieldValue
+    }
+  }
+}
+
+function normalizeConditionValue(value: string | null | undefined) {
+  return String(value ?? '').trim().toLowerCase()
 }
 
 function renderReadOnlyValue(field: RecordHeaderField, value: string) {

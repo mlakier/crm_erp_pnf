@@ -28,11 +28,27 @@ export type ReceiptDetailFieldKey =
   | 'createdAt'
   | 'updatedAt'
 
+export type ReceiptLineColumnKey =
+  | 'line'
+  | 'item-id'
+  | 'description'
+  | 'ordered-qty'
+  | 'already-processed-qty'
+  | 'open-qty'
+  | 'document-qty'
+  | 'notes'
+
 export type ReceiptDetailFieldMeta = {
   id: ReceiptDetailFieldKey
   label: string
   fieldType: string
   source?: string
+  description?: string
+}
+
+export type ReceiptLineColumnMeta = {
+  id: ReceiptLineColumnKey
+  label: string
   description?: string
 }
 
@@ -43,12 +59,18 @@ export type ReceiptDetailFieldCustomization = {
   column: number
 }
 
+export type ReceiptLineColumnCustomization = {
+  visible: boolean
+  order: number
+}
+
 export type ReceiptDetailCustomizationConfig = {
   formColumns: number
   sections: string[]
   sectionRows: Record<string, number>
   fields: Record<ReceiptDetailFieldKey, ReceiptDetailFieldCustomization>
   referenceLayouts: TransactionReferenceLayout[]
+  lineColumns: Record<ReceiptLineColumnKey, ReceiptLineColumnCustomization>
   glImpactSettings: TransactionGlImpactSettings
   glImpactColumns: Record<TransactionGlImpactColumnKey, TransactionGlImpactColumnCustomization>
   statCards?: Array<TransactionStatCardSlot<ReceiptStatCardKey>>
@@ -75,6 +97,17 @@ export const RECEIPT_DETAIL_FIELDS: ReceiptDetailFieldMeta[] = [
   { id: 'notes', label: 'Notes', fieldType: 'text', description: 'Free-form notes for this receipt.' },
   { id: 'createdAt', label: 'Created', fieldType: 'date', description: 'Date/time the receipt record was created.' },
   { id: 'updatedAt', label: 'Last Modified', fieldType: 'date', description: 'Date/time the receipt record was last modified.' },
+]
+
+export const RECEIPT_LINE_COLUMNS: ReceiptLineColumnMeta[] = [
+  { id: 'line', label: 'Line', description: 'Purchase order line sequence number.' },
+  { id: 'item-id', label: 'Item Id', description: 'Linked item identifier from the purchase order line.' },
+  { id: 'description', label: 'Description', description: 'Description carried from the purchase order line.' },
+  { id: 'ordered-qty', label: 'Ordered Qty', description: 'Original quantity ordered on the purchase order line.' },
+  { id: 'already-processed-qty', label: 'Already Received Qty', description: 'Quantity already received on other receipt documents.' },
+  { id: 'open-qty', label: 'Open Qty', description: 'Remaining quantity open before this receipt.' },
+  { id: 'document-qty', label: 'Receipt Qty', description: 'Quantity received on this document line.' },
+  { id: 'notes', label: 'Notes', description: 'Line-specific receipt note or warehouse reference.' },
 ]
 
 export const RECEIPT_REFERENCE_SOURCES: LinkedRecordReferenceSource[] = [
@@ -114,6 +147,15 @@ export function defaultReceiptDetailCustomization(): ReceiptDetailCustomizationC
       updatedAt: { visible: true, section: 'System Dates', order: 0, column: 2 },
     },
     referenceLayouts: [buildDefaultTransactionReferenceLayout(RECEIPT_REFERENCE_SOURCES, 'purchaseOrder')],
+    lineColumns: Object.fromEntries(
+      RECEIPT_LINE_COLUMNS.map((column, index) => [
+        column.id,
+        {
+          visible: true,
+          order: index,
+        },
+      ]),
+    ) as ReceiptDetailCustomizationConfig['lineColumns'],
     glImpactSettings: defaultTransactionGlImpactSettings(),
     glImpactColumns: defaultTransactionGlImpactColumns(),
     statCards: [

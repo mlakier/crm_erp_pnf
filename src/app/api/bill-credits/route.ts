@@ -7,6 +7,8 @@ import { generateNextBillCreditNumber } from '@/lib/bill-credit-number'
 import { clearCreditDocumentPostingArtifacts, syncBillCreditPosting } from '@/lib/credit-document-posting'
 import { deleteDocumentRelationshipsForRecord } from '@/lib/document-relationships'
 import { calcLineTotal, parseMoneyValue, sumMoney } from '@/lib/money'
+import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
+import { getTransactionPostingContextError } from '@/lib/transaction-posting-context'
 
 const INCLUDE = {
   vendor: true,
@@ -148,11 +150,24 @@ export async function POST(request: NextRequest) {
     }
 
     const number = await generateNextBillCreditNumber()
+    const lineRequirementsError = getTransactionLineRequirementsError('bill-credit', lineItems)
+    if (lineRequirementsError) {
+      return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
+    }
     const normalizedLineItems = Array.isArray(lineItems) ? normalizeLineItems(lineItems) : []
     const normalizedApplications = normalizeBillCreditApplications(applications)
     const computedTotal = normalizedLineItems.length
       ? sumMoney(normalizedLineItems.map((line) => line.lineTotal))
       : parseMoneyValue(total)
+    const resolvedSubsidiaryId = subsidiaryId || null
+    const resolvedCurrencyId = currencyId || null
+    const postingContextError = getTransactionPostingContextError('bill-credit', {
+      subsidiaryId: resolvedSubsidiaryId,
+      currencyId: resolvedCurrencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
 
     const createdBillCredit = await prisma.billCredit.create({
       data: {
@@ -160,8 +175,8 @@ export async function POST(request: NextRequest) {
         vendorId,
         billId: billId || null,
         userId: userId || null,
-        subsidiaryId: subsidiaryId || null,
-        currencyId: currencyId || null,
+        subsidiaryId: resolvedSubsidiaryId,
+        currencyId: resolvedCurrencyId,
         status: status || 'draft',
         date: new Date(date),
         reason: reason?.trim() || null,
@@ -234,6 +249,10 @@ export async function PUT(request: NextRequest) {
       lineItems,
       applications,
     } = body
+    const lineRequirementsError = getTransactionLineRequirementsError('bill-credit', lineItems)
+    if (lineRequirementsError) {
+      return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
+    }
 
     const before = await prisma.billCredit.findUnique({
       where: { id },
@@ -248,6 +267,15 @@ export async function PUT(request: NextRequest) {
     const computedTotal = normalizedLineItems.length
       ? sumMoney(normalizedLineItems.map((line) => line.lineTotal))
       : parseMoneyValue(total)
+    const nextSubsidiaryId = subsidiaryId || before.subsidiaryId || null
+    const nextCurrencyId = currencyId || before.currencyId || null
+    const postingContextError = getTransactionPostingContextError('bill-credit', {
+      subsidiaryId: nextSubsidiaryId,
+      currencyId: nextCurrencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
 
     const updatedBillCredit = await prisma.billCredit.update({
       where: { id },
@@ -255,8 +283,8 @@ export async function PUT(request: NextRequest) {
         vendorId: vendorId || before.vendorId,
         billId: billId || null,
         userId: userId || before.userId,
-        subsidiaryId: subsidiaryId || null,
-        currencyId: currencyId || null,
+        subsidiaryId: nextSubsidiaryId,
+        currencyId: nextCurrencyId,
         status: status || before.status,
         date: date ? new Date(date) : before.date,
         reason: reason?.trim() || null,

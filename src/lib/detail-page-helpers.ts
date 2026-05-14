@@ -16,6 +16,7 @@ type LayoutFieldConfig = {
 
 type LayoutConfig<TKey extends string> = {
   sections: string[]
+  sectionRows?: Record<string, number>
   fields: Record<TKey, LayoutFieldConfig>
 }
 
@@ -88,6 +89,7 @@ export function buildConfiguredInlineSections<TKey extends string, TField extend
       return [{
         title: sectionTitle,
         description: sectionDescriptions?.[sectionTitle],
+        rows: layout.sectionRows?.[sectionTitle],
         collapsible: true,
         defaultExpanded: true,
         fields: configuredFields,

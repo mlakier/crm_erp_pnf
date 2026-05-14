@@ -64,6 +64,94 @@ function deriveRollforwardCategory(account) {
   return 'Not Applicable'
 }
 
+function containsAny(value, needles) {
+  return needles.some((needle) => value.includes(needle))
+}
+
+function deriveMonetaryClassification(account) {
+  const accountId = String(account.accountId ?? account.accountNumber ?? '').trim()
+  const accountNumber = String(account.accountNumber ?? account.accountId ?? '').trim()
+  const name = String(account.name ?? '').trim().toLowerCase()
+  const accountType = String(account.accountType ?? '').trim().toLowerCase()
+  const category = String(account.category ?? '').trim().toLowerCase()
+  const accountRole = String(account.accountRole ?? '').trim().toLowerCase()
+  const financialStatementSection = String(account.financialStatementSection ?? '').trim().toLowerCase()
+  const financialStatementGroup = String(account.financialStatementGroup ?? '').trim().toLowerCase()
+  const financialStatementCategory = String(account.financialStatementCategory ?? '').trim().toLowerCase()
+  const rollforwardCategory = String(deriveRollforwardCategory(account) ?? '').trim().toLowerCase()
+  const searchText = [
+    name,
+    category,
+    accountRole,
+    financialStatementSection,
+    financialStatementGroup,
+    financialStatementCategory,
+    rollforwardCategory,
+  ].join(' ')
+  const directAccountText = [name, category, accountRole].join(' ')
+
+  if (accountType === 'revenue' || accountType === 'expense') return 'p_and_l_flow'
+  if (accountType === 'equity' || containsAny(searchText, ['equity', 'retained earnings', 'cta', 'cumulative translation'])) return 'equity_historical'
+
+  const isHistoricalRollforward =
+    containsAny(rollforwardCategory, ['inventory', 'fixed asset', 'accumulated depreciation', 'accumulated amortization', 'deferred revenue'])
+    || (rollforwardCategory.includes('prepaid') && containsAny(directAccountText, ['prepaid', 'deferred cost', 'contract cost']))
+
+  const isHistoricalCostAccount =
+    account.inventory
+    || ['1200', '1210', '1220', '1230', '1300', '1310', '2200', '2210'].includes(accountId)
+    || ['1200', '1210', '1220', '1230', '1300', '1310', '2200', '2210'].includes(accountNumber)
+    || isHistoricalRollforward
+    || containsAny(directAccountText, [
+      'inventory',
+      'prepaid',
+      'deferred cost',
+      'contract cost',
+      'fixed asset',
+      'property',
+      'equipment',
+      'capitalized software',
+      'software development costs',
+      'right of use',
+      'rou asset',
+      'goodwill',
+      'intangibles',
+      'patents',
+      'trademarks',
+      'accumulated depreciation',
+      'accumulated amortization',
+      'deferred tax',
+      'deferred income tax',
+      'deferred revenue',
+      'customer deposit',
+    ])
+
+  if (accountType === 'asset' || accountType === 'liability') {
+    return isHistoricalCostAccount ? 'non_monetary_historical_cost' : 'monetary'
+  }
+
+  if (isHistoricalCostAccount) {
+    return 'non_monetary_historical_cost'
+  }
+  if (containsAny(searchText, ['income statement', 'p&l'])) return 'p_and_l_flow'
+  if (containsAny(searchText, ['asset', 'liability', 'cash', 'receivable', 'payable', 'accrued', 'loan', 'debt', 'tax'])) return 'monetary'
+  return null
+}
+
+function deriveRemeasureOpenBalance(account) {
+  return deriveMonetaryClassification(account) === 'monetary'
+}
+
+function deriveTranslationTreatment(account) {
+  const accountType = String(account.accountType ?? '').trim().toLowerCase()
+  const classification = deriveMonetaryClassification(account)
+  if (account.summary) return 'no_translation'
+  if (classification === 'p_and_l_flow' || accountType === 'revenue' || accountType === 'expense') return 'average_rate'
+  if (classification === 'equity_historical' || accountType === 'equity') return 'historical_rate'
+  if (classification === 'monetary' || classification === 'non_monetary_historical_cost' || accountType === 'asset' || accountType === 'liability') return 'closing_rate'
+  return null
+}
+
 async function main() {
   const seedMasterData = process.env.SEED_MASTER_DATA === 'true'
   const passwordHash = await bcrypt.hash('Admin123!', 10)
@@ -526,6 +614,7 @@ async function main() {
     { accountId: '3000', name: 'Common Stock', accountType: 'Equity', category: 'Equity' },
     { accountId: '3100', name: 'Retained Earnings', accountType: 'Equity', category: 'Equity' },
     { accountId: '3200', name: 'Current Year Earnings', accountType: 'Equity', category: 'Equity' },
+    { accountId: '3300', name: 'Currency Translation Adjustment', accountType: 'Equity', category: 'CTA / Currency Translation Adjustment' },
     { accountId: '4000', name: 'Product Revenue', accountType: 'Revenue', category: 'Operating Revenue' },
     { accountId: '4010', name: 'Service Revenue', accountType: 'Revenue', category: 'Operating Revenue' },
     { accountId: '4020', name: 'Subscription Revenue', accountType: 'Revenue', category: 'Operating Revenue' },
@@ -572,6 +661,9 @@ async function main() {
                 : null,
         cashFlowCategory: deriveCashFlowCategory(account.accountId, account.accountType),
         inventory: Boolean(account.inventory),
+        revalueOpenBalance: deriveRemeasureOpenBalance(account),
+        monetaryClassification: deriveMonetaryClassification(account),
+        translationTreatment: deriveTranslationTreatment(account),
         active: true,
       },
       create: {
@@ -597,6 +689,9 @@ async function main() {
                 : null,
         cashFlowCategory: deriveCashFlowCategory(account.accountId, account.accountType),
         inventory: Boolean(account.inventory),
+        revalueOpenBalance: deriveRemeasureOpenBalance(account),
+        monetaryClassification: deriveMonetaryClassification(account),
+        translationTreatment: deriveTranslationTreatment(account),
         active: true,
       },
     })
@@ -639,63 +734,35 @@ async function main() {
   })
   const revRecTemplateByCode = new Map(revRecTemplates.map((template) => [template.templateId, template]))
 
-  const departmentSeeds = [
-    {
-      departmentId: 'FIN',
-      name: 'Finance',
-      description: 'Accounting, AP, AR, and treasury operations.',
-      division: 'Corporate',
-      subsidiaryCode: 'SUB-001',
-    },
-    {
-      departmentId: 'HR',
-      name: 'Human Resources',
-      description: 'Talent acquisition, payroll, and employee operations.',
-      division: 'Corporate',
-      subsidiaryCode: 'SUB-001',
-    },
-    {
-      departmentId: 'OPS',
-      name: 'Operations',
-      description: 'Core operations, fulfillment, and process execution.',
-      division: 'Operations',
-      subsidiaryCode: 'SUB-002',
-    },
-    {
-      departmentId: 'SALES',
-      name: 'Sales',
-      description: 'Pipeline management and revenue generation.',
-      division: 'Commercial',
-      subsidiaryCode: 'SUB-003',
-    },
+  const departmentAliases = [
+    { alias: 'FIN', departmentNumber: '760', subsidiaryCode: 'SUB-001' },
+    { alias: 'HR', departmentNumber: '790', subsidiaryCode: 'SUB-001' },
+    { alias: 'OPS', departmentNumber: '710', subsidiaryCode: 'SUB-002' },
+    { alias: 'SALES', departmentNumber: '510', subsidiaryCode: 'SUB-003' },
   ]
 
-  for (const department of departmentSeeds) {
-    await prisma.department.upsert({
-      where: { departmentId: department.departmentId },
-      update: {
-        name: department.name,
-        description: department.description,
-        division: department.division,
-        active: false,
-      },
-      create: {
-        departmentId: department.departmentId,
-        name: department.name,
-        description: department.description,
-        division: department.division,
-        active: false,
-      },
-    })
+  const departmentRecords = await prisma.department.findMany({
+    where: {
+      OR: [
+        { departmentNumber: { in: departmentAliases.map((department) => department.departmentNumber) } },
+        { departmentId: { in: departmentAliases.map((department) => department.alias) } },
+      ],
+    },
+  })
+  const departmentByCode = new Map()
+  for (const department of departmentRecords) {
+    departmentByCode.set(department.departmentId, department)
+    if (department.departmentNumber) departmentByCode.set(department.departmentNumber, department)
+  }
+  for (const alias of departmentAliases) {
+    const activeDepartment = departmentRecords.find((department) => department.departmentNumber === alias.departmentNumber)
+    const legacyDepartment = departmentRecords.find((department) => department.departmentId === alias.alias)
+    if (activeDepartment) departmentByCode.set(alias.alias, activeDepartment)
+    else if (legacyDepartment) departmentByCode.set(alias.alias, legacyDepartment)
   }
 
-  const departmentRecords = await prisma.department.findMany({
-    where: { departmentId: { in: departmentSeeds.map((department) => department.departmentId) } },
-  })
-  const departmentByCode = new Map(departmentRecords.map((department) => [department.departmentId, department]))
-
-  for (const department of departmentSeeds) {
-    const departmentRecord = departmentByCode.get(department.departmentId)
+  for (const department of departmentAliases) {
+    const departmentRecord = departmentByCode.get(department.alias)
     const subsidiaryRecord = subsidiaryByCode.get(department.subsidiaryCode)
     if (!departmentRecord || !subsidiaryRecord) continue
 
@@ -827,12 +894,101 @@ async function main() {
   ]
 
   for (const [departmentCode, managerEmployeeNumber] of managerAssignments) {
+    const departmentRecord = departmentByCode.get(departmentCode)
+    if (!departmentRecord) continue
+
     await prisma.department.update({
-      where: { departmentId: departmentCode },
+      where: { id: departmentRecord.id },
       data: {
         managerEmployeeId: employeeByNumber.get(managerEmployeeNumber)?.id ?? null,
       },
     })
+  }
+
+  const priceLevelSeeds = [
+    {
+      priceLevelId: 'PL-00001',
+      name: 'Standard',
+      description: 'Default published customer pricing.',
+      levelType: 'Standard',
+      subsidiaryCode: 'SUB-001',
+      includeChildren: true,
+      defaultDiscountPct: '0',
+      minimumMarginPct: '0',
+      approvalRequired: false,
+      approvalWorkflow: null,
+      allowManualOverride: true,
+      effectiveStartDate: new Date('2026-01-01'),
+      inactive: false,
+    },
+    {
+      priceLevelId: 'PL-00002',
+      name: 'Preferred',
+      description: 'Preferred customer pricing with controlled discounting.',
+      levelType: 'Preferred',
+      subsidiaryCode: 'SUB-001',
+      includeChildren: true,
+      defaultDiscountPct: '5',
+      minimumMarginPct: '20',
+      approvalRequired: false,
+      approvalWorkflow: null,
+      allowManualOverride: true,
+      effectiveStartDate: new Date('2026-01-01'),
+      inactive: false,
+    },
+    {
+      priceLevelId: 'PL-00003',
+      name: 'Distributor',
+      description: 'Distributor pricing that requires approval when margin guardrails are missed.',
+      levelType: 'Distributor',
+      subsidiaryCode: 'SUB-001',
+      includeChildren: true,
+      defaultDiscountPct: '15',
+      minimumMarginPct: '15',
+      approvalRequired: true,
+      approvalWorkflow: 'price-level-approval',
+      allowManualOverride: true,
+      effectiveStartDate: new Date('2026-01-01'),
+      inactive: false,
+    },
+  ]
+
+  const priceLevelByName = new Map()
+  for (const priceLevel of priceLevelSeeds) {
+    const savedPriceLevel = await prisma.priceLevel.upsert({
+      where: { priceLevelId: priceLevel.priceLevelId },
+      update: {
+        name: priceLevel.name,
+        description: priceLevel.description,
+        levelType: priceLevel.levelType,
+        subsidiaryId: subsidiaryByCode.get(priceLevel.subsidiaryCode)?.id ?? null,
+        includeChildren: priceLevel.includeChildren,
+        defaultDiscountPct: priceLevel.defaultDiscountPct,
+        minimumMarginPct: priceLevel.minimumMarginPct,
+        approvalRequired: priceLevel.approvalRequired,
+        approvalWorkflow: priceLevel.approvalWorkflow,
+        allowManualOverride: priceLevel.allowManualOverride,
+        effectiveStartDate: priceLevel.effectiveStartDate,
+        inactive: priceLevel.inactive,
+      },
+      create: {
+        priceLevelId: priceLevel.priceLevelId,
+        name: priceLevel.name,
+        description: priceLevel.description,
+        levelType: priceLevel.levelType,
+        subsidiaryId: subsidiaryByCode.get(priceLevel.subsidiaryCode)?.id ?? null,
+        includeChildren: priceLevel.includeChildren,
+        defaultDiscountPct: priceLevel.defaultDiscountPct,
+        minimumMarginPct: priceLevel.minimumMarginPct,
+        approvalRequired: priceLevel.approvalRequired,
+        approvalWorkflow: priceLevel.approvalWorkflow,
+        allowManualOverride: priceLevel.allowManualOverride,
+        effectiveStartDate: priceLevel.effectiveStartDate,
+        inactive: priceLevel.inactive,
+      },
+    })
+    priceLevelByName.set(priceLevel.name, savedPriceLevel)
+    priceLevelByName.set(priceLevel.levelType, savedPriceLevel)
   }
 
   const customerSeeds = [
@@ -845,6 +1001,7 @@ async function main() {
       industry: 'Technology',
       subsidiaryCode: 'SUB-001',
       currencyCode: 'USD',
+      priceLevel: 'Standard',
     },
     {
       customerNumber: 'CUST-000002',
@@ -855,6 +1012,7 @@ async function main() {
       industry: 'Manufacturing',
       subsidiaryCode: 'SUB-002',
       currencyCode: 'EUR',
+      priceLevel: 'Preferred',
     },
     {
       customerNumber: 'CUST-000003',
@@ -865,6 +1023,7 @@ async function main() {
       industry: 'Retail',
       subsidiaryCode: 'SUB-003',
       currencyCode: 'GBP',
+      priceLevel: 'Distributor',
     },
   ]
 
@@ -879,6 +1038,7 @@ async function main() {
         industry: customer.industry,
         subsidiaryId: subsidiaryByCode.get(customer.subsidiaryCode)?.id ?? null,
         currencyId: currencyByCode.get(customer.currencyCode)?.id ?? null,
+        priceLevel: priceLevelByName.get(customer.priceLevel)?.id ?? null,
         inactive: false,
         userId: adminUser.id,
       },
@@ -891,6 +1051,7 @@ async function main() {
         industry: customer.industry,
         subsidiaryId: subsidiaryByCode.get(customer.subsidiaryCode)?.id ?? null,
         currencyId: currencyByCode.get(customer.currencyCode)?.id ?? null,
+        priceLevel: priceLevelByName.get(customer.priceLevel)?.id ?? null,
         inactive: false,
         userId: adminUser.id,
       },

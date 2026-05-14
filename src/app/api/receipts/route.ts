@@ -3,7 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { logActivity, logCommunicationActivity, logFieldChangeActivities, logRecordSnapshotActivities } from '@/lib/activity'
 import { canReceivePurchaseOrderLine } from '@/lib/item-business-rules'
 import { syncReceiptQuantity } from '@/lib/receipt-quantity'
-import { generateNextJournalNumber } from '@/lib/journal-number'
+import { generateNextSystemJournalNumber } from '@/lib/journal-number'
+import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
 
 type ReceiptLineInput = {
   purchaseOrderLineItemId: string
@@ -135,7 +136,7 @@ async function postReceiptJournal(receiptId: string) {
   const totalDebit = debitLines.reduce((sum, line) => sum + Number(line.debit ?? 0), 0)
   if (!debitLines.length || totalDebit <= 0) return
 
-  const journalNumber = await generateNextJournalNumber()
+  const journalNumber = await generateNextSystemJournalNumber()
 
   await prisma.journalEntry.create({
     data: {
@@ -234,6 +235,11 @@ export async function POST(request: NextRequest) {
 
     if (!purchaseOrderId || !userId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    const lineRequirementsError = getTransactionLineRequirementsError('receipt', lineItems)
+    if (lineRequirementsError) {
+      return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
     }
 
     const normalizedLines: ReceiptLineInput[] = Array.isArray(lineItems)

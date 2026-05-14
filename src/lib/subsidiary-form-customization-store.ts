@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import {
+  DEFAULT_SUBSIDIARY_FORM_SECTIONS,
   SUBSIDIARY_STAT_CARDS,
   defaultSubsidiaryFormCustomization,
   SUBSIDIARY_FORM_FIELDS,
@@ -109,7 +110,9 @@ function mergeWithDefaults(overrides: Partial<SubsidiaryFormCustomizationConfig>
     ? overrides.sections.map((section) => normalizeText(section)).filter((section): section is string => Boolean(section))
     : []
   if (inputSections.length > 0) {
-    merged.sections = Array.from(new Set(inputSections))
+    const canonicalSections = DEFAULT_SUBSIDIARY_FORM_SECTIONS.filter((section) => inputSections.includes(section) || merged.sections.includes(section))
+    const customSections = inputSections.filter((section) => !canonicalSections.includes(section as (typeof DEFAULT_SUBSIDIARY_FORM_SECTIONS)[number]))
+    merged.sections = Array.from(new Set([...canonicalSections, ...customSections]))
   }
 
   const sectionRowsInput = overrides.sectionRows && typeof overrides.sectionRows === 'object'

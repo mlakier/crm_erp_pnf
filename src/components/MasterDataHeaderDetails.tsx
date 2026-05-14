@@ -86,6 +86,7 @@ export default function MasterDataHeaderDetails({
     ...sections.map((section) => ({
       title: section.title,
       description: section.description,
+      rows: section.rows,
       fields: section.fields.map(convertField),
     })),
     ...(systemInformationItems?.length

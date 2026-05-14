@@ -25,6 +25,7 @@ import MasterDataDetailCreateMenu from '@/components/MasterDataDetailCreateMenu'
 import MasterDataDetailExportMenu from '@/components/MasterDataDetailExportMenu'
 import TransactionActionStack from '@/components/TransactionActionStack'
 import TransactionFourCurrencySection from '@/components/TransactionFourCurrencySection'
+import InvoiceStripePaymentLinkAction from '@/components/InvoiceStripePaymentLinkAction'
 import { parseCommunicationSummary, parseFieldChangeSummary } from '@/lib/activity'
 import {
   buildLinkedReferenceFieldDefinitions,
@@ -122,7 +123,7 @@ export default async function InvoiceDetailPage({
   const isCustomizing = customize === '1'
   const { moneySettings } = await loadCompanyDisplaySettings()
 
-  const [invoice, invoiceOpenItem, activities, customization, subsidiaries, currencies, items, statusListDetail, workflow] = await Promise.all([
+  const [invoice, invoiceOpenItem, activities, customization, subsidiaries, currencies, items, departments, locations, classes, projects, statusListDetail, workflow] = await Promise.all([
     prisma.invoice.findUnique({
       where: { id },
       include: {
@@ -150,6 +151,7 @@ export default async function InvoiceDetailPage({
             item: { select: { id: true, itemId: true, name: true } },
             department: { select: { id: true, departmentId: true, name: true } },
             location: { select: { id: true, locationId: true, name: true } },
+            classDimension: { select: { id: true, classId: true, name: true } },
             project: { select: { id: true, name: true } },
             revRecTemplate: { select: { id: true, templateId: true, name: true } },
           },
@@ -201,6 +203,26 @@ export default async function InvoiceDetailPage({
       select: { id: true, itemId: true, name: true, listPrice: true },
       take: 500,
     }),
+    prisma.department.findMany({
+      where: { active: true },
+      orderBy: [{ departmentNumber: 'asc' }, { departmentId: 'asc' }],
+      select: { id: true, departmentId: true, departmentNumber: true, name: true },
+    }),
+    prisma.location.findMany({
+      where: { inactive: false },
+      orderBy: [{ code: 'asc' }, { locationId: 'asc' }],
+      select: { id: true, locationId: true, code: true, name: true },
+    }),
+    prisma.classDimension.findMany({
+      where: { inactive: false },
+      orderBy: [{ classId: 'asc' }, { name: 'asc' }],
+      select: { id: true, classId: true, name: true },
+    }),
+    prisma.project.findMany({
+      where: { inactive: false },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, description: true },
+    }),
     loadManagedListDetail('INV-STATUS'),
     loadOtcWorkflowRuntime(),
   ])
@@ -215,6 +237,9 @@ export default async function InvoiceDetailPage({
           account: {
             select: { accountId: true, accountNumber: true, name: true },
           },
+          department: { select: { departmentId: true, departmentNumber: true, name: true } },
+          location: { select: { locationId: true, code: true, name: true } },
+          classDimension: { select: { classId: true, name: true } },
         },
       },
     },
@@ -774,6 +799,13 @@ export default async function InvoiceDetailPage({
   const localCurrencyCode = currencyCodeById.get(invoiceOpenItem?.localCurrencyId ?? '') ?? null
   const functionalCurrencyCode = currencyCodeById.get(invoiceOpenItem?.functionalCurrencyId ?? '') ?? null
   const groupCurrencyCode = currencyCodeById.get(invoiceOpenItem?.groupCurrencyId ?? '') ?? null
+  const paidAmount = invoice.cashReceipts
+    .filter((receipt) => receipt.status?.toLowerCase() !== 'void')
+    .reduce((sum, receipt) => sum + toNumericValue(receipt.amount, 0), 0)
+  const outstandingAmount = Math.max(0, toNumericValue(invoice.total, 0) - paidAmount)
+  const canCreateStripePaymentLink =
+    outstandingAmount > 0
+    && !['paid', 'void'].includes((invoice.status ?? '').toLowerCase())
 
   return (
     <RecordDetailPageShell
@@ -850,6 +882,12 @@ export default async function InvoiceDetailPage({
                       options: field.options,
                     })),
                   }))}
+                />
+                <InvoiceStripePaymentLinkAction
+                  invoiceId={invoice.id}
+                  existingUrl={invoice.stripePaymentUrl}
+                  existingExpiresAt={invoice.stripePaymentUrlExpiresAt?.toISOString() ?? null}
+                  disabled={!canCreateStripePaymentLink}
                 />
                 <Link
                   href={`${detailHref}?customize=1`}
@@ -939,6 +977,18 @@ export default async function InvoiceDetailPage({
                 itemRecordId: line.item?.id ?? null,
                 itemId: line.item?.itemId ?? null,
                 itemName: line.item?.name ?? null,
+                departmentRecordId: line.department?.id ?? null,
+                departmentId: line.department?.departmentId ?? null,
+                departmentName: line.department?.name ?? null,
+                locationRecordId: line.location?.id ?? null,
+                locationId: line.location?.locationId ?? null,
+                locationName: line.location?.name ?? null,
+                classRecordId: line.classDimension?.id ?? null,
+                classId: line.classDimension?.classId ?? null,
+                className: line.classDimension?.name ?? null,
+                projectRecordId: line.project?.id ?? null,
+                projectId: line.project?.id ?? null,
+                projectName: line.project?.name ?? null,
                 description: line.description,
                 quantity: line.quantity,
                 receivedQuantity: 0,
@@ -951,22 +1001,47 @@ export default async function InvoiceDetailPage({
               purchaseOrderId={invoice.id}
               userId={invoice.userId ?? ''}
               itemOptions={itemOptions}
+              departmentOptions={departments}
+              locationOptions={locations}
+              classOptions={classes}
+              projectOptions={projects}
               currencyCode={transactionCurrencyCode}
               lineSettings={customization.lineSettings}
               lineColumnCustomization={customization.lineColumns}
-              lineColumns={visibleLineColumns
-                .map((column) =>
-                  column.id === 'line' ||
-                  column.id === 'item-id' ||
-                  column.id === 'description' ||
-                  column.id === 'quantity' ||
-                  column.id === 'unit-price' ||
-                  column.id === 'line-total'
-                    ? column
-                    : null,
-                )
-                .filter((column): column is { id: 'line' | 'item-id' | 'description' | 'quantity' | 'unit-price' | 'line-total'; label: string } => Boolean(column))}
+              lineColumns={visibleLineColumns.filter(
+                (
+                  column,
+                ): column is {
+                  id:
+                    | 'line'
+                    | 'item-id'
+                    | 'description'
+                    | 'quantity'
+                    | 'unit-price'
+                    | 'line-total'
+                    | 'notes'
+                    | 'department'
+                    | 'location'
+                    | 'class'
+                    | 'project'
+                  label: string
+                } =>
+                  [
+                    'line',
+                    'item-id',
+                    'description',
+                    'quantity',
+                    'unit-price',
+                    'line-total',
+                    'notes',
+                    'department',
+                    'location',
+                    'class',
+                    'project',
+                  ].includes(column.id),
+              )}
               sectionTitle="Invoice Line Items"
+              allowNegativeUnitPrice
               lineItemApiBasePath="/api/invoice-line-items"
               deleteResource="invoice-line-items"
               parentIdFieldName="invoiceId"
@@ -1183,6 +1258,7 @@ function renderLineValue({
     notes: string | null
     department?: { departmentId: string | null; name: string } | null
     location?: { locationId: string | null; name: string } | null
+    classDimension?: { classId: string | null; name: string } | null
     project?: { name: string } | null
     serviceStartDate: Date | null
     serviceEndDate: Date | null
@@ -1213,6 +1289,8 @@ function renderLineValue({
       return line.department ? `${line.department.departmentId ?? ''} - ${line.department.name}`.trim().replace(/^ - /, '') : '-'
     case 'location':
       return line.location ? `${line.location.locationId ?? ''} - ${line.location.name}`.trim().replace(/^ - /, '') : '-'
+    case 'class':
+      return line.classDimension ? `${line.classDimension.classId ?? ''} - ${line.classDimension.name}`.trim().replace(/^ - /, '') : '-'
     case 'project':
       return line.project?.name ?? '-'
     case 'service-start':

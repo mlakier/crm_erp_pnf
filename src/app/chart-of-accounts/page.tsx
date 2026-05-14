@@ -2,11 +2,9 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import MasterDataPageHeader from '@/components/MasterDataPageHeader'
 import MasterDataListSection from '@/components/MasterDataListSection'
-import { MasterDataBodyCell, MasterDataEmptyStateRow, MasterDataHeaderCell, MasterDataMutedCell } from '@/components/MasterDataTableCells'
-import ListRowActions from '@/components/ListRowActions'
+import ChartOfAccountsInlineEditTable, { type ChartOfAccountsInlineRow } from '@/components/ChartOfAccountsInlineEditTable'
 import PaginationFooter from '@/components/PaginationFooter'
 import { getPagination } from '@/lib/pagination'
-import { MASTER_DATA_TABLE_DIVIDER_STYLE, getMasterDataRowStyle } from '@/lib/master-data-table'
 import { formatMasterDataDate } from '@/lib/master-data-display'
 import { loadCompanyPageLogo } from '@/lib/company-page-logo'
 import { chartOfAccountsListDefinition } from '@/lib/master-data-list-definitions'
@@ -22,6 +20,11 @@ import {
   buildChartOfAccountsSavedSearchFields,
   CHART_OF_ACCOUNTS_SAVED_SEARCH_FILTERS,
 } from '@/lib/chart-of-accounts-saved-search-metadata'
+import { GL_ACCOUNT_CATEGORY_POLICIES, monetaryClassificationLabel, translationTreatmentLabel } from '@/lib/gl-account-accounting-policy'
+
+function isAdminRole(role: string | null | undefined) {
+  return (role ?? '').trim().toLowerCase().includes('admin')
+}
 
 function buildStringFilter(operator: string, value: string) {
   const trimmed = value.trim()
@@ -80,6 +83,11 @@ function buildChartOfAccountsCriterionCondition(criterion: SavedSearchCriterion)
       if (criterion.operator === 'isEmpty' || criterion.operator === 'isNotEmpty') return null
       if (!value) return null
       return criterion.operator === 'isNot' ? { NOT: { accountType: value } } : { accountType: value }
+    case 'account-category':
+      if (criterion.operator === 'isEmpty') return { category: null }
+      if (criterion.operator === 'isNotEmpty') return { NOT: { category: null } }
+      if (!value) return null
+      return criterion.operator === 'isNot' ? { NOT: { category: value } } : { category: value }
     case 'normal-balance':
       if (criterion.operator === 'isEmpty') return { normalBalance: null }
       if (criterion.operator === 'isNotEmpty') return { NOT: { normalBalance: null } }
@@ -117,6 +125,16 @@ function buildChartOfAccountsCriterionCondition(criterion: SavedSearchCriterion)
       return buildBooleanFilter(criterion.operator, value) === null ? null : { inventory: buildBooleanFilter(criterion.operator, value) }
     case 'revalue-open-balance':
       return buildBooleanFilter(criterion.operator, value) === null ? null : { revalueOpenBalance: buildBooleanFilter(criterion.operator, value) }
+    case 'monetary-classification':
+      if (criterion.operator === 'isEmpty') return { monetaryClassification: null }
+      if (criterion.operator === 'isNotEmpty') return { NOT: { monetaryClassification: null } }
+      if (!value) return null
+      return criterion.operator === 'isNot' ? { NOT: { monetaryClassification: value } } : { monetaryClassification: value }
+    case 'translation-treatment':
+      if (criterion.operator === 'isEmpty') return { translationTreatment: null }
+      if (criterion.operator === 'isNotEmpty') return { NOT: { translationTreatment: null } }
+      if (!value) return null
+      return criterion.operator === 'isNot' ? { NOT: { translationTreatment: value } } : { translationTreatment: value }
     case 'summary':
       return buildBooleanFilter(criterion.operator, value) === null ? null : { summary: buildBooleanFilter(criterion.operator, value) }
     case 'subsidiaries':
@@ -236,6 +254,7 @@ export default async function ChartOfAccountsPage({
 }) {
   const params = await searchParams
   const session = await getServerSession(authOptions)
+  const canInlineEdit = isAdminRole(session?.user?.role)
   const selectedViewId = (params.view ?? '').trim()
   const defaultViewUserId = session?.user?.id ?? null
   const savedDefinition = sanitizeSavedSearchDefinitionState(
@@ -258,6 +277,7 @@ export default async function ChartOfAccountsPage({
           { accountNumber: { contains: query, mode: 'insensitive' as const } },
           { name: { contains: query, mode: 'insensitive' as const } },
           { accountType: { contains: query, mode: 'insensitive' as const } },
+          { category: { contains: query, mode: 'insensitive' as const } },
           { accountRole: { contains: query, mode: 'insensitive' as const } },
           { rollforwardCategory: { contains: query, mode: 'insensitive' as const } },
           { financialStatementCategory: { contains: query, mode: 'insensitive' as const } },
@@ -272,7 +292,7 @@ export default async function ChartOfAccountsPage({
   const total = await prisma.chartOfAccounts.count({ where })
   const pagination = getPagination(total, params.page)
 
-  const [accounts, accountOptions, accountTypeOptions, normalBalanceOptions, financialStatementCategoryOptions, accountRoleOptions, rollforwardCategoryOptions, companyLogoPages, subsidiaries] = await Promise.all([
+  const [accounts, accountOptions, accountTypeOptions, normalBalanceOptions, financialStatementCategoryOptions, accountRoleOptions, rollforwardCategoryOptions, monetaryClassificationOptions, translationTreatmentOptions, companyLogoPages, subsidiaries] = await Promise.all([
     prisma.chartOfAccounts.findMany({
       where,
       include: {
@@ -300,15 +320,28 @@ export default async function ChartOfAccountsPage({
     loadListOptionsForSource({ sourceType: 'managed-list', sourceKey: 'LIST-COA-FS-CATEGORY' }),
     loadListOptionsForSource(fieldMetaById.accountRole),
     loadListOptionsForSource(fieldMetaById.rollforwardCategory),
+    loadListOptionsForSource(fieldMetaById.monetaryClassification),
+    loadListOptionsForSource(fieldMetaById.translationTreatment),
     loadCompanyPageLogo(),
     prisma.subsidiary.findMany({ orderBy: [{ subsidiaryId: 'asc' }, { name: 'asc' }], select: { id: true, subsidiaryId: true, name: true } }),
   ])
+  const accountCategoryOptions = Array.from(
+    new Map(
+      GL_ACCOUNT_CATEGORY_POLICIES.map((policy) => [
+        policy.category,
+        { value: policy.category, label: policy.category },
+      ]),
+    ).values(),
+  )
   const chartOfAccountsSavedSearchFields = buildChartOfAccountsSavedSearchFields({
     accountTypeOptions,
+    accountCategoryOptions,
     normalBalanceOptions,
     financialStatementCategoryOptions: financialStatementCategoryOptions,
     accountRoleOptions,
     rollforwardCategoryOptions,
+    monetaryClassificationOptions,
+    translationTreatmentOptions,
     parentAccountOptions: accountOptions.map((option) => ({
       value: option.id,
       label: `${option.accountId} - ${option.accountNumber} - ${option.name}`,
@@ -327,6 +360,48 @@ export default async function ChartOfAccountsPage({
     search.set('page', String(nextPage))
     return `/chart-of-accounts?${search.toString()}`
   }
+
+  const inlineRows: ChartOfAccountsInlineRow[] = accounts.map((account) => ({
+    id: account.id,
+    accountId: account.accountId,
+    accountNumber: account.accountNumber,
+    name: account.name,
+    description: account.description ?? '',
+    accountType: account.accountType,
+    category: account.category ?? '',
+    normalBalance: account.normalBalance ?? '',
+    financialStatementSection: account.financialStatementSection ?? '',
+    financialStatementGroup: account.financialStatementGroup ?? '',
+    financialStatementCategory: account.financialStatementCategory ?? '',
+    accountRole: account.accountRole ?? '',
+    rollforwardCategory: account.rollforwardCategory ?? '',
+    parentAccountLabel: account.parentAccount ? `${account.parentAccount.accountId} - ${account.parentAccount.name}` : '-',
+    parentAccountId: account.parentAccountId ?? '',
+    isPosting: account.isPosting,
+    isControlAccount: account.isControlAccount,
+    allowsManualPosting: account.allowsManualPosting,
+    requiresSubledgerType: account.requiresSubledgerType ?? '',
+    cashFlowCategory: account.cashFlowCategory ?? '',
+    inventory: account.inventory,
+    revalueOpenBalance: account.revalueOpenBalance,
+    monetaryClassificationLabel: monetaryClassificationLabel(account.monetaryClassification),
+    monetaryClassification: account.monetaryClassification ?? '',
+    translationTreatmentLabel: translationTreatmentLabel(account.translationTreatment),
+    translationTreatment: account.translationTreatment ?? '',
+    eliminateIntercoTransactions: account.eliminateIntercoTransactions,
+    summary: account.summary,
+    subsidiariesLabel: account.parentSubsidiary
+      ? account.parentSubsidiary.subsidiaryId
+      : account.subsidiaryAssignments.length > 0
+        ? account.subsidiaryAssignments.map((entry) => entry.subsidiary.subsidiaryId).join(', ')
+        : '-',
+    includeChildren: account.includeChildren,
+    active: account.active,
+    dbId: account.id,
+    created: formatMasterDataDate(account.createdAt),
+    lastModified: formatMasterDataDate(account.updatedAt),
+    closeToAccountId: account.closeToAccountId ?? '',
+  }))
 
   return (
     <div className="min-h-full px-8 py-8">
@@ -361,123 +436,19 @@ export default async function ChartOfAccountsPage({
         criteriaFields={chartOfAccountsSavedSearchFields}
         resultFields={chartOfAccountsSavedSearchFields}
       >
-        <table className="min-w-full" id={chartOfAccountsListDefinition.tableId}>
-          <thead>
-            <tr style={MASTER_DATA_TABLE_DIVIDER_STYLE}>
-              <MasterDataHeaderCell columnId="account-id">Account Id</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="account-number">Account Number</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="name">Name</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="description">Description</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="type">Account Type</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="normal-balance">Normal Balance</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="fs-section">FS Section</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="fs-group">FS Group</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="fs-category">FS Category</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="account-role">Account Role</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="rollforward-category">Rollforward Category</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="parent-account">Parent Account</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="posting">Posting</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="control">Control</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="inventory">Inventory</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="revalue-open-balance">Revalue Open Balance</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="summary">Summary</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="subsidiaries">Subsidiaries</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="include-children">Include Children</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="active">Active</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="db-id">DB Id</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="last-modified">Last Modified</MasterDataHeaderCell>
-              <MasterDataHeaderCell columnId="actions">Actions</MasterDataHeaderCell>
-            </tr>
-          </thead>
-          <tbody>
-            {accounts.length === 0 ? (
-              <MasterDataEmptyStateRow colSpan={24}>No chart accounts found</MasterDataEmptyStateRow>
-            ) : (
-              accounts.map((account, index) => (
-                <tr key={account.id} style={getMasterDataRowStyle(index, accounts.length)}>
-                  <MasterDataBodyCell columnId="account-id">
-                    <Link href={`/chart-of-accounts/${account.id}`} className="font-medium hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
-                      {account.accountId}
-                    </Link>
-                  </MasterDataBodyCell>
-                  <MasterDataMutedCell columnId="account-number">{account.accountNumber}</MasterDataMutedCell>
-                  <MasterDataBodyCell columnId="name" className="px-4 py-2 text-sm text-white">{account.name}</MasterDataBodyCell>
-                  <MasterDataMutedCell columnId="description">{account.description ?? '-'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="type">{account.accountType}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="normal-balance">{account.normalBalance ?? '-'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="fs-section">{account.financialStatementSection ?? '-'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="fs-group">{account.financialStatementGroup ?? '-'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="fs-category">{account.financialStatementCategory ?? '-'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="account-role">{account.accountRole ?? '-'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="rollforward-category">{account.rollforwardCategory ?? '-'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="parent-account">
-                    {account.parentAccount
-                      ? `${account.parentAccount.accountId} - ${account.parentAccount.name}`
-                      : '-'}
-                  </MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="posting">{account.isPosting ? 'Yes' : 'No'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="control">{account.isControlAccount ? 'Yes' : 'No'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="inventory">{account.inventory ? 'Yes' : 'No'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="revalue-open-balance">{account.revalueOpenBalance ? 'Yes' : 'No'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="summary">{account.summary ? 'Yes' : 'No'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="subsidiaries">
-                    {account.parentSubsidiary
-                      ? account.parentSubsidiary.subsidiaryId
-                      : account.subsidiaryAssignments.length > 0
-                        ? account.subsidiaryAssignments.map((entry) => entry.subsidiary.subsidiaryId).join(', ')
-                        : '-'}
-                  </MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="include-children">{account.includeChildren ? 'Yes' : 'No'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="active">{account.active ? 'Yes' : 'No'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="db-id">{account.id}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="created">{formatMasterDataDate(account.createdAt)}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(account.updatedAt)}</MasterDataMutedCell>
-                  <MasterDataBodyCell columnId="actions">
-                    <ListRowActions
-                      viewHref={`/chart-of-accounts/${account.id}`}
-                      editButton={{
-                        resource: 'chart-of-accounts',
-                        id: account.id,
-                        fields: [
-                          { name: 'accountId', label: 'Account Id', value: account.accountId },
-                          { name: 'accountNumber', label: 'Account Number', value: account.accountNumber },
-                          { name: 'name', label: 'Name', value: account.name },
-                          { name: 'description', label: 'Description', value: account.description ?? '' },
-                          {
-                            name: 'accountType',
-                            label: 'Account Type',
-                            value: account.accountType,
-                            type: 'select',
-                            options: accountTypeOptions,
-                          },
-                          { name: 'normalBalance', label: 'Normal Balance', value: account.normalBalance ?? '', type: 'select', options: normalBalanceOptions },
-                          { name: 'financialStatementSection', label: 'FS Section', value: account.financialStatementSection ?? '' },
-                          { name: 'financialStatementGroup', label: 'FS Group', value: account.financialStatementGroup ?? '' },
-                          { name: 'financialStatementCategory', label: 'FS Category', value: account.financialStatementCategory ?? '', type: 'select', options: financialStatementCategoryOptions },
-                          { name: 'accountRole', label: 'Account Role', value: account.accountRole ?? '', type: 'select', options: accountRoleOptions },
-                          { name: 'rollforwardCategory', label: 'Rollforward Category', value: account.rollforwardCategory ?? '', type: 'select', options: rollforwardCategoryOptions },
-                          { name: 'isPosting', label: 'Posting Account', value: String(account.isPosting), type: 'checkbox' },
-                          { name: 'isControlAccount', label: 'Control Account', value: String(account.isControlAccount), type: 'checkbox' },
-                          { name: 'allowsManualPosting', label: 'Allow Manual Posting', value: String(account.allowsManualPosting), type: 'checkbox' },
-                          { name: 'requiresSubledgerType', label: 'Requires Subledger Type', value: account.requiresSubledgerType ?? '' },
-                          { name: 'cashFlowCategory', label: 'Cash Flow Category', value: account.cashFlowCategory ?? '' },
-                          { name: 'parentAccountId', label: 'Parent Account', value: account.parentAccountId ?? '', type: 'select', placeholder: 'Select parent account', options: accountOptions.filter((option) => option.id !== account.id).map((option) => ({ value: option.id, label: `${option.accountId} - ${option.accountNumber} - ${option.name}` })) },
-                          { name: 'closeToAccountId', label: 'Close To Account', value: account.closeToAccountId ?? '', type: 'select', placeholder: 'Select close-to account', options: accountOptions.filter((option) => option.id !== account.id).map((option) => ({ value: option.id, label: `${option.accountId} - ${option.accountNumber} - ${option.name}` })) },
-                          { name: 'inventory', label: 'Inventory', value: String(account.inventory), type: 'checkbox' },
-                          { name: 'revalueOpenBalance', label: 'Revalue Open Balance', value: String(account.revalueOpenBalance), type: 'checkbox' },
-                          { name: 'eliminateIntercoTransactions', label: 'Eliminate Interco Transactions', value: String(account.eliminateIntercoTransactions), type: 'checkbox' },
-                          { name: 'summary', label: 'Summary', value: String(account.summary), type: 'checkbox' },
-                        ],
-                      }}
-                      deleteButton={{ resource: 'chart-of-accounts', id: account.id }}
-                    />
-                  </MasterDataBodyCell>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        <ChartOfAccountsInlineEditTable
+          rows={inlineRows}
+          accountOptions={accountOptions}
+          accountTypeOptions={accountTypeOptions}
+          accountCategoryOptions={accountCategoryOptions}
+          normalBalanceOptions={normalBalanceOptions}
+          financialStatementCategoryOptions={financialStatementCategoryOptions}
+          accountRoleOptions={accountRoleOptions}
+          rollforwardCategoryOptions={rollforwardCategoryOptions}
+          monetaryClassificationOptions={monetaryClassificationOptions}
+          translationTreatmentOptions={translationTreatmentOptions}
+          allowInlineEdit={canInlineEdit}
+        />
         <PaginationFooter
           startRow={pagination.startRow}
           endRow={pagination.endRow}

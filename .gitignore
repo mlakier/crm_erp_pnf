@@ -32,6 +32,9 @@ yarn-error.log*
 .pnpm-debug.log*
 .next-dev.log
 .next-dev.err
+*.log
+*.out.log
+*.err.log
 
 # env files (can opt-in for committing if needed)
 .env*

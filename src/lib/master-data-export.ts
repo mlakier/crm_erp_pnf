@@ -12,12 +12,18 @@ import {
   itemListDefinition,
   locationListDefinition,
   accountingPeriodListDefinition,
+  billingAccountListDefinition,
+  billingScheduleListDefinition,
   managedListDefinition,
+  priceBookListDefinition,
+  priceLevelListDefinition,
   roleListDefinition,
   subsidiaryListDefinition,
+  subscriptionPlanListDefinition,
   userListDefinition,
   vendorListDefinition,
 } from '@/lib/master-data-list-definitions'
+import { getBillingMasterDataConfig, type BillingMasterDataKey } from '@/lib/billing-subscription-master-data'
 
 export type MasterDataExportResource =
   | 'leads'
@@ -32,6 +38,11 @@ export type MasterDataExportResource =
   | 'roles'
   | 'contacts'
   | 'customers'
+  | 'price-levels'
+  | 'price-books'
+  | 'billing-accounts'
+  | 'billing-schedules'
+  | 'subscription-plans'
   | 'vendors'
   | 'subsidiaries'
   | 'currencies'
@@ -828,7 +839,8 @@ export async function buildMasterDataExportPayload(
       }
     }
     case 'customers': {
-      const customers = await prisma.customer.findMany({
+      const [customers, priceLevels, priceBooks] = await Promise.all([
+        prisma.customer.findMany({
         where: query
           ? {
               OR: [
@@ -836,10 +848,14 @@ export async function buildMasterDataExportPayload(
                 { name: { contains: query, mode: INSENSITIVE } },
                 { email: { contains: query, mode: INSENSITIVE } },
                 { industry: { contains: query, mode: INSENSITIVE } },
+                { customerStatus: { contains: query, mode: INSENSITIVE } },
+                { customerType: { contains: query, mode: INSENSITIVE } },
+                { customerGroup: { contains: query, mode: INSENSITIVE } },
+                { territory: { contains: query, mode: INSENSITIVE } },
               ],
             }
           : {},
-        include: { subsidiary: true, currency: true },
+        include: { subsidiary: true, currency: true, arAccount: true },
         orderBy:
           sort === 'id'
             ? [{ customerId: 'asc' }, { createdAt: 'desc' }]
@@ -848,19 +864,201 @@ export async function buildMasterDataExportPayload(
               : sort === 'name'
                 ? [{ name: 'asc' }, { createdAt: 'desc' }]
                 : [{ createdAt: 'desc' }],
-      })
+        }),
+        prisma.priceLevel.findMany({ select: { id: true, priceLevelId: true, name: true, levelType: true } }),
+        prisma.priceBook.findMany({ select: { id: true, priceBookId: true, name: true, bookType: true } }),
+      ])
+      const priceLevelLabels = new Map<string, string>()
+      for (const priceLevel of priceLevels) {
+        const label = priceLevel.priceLevelId ? `${priceLevel.priceLevelId} - ${priceLevel.name}` : priceLevel.name
+        priceLevelLabels.set(priceLevel.id, label)
+        if (priceLevel.priceLevelId) priceLevelLabels.set(priceLevel.priceLevelId, label)
+        priceLevelLabels.set(priceLevel.name, label)
+        if (priceLevel.levelType) priceLevelLabels.set(priceLevel.levelType, label)
+      }
+      const priceBookLabels = new Map<string, string>()
+      for (const priceBook of priceBooks) {
+        const label = priceBook.priceBookId ? `${priceBook.priceBookId} - ${priceBook.name}` : priceBook.name
+        priceBookLabels.set(priceBook.id, label)
+        if (priceBook.priceBookId) priceBookLabels.set(priceBook.priceBookId, label)
+        priceBookLabels.set(priceBook.name, label)
+        if (priceBook.bookType) priceBookLabels.set(priceBook.bookType, label)
+      }
+      const displayPriceLevel = (value: string | null) => (value ? priceLevelLabels.get(value) ?? displayMasterDataValue(value) : displayMasterDataValue(null))
+      const displayPriceBook = (value: string | null) => (value ? priceBookLabels.get(value) ?? displayMasterDataValue(value) : displayMasterDataValue(null))
       return {
         headers: buildHeaders(customerListDefinition.columns),
         rows: customers.map((customer) => [
           text(customer.customerId ?? 'Pending'),
           text(customer.name),
+          displayMasterDataValue(customer.customerStatus),
+          displayMasterDataValue(customer.customerType),
+          displayMasterDataValue(customer.customerGroup),
+          displayMasterDataValue(customer.territory),
+          displayMasterDataValue(customer.salesManager),
           customer.subsidiary ? `${customer.subsidiary.subsidiaryId} (${customer.subsidiary.name})` : '-',
           text(customer.currency?.code),
+          customer.arAccount ? `${customer.arAccount.accountNumber} - ${customer.arAccount.name}` : '-',
+          displayMasterDataValue(customer.reminderDays),
+          displayPriceLevel(customer.priceLevel),
+          displayPriceBook(customer.priceBook),
+          yesNo(customer.taxable),
+          displayMasterDataValue(customer.taxItem),
+          displayMasterDataValue(customer.collectionsRep),
+          displayMasterDataValue(customer.industry),
           displayMasterDataValue(customer.address),
+          displayMasterDataValue(customer.email),
+          displayMasterDataValue(customer.phone),
           yesNo(customer.inactive),
+          text(customer.id),
           formatMasterDataDate(customer.createdAt),
           formatMasterDataDate(customer.updatedAt),
         ]),
+      }
+    }
+    case 'price-levels': {
+      const priceLevels = await prisma.priceLevel.findMany({
+        where: query
+          ? {
+              OR: [
+                { priceLevelId: { contains: query, mode: INSENSITIVE } },
+                { name: { contains: query, mode: INSENSITIVE } },
+                { description: { contains: query, mode: INSENSITIVE } },
+                { levelType: { contains: query, mode: INSENSITIVE } },
+                { subsidiary: { is: { subsidiaryId: { contains: query, mode: INSENSITIVE } } } },
+                { subsidiary: { is: { name: { contains: query, mode: INSENSITIVE } } } },
+              ],
+            }
+          : {},
+        include: { subsidiary: { select: { subsidiaryId: true, name: true } } },
+        orderBy:
+          sort === 'id'
+            ? [{ priceLevelId: 'asc' }, { createdAt: 'desc' }]
+            : sort === 'oldest'
+              ? [{ createdAt: 'asc' }]
+              : sort === 'name'
+                ? [{ name: 'asc' }, { createdAt: 'desc' }]
+                : [{ createdAt: 'desc' }],
+      })
+      return {
+        headers: buildHeaders(priceLevelListDefinition.columns),
+        rows: priceLevels.map((priceLevel) => [
+          text(priceLevel.priceLevelId ?? 'Pending'),
+          text(priceLevel.name),
+          displayMasterDataValue(priceLevel.levelType),
+          priceLevel.subsidiary ? `${priceLevel.subsidiary.subsidiaryId} (${priceLevel.subsidiary.name})` : '-',
+          yesNo(priceLevel.includeChildren),
+          text(priceLevel.defaultDiscountPct),
+          text(priceLevel.minimumMarginPct),
+          yesNo(priceLevel.approvalRequired),
+          yesNo(priceLevel.allowManualOverride),
+          formatMasterDataDate(priceLevel.effectiveStartDate),
+          formatMasterDataDate(priceLevel.effectiveEndDate),
+          yesNo(priceLevel.inactive),
+          text(priceLevel.id),
+          formatMasterDataDate(priceLevel.createdAt),
+          formatMasterDataDate(priceLevel.updatedAt),
+        ]),
+      }
+    }
+    case 'price-books': {
+      const priceBooks = await prisma.priceBook.findMany({
+        where: query
+          ? {
+              OR: [
+                { priceBookId: { contains: query, mode: INSENSITIVE } },
+                { name: { contains: query, mode: INSENSITIVE } },
+                { description: { contains: query, mode: INSENSITIVE } },
+                { bookType: { contains: query, mode: INSENSITIVE } },
+                { subsidiary: { is: { subsidiaryId: { contains: query, mode: INSENSITIVE } } } },
+                { subsidiary: { is: { name: { contains: query, mode: INSENSITIVE } } } },
+                { currency: { is: { code: { contains: query, mode: INSENSITIVE } } } },
+              ],
+            }
+          : {},
+        include: {
+          subsidiary: { select: { subsidiaryId: true, name: true } },
+          currency: { select: { code: true, name: true } },
+          defaultPriceLevel: { select: { priceLevelId: true, name: true } },
+        },
+        orderBy:
+          sort === 'id'
+            ? [{ priceBookId: 'asc' }, { createdAt: 'desc' }]
+            : sort === 'oldest'
+              ? [{ createdAt: 'asc' }]
+              : sort === 'name'
+                ? [{ name: 'asc' }, { createdAt: 'desc' }]
+                : [{ createdAt: 'desc' }],
+      })
+      return {
+        headers: buildHeaders(priceBookListDefinition.columns),
+        rows: priceBooks.map((priceBook) => [
+          text(priceBook.priceBookId ?? 'Pending'),
+          text(priceBook.name),
+          displayMasterDataValue(priceBook.bookType),
+          priceBook.subsidiary ? `${priceBook.subsidiary.subsidiaryId} (${priceBook.subsidiary.name})` : '-',
+          yesNo(priceBook.includeChildren),
+          priceBook.currency ? `${priceBook.currency.code} - ${priceBook.currency.name}` : '-',
+          priceBook.defaultPriceLevel ? `${priceBook.defaultPriceLevel.priceLevelId} - ${priceBook.defaultPriceLevel.name}` : '-',
+          yesNo(priceBook.approvalRequired),
+          yesNo(priceBook.allowManualOverride),
+          formatMasterDataDate(priceBook.effectiveStartDate),
+          formatMasterDataDate(priceBook.effectiveEndDate),
+          yesNo(priceBook.inactive),
+          text(priceBook.id),
+          formatMasterDataDate(priceBook.createdAt),
+          formatMasterDataDate(priceBook.updatedAt),
+        ]),
+      }
+    }
+    case 'billing-schedules':
+    case 'billing-accounts':
+    case 'subscription-plans': {
+      const key = resource as BillingMasterDataKey
+      const config = getBillingMasterDataConfig(key)
+      const model = prisma[config.prismaModel] as any
+      const definition =
+        key === 'billing-schedules'
+          ? billingScheduleListDefinition
+          : key === 'billing-accounts'
+            ? billingAccountListDefinition
+            : subscriptionPlanListDefinition
+      const rows = await model.findMany({
+        where: query
+          ? {
+              OR: [
+                { [config.idField]: { contains: query, mode: INSENSITIVE } },
+                { name: { contains: query, mode: INSENSITIVE } },
+                { description: { contains: query, mode: INSENSITIVE } },
+              ],
+            }
+          : {},
+        include: config.includes,
+        orderBy:
+          sort === 'id'
+            ? [{ [config.idField]: 'asc' }, { createdAt: 'desc' }]
+            : sort === 'oldest'
+              ? [{ createdAt: 'asc' }]
+              : sort === 'name'
+                ? [{ name: 'asc' }, { createdAt: 'desc' }]
+                : [{ createdAt: 'desc' }],
+      })
+      const columnIds = definition.columns.filter((column) => column.id !== 'actions').map((column) => column.id)
+      const valueFor = (row: any, columnId: string) => {
+        const value = row[columnId]
+        if (columnId === 'customerId') return row.customer ? `${row.customer.customerId ?? 'Customer'} - ${row.customer.name}` : '-'
+        if (columnId === 'subsidiaryId') return row.subsidiary ? `${row.subsidiary.subsidiaryId} - ${row.subsidiary.name}` : '-'
+        if (columnId === 'currencyId') return row.currency ? `${row.currency.code} - ${row.currency.name}` : '-'
+        if (columnId === 'defaultBillingScheduleId') return row.defaultBillingSchedule ? `${row.defaultBillingSchedule.billingScheduleId ?? 'Schedule'} - ${row.defaultBillingSchedule.name}` : '-'
+        if (columnId === 'defaultPriceBookId') return row.defaultPriceBook ? `${row.defaultPriceBook.priceBookId ?? 'Price Book'} - ${row.defaultPriceBook.name}` : '-'
+        if (columnId === 'itemId') return row.item ? `${row.item.itemId ?? 'Item'} - ${row.item.name}` : '-'
+        if (columnId === 'createdAt' || columnId === 'updatedAt') return formatMasterDataDate(value)
+        if (typeof value === 'boolean') return yesNo(value)
+        return text(displayMasterDataValue(value))
+      }
+      return {
+        headers: buildHeaders(definition.columns),
+        rows: rows.map((row: any) => columnIds.map((columnId) => valueFor(row, columnId))),
       }
     }
     case 'vendors': {
@@ -1305,6 +1503,7 @@ export async function buildMasterDataExportPayload(
           text(account.name),
           text(account.description),
           text(account.accountType),
+          text(account.category),
           text(account.normalBalance),
           text(account.financialStatementSection),
           text(account.financialStatementGroup),
@@ -1314,9 +1513,11 @@ export async function buildMasterDataExportPayload(
           account.parentAccount ? `${account.parentAccount.accountId} - ${account.parentAccount.name}` : '-',
           yesNo(account.isPosting),
           yesNo(account.isControlAccount),
-          yesNo(account.inventory),
-          yesNo(account.revalueOpenBalance),
-          yesNo(account.summary),
+            yesNo(account.inventory),
+            yesNo(account.revalueOpenBalance),
+            text(account.monetaryClassification),
+            text(account.translationTreatment),
+            yesNo(account.summary),
           account.parentSubsidiary
             ? account.parentSubsidiary.subsidiaryId
             : account.subsidiaryAssignments.length > 0

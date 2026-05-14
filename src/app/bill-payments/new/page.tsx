@@ -14,9 +14,13 @@ export const runtime = 'nodejs'
 export default async function NewBillPaymentPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ duplicateFrom?: string }>
+  searchParams?: Promise<{ duplicateFrom?: string; billId?: string; method?: string; status?: string }>
 }) {
-  const duplicateFrom = (await searchParams)?.duplicateFrom?.trim()
+  const resolvedSearchParams = await searchParams
+  const duplicateFrom = resolvedSearchParams?.duplicateFrom?.trim()
+  const billId = resolvedSearchParams?.billId?.trim()
+  const requestedMethod = resolvedSearchParams?.method?.trim().toLowerCase()
+  const requestedStatus = resolvedSearchParams?.status?.trim().toLowerCase()
 
   const [vendors, bills, paymentMethodValues, statusValues, customization, cashAccounts, duplicateSource] = await Promise.all([
     prisma.vendor.findMany({
@@ -68,6 +72,35 @@ export default async function NewBillPaymentPage({
   const duplicateVendorId =
     duplicateSource?.vendorId
     ?? (duplicateSource?.billId ? bills.find((bill) => bill.id === duplicateSource.billId)?.vendorId ?? '' : '')
+  const billOptions = bills.map((bill) => {
+    const appliedViaApplications = bill.paymentApplications.reduce((sum, application) => {
+      if ((application.billPayment.status ?? '').toLowerCase() === 'cancelled') return sum
+      return sum + Number(application.appliedAmount)
+    }, 0)
+    const appliedViaLegacyPayments = bill.billPayments.reduce((sum, payment) => {
+      if ((payment.status ?? '').toLowerCase() === 'cancelled') return sum
+      if (payment.applications.length > 0) return sum
+      return sum + Number(payment.amount)
+    }, 0)
+    return {
+      id: bill.id,
+      number: bill.number,
+      vendorId: bill.vendorId,
+      vendorName: bill.vendor.name,
+      status: bill.status,
+      total: Number(bill.total),
+      date: bill.date,
+      subsidiaryId: bill.subsidiaryId ?? null,
+      subsidiaryLabel: bill.subsidiary ? `${bill.subsidiary.subsidiaryId} - ${bill.subsidiary.name}` : null,
+      currencyId: bill.currencyId ?? null,
+      currencyCode: bill.currency?.code ?? bill.currency?.currencyId ?? null,
+      currencyLabel: bill.currency ? `${bill.currency.code ?? bill.currency.currencyId} - ${bill.currency.name}` : null,
+      userId: bill.userId ?? null,
+      openAmount: roundMoney(Number(bill.total) - appliedViaApplications - appliedViaLegacyPayments),
+    }
+  })
+  const sourceBill = !duplicateSource && billId ? billOptions.find((bill) => bill.id === billId) : null
+  const today = new Date().toISOString().slice(0, 10)
 
   return (
     <BillPaymentCreatePageClient
@@ -75,33 +108,7 @@ export default async function NewBillPaymentPage({
         value: vendor.id,
         label: `${vendor.vendorNumber ?? 'VENDOR'} - ${vendor.name}`,
       }))}
-      bills={bills.map((bill) => {
-        const appliedViaApplications = bill.paymentApplications.reduce((sum, application) => {
-          if ((application.billPayment.status ?? '').toLowerCase() === 'cancelled') return sum
-          return sum + Number(application.appliedAmount)
-        }, 0)
-        const appliedViaLegacyPayments = bill.billPayments.reduce((sum, payment) => {
-          if ((payment.status ?? '').toLowerCase() === 'cancelled') return sum
-          if (payment.applications.length > 0) return sum
-          return sum + Number(payment.amount)
-        }, 0)
-        return {
-          id: bill.id,
-          number: bill.number,
-          vendorId: bill.vendorId,
-          vendorName: bill.vendor.name,
-          status: bill.status,
-          total: Number(bill.total),
-          date: bill.date,
-          subsidiaryId: bill.subsidiaryId ?? null,
-          subsidiaryLabel: bill.subsidiary ? `${bill.subsidiary.subsidiaryId} - ${bill.subsidiary.name}` : null,
-          currencyId: bill.currencyId ?? null,
-          currencyCode: bill.currency?.code ?? bill.currency?.currencyId ?? null,
-          currencyLabel: bill.currency ? `${bill.currency.code ?? bill.currency.currencyId} - ${bill.currency.name}` : null,
-          userId: bill.userId ?? null,
-          openAmount: roundMoney(Number(bill.total) - appliedViaApplications - appliedViaLegacyPayments),
-        }
-      })}
+      bills={billOptions}
       methodOptions={paymentMethodValues.map((value) => ({ value: value.toLowerCase(), label: value }))}
       statusOptions={statusValues.map((value) => ({ value: value.toLowerCase(), label: value }))}
       bankAccountOptions={cashAccounts.map((account) => ({
@@ -120,6 +127,17 @@ export default async function NewBillPaymentPage({
               reference: duplicateSource.reference ?? '',
               notes: duplicateSource.notes ?? '',
             }
+          : sourceBill
+            ? {
+                vendorId: sourceBill.vendorId,
+                date: today,
+                method: requestedMethod ?? '',
+                status: requestedStatus ?? 'pending',
+                amount: String(Math.max(sourceBill.openAmount, 0)),
+                subsidiaryId: sourceBill.subsidiaryId ?? '',
+                currencyId: sourceBill.currencyId ?? '',
+                notes: `Created from bill ${sourceBill.number}`,
+              }
           : undefined
       }
       initialApplications={
@@ -134,6 +152,8 @@ export default async function NewBillPaymentPage({
                   ? [{ billId: duplicateSource.billId, appliedAmount: Number(duplicateSource.amount) }]
                   : [],
             )
+          : sourceBill && sourceBill.openAmount > 0
+            ? [{ billId: sourceBill.id, appliedAmount: sourceBill.openAmount }]
           : undefined
       }
     />

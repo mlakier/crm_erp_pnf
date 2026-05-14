@@ -2,9 +2,16 @@
 
 import type { ComponentProps } from 'react'
 import RecordDetailCustomizeMode from '@/components/RecordDetailCustomizeMode'
+import { getSeededDimensionLineCheckboxState } from '@/lib/dimension-control-plane'
+import { useDimensionConfigurationRows } from '@/lib/dimension-control-plane-client'
 import { useFormRequirementsState } from '@/lib/form-requirements-client'
 import type { FormKey } from '@/lib/form-requirements'
 import { saveLayoutWithRequirements } from '@/lib/save-layout-with-requirements'
+import {
+  getTransactionLineRequiredColumnFlags,
+  getTransactionLineRequirementsDocumentType,
+  getTransactionLineRequirementsSummary,
+} from '@/lib/transaction-line-requirements'
 
 const SHARED_LINE_FONT_SIZE_OPTIONS = [
   { value: 'xs', label: 'Compact' },
@@ -72,8 +79,52 @@ export default function TransactionRecordDetailCustomizeMode({
   ...props
 }: Props) {
   const { requirements, lockedRequirements, toggleRequired } = useFormRequirementsState(formKey)
+  const dimensionRows = useDimensionConfigurationRows()
   const hasLineColumns = Boolean(props.lineColumnDefinitions?.length)
   const hasSecondaryColumns = Boolean(props.secondaryColumnDefinitions?.length)
+  const lineRequirementsDocumentType = getTransactionLineRequirementsDocumentType(formKey)
+  const lineRequiredFlags =
+    hasLineColumns && lineRequirementsDocumentType && props.lineColumnDefinitions
+      ? getTransactionLineRequiredColumnFlags(
+          lineRequirementsDocumentType,
+          props.lineColumnDefinitions.map((column) => column.id),
+        )
+      : undefined
+  const dimensionLineCheckboxState =
+    hasLineColumns && props.lineColumnDefinitions?.length
+      ? getSeededDimensionLineCheckboxState(
+          dimensionRows,
+          props.lineColumnDefinitions.map((column) => column.id),
+          lineRequirementsDocumentType,
+        )
+      : {}
+  const mergedLineRequiredFlags =
+    hasLineColumns && props.lineColumnDefinitions
+      ? Object.fromEntries(
+          props.lineColumnDefinitions.map((column) => [
+            column.id,
+            Boolean(lineRequiredFlags?.[column.id]) ||
+              Boolean(dimensionLineCheckboxState[column.id]?.required),
+          ]),
+        )
+      : undefined
+  const mergedLineDisabledFlags =
+    hasLineColumns && props.lineColumnDefinitions
+      ? Object.fromEntries(
+          props.lineColumnDefinitions.map((column) => [
+            column.id,
+            Boolean(lineRequiredFlags?.[column.id]) ||
+              Boolean(dimensionLineCheckboxState[column.id]?.disabled),
+          ]),
+        )
+      : undefined
+  const lineRequirementsSummary =
+    hasLineColumns && lineRequirementsDocumentType && props.lineColumnDefinitions
+      ? getTransactionLineRequirementsSummary(
+          lineRequirementsDocumentType,
+          props.lineColumnDefinitions.map((column) => ({ id: column.id, label: column.label })),
+        )
+      : ''
 
   return (
     <RecordDetailCustomizeMode
@@ -98,6 +149,10 @@ export default function TransactionRecordDetailCustomizeMode({
       extraFieldCheckboxValues={requirements}
       extraFieldCheckboxDisabledValues={lockedRequirements}
       onToggleExtraFieldCheckbox={toggleRequired}
+      lineColumnCheckboxLabel="Required"
+      lineColumnCheckboxValues={mergedLineRequiredFlags}
+      lineColumnCheckboxDisabledValues={mergedLineDisabledFlags}
+      lineColumnsRulesNote={lineRequirementsSummary || undefined}
       onSaveCustomization={(layout) =>
         saveLayoutWithRequirements({
           layoutEndpoint: props.saveEndpoint,

@@ -5,6 +5,8 @@ import { moneyEquals, parseMoneyValue, sumMoney } from '@/lib/money'
 import { deriveOpenItemCurrencyContext } from '@/lib/open-item-currency-context'
 import { resolveDefaultCurrencySnapshot } from '@/lib/transaction-snapshot-defaults'
 import { generateNextIntercompanyJournalNumber, generateNextJournalNumber } from '@/lib/journal-number'
+import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
+import { getTransactionPostingContextError } from '@/lib/transaction-posting-context'
 import {
   deleteDocumentRelationshipsForRecord,
   syncAutoDocumentRelationshipsForSource,
@@ -42,10 +44,10 @@ async function syncJournalDocumentRelationships(journalEntryId: string) {
 export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get('id')
   if (id) {
-    const row = await prisma.journalEntry.findUnique({ where: { id }, include: { subsidiary: true, currency: true, user: true, accountingPeriod: true, postedByEmployee: true, approvedByEmployee: true, lineItems: { include: { account: true, subsidiary: true, department: true, location: true, project: true, customer: true, vendor: true, item: true, employee: true }, orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }] } } })
+    const row = await prisma.journalEntry.findUnique({ where: { id }, include: { subsidiary: true, currency: true, user: true, accountingPeriod: true, postedByEmployee: true, approvedByEmployee: true, lineItems: { include: { account: true, subsidiary: true, department: true, location: true, classDimension: true, project: true, customer: true, vendor: true, item: true, employee: true }, orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }] } } })
     return row ? NextResponse.json(row) : NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
-  const rows = await prisma.journalEntry.findMany({ include: { subsidiary: true, currency: true, user: true, accountingPeriod: true, postedByEmployee: true, approvedByEmployee: true, lineItems: { include: { account: true, subsidiary: true, department: true, location: true, project: true, customer: true, vendor: true, item: true, employee: true }, orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }] } }, orderBy: { createdAt: 'desc' } })
+  const rows = await prisma.journalEntry.findMany({ include: { subsidiary: true, currency: true, user: true, accountingPeriod: true, postedByEmployee: true, approvedByEmployee: true, lineItems: { include: { account: true, subsidiary: true, department: true, location: true, classDimension: true, project: true, customer: true, vendor: true, item: true, employee: true }, orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }] } }, orderBy: { createdAt: 'desc' } })
   return NextResponse.json(rows)
 }
 
@@ -63,6 +65,7 @@ function normalizeLineItems(value: unknown) {
         subsidiaryId: String(candidate.subsidiaryId ?? '').trim() || null,
         departmentId: String(candidate.departmentId ?? '').trim() || null,
         locationId: String(candidate.locationId ?? '').trim() || null,
+        classId: String(candidate.classId ?? '').trim() || null,
         projectId: String(candidate.projectId ?? '').trim() || null,
         customerId: String(candidate.customerId ?? '').trim() || null,
         vendorId: String(candidate.vendorId ?? '').trim() || null,
@@ -617,6 +620,13 @@ export async function POST(req: NextRequest) {
       ? normalizeLineItems(body.lineItems)
       : normalizeStandardJournalLineItems(normalizeLineItems(body.lineItems)),
   )
+  const lineRequirementsError = getTransactionLineRequirementsError(
+    body.journalType === 'intercompany' ? 'intercompany-journal' : 'journal',
+    body.lineItems,
+  )
+  if (lineRequirementsError) {
+    return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
+  }
   const lineValidationError = validateLineItems(normalizedLineItems)
   if (lineValidationError) {
     return NextResponse.json({ error: lineValidationError }, { status: 400 })
@@ -644,6 +654,16 @@ export async function POST(req: NextRequest) {
   if (body.subsidiaryId === '') body.subsidiaryId = null
   if (body.currencyId === '') body.currencyId = null
   body.currencyId = await resolveDefaultCurrencySnapshot(body.currencyId)
+  const postingContextError = getTransactionPostingContextError(
+    body.journalType === 'intercompany' ? 'intercompany-journal' : 'journal',
+    {
+      subsidiaryId: body.subsidiaryId,
+      currencyId: body.currencyId,
+    },
+  )
+  if (postingContextError) {
+    return NextResponse.json({ error: postingContextError }, { status: 400 })
+  }
   if (body.accountingPeriodId === '') body.accountingPeriodId = null
   if (body.reversesJournalEntryId === '') body.reversesJournalEntryId = null
   if (body.reversalReasonCode === '') body.reversalReasonCode = null
@@ -704,6 +724,15 @@ export async function PUT(req: NextRequest) {
   delete body.entityId
   const replaceLines = body.lineItems !== undefined
   const normalizedLineItems = applyDisplayOrderToLineItems(normalizeLineItems(body.lineItems))
+  const lineRequirementsError = replaceLines
+    ? getTransactionLineRequirementsError(
+        body.journalType === 'intercompany' ? 'intercompany-journal' : 'journal',
+        body.lineItems,
+      )
+    : null
+  if (lineRequirementsError) {
+    return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
+  }
   const lineValidationError = replaceLines ? validateLineItems(normalizedLineItems) : null
   if (lineValidationError) {
     return NextResponse.json({ error: lineValidationError }, { status: 400 })
@@ -720,6 +749,9 @@ export async function PUT(req: NextRequest) {
   if (body.date) body.date = new Date(body.date)
   if (body.subsidiaryId === '') body.subsidiaryId = null
   if (body.currencyId === '') body.currencyId = null
+  if (body.currencyId !== undefined) {
+    body.currencyId = await resolveDefaultCurrencySnapshot(body.currencyId)
+  }
   if (body.accountingPeriodId === '') body.accountingPeriodId = null
   if (body.reversesJournalEntryId === '') body.reversesJournalEntryId = null
   if (body.reversalReasonCode === '') body.reversalReasonCode = null
@@ -736,7 +768,7 @@ export async function PUT(req: NextRequest) {
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [subsidiaries, currencies, periods, employees, accounts, departments, locations, projects, customers, vendors, items, openItems] = await Promise.all([
+  const [subsidiaries, currencies, periods, employees, accounts, departments, locations, classes, projects, customers, vendors, items, openItems] = await Promise.all([
     prisma.subsidiary.findMany({ select: { id: true, subsidiaryId: true, name: true } }),
     prisma.currency.findMany({ select: { id: true, code: true, currencyId: true, name: true } }),
     prisma.accountingPeriod.findMany({ select: { id: true, name: true } }),
@@ -748,6 +780,7 @@ export async function PUT(req: NextRequest) {
     }),
     prisma.department.findMany({ select: { id: true, departmentId: true, name: true } }),
     prisma.location.findMany({ select: { id: true, locationId: true, name: true } }),
+    prisma.classDimension.findMany({ select: { id: true, classId: true, name: true } }),
     prisma.project.findMany({ select: { id: true, name: true } }),
     prisma.customer.findMany({ select: { id: true, customerId: true, name: true } }),
     prisma.vendor.findMany({ select: { id: true, vendorNumber: true, name: true } }),
@@ -760,6 +793,17 @@ export async function PUT(req: NextRequest) {
   const normalizedDescription = body.description !== undefined ? body.description : existing.description
   const normalizedSubsidiaryId = body.subsidiaryId !== undefined ? body.subsidiaryId : existing.subsidiaryId
   const normalizedCurrencyId = body.currencyId !== undefined ? body.currencyId : existing.currencyId
+  const normalizedJournalType = body.journalType !== undefined ? body.journalType : existing.journalType
+  const postingContextError = getTransactionPostingContextError(
+    normalizedJournalType === 'intercompany' ? 'intercompany-journal' : 'journal',
+    {
+      subsidiaryId: normalizedSubsidiaryId,
+      currencyId: normalizedCurrencyId,
+    },
+  )
+  if (postingContextError) {
+    return NextResponse.json({ error: postingContextError }, { status: 400 })
+  }
   const normalizedAccountingPeriodId = body.accountingPeriodId !== undefined ? body.accountingPeriodId : existing.accountingPeriodId
   const normalizedSourceType = body.sourceType !== undefined ? body.sourceType : existing.sourceType
   const normalizedSourceId = body.sourceId !== undefined ? body.sourceId : existing.sourceId
@@ -769,7 +813,6 @@ export async function PUT(req: NextRequest) {
   const normalizedApprovedByEmployeeId = body.approvedByEmployeeId !== undefined ? body.approvedByEmployeeId : existing.approvedByEmployeeId
   const normalizedDate = body.date !== undefined ? body.date : existing.date
   const normalizedTotal = body.total !== undefined ? body.total : existing.total
-  const normalizedJournalType = body.journalType !== undefined ? body.journalType : existing.journalType
   const normalizedIsOpenItemRelevant = body.isOpenItemRelevant !== undefined ? body.isOpenItemRelevant : existing.isOpenItemRelevant
   const effectiveLineItems =
     replaceLines
@@ -858,6 +901,7 @@ export async function PUT(req: NextRequest) {
           normalizedJournalType === 'intercompany' && (oldLine.subsidiaryId ?? '') !== (newLine.subsidiaryId ?? '') ? { fieldName: 'Subsidiary', oldValue: formatOptionLabel(subsidiaries, oldLine.subsidiaryId, (value) => `${value.subsidiaryId} - ${value.name}`), newValue: formatOptionLabel(subsidiaries, newLine.subsidiaryId, (value) => `${value.subsidiaryId} - ${value.name}`) } : null,
           (oldLine.departmentId ?? '') !== (newLine.departmentId ?? '') ? { fieldName: 'Department', oldValue: formatOptionLabel(departments, oldLine.departmentId, (value) => `${value.departmentId} - ${value.name}`), newValue: formatOptionLabel(departments, newLine.departmentId, (value) => `${value.departmentId} - ${value.name}`) } : null,
           (oldLine.locationId ?? '') !== (newLine.locationId ?? '') ? { fieldName: 'Location', oldValue: formatOptionLabel(locations, oldLine.locationId, (value) => `${value.locationId} - ${value.name}`), newValue: formatOptionLabel(locations, newLine.locationId, (value) => `${value.locationId} - ${value.name}`) } : null,
+          (oldLine.classId ?? '') !== (newLine.classId ?? '') ? { fieldName: 'Class', oldValue: formatOptionLabel(classes, oldLine.classId, (value) => `${value.classId} - ${value.name}`), newValue: formatOptionLabel(classes, newLine.classId, (value) => `${value.classId} - ${value.name}`) } : null,
           (oldLine.projectId ?? '') !== (newLine.projectId ?? '') ? { fieldName: 'Project', oldValue: formatOptionLabel(projects, oldLine.projectId, (value) => value.name), newValue: formatOptionLabel(projects, newLine.projectId, (value) => value.name) } : null,
           (oldLine.customerId ?? '') !== (newLine.customerId ?? '') ? { fieldName: 'Customer', oldValue: formatOptionLabel(customers, oldLine.customerId, (value) => `${value.customerId ?? 'CUST'} - ${value.name}`), newValue: formatOptionLabel(customers, newLine.customerId, (value) => `${value.customerId ?? 'CUST'} - ${value.name}`) } : null,
           (oldLine.vendorId ?? '') !== (newLine.vendorId ?? '') ? { fieldName: 'Vendor', oldValue: formatOptionLabel(vendors, oldLine.vendorId, (value) => `${value.vendorNumber ?? 'VEND'} - ${value.name}`), newValue: formatOptionLabel(vendors, newLine.vendorId, (value) => `${value.vendorNumber ?? 'VEND'} - ${value.name}`) } : null,

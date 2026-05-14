@@ -8,7 +8,8 @@ import { loadCompanyDisplaySettings } from '@/lib/company-display-settings'
 import { fmtDocumentDate } from '@/lib/format'
 
 function getActivityHref(entityType: string, entityId: string) {
-  if (entityType === 'department') return `/departments/${entityId}`
+  if (entityType === 'department') return '/configuration/manage-dimensions'
+  if (entityType === 'location') return '/configuration/manage-dimensions'
   if (entityType === 'employee') return `/employees/${entityId}`
   if (entityType === 'customer') return `/customers/${entityId}`
   if (entityType === 'vendor') return `/vendors/${entityId}`
@@ -85,7 +86,7 @@ export default async function Dashboard() {
         <NavCard title="Leads" description="Capture and qualify lead records" href="/leads" />
         <NavCard title="Customers" description="Manage customer master data" href="/customers" />
         <NavCard title="Contacts" description="Customer contacts and relationships" href="/contacts" />
-        <NavCard title="Departments" description="Organize employee structure and ownership" href="/departments" />
+        <NavCard title="Dimensions" description="Manage departments, locations, class, and custom dimensions" href="/configuration/manage-dimensions" />
         <NavCard title="Vendors" description="Manage vendor master data" href="/vendors" />
         <NavCard title="Opportunities" description="Track sales pipeline and deals" href="/opportunities" />
         <NavCard title="Quotes" description="Customer proposals from opportunities" href="/quotes" />

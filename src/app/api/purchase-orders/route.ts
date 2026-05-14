@@ -4,6 +4,8 @@ import { logActivity, logCommunicationActivity, logFieldChangeActivities, logRec
 import { generateNextPurchaseOrderNumber } from '@/lib/purchase-order-number'
 import { calcLineTotal, moneyEquals, parseMoneyValue, parseQuantity, sumMoney } from '@/lib/money'
 import { resolveVendorTransactionSnapshot } from '@/lib/transaction-snapshot-defaults'
+import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
+import { getRequiredStandardTransactionPostingContext, getTransactionPostingContextError } from '@/lib/transaction-posting-context'
 
 export async function GET() {
   try {
@@ -76,6 +78,10 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedNumber = number?.trim() || await generateNextPurchaseOrderNumber()
+    const lineRequirementsError = getTransactionLineRequirementsError('purchase-order', lineItems)
+    if (lineRequirementsError) {
+      return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
+    }
     const normalizedLineItems = Array.isArray(lineItems)
       ? lineItems
           .map((line, index) => {
@@ -115,6 +121,13 @@ export async function POST(request: NextRequest) {
       subsidiaryId: requestSubsidiaryId,
       currencyId,
     })
+    const postingContext = getRequiredStandardTransactionPostingContext('purchase-order', {
+      subsidiaryId: snapshot.subsidiaryId,
+      currencyId: snapshot.currencyId,
+    })
+    if ('error' in postingContext) {
+      return NextResponse.json({ error: postingContext.error }, { status: 400 })
+    }
 
     const purchaseOrder = await prisma.purchaseOrder.create({
       data: {
@@ -122,8 +135,8 @@ export async function POST(request: NextRequest) {
         status,
         total: normalizedTotal,
         vendorId,
-        subsidiaryId: snapshot.subsidiaryId,
-        currencyId: snapshot.currencyId,
+        subsidiaryId: postingContext.subsidiaryId,
+        currencyId: postingContext.currencyId,
         userId,
         ...(normalizedLineItems.length > 0
           ? {
@@ -171,7 +184,7 @@ export async function PUT(request: NextRequest) {
     if (!id) return NextResponse.json({ error: 'Missing purchase order id' }, { status: 400 })
 
     const body = await request.json()
-    const { number, status, total, vendorId, entityId, subsidiaryId } = body
+    const { number, status, total, vendorId, entityId, subsidiaryId, currencyId } = body
     const requestSubsidiaryId = subsidiaryId ?? entityId
 
     const existing = await prisma.purchaseOrder.findUnique({
@@ -201,8 +214,16 @@ export async function PUT(request: NextRequest) {
     const normalizedNumber = number?.trim() || existing.number
     const normalizedVendorId = vendorId || existing.vendorId
     const normalizedEntityId = requestSubsidiaryId || null
+    const normalizedCurrencyId = currencyId !== undefined ? currencyId || null : existing.currencyId
     const normalizedStatus = status || null
     const normalizedTotal = total !== '' && total != null ? parseMoneyValue(total) : 0
+    const postingContextError = getTransactionPostingContextError('purchase-order', {
+      subsidiaryId: normalizedEntityId,
+      currencyId: normalizedCurrencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
 
     const vendorIds = Array.from(new Set([existing.vendorId, normalizedVendorId].filter(Boolean)))
     const vendors = vendorIds.length
@@ -230,6 +251,7 @@ export async function PUT(request: NextRequest) {
       data: {
         number: normalizedNumber,
         subsidiaryId: normalizedEntityId,
+        currencyId: normalizedCurrencyId,
         vendorId: normalizedVendorId,
         status: normalizedStatus,
         total: normalizedTotal,
@@ -256,6 +278,13 @@ export async function PUT(request: NextRequest) {
             fieldName: 'Subsidiary',
             oldValue: existing.subsidiaryId ? entityLabelById.get(existing.subsidiaryId) ?? existing.subsidiaryId : '-',
             newValue: normalizedEntityId ? entityLabelById.get(normalizedEntityId) ?? normalizedEntityId : '-',
+          }
+        : null,
+      (existing.currencyId ?? '') !== (normalizedCurrencyId ?? '')
+        ? {
+            fieldName: 'Currency',
+            oldValue: existing.currencyId ?? '-',
+            newValue: normalizedCurrencyId ?? '-',
           }
         : null,
       (existing.status ?? '') !== (normalizedStatus ?? '')

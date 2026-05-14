@@ -138,6 +138,7 @@ export default async function InvoiceReceiptDetailPage({
       _sum: {
         realizedFxLocalAmount: true,
         realizedFxFunctionalAmount: true,
+        realizedFxGroupAmount: true,
       },
     }),
     loadInvoiceReceiptDetailCustomization(),
@@ -185,6 +186,9 @@ export default async function InvoiceReceiptDetailPage({
           account: {
             select: { accountId: true, accountNumber: true, name: true },
           },
+          department: { select: { departmentId: true, departmentNumber: true, name: true } },
+          location: { select: { locationId: true, code: true, name: true } },
+          classDimension: { select: { classId: true, name: true } },
         },
       },
     },
@@ -682,6 +686,7 @@ export default async function InvoiceReceiptDetailPage({
     groupCurrencyLabel: currencyLabelById.get(receiptOpenItem?.groupCurrencyId ?? '') ?? null,
     realizedFxLocalAmount: receiptApplicationFx._sum.realizedFxLocalAmount,
     realizedFxFunctionalAmount: receiptApplicationFx._sum.realizedFxFunctionalAmount,
+    realizedFxGroupAmount: receiptApplicationFx._sum.realizedFxGroupAmount,
     fxRateType: receipt.fxRateType ?? null,
     fxRateSource: receipt.fxRateSource ?? null,
     fxEffectiveDateLabel: receipt.fxEffectiveDate ? fmtDocumentDate(receipt.fxEffectiveDate, moneySettings) : null,

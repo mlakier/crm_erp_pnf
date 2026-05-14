@@ -6,6 +6,10 @@ import { usePathname, useRouter } from 'next/navigation'
 import AddressModal, { parseAddress } from '@/components/AddressModal'
 import MultiSelectDropdown from '@/components/MultiSelectDropdown'
 import SearchableSelect from '@/components/SearchableSelect'
+import {
+  GL_ACCOUNT_CATEGORY_POLICIES,
+  findGlAccountCategoryPolicy,
+} from '@/lib/gl-account-accounting-policy'
 import { isValidEmail } from '@/lib/validation'
 
 export interface InlineRecordField {
@@ -19,7 +23,7 @@ export interface InlineRecordField {
   order?: number
   required?: boolean
   readOnly?: boolean
-  options?: Array<{ value: string; label: string }>
+  options?: Array<{ value: string; label: string; accountTypes?: string[] }>
   placeholder?: string
   helpText?: string
   sourceText?: string
@@ -38,6 +42,7 @@ export interface InlineRecordField {
 export interface InlineRecordSection {
   title: string
   description?: string
+  rows?: number
   fields: InlineRecordField[]
   collapsible?: boolean
   defaultExpanded?: boolean
@@ -308,6 +313,7 @@ function SectionFieldGrid({
           const isDisabled = isFieldDisabled(field, values)
           const isReadOnly = field.readOnly === true
           const isUnavailable = isDisabled || isReadOnly
+          const availableOptions = getAvailableOptions(field, values)
           return (
             <div key={field.name} style={cellStyle}>
               <dt className="flex items-center gap-1 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
@@ -360,7 +366,7 @@ function SectionFieldGrid({
                   field.multiple ? (
                     <MultiSelectDropdown
                       value={splitMultiValue(values[field.name] ?? '')}
-                      options={field.options ?? []}
+                      options={availableOptions}
                       disabled={isUnavailable}
                       placeholder={field.placeholder ?? 'Select options'}
                       onChange={(next) =>
@@ -374,7 +380,7 @@ function SectionFieldGrid({
                     <SearchableSelect
                       selectedValue={values[field.name] ?? ''}
                       disabled={isUnavailable}
-                      options={(field.options ?? []).map((option) => ({
+                      options={availableOptions.map((option) => ({
                         value: option.value,
                         label: option.label,
                         searchText: `${option.value} ${option.label}`,
@@ -397,6 +403,9 @@ function SectionFieldGrid({
                               next.specialOrderItem = 'false'
                               next.inventoryAccountId = ''
                             }
+                          }
+                          if (field.name === 'accountType' && prev.category && !isAccountCategoryAllowed(prev.category, nextValue, fields)) {
+                            next.category = ''
                           }
                           return next
                         })
@@ -464,6 +473,44 @@ function splitMultiValue(value: string) {
     .split(',')
     .map((entry) => entry.trim())
     .filter(Boolean)
+}
+
+function getAvailableOptions(field: InlineRecordField, values: Record<string, string>) {
+  const options = field.options ?? []
+  if (field.name !== 'category') return options
+
+  const accountType = normalizeConditionValue(values.accountType)
+  if (!accountType) return options
+
+  const labelsByValue = new Map(options.map((option) => [option.value, option.label]))
+  const blankOptions = options.filter((option) => !option.value)
+  const filtered = GL_ACCOUNT_CATEGORY_POLICIES
+    .filter((policy) =>
+      policy.accountTypes.some((type) => normalizeConditionValue(type) === accountType)
+    )
+    .map((policy) => ({
+      value: policy.category,
+      label: labelsByValue.get(policy.category) ?? policy.category,
+      accountTypes: policy.accountTypes,
+    }))
+
+  return [...blankOptions, ...filtered]
+}
+
+function isAccountCategoryAllowed(category: string, accountType: string, fields: InlineRecordField[]) {
+  const categoryField = fields.find((field) => field.name === 'category')
+  if (!categoryField) return true
+
+  const normalizedAccountType = normalizeConditionValue(accountType)
+  if (!normalizedAccountType) return true
+
+  const option = (categoryField.options ?? []).find((entry) => entry.value === category)
+  const policy = findGlAccountCategoryPolicy(option?.value ?? category)
+  if (!policy) return false
+  const accountTypes = policy.accountTypes
+  if (accountTypes.length === 0) return false
+
+  return accountTypes.some((type) => normalizeConditionValue(type) === normalizedAccountType)
 }
 
 function buildTooltipContent(field: InlineRecordField) {

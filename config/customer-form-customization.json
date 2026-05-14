@@ -1,15 +1,25 @@
 {
-  "formColumns": 2,
+  "formColumns": 3,
   "sections": [
     "Core",
     "Contact",
     "Financial",
-    "Status"
+    "Status",
+    "Sales",
+    "Tax",
+    "Preferences",
+    "Collections",
+    "Subsidiary Access"
   ],
   "sectionRows": {
     "Core": 1,
+    "Sales": 3,
     "Contact": 2,
-    "Financial": 2,
+    "Financial": 4,
+    "Tax": 2,
+    "Preferences": 3,
+    "Collections": 1,
+    "Subsidiary Access": 2,
     "Status": 1
   },
   "fields": {
@@ -40,8 +50,8 @@
     "address": {
       "visible": true,
       "section": "Contact",
-      "order": 1,
-      "column": 1
+      "order": 0,
+      "column": 3
     },
     "industry": {
       "visible": true,
@@ -49,16 +59,160 @@
       "order": 0,
       "column": 1
     },
-    "primarySubsidiaryId": {
+    "customerType": {
+      "visible": true,
+      "section": "Sales",
+      "order": 0,
+      "column": 1
+    },
+    "customerGroup": {
+      "visible": true,
+      "section": "Sales",
+      "order": 0,
+      "column": 2
+    },
+    "customerStatus": {
+      "visible": true,
+      "section": "Sales",
+      "order": 1,
+      "column": 1
+    },
+    "territory": {
+      "visible": true,
+      "section": "Sales",
+      "order": 1,
+      "column": 2
+    },
+    "salesManager": {
+      "visible": true,
+      "section": "Sales",
+      "order": 0,
+      "column": 3
+    },
+    "projectManager": {
+      "visible": true,
+      "section": "Sales",
+      "order": 1,
+      "column": 3
+    },
+    "arAccountId": {
       "visible": true,
       "section": "Financial",
       "order": 0,
       "column": 2
     },
-    "primaryCurrencyId": {
+    "startDate": {
       "visible": true,
       "section": "Financial",
       "order": 1,
+      "column": 1
+    },
+    "endDate": {
+      "visible": true,
+      "section": "Financial",
+      "order": 1,
+      "column": 2
+    },
+    "reminderDays": {
+      "visible": true,
+      "section": "Financial",
+      "order": 0,
+      "column": 3
+    },
+    "priceLevel": {
+      "visible": true,
+      "section": "Financial",
+      "order": 1,
+      "column": 3
+    },
+    "priceBook": {
+      "visible": true,
+      "section": "Financial",
+      "order": 2,
+      "column": 1
+    },
+    "taxable": {
+      "visible": true,
+      "section": "Tax",
+      "order": 0,
+      "column": 1
+    },
+    "taxItem": {
+      "visible": true,
+      "section": "Tax",
+      "order": 0,
+      "column": 2
+    },
+    "resaleNumber": {
+      "visible": true,
+      "section": "Tax",
+      "order": 1,
+      "column": 1
+    },
+    "language": {
+      "visible": true,
+      "section": "Preferences",
+      "order": 0,
+      "column": 1
+    },
+    "numberFormat": {
+      "visible": true,
+      "section": "Preferences",
+      "order": 0,
+      "column": 2
+    },
+    "negativeNumberFormat": {
+      "visible": true,
+      "section": "Preferences",
+      "order": 1,
+      "column": 1
+    },
+    "shipComplete": {
+      "visible": true,
+      "section": "Preferences",
+      "order": 1,
+      "column": 2
+    },
+    "shippingCarrier": {
+      "visible": true,
+      "section": "Preferences",
+      "order": 0,
+      "column": 3
+    },
+    "shippingMethod": {
+      "visible": true,
+      "section": "Preferences",
+      "order": 1,
+      "column": 3
+    },
+    "blockCollectionEmail": {
+      "visible": true,
+      "section": "Collections",
+      "order": 0,
+      "column": 1
+    },
+    "collectionsRep": {
+      "visible": true,
+      "section": "Collections",
+      "order": 0,
+      "column": 2
+    },
+    "primarySubsidiaryId": {
+      "visible": true,
+      "section": "Financial",
+      "order": 2,
+      "column": 2
+    },
+    "primaryCurrencyId": {
+      "visible": true,
+      "section": "Financial",
+      "order": 2,
+      "column": 3
+    },
+    "includeChildren": {
+      "visible": true,
+      "section": "Subsidiary Access",
+      "order": 0,
       "column": 1
     },
     "inactive": {

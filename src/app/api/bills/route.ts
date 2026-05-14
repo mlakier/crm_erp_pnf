@@ -5,10 +5,13 @@ import { logActivity, logCommunicationActivity, logFieldChangeActivities, logRec
 import { generateNextBillNumber } from '@/lib/bill-number'
 import { calcLineTotal, parseMoneyValue, sumMoney } from '@/lib/money'
 import { resolveVendorTransactionSnapshot } from '@/lib/transaction-snapshot-defaults'
-import { generateNextJournalNumber } from '@/lib/journal-number'
+import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { loadCompanySetupSettings } from '@/lib/company-setup-settings-store'
 import { deriveOpenItemCurrencyContext } from '@/lib/open-item-currency-context'
 import { ensureOpenItemForSource } from '@/lib/open-item-service'
+import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
+import { getRequiredStandardTransactionPostingContext, getTransactionPostingContextError } from '@/lib/transaction-posting-context'
+import { deriveSettlementLineDimensions } from '@/lib/settlement-dimension-policy'
 
 const INCLUDE = {
   vendor: true,
@@ -21,6 +24,9 @@ const INCLUDE = {
       expenseAccount: {
         select: { id: true, accountId: true, name: true },
       },
+      department: { select: { id: true } },
+      location: { select: { id: true } },
+      classDimension: { select: { id: true } },
     },
     orderBy: [{ createdAt: 'asc' }],
   },
@@ -126,6 +132,8 @@ async function postBillApprovalJournal(billId: string) {
 
   if (!apAccountId) return
 
+  const billSummaryDimensions = await deriveSettlementLineDimensions(bill.lineItems)
+
   const debitLines = bill.lineItems
     .map((line, index) => {
       const quantity = Number(line.quantity ?? 0)
@@ -149,6 +157,9 @@ async function postBillApprovalJournal(billId: string) {
         subsidiaryId: bill.subsidiaryId,
         vendorId: bill.vendorId,
         itemId: line.itemId,
+        departmentId: line.departmentId,
+        locationId: line.locationId,
+        classId: line.classId,
       }
     })
     .filter((line): line is NonNullable<typeof line> => Boolean(line))
@@ -169,9 +180,12 @@ async function postBillApprovalJournal(billId: string) {
     subsidiaryId: bill.subsidiaryId,
     vendorId: bill.vendorId,
     itemId: null,
+    departmentId: billSummaryDimensions.departmentId ?? null,
+    locationId: billSummaryDimensions.locationId ?? null,
+    classId: billSummaryDimensions.classId ?? null,
   })
 
-  const journalNumber = await generateNextJournalNumber()
+  const journalNumber = await generateNextSystemJournalNumber()
 
   await prisma.journalEntry.create({
     data: {
@@ -289,6 +303,10 @@ export async function POST(request: NextRequest) {
       subsidiaryId,
       currencyId,
     })
+    const lineRequirementsError = getTransactionLineRequirementsError('bill', lineItems)
+    if (lineRequirementsError) {
+      return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
+    }
 
     const normalizedLineItems = Array.isArray(lineItems)
       ? lineItems
@@ -325,6 +343,13 @@ export async function POST(request: NextRequest) {
     const computedTotal = normalizedLineItems.length
       ? sumMoney(normalizedLineItems.map((line: { lineTotal: number }) => line.lineTotal))
       : parseMoneyValue(total)
+    const postingContext = getRequiredStandardTransactionPostingContext('bill', {
+      subsidiaryId: snapshot.subsidiaryId,
+      currencyId: snapshot.currencyId,
+    })
+    if ('error' in postingContext) {
+      return NextResponse.json({ error: postingContext.error }, { status: 400 })
+    }
 
     const bill = await prisma.bill.create({
       data: {
@@ -338,8 +363,8 @@ export async function POST(request: NextRequest) {
         dueDate: dueDate ? new Date(dueDate) : null,
         status: nextStatus,
         notes: notes || null,
-        subsidiaryId: snapshot.subsidiaryId,
-        currencyId: snapshot.currencyId,
+        subsidiaryId: postingContext.subsidiaryId,
+        currencyId: postingContext.currencyId,
         userId: userId || null,
         lineItems: normalizedLineItems.length
           ? {
@@ -425,6 +450,15 @@ export async function PUT(request: NextRequest) {
     if (date !== undefined && !String(date ?? '').trim()) {
       return NextResponse.json({ error: 'date cannot be empty' }, { status: 400 })
     }
+    const nextSubsidiaryId = subsidiaryId !== undefined ? subsidiaryId || null : before.subsidiaryId
+    const nextCurrencyId = currencyId !== undefined ? currencyId || null : before.currencyId
+    const postingContextError = getTransactionPostingContextError('bill', {
+      subsidiaryId: nextSubsidiaryId,
+      currencyId: nextCurrencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
 
     const bill = await prisma.bill.update({
       where: { id },
@@ -438,8 +472,8 @@ export async function PUT(request: NextRequest) {
         ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
         ...(status !== undefined ? { status: status || 'received' } : {}),
         ...(notes !== undefined ? { notes: notes || null } : {}),
-        ...(subsidiaryId !== undefined ? { subsidiaryId: subsidiaryId || null } : {}),
-        ...(currencyId !== undefined ? { currencyId: currencyId || null } : {}),
+        ...(subsidiaryId !== undefined ? { subsidiaryId: nextSubsidiaryId } : {}),
+        ...(currencyId !== undefined ? { currencyId: nextCurrencyId } : {}),
       },
       include: INCLUDE,
     })

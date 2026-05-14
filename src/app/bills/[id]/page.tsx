@@ -67,6 +67,10 @@ const BILL_LINE_COLUMNS = [
   { id: 'unit-price' as const, label: 'Unit Price' },
   { id: 'line-total' as const, label: 'Line Total' },
   { id: 'notes' as const, label: 'Notes' },
+  { id: 'department' as const, label: 'Department' },
+  { id: 'location' as const, label: 'Location' },
+  { id: 'class' as const, label: 'Class' },
+  { id: 'project' as const, label: 'Project' },
 ]
 
 export default async function BillDetailPage({
@@ -83,7 +87,7 @@ export default async function BillDetailPage({
   const isCustomizing = customize === '1'
   const { moneySettings } = await loadCompanyDisplaySettings()
 
-  const [bill, billOpenItem, vendors, purchaseOrders, subsidiaries, currencies, items, expenseAccounts, customization] = await Promise.all([
+  const [bill, billOpenItem, vendors, purchaseOrders, subsidiaries, currencies, items, expenseAccounts, departments, locations, classes, projects, customization] = await Promise.all([
     prisma.bill.findUnique({
       where: { id },
       include: {
@@ -100,6 +104,10 @@ export default async function BillDetailPage({
             expenseAccount: {
               select: { id: true, accountId: true, accountNumber: true, name: true },
             },
+            department: { select: { id: true, departmentId: true, name: true } },
+            location: { select: { id: true, locationId: true, name: true } },
+            classDimension: { select: { id: true, classId: true, name: true } },
+            project: { select: { id: true, name: true } },
           },
           orderBy: [{ createdAt: 'asc' }],
         },
@@ -165,6 +173,26 @@ export default async function BillDetailPage({
       select: { id: true, accountId: true, accountNumber: true, name: true },
       take: 500,
     }),
+    prisma.department.findMany({
+      where: { active: true },
+      orderBy: [{ departmentNumber: 'asc' }, { departmentId: 'asc' }],
+      select: { id: true, departmentId: true, departmentNumber: true, name: true },
+    }),
+    prisma.location.findMany({
+      where: { inactive: false },
+      orderBy: [{ code: 'asc' }, { locationId: 'asc' }],
+      select: { id: true, locationId: true, code: true, name: true },
+    }),
+    prisma.classDimension.findMany({
+      where: { inactive: false },
+      orderBy: [{ classId: 'asc' }, { name: 'asc' }],
+      select: { id: true, classId: true, name: true },
+    }),
+    prisma.project.findMany({
+      where: { inactive: false },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, description: true },
+    }),
     loadBillDetailCustomization(),
   ])
 
@@ -178,6 +206,9 @@ export default async function BillDetailPage({
           account: {
             select: { accountId: true, accountNumber: true, name: true },
           },
+          department: { select: { departmentId: true, departmentNumber: true, name: true } },
+          location: { select: { locationId: true, code: true, name: true } },
+          classDimension: { select: { classId: true, name: true } },
         },
       },
     },
@@ -692,6 +723,18 @@ export default async function BillDetailPage({
     expenseAccountRecordId: line.expenseAccountId,
     expenseAccountId: line.expenseAccount?.accountId ?? null,
     expenseAccountName: line.expenseAccount?.name ?? null,
+    departmentRecordId: line.department?.id ?? null,
+    departmentId: line.department?.departmentId ?? null,
+    departmentName: line.department?.name ?? null,
+    locationRecordId: line.location?.id ?? null,
+    locationId: line.location?.locationId ?? null,
+    locationName: line.location?.name ?? null,
+    classRecordId: line.classDimension?.id ?? null,
+    classId: line.classDimension?.classId ?? null,
+    className: line.classDimension?.name ?? null,
+    projectRecordId: line.project?.id ?? null,
+    projectId: line.project?.id ?? null,
+    projectName: line.project?.name ?? null,
     description: line.description,
     notes: line.notes,
     quantity: line.quantity,
@@ -753,7 +796,13 @@ export default async function BillDetailPage({
   })
   const configuredCurrencySection =
     configuredHeaderSections.find((section) => section.title === CURRENCY_READOUT_SECTION_TITLE) ?? currencyReadoutSection
-  const headerSections = configuredHeaderSections.filter((section) => section.title !== CURRENCY_READOUT_SECTION_TITLE)
+  const headerSections = configuredHeaderSections
+    .filter((section) => section.title !== CURRENCY_READOUT_SECTION_TITLE)
+    .map((section) => ({
+      ...section,
+      fields: section.fields.filter((field) => !String(field.key).startsWith('currency-')),
+    }))
+    .filter((section) => section.fields.length > 0)
   const transactionCurrencyCode =
     currencyCodeById.get(billOpenItem?.transactionCurrencyId ?? bill.currencyId ?? '') ?? null
   const localCurrencyCode = currencyCodeById.get(billOpenItem?.localCurrencyId ?? '') ?? null
@@ -796,6 +845,27 @@ export default async function BillDetailPage({
                     fields: buildTransactionExportHeaderFields([section]),
                   }))}
                 />
+                <Link
+                  href={`/bill-payments/new?billId=${encodeURIComponent(bill.id)}`}
+                  className="rounded-md border px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+                >
+                  Pay Bill
+                </Link>
+                <Link
+                  href={`/bill-payments/new?billId=${encodeURIComponent(bill.id)}&method=check&status=processed`}
+                  className="rounded-md border px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+                >
+                  Pay by Check
+                </Link>
+                <Link
+                  href={`/payment-runs/new?billId=${encodeURIComponent(bill.id)}`}
+                  className="rounded-md border px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--border-muted)', color: 'var(--text-secondary)' }}
+                >
+                  Add to Payment Run
+                </Link>
                 <Link
                   href={`${detailHref}?customize=1`}
                   className="rounded-md border px-3 py-2 text-sm"
@@ -892,6 +962,10 @@ export default async function BillDetailPage({
               },
               }))}
               accountOptions={expenseAccounts}
+              departmentOptions={departments}
+              locationOptions={locations}
+              classOptions={classes}
+              projectOptions={projects}
               currencyCode={transactionCurrencyCode}
               lineColumns={getOrderedVisibleTransactionLineColumns(BILL_LINE_COLUMNS, customization)}
             lineSettings={customization.lineSettings}

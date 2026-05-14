@@ -253,6 +253,21 @@ export default async function BillPaymentsPage({
     skip: pagination.skip,
     take: pagination.pageSize,
   })
+  const postingJournals = rows.length > 0
+    ? await prisma.journalEntry.findMany({
+        where: {
+          sourceType: 'bill-payment',
+          sourceId: { in: rows.map((row) => row.id) },
+        },
+        select: { id: true, number: true, sourceId: true },
+        orderBy: { createdAt: 'desc' },
+      })
+    : []
+  const postingJournalByPaymentId = new Map(
+    postingJournals
+      .filter((journal) => journal.sourceId)
+      .map((journal) => [journal.sourceId as string, journal]),
+  )
 
   const buildPageHref = (page: number) => {
     const search = new URLSearchParams()
@@ -381,12 +396,14 @@ export default async function BillPaymentsPage({
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                  <td colSpan={14} className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
                     No bill payments yet.
                   </td>
                 </tr>
               ) : (
-                rows.map((row, index) => (
+                rows.map((row, index) => {
+                  const postingJournal = postingJournalByPaymentId.get(row.id)
+                  return (
                   <tr key={row.id} style={index < rows.length - 1 ? { borderBottom: '1px solid var(--border-muted)' } : {}}>
                     <td data-column="number" className="px-4 py-2 text-sm">
                       <Link href={`/bill-payments/${row.id}`} className="font-medium hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
@@ -430,6 +447,15 @@ export default async function BillPaymentsPage({
                     <td data-column="status" className="px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
                       {formatRecordLabel(row.status, statusLabelMap)}
                     </td>
+                    <td data-column="gl-posting" className="px-4 py-2 text-sm">
+                      {postingJournal ? (
+                        <Link href={`/journals/${postingJournal.id}`} className="hover:underline" style={{ color: 'var(--accent-primary-strong)' }}>
+                          {postingJournal.number}
+                        </Link>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                      )}
+                    </td>
                     <td data-column="notes" className="max-w-[200px] truncate px-4 py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
                       {row.notes ?? '-'}
                     </td>
@@ -458,7 +484,8 @@ export default async function BillPaymentsPage({
                       />
                     </td>
                   </tr>
-                ))
+                  )
+                })
               )}
             </tbody>
           </table>

@@ -67,10 +67,24 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     summary: 'Process customer payments, manage subscriptions, and receive payment event webhooks.',
     category: 'Commerce',
     statusLabel: 'Configured via API keys',
-    setupFields: ['Secret Key', 'Publishable Key'],
+    setupFields: ['Restricted/Secret API Key', 'Publishable Key', 'Webhook Signing Secret'],
     credentials: [
-      { key: 'secretKey', label: 'Secret Key', type: 'password', required: true, placeholder: 'sk_live_...' },
-      { key: 'publishableKey', label: 'Publishable Key', type: 'text', required: true, placeholder: 'pk_live_...' },
+      {
+        key: 'secretKey',
+        label: 'Restricted or Secret API Key',
+        type: 'password',
+        required: true,
+        placeholder: 'rk_test_... or sk_test_...',
+        hint: 'Prefer a restricted API key with the minimum Stripe permissions needed. This value stays server-side.',
+      },
+      {
+        key: 'publishableKey',
+        label: 'Publishable Key',
+        type: 'text',
+        required: true,
+        placeholder: 'pk_test_...',
+        hint: 'This is safe for browser-side Stripe.js usage, but it should still match the same test/live mode as the server key.',
+      },
       {
         key: 'webhookSecret',
         label: 'Webhook Signing Secret',

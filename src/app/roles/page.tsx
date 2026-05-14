@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
-import EditButton from '@/components/EditButton'
-import DeleteButton from '@/components/DeleteButton'
+import ListRowActions from '@/components/ListRowActions'
 import PaginationFooter from '@/components/PaginationFooter'
 import MasterDataPageHeader from '@/components/MasterDataPageHeader'
 import MasterDataListSection from '@/components/MasterDataListSection'
@@ -130,18 +129,19 @@ export default async function RolesPage({
                     <MasterDataMutedCell columnId="created">{formatMasterDataDate(item.createdAt)}</MasterDataMutedCell>
                     <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(item.updatedAt)}</MasterDataMutedCell>
                     <MasterDataBodyCell columnId="actions">
-                      <div className="flex items-center gap-2">
-                        <EditButton
-                          resource="roles"
-                          id={item.id}
-                          fields={[
+                      <ListRowActions
+                        viewHref={`/roles/${item.id}`}
+                        editButton={{
+                          resource: 'roles',
+                          id: item.id,
+                          fields: [
                             ...(formCustomization.fields.name.visible ? [{ name: 'name', label: 'Name', value: item.name }] : []),
                             ...(formCustomization.fields.description.visible ? [{ name: 'description', label: 'Description', value: item.description ?? '' }] : []),
                             ...(formCustomization.fields.inactive.visible ? [{ name: 'inactive', label: 'Inactive', value: item.active ? 'false' : 'true', type: 'select' as const, options: inactiveOptions }] : []),
-                          ]}
-                        />
-                        <DeleteButton resource="roles" id={item.id} />
-                      </div>
+                          ],
+                        }}
+                        deleteButton={{ resource: 'roles', id: item.id }}
+                      />
                     </MasterDataBodyCell>
                   </tr>
                 )

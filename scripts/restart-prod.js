@@ -109,24 +109,22 @@ function startServer() {
   truncateLogFile(logPath)
   truncateLogFile(errorLogPath)
 
-  const escapedCwd = cwd.replace(/'/g, "''")
-  const escapedLogPath = logPath.replace(/'/g, "''")
-  const escapedErrorLogPath = errorLogPath.replace(/'/g, "''")
-  const launchCommand = [
-    `Start-Process -FilePath powershell.exe`,
-    `-ArgumentList '-NoLogo','-NoProfile','-Command','Set-Location ''${escapedCwd}''; npm.cmd start'`,
-    `-WindowStyle Hidden`,
-    `-RedirectStandardOutput '${escapedLogPath}'`,
-    `-RedirectStandardError '${escapedErrorLogPath}'`,
-  ].join(' ')
-
-  const child = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-Command', launchCommand], {
+  const out = fs.openSync(logPath, 'a')
+  const err = fs.openSync(errorLogPath, 'a')
+  const child = spawn(
+    process.execPath,
+    [
+      path.join(cwd, 'scripts', 'server-wrapper.js'),
+    ],
+    {
     cwd,
-    detached: false,
-    stdio: 'ignore',
+    detached: true,
+    stdio: ['ignore', out, err],
     windowsHide: true,
     shell: false,
-  })
+    },
+  )
+  child.unref()
 
   return child.pid
 }

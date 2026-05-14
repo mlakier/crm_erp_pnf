@@ -4,6 +4,8 @@ import { useRef, useState } from 'react'
 import Link from 'next/link'
 import DetailStatCardsCustomizeSection, { DEFAULT_DETAIL_STAT_CARDS_TITLE } from '@/components/DetailStatCardsCustomizeSection'
 import SearchableSelect, { type SearchableSelectOption } from '@/components/SearchableSelect'
+import { useSeededDimensionLabels } from '@/components/SeededDimensionLabelsProvider'
+import { applySeededDimensionLabels } from '@/lib/transaction-gl-impact'
 import type { TransactionStatCardSize, TransactionVisualTone } from '@/lib/transaction-page-config'
 
 type FieldKey = string
@@ -184,6 +186,10 @@ export default function RecordDetailCustomizeMode({
   extraFieldCheckboxLabel,
   extraFieldCheckboxValues,
   extraFieldCheckboxDisabledValues,
+  lineColumnCheckboxLabel,
+  lineColumnCheckboxValues,
+  lineColumnCheckboxDisabledValues,
+  lineColumnsRulesNote,
   onToggleExtraFieldCheckbox,
   onSaveCustomization,
 }: {
@@ -220,9 +226,21 @@ export default function RecordDetailCustomizeMode({
   extraFieldCheckboxLabel?: string
   extraFieldCheckboxValues?: Record<string, boolean>
   extraFieldCheckboxDisabledValues?: Record<string, boolean>
+  lineColumnCheckboxLabel?: string
+  lineColumnCheckboxValues?: Record<string, boolean>
+  lineColumnCheckboxDisabledValues?: Record<string, boolean>
+  lineColumnsRulesNote?: string
   onToggleExtraFieldCheckbox?: (fieldId: string) => void
   onSaveCustomization?: (layout: LayoutConfig) => Promise<{ error?: string | null } | void>
 }) {
+  const dimensionLabels = useSeededDimensionLabels()
+  const effectiveLineColumnDefinitions = lineColumnDefinitions
+    ? applySeededDimensionLabels(lineColumnDefinitions, dimensionLabels)
+    : undefined
+  const effectiveSecondaryColumnDefinitions = secondaryColumnDefinitions
+    ? applySeededDimensionLabels(secondaryColumnDefinitions, dimensionLabels)
+    : undefined
+
   function normalizeDetailLayout(nextLayout: LayoutConfig) {
     const normalizedColumns = Math.min(4, Math.max(1, nextLayout.formColumns || 1))
     const normalizedFields = { ...nextLayout.fields }
@@ -946,9 +964,9 @@ export default function RecordDetailCustomizeMode({
 
   function moveLineColumn(columnId: string, direction: -1 | 1) {
     setLayout((prev) => {
-      if (!prev.lineColumns || !lineColumnDefinitions) return prev
+      if (!prev.lineColumns || !effectiveLineColumnDefinitions) return prev
 
-      const ordered = [...lineColumnDefinitions]
+      const ordered = [...effectiveLineColumnDefinitions]
         .map((column) => ({
           id: column.id,
           config: prev.lineColumns?.[column.id],
@@ -1029,9 +1047,9 @@ export default function RecordDetailCustomizeMode({
 
   function moveSecondaryColumn(columnId: string, direction: -1 | 1) {
     setLayout((prev) => {
-      if (!prev.secondaryColumns || !secondaryColumnDefinitions) return prev
+      if (!prev.secondaryColumns || !effectiveSecondaryColumnDefinitions) return prev
 
-      const ordered = [...secondaryColumnDefinitions]
+      const ordered = [...effectiveSecondaryColumnDefinitions]
         .map((column) => ({
           id: column.id,
           config: prev.secondaryColumns?.[column.id],
@@ -1270,16 +1288,16 @@ export default function RecordDetailCustomizeMode({
   }
 
   const orderedLineColumns =
-    lineColumnDefinitions && layout.lineColumns
-      ? [...lineColumnDefinitions].sort(
+    effectiveLineColumnDefinitions && layout.lineColumns
+      ? [...effectiveLineColumnDefinitions].sort(
           (left, right) => (layout.lineColumns?.[left.id]?.order ?? 0) - (layout.lineColumns?.[right.id]?.order ?? 0),
         )
       : []
   const orderedStatCards = layout.statCards ? [...layout.statCards].sort((left, right) => left.order - right.order) : []
   const orderedReferenceLayouts = layout.referenceLayouts ?? []
   const orderedSecondaryColumns =
-    secondaryColumnDefinitions && layout.secondaryColumns
-      ? [...secondaryColumnDefinitions].sort(
+    effectiveSecondaryColumnDefinitions && layout.secondaryColumns
+      ? [...effectiveSecondaryColumnDefinitions].sort(
           (left, right) => (layout.secondaryColumns?.[left.id]?.order ?? 0) - (layout.secondaryColumns?.[right.id]?.order ?? 0),
         )
       : []
@@ -1756,7 +1774,7 @@ export default function RecordDetailCustomizeMode({
         </div>
       </div>
 
-      {lineColumnDefinitions && layout.lineColumns ? (
+      {effectiveLineColumnDefinitions && layout.lineColumns ? (
         <div className="rounded-xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>
@@ -1766,6 +1784,11 @@ export default function RecordDetailCustomizeMode({
               <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
                 {resolvedLineColumnsIntro}
               </p>
+              {lineColumnsRulesNote ? (
+                <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {lineColumnsRulesNote}
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -1815,6 +1838,18 @@ export default function RecordDetailCustomizeMode({
                     />
                     Show
                   </label>
+                  {lineColumnCheckboxLabel && lineColumnCheckboxValues ? (
+                    <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(lineColumnCheckboxValues[column.id])}
+                        disabled={Boolean(lineColumnCheckboxDisabledValues?.[column.id])}
+                        readOnly
+                        className="h-4 w-4"
+                      />
+                      {lineColumnCheckboxLabel}
+                    </label>
+                  ) : null}
                   <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                     Order {index + 1}
                   </span>
@@ -1868,7 +1903,7 @@ export default function RecordDetailCustomizeMode({
         </div>
       ) : null}
 
-      {secondaryColumnDefinitions && layout.secondaryColumns ? (
+      {effectiveSecondaryColumnDefinitions && layout.secondaryColumns ? (
         <div className="rounded-xl border p-6" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border-muted)' }}>
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>

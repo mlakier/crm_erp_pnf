@@ -10,6 +10,18 @@ export function formatIntercompanyJournalNumber(sequence: number, config = DEFAU
   return formatIdentifier(sequence, config)
 }
 
+const SYSTEM_JOURNAL_ID_SETTING = {
+  prefix: 'SJE-',
+  startingNumber: 1,
+  digits: 0,
+  autoIncrement: true,
+  locked: false,
+}
+
+export function formatSystemJournalNumber(sequence: number, config = SYSTEM_JOURNAL_ID_SETTING) {
+  return formatIdentifier(sequence, config)
+}
+
 async function generateNextJournalNumberBySetting(settingKey: 'journal' | 'intercompanyJournal') {
   const config = await loadIdSetting(settingKey)
   const latestEntries = await prisma.journalEntry.findMany({
@@ -42,4 +54,27 @@ export async function generateNextJournalNumber() {
 
 export async function generateNextIntercompanyJournalNumber() {
   return generateNextJournalNumberBySetting('intercompanyJournal')
+}
+
+export async function generateNextSystemJournalNumber() {
+  const latestEntries = await prisma.journalEntry.findMany({
+    where: {
+      number: {
+        startsWith: SYSTEM_JOURNAL_ID_SETTING.prefix,
+      },
+    },
+    orderBy: {
+      number: 'desc',
+    },
+    select: {
+      number: true,
+    },
+    take: 200,
+  })
+
+  const nextSequence = getNextSequenceFromValues(
+    latestEntries.map((entry) => entry.number),
+    SYSTEM_JOURNAL_ID_SETTING,
+  )
+  return formatSystemJournalNumber(nextSequence)
 }

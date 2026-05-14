@@ -6,6 +6,8 @@ import { generateNextPurchaseOrderNumber } from '@/lib/purchase-order-number'
 import { calcLineTotal, sumMoney } from '@/lib/money'
 import { toNumericValue } from '@/lib/format'
 import { resolveVendorTransactionSnapshot } from '@/lib/transaction-snapshot-defaults'
+import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
+import { getRequiredStandardTransactionPostingContext, getTransactionPostingContextError } from '@/lib/transaction-posting-context'
 
 const INCLUDE = {
   vendor: true,
@@ -115,6 +117,10 @@ export async function POST(request: NextRequest) {
       subsidiaryId: requestSubsidiaryId,
       currencyId,
     })
+    const lineRequirementsError = getTransactionLineRequirementsError('purchase-requisition', lineItems)
+    if (lineRequirementsError) {
+      return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
+    }
 
     const normalizedLineItems = Array.isArray(lineItems)
       ? lineItems
@@ -143,6 +149,13 @@ export async function POST(request: NextRequest) {
     const computedTotal = normalizedLineItems.length
       ? sumMoney(normalizedLineItems.map((line: { lineTotal: number }) => line.lineTotal))
       : 0
+    const postingContext = getRequiredStandardTransactionPostingContext('purchase-requisition', {
+      subsidiaryId: snapshot.subsidiaryId,
+      currencyId: snapshot.currencyId,
+    })
+    if ('error' in postingContext) {
+      return NextResponse.json({ error: postingContext.error }, { status: 400 })
+    }
 
     const requisition = await prisma.requisition.create({
       data: {
@@ -157,8 +170,8 @@ export async function POST(request: NextRequest) {
         userId,
         departmentId: departmentId || null,
         vendorId: vendorId || null,
-        subsidiaryId: snapshot.subsidiaryId,
-        currencyId: snapshot.currencyId,
+        subsidiaryId: postingContext.subsidiaryId,
+        currencyId: postingContext.currencyId,
         lineItems: normalizedLineItems.length
           ? {
               create: normalizedLineItems.map((line: {
@@ -215,8 +228,18 @@ export async function PUT(request: NextRequest) {
       },
     })
     if (!before) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const nextSubsidiaryId = requestSubsidiaryId !== undefined ? requestSubsidiaryId || null : before.subsidiaryId
+    const nextCurrencyId = currencyId !== undefined ? currencyId || null : before.currencyId
+    const postingContextError = getTransactionPostingContextError('purchase-requisition', {
+      subsidiaryId: nextSubsidiaryId,
+      currencyId: nextCurrencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
 
     const requisition = await prisma.requisition.update({
+      // Keep posting context explicit even when users adjust the header later.
       where: { id },
       data: {
         ...(body.number !== undefined ? { number: body.number || before.number } : {}),
@@ -228,8 +251,8 @@ export async function PUT(request: NextRequest) {
         ...(notes !== undefined ? { notes: notes || null } : {}),
         ...(vendorId !== undefined ? { vendorId: vendorId || null } : {}),
         ...(departmentId !== undefined ? { departmentId: departmentId || null } : {}),
-        ...(requestSubsidiaryId !== undefined ? { subsidiaryId: requestSubsidiaryId || null } : {}),
-        ...(currencyId !== undefined ? { currencyId: currencyId || null } : {}),
+        ...(requestSubsidiaryId !== undefined ? { subsidiaryId: nextSubsidiaryId } : {}),
+        ...(currencyId !== undefined ? { currencyId: nextCurrencyId } : {}),
       },
     })
 
@@ -291,20 +314,28 @@ export async function PUT(request: NextRequest) {
           ? sumMoney(normalizedLineItems.map((line) => line.lineTotal))
           : toNumericValue(before.total)
         const po = await prisma.purchaseOrder.create({
+          // The generated PO inherits the requisition posting context and must persist it.
           data: {
             number: poNumber,
             status: 'draft',
             total,
             vendorId: effectiveVendorId,
             userId: before.userId,
-            subsidiaryId: requestSubsidiaryId !== undefined ? (requestSubsidiaryId || null) : before.subsidiaryId,
-            currencyId: currencyId !== undefined ? (currencyId || null) : before.currencyId,
+            subsidiaryId: nextSubsidiaryId,
+            currencyId: nextCurrencyId,
             requisitionId: before.id,
             lineItems: {
               create: normalizedLineItems,
             },
           },
         })
+        const generatedPoContextError = getTransactionPostingContextError('purchase-order', {
+          subsidiaryId: po.subsidiaryId,
+          currencyId: po.currencyId,
+        })
+        if (generatedPoContextError) {
+          return NextResponse.json({ error: generatedPoContextError }, { status: 400 })
+        }
 
         // Mark requisition as ordered now that PO is raised
         await prisma.requisition.update({

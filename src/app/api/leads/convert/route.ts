@@ -13,6 +13,7 @@ import {
   getWorkflowDocumentAction,
   loadOtcWorkflowRuntime,
 } from '@/lib/otc-workflow-runtime'
+import { getRequiredStandardTransactionPostingContext } from '@/lib/transaction-posting-context'
 
 function leadDisplayName(lead: {
   leadNumber?: string | null
@@ -233,6 +234,13 @@ export async function POST(request: NextRequest) {
 
       const linesTotal = sumMoney(normalizedLines.map((line) => line.lineTotal))
       const finalAmount = parsedAmount ?? (normalizedLines.length > 0 ? linesTotal : null)
+      const postingContext = getRequiredStandardTransactionPostingContext('opportunity', {
+        subsidiaryId: lead.subsidiaryId,
+        currencyId: lead.currencyId,
+      })
+      if ('error' in postingContext) {
+        throw new Error(postingContext.error)
+      }
 
       const opportunity = await tx.opportunity.create({
         data: {
@@ -241,8 +249,8 @@ export async function POST(request: NextRequest) {
           amount: finalAmount,
           stage: stage || nextOpportunityStage,
           closeDate: closeDate ? new Date(closeDate) : null,
-          subsidiaryId: lead.subsidiaryId || null,
-          currencyId: lead.currencyId || null,
+          subsidiaryId: postingContext.subsidiaryId,
+          currencyId: postingContext.currencyId,
           customerId,
           userId: lead.userId,
           lineItems: normalizedLines.length

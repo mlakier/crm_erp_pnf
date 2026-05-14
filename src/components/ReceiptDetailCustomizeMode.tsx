@@ -2,7 +2,11 @@
 
 import type { ReceiptDetailCustomizationConfig } from '@/lib/receipt-detail-customization'
 import TransactionRecordDetailCustomizeMode from '@/components/TransactionRecordDetailCustomizeMode'
-import { RECEIPT_REFERENCE_SOURCES, RECEIPT_STAT_CARDS } from '@/lib/receipt-detail-customization'
+import {
+  RECEIPT_LINE_COLUMNS,
+  RECEIPT_REFERENCE_SOURCES,
+  RECEIPT_STAT_CARDS,
+} from '@/lib/receipt-detail-customization'
 import {
   TRANSACTION_GL_IMPACT_COLUMNS,
   TRANSACTION_GL_IMPACT_SETTING_AVAILABILITY,
@@ -66,10 +70,14 @@ export default function ReceiptDetailCustomizeMode({
       formKey="receiptCreate"
       saveEndpoint="/api/config/receipt-detail-customization"
       recordLabel="receipt"
+      lineColumnsLabel="Receipt Lines"
       sectionDescriptions={sectionDescriptions}
       referenceSourceDefinitions={referenceSourceDefinitions ?? RECEIPT_REFERENCE_SOURCES}
       statCardDefinitions={RECEIPT_STAT_CARDS}
       statPreviewCards={statPreviewCards}
+      lineColumnDefinitions={RECEIPT_LINE_COLUMNS}
+      lineSectionSettingDefinitions={[]}
+      lineColumnSettingDefinitions={[]}
       secondaryColumnsLabel="GL Impact"
       secondaryColumnDefinitions={TRANSACTION_GL_IMPACT_COLUMNS}
       secondaryColumnSettingAvailability={TRANSACTION_GL_IMPACT_SETTING_AVAILABILITY}

@@ -421,7 +421,7 @@ export default async function PurchaseRequisitionsPage({
                     <td data-column="department" className="px-4 py-2 text-sm">
                       {requisition.department && requisition.departmentId ? (
                         <Link
-                          href={`/departments/${requisition.departmentId}`}
+                          href="/configuration/manage-dimensions"
                           className="hover:underline"
                           style={{ color: 'var(--accent-primary-strong)' }}
                         >

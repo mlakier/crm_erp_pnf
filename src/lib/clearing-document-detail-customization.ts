@@ -204,6 +204,8 @@ export const CLEARING_DOCUMENT_REFERENCE_SOURCES: LinkedRecordReferenceSource[] 
 export const CLEARING_DOCUMENT_LINE_COLUMNS: ClearingDocumentLineColumnMeta[] = [
   { id: 'lineNumber', label: 'Line', description: 'Sequence number for the clearing line.' },
   { id: 'lineRole', label: 'Role', description: 'Role this line plays in the clearing pattern.' },
+  { id: 'fromOpenItem', label: 'From Open Item', description: 'Source open item reduced by the clearing line.' },
+  { id: 'toOpenItem', label: 'To Open Item', description: 'Destination open item touched by the clearing line.' },
   { id: 'transactionAmount', label: 'Amount', description: 'Transaction amount carried on the clearing line.' },
   { id: 'localAmount', label: 'Local Amount', description: 'Amount carried in local/statutory currency for the clearing line.' },
   { id: 'functionalAmount', label: 'Functional Amount', description: 'Amount carried in functional currency for the clearing line.' },
@@ -211,8 +213,6 @@ export const CLEARING_DOCUMENT_LINE_COLUMNS: ClearingDocumentLineColumnMeta[] = 
   { id: 'realizedFxLocalAmount', label: 'Realized FX Local', description: 'Realized foreign exchange effect in local currency for the clearing line.' },
   { id: 'realizedFxFunctionalAmount', label: 'Realized FX Functional', description: 'Realized foreign exchange effect in functional currency for the clearing line.' },
   { id: 'realizedFxGroupAmount', label: 'Realized FX Group', description: 'Realized foreign exchange effect in group/reporting currency for the clearing line.' },
-  { id: 'fromOpenItem', label: 'From Open Item', description: 'Source open item reduced by the clearing line.' },
-  { id: 'toOpenItem', label: 'To Open Item', description: 'Destination open item touched by the clearing line.' },
   { id: 'application', label: 'Application', description: 'Open-item application created for this line when applicable.' },
   { id: 'source', label: 'Source', description: 'Source transaction context for the line.' },
   { id: 'settlement', label: 'Settlement', description: 'Settlement transaction context for the line.' },

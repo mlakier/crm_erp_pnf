@@ -3,11 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { logActivity } from '@/lib/activity'
 import { syncInvoiceTotal } from '@/lib/invoice-total'
 import { calcLineTotal, parseMoneyValue, parseQuantity } from '@/lib/money'
+import { resolveSeededLineDimensionDefaults } from '@/lib/dimension-source-resolver'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { invoiceId, itemId, description, quantity, unitPrice, displayOrder, userId } = body
+    const { invoiceId, itemId, departmentId, locationId, classId, projectId, description, quantity, unitPrice, displayOrder, userId } = body
 
     if (!invoiceId || !description || !userId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -17,18 +18,37 @@ export async function POST(request: NextRequest) {
     const parsedUnitPrice = parseMoneyValue(unitPrice, Number.NaN)
     const parsedDisplayOrder = Number.parseInt(String(displayOrder ?? 0), 10)
 
-    if (!Number.isFinite(parsedUnitPrice) || parsedUnitPrice < 0) {
-      return NextResponse.json({ error: 'Unit price must be zero or greater' }, { status: 400 })
+    if (!Number.isFinite(parsedUnitPrice)) {
+      return NextResponse.json({ error: 'Unit price must be a valid amount' }, { status: 400 })
     }
 
     if (!Number.isFinite(parsedDisplayOrder) || parsedDisplayOrder < 0) {
       return NextResponse.json({ error: 'Display order must be zero or greater' }, { status: 400 })
     }
 
+    const dimensionDefaults = await resolveSeededLineDimensionDefaults({
+      documentType: 'invoice',
+      itemId: itemId || null,
+      departmentId: departmentId || null,
+      locationId: locationId || null,
+      classId: classId || null,
+      projectId: projectId || null,
+    })
+
+    if (dimensionDefaults.unresolvedRequired.length > 0) {
+      return NextResponse.json({
+        error: `Missing required dimension value: ${dimensionDefaults.unresolvedRequired.map((entry) => entry.label).join(', ')}`,
+      }, { status: 400 })
+    }
+
     const lineItem = await prisma.invoiceLineItem.create({
       data: {
         invoiceId,
         itemId: itemId || null,
+        departmentId: dimensionDefaults.departmentId || null,
+        locationId: dimensionDefaults.locationId || null,
+        classId: dimensionDefaults.classId || null,
+        projectId: projectId || null,
         description: String(description).trim(),
         quantity: parsedQuantity,
         unitPrice: parsedUnitPrice,
@@ -62,7 +82,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { itemId, description, quantity, unitPrice, userId } = body
+    const { itemId, departmentId, locationId, classId, projectId, description, quantity, unitPrice, userId } = body
 
     const existing = await prisma.invoiceLineItem.findUnique({ where: { id } })
     if (!existing) {
@@ -76,14 +96,33 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Description is required' }, { status: 400 })
     }
 
-    if (!Number.isFinite(parsedUnitPrice) || parsedUnitPrice < 0) {
-      return NextResponse.json({ error: 'Unit price must be zero or greater' }, { status: 400 })
+    if (!Number.isFinite(parsedUnitPrice)) {
+      return NextResponse.json({ error: 'Unit price must be a valid amount' }, { status: 400 })
+    }
+
+    const dimensionDefaults = await resolveSeededLineDimensionDefaults({
+      documentType: 'invoice',
+      itemId: itemId || null,
+      departmentId: departmentId || null,
+      locationId: locationId || null,
+      classId: classId || null,
+      projectId: projectId || null,
+    })
+
+    if (dimensionDefaults.unresolvedRequired.length > 0) {
+      return NextResponse.json({
+        error: `Missing required dimension value: ${dimensionDefaults.unresolvedRequired.map((entry) => entry.label).join(', ')}`,
+      }, { status: 400 })
     }
 
     const updated = await prisma.invoiceLineItem.update({
       where: { id },
       data: {
         itemId: itemId || null,
+        departmentId: dimensionDefaults.departmentId || null,
+        locationId: dimensionDefaults.locationId || null,
+        classId: dimensionDefaults.classId || null,
+        projectId: projectId || null,
         description: String(description).trim(),
         quantity: parsedQuantity,
         unitPrice: parsedUnitPrice,

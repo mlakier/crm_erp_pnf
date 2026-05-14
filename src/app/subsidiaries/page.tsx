@@ -3,8 +3,7 @@ import { prisma } from '@/lib/prisma'
 import MasterDataPageHeader from '@/components/MasterDataPageHeader'
 import MasterDataListSection from '@/components/MasterDataListSection'
 import { MasterDataBodyCell, MasterDataEmptyStateRow, MasterDataHeaderCell, MasterDataMutedCell } from '@/components/MasterDataTableCells'
-import EditButton from '@/components/EditButton'
-import DeleteButton from '@/components/DeleteButton'
+import ListRowActions from '@/components/ListRowActions'
 import { getPagination } from '@/lib/pagination'
 import { loadCompanyInformationSettings } from '@/lib/company-information-settings-store'
 import { loadCompanyCabinetFiles } from '@/lib/company-file-cabinet-store'
@@ -30,6 +29,18 @@ type SubsidiaryHierarchyEntity = {
   parentSubsidiaryId: string | null
 }
 
+function formatPercent(value?: number | null) {
+  return value == null ? '-' : `${value.toString()}%`
+}
+
+function formatBoolean(value: boolean) {
+  return value ? 'Yes' : 'No'
+}
+
+function formatAccount(account?: { accountId: string; name: string } | null) {
+  return account ? `${account.accountId} - ${account.name}` : '-'
+}
+
 export default async function SubsidiariesPage({
   searchParams,
 }: {
@@ -50,7 +61,25 @@ export default async function SubsidiariesPage({
   const [entities, currencies, glAccounts, allEntities, companySettings, cabinetFiles, fieldOptions, formCustomization] = await Promise.all([
     prisma.subsidiary.findMany({
       where,
-      include: { localCurrency: true, functionalCurrency: true, groupCurrency: true, parentSubsidiary: true },
+      include: {
+        localCurrency: true,
+        functionalCurrency: true,
+        groupCurrency: true,
+        parentSubsidiary: true,
+        eliminationTargetParent: { select: { subsidiaryId: true, name: true } },
+        retainedEarningsAccount: { select: { accountId: true, name: true } },
+        ctaAccount: { select: { accountId: true, name: true } },
+        intercompanyClearingAccount: { select: { accountId: true, name: true } },
+        dueToAccount: { select: { accountId: true, name: true } },
+        dueFromAccount: { select: { accountId: true, name: true } },
+        investmentInSubsidiaryAccount: { select: { accountId: true, name: true } },
+        nciEquityAccount: { select: { accountId: true, name: true } },
+        nciIncomeStatementAccount: { select: { accountId: true, name: true } },
+        realizedFxGainAccount: { select: { accountId: true, name: true } },
+        realizedFxLossAccount: { select: { accountId: true, name: true } },
+        unrealizedFxGainAccount: { select: { accountId: true, name: true } },
+        unrealizedFxLossAccount: { select: { accountId: true, name: true } },
+      },
       orderBy:
         sort === 'id'
           ? [{ subsidiaryId: 'asc' as const }, { createdAt: 'desc' as const }]
@@ -70,11 +99,25 @@ export default async function SubsidiariesPage({
     }),
     loadCompanyInformationSettings(),
     loadCompanyCabinetFiles(),
-    loadFieldOptionsMap(fieldMetaById, ['country', 'inactive']),
+    loadFieldOptionsMap(fieldMetaById, [
+      'country',
+      'fiscalCalendarId',
+      'accountingStandard',
+      'consolidationMethod',
+      'eliminationScope',
+      'eliminationCurrencyBasis',
+      'inactive',
+    ]),
     loadSubsidiaryFormCustomization(),
   ])
   const countryOptions = fieldOptions.country ?? []
+  const consolidationMethodOptions = fieldOptions.consolidationMethod ?? []
+  const fiscalCalendarLabels = new Map((fieldOptions.fiscalCalendarId ?? []).map((option) => [option.value, option.label]))
+  const accountingStandardLabels = new Map((fieldOptions.accountingStandard ?? []).map((option) => [option.value, option.label]))
+  const eliminationScopeLabels = new Map((fieldOptions.eliminationScope ?? []).map((option) => [option.value, option.label]))
+  const eliminationCurrencyBasisLabels = new Map((fieldOptions.eliminationCurrencyBasis ?? []).map((option) => [option.value, option.label]))
   const inactiveOptions = fieldOptions.inactive ?? []
+  const consolidationMethodLabels = new Map(consolidationMethodOptions.map((option) => [option.value, option.label]))
   const hierarchyEntities: SubsidiaryHierarchyEntity[] = allEntities
 
   const companyLogoPages = resolveCompanyPageLogo(companySettings, cabinetFiles)
@@ -115,7 +158,7 @@ export default async function SubsidiariesPage({
         compactExport={subsidiaryListDefinition.compactExport}
         tableContainerId="subsidiaries-list-scroll"
       >
-        <table className="min-w-[1600px] w-full" id={subsidiaryListDefinition.tableId}>
+        <table className="min-w-[3200px] w-full" id={subsidiaryListDefinition.tableId}>
           <thead>
             <tr style={MASTER_DATA_TABLE_DIVIDER_STYLE}>
               <MasterDataHeaderCell columnId="subsidiary-id" className="sticky top-0 left-0 z-20 w-36 min-w-36 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide">Subsidiary Id</MasterDataHeaderCell>
@@ -129,8 +172,38 @@ export default async function SubsidiariesPage({
               <MasterDataHeaderCell columnId="default-currency">Local Currency</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="functional-currency">Functional Currency</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="reporting-currency">Group Currency</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="fiscal-calendar">Fiscal Calendar</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="accounting-standard">Accounting Standard</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="consolidation-method">Consolidation Method</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="ownership-percent">Ownership %</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="direct-ownership-percent">Direct Ownership %</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="ultimate-ownership-percent">Ultimate Ownership %</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="ownership-effective-from">Ownership From</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="ownership-effective-through">Ownership Through</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="consolidation-effective-from">Consolidation From</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="consolidation-effective-through">Consolidation Through</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="control-indicator">Control</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="nci-required">NCI Required</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="elimination-target-parent">Elimination Target Parent</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="elimination-scope">Elimination Scope</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="elimination-currency-basis">Elimination Currency Basis</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="retained-earnings-account">Retained Earnings Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="cta-account">CTA Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="intercompany-clearing-account">Intercompany Clearing Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="due-to-account">Due To Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="due-from-account">Due From Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="investment-in-subsidiary-account">Investment In Subsidiary Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="nci-equity-account">NCI Equity Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="nci-income-statement-account">NCI Income Statement Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="realized-fx-gain-account">Realized FX Gain Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="realized-fx-loss-account">Realized FX Loss Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="unrealized-fx-gain-account">Unrealized FX Gain Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="unrealized-fx-loss-account">Unrealized FX Loss Account</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="allow-transactions">Allow Transactions</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="allow-bank-accounts">Allow Bank Accounts</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="allow-inventory">Allow Inventory</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="allow-payroll">Allow Payroll</MasterDataHeaderCell>
+              <MasterDataHeaderCell columnId="allow-projects">Allow Projects</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="inactive">Inactive</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="db-id">DB Id</MasterDataHeaderCell>
               <MasterDataHeaderCell columnId="created">Created</MasterDataHeaderCell>
@@ -140,7 +213,7 @@ export default async function SubsidiariesPage({
           </thead>
           <tbody>
             {entities.length === 0 ? (
-              <MasterDataEmptyStateRow colSpan={17}>No subsidiaries found</MasterDataEmptyStateRow>
+              <MasterDataEmptyStateRow colSpan={50}>No subsidiaries found</MasterDataEmptyStateRow>
             ) : (
               entities.map((Subsidiary, index) => (
                 <tr key={Subsidiary.id} style={getMasterDataRowStyle(index, entities.length)}>
@@ -159,18 +232,49 @@ export default async function SubsidiariesPage({
                   <MasterDataMutedCell columnId="default-currency">{Subsidiary.localCurrency?.code ?? '-'}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="functional-currency">{Subsidiary.functionalCurrency?.code ?? '-'}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="reporting-currency">{Subsidiary.groupCurrency?.code ?? '-'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="consolidation-method">{Subsidiary.consolidationMethod ?? '-'}</MasterDataMutedCell>
-                  <MasterDataMutedCell columnId="ownership-percent">{Subsidiary.ownershipPercent?.toString() ?? '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="fiscal-calendar">{Subsidiary.fiscalCalendarId ? fiscalCalendarLabels.get(Subsidiary.fiscalCalendarId) ?? Subsidiary.fiscalCalendarId : '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="accounting-standard">{Subsidiary.accountingStandard ? accountingStandardLabels.get(Subsidiary.accountingStandard) ?? Subsidiary.accountingStandard : '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="consolidation-method">{Subsidiary.consolidationMethod ? consolidationMethodLabels.get(Subsidiary.consolidationMethod) ?? Subsidiary.consolidationMethod : '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="ownership-percent">{formatPercent(Subsidiary.ownershipPercent)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="direct-ownership-percent">{formatPercent(Subsidiary.directOwnershipPercent)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="ultimate-ownership-percent">{formatPercent(Subsidiary.ultimateOwnershipPercent)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="ownership-effective-from">{formatMasterDataDate(Subsidiary.ownershipEffectiveFrom)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="ownership-effective-through">{formatMasterDataDate(Subsidiary.ownershipEffectiveThrough)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="consolidation-effective-from">{formatMasterDataDate(Subsidiary.consolidationEffectiveFrom)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="consolidation-effective-through">{formatMasterDataDate(Subsidiary.consolidationEffectiveThrough)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="control-indicator">{formatBoolean(Subsidiary.controlIndicator)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="nci-required">{formatBoolean(Subsidiary.nciRequired)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="elimination-target-parent">{Subsidiary.eliminationTargetParent ? `${Subsidiary.eliminationTargetParent.subsidiaryId} - ${Subsidiary.eliminationTargetParent.name}` : '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="elimination-scope">{Subsidiary.eliminationScope ? eliminationScopeLabels.get(Subsidiary.eliminationScope) ?? Subsidiary.eliminationScope : '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="elimination-currency-basis">{Subsidiary.eliminationCurrencyBasis ? eliminationCurrencyBasisLabels.get(Subsidiary.eliminationCurrencyBasis) ?? Subsidiary.eliminationCurrencyBasis : '-'}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="retained-earnings-account">{formatAccount(Subsidiary.retainedEarningsAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="cta-account">{formatAccount(Subsidiary.ctaAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="intercompany-clearing-account">{formatAccount(Subsidiary.intercompanyClearingAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="due-to-account">{formatAccount(Subsidiary.dueToAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="due-from-account">{formatAccount(Subsidiary.dueFromAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="investment-in-subsidiary-account">{formatAccount(Subsidiary.investmentInSubsidiaryAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="nci-equity-account">{formatAccount(Subsidiary.nciEquityAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="nci-income-statement-account">{formatAccount(Subsidiary.nciIncomeStatementAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="realized-fx-gain-account">{formatAccount(Subsidiary.realizedFxGainAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="realized-fx-loss-account">{formatAccount(Subsidiary.realizedFxLossAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="unrealized-fx-gain-account">{formatAccount(Subsidiary.unrealizedFxGainAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="unrealized-fx-loss-account">{formatAccount(Subsidiary.unrealizedFxLossAccount)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="allow-transactions">{formatBoolean(Subsidiary.allowTransactions)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="allow-bank-accounts">{formatBoolean(Subsidiary.allowBankAccounts)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="allow-inventory">{formatBoolean(Subsidiary.allowInventory)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="allow-payroll">{formatBoolean(Subsidiary.allowPayroll)}</MasterDataMutedCell>
+                  <MasterDataMutedCell columnId="allow-projects">{formatBoolean(Subsidiary.allowProjects)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="inactive">{Subsidiary.active ? 'No' : 'Yes'}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="db-id">{Subsidiary.id}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="created">{formatMasterDataDate(Subsidiary.createdAt)}</MasterDataMutedCell>
                   <MasterDataMutedCell columnId="last-modified">{formatMasterDataDate(Subsidiary.updatedAt)}</MasterDataMutedCell>
                   <MasterDataBodyCell columnId="actions">
-                    <div className="flex items-center gap-2">
-                      <EditButton
-                        resource="subsidiaries"
-                        id={Subsidiary.id}
-                        fields={[
+                    <ListRowActions
+                      viewHref={`/subsidiaries/${Subsidiary.id}`}
+                      editButton={{
+                        resource: 'subsidiaries',
+                        id: Subsidiary.id,
+                        fields: [
                           ...(formCustomization.fields.subsidiaryId.visible ? [{ name: 'subsidiaryId', label: 'Subsidiary ID', value: Subsidiary.subsidiaryId }] : []),
                           ...(formCustomization.fields.name.visible ? [{ name: 'name', label: 'Name', value: Subsidiary.name }] : []),
                           ...(formCustomization.fields.legalName.visible ? [{ name: 'legalName', label: 'Legal Name', value: Subsidiary.legalName ?? '' }] : []),
@@ -218,7 +322,14 @@ export default async function SubsidiariesPage({
                               placeholder: 'Select currency',
                               options: currencies.map((currency) => ({ value: currency.id, label: `${currency.code} - ${currency.name}` })),
                             }] : []),
-                          ...(formCustomization.fields.consolidationMethod.visible ? [{ name: 'consolidationMethod', label: 'Consolidation Method', value: Subsidiary.consolidationMethod ?? '' }] : []),
+                          ...(formCustomization.fields.consolidationMethod.visible ? [{
+                              name: 'consolidationMethod',
+                              label: 'Consolidation Method',
+                              value: Subsidiary.consolidationMethod ?? '',
+                              type: 'select' as const,
+                              placeholder: 'Select consolidation method',
+                              options: consolidationMethodOptions,
+                            }] : []),
                           ...(formCustomization.fields.ownershipPercent.visible ? [{ name: 'ownershipPercent', label: 'Ownership Percent', value: Subsidiary.ownershipPercent?.toString() ?? '', type: 'number' as const }] : []),
                           ...(formCustomization.fields.retainedEarningsAccountId.visible ? [{
                               name: 'retainedEarningsAccountId',
@@ -267,10 +378,10 @@ export default async function SubsidiariesPage({
                               type: 'select' as const,
                               options: inactiveOptions,
                             }] : []),
-                        ]}
-                      />
-                      <DeleteButton resource="subsidiaries" id={Subsidiary.id} />
-                    </div>
+                        ],
+                      }}
+                      deleteButton={{ resource: 'subsidiaries', id: Subsidiary.id }}
+                    />
                   </MasterDataBodyCell>
                 </tr>
               ))

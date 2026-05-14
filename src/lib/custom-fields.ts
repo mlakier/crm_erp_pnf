@@ -1,4 +1,16 @@
-export const CUSTOM_FIELD_TYPES = ['text', 'textarea', 'number', 'date', 'select', 'checkbox'] as const
+export const CUSTOM_FIELD_TYPES = [
+  'text',
+  'textarea',
+  'number',
+  'date',
+  'select',
+  'checkbox',
+  'list_record',
+  'employee',
+  'subsidiary',
+  'currency',
+  'address',
+] as const
 
 export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number]
 

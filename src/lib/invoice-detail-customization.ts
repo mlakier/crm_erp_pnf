@@ -64,6 +64,7 @@ export type InvoiceLineColumnKey =
   | 'notes'
   | 'department'
   | 'location'
+  | 'class'
   | 'project'
   | 'service-start'
   | 'service-end'
@@ -179,6 +180,7 @@ export const INVOICE_LINE_COLUMNS: Array<{ id: InvoiceLineColumnKey; label: stri
   { id: 'notes', label: 'Notes', description: 'Invoice line notes.' },
   { id: 'department', label: 'Department', description: 'Department coding on the invoice line.' },
   { id: 'location', label: 'Location', description: 'Location coding on the invoice line.' },
+  { id: 'class', label: 'Class', description: 'Class coding on the invoice line.' },
   { id: 'project', label: 'Project', description: 'Project coding on the invoice line.' },
   { id: 'service-start', label: 'Service Start', description: 'Service period start date for the invoice line.' },
   { id: 'service-end', label: 'Service End', description: 'Service period end date for the invoice line.' },
@@ -285,6 +287,7 @@ const DEFAULT_INVOICE_LINE_WIDTHS: Record<InvoiceLineColumnKey, InvoiceLineWidth
   notes: 'wide',
   department: 'wide',
   location: 'wide',
+  class: 'wide',
   project: 'wide',
   'service-start': 'normal',
   'service-end': 'normal',
@@ -304,6 +307,7 @@ const DEFAULT_INVOICE_LINE_EDIT_DISPLAY: Record<InvoiceLineColumnKey, InvoiceLin
   notes: 'label',
   department: 'idAndLabel',
   location: 'idAndLabel',
+  class: 'idAndLabel',
   project: 'label',
   'service-start': 'label',
   'service-end': 'label',
@@ -332,6 +336,7 @@ const DEFAULT_INVOICE_LINE_DROPDOWN_SORT: Record<InvoiceLineColumnKey, InvoiceLi
   notes: 'label',
   department: 'label',
   location: 'label',
+  class: 'label',
   project: 'label',
   'service-start': 'id',
   'service-end': 'id',
@@ -459,7 +464,7 @@ export function defaultInvoiceDetailCustomization(): InvoiceDetailCustomizationC
       INVOICE_LINE_COLUMNS.map((column, index) => [
         column.id,
         {
-          visible: ['notes', 'department', 'location', 'project', 'service-start', 'service-end', 'rev-rec-template', 'performance-obligation-code', 'ssp', 'allocated-amount'].includes(column.id)
+          visible: ['notes', 'department', 'location', 'class', 'project', 'service-start', 'service-end', 'rev-rec-template', 'performance-obligation-code', 'ssp', 'allocated-amount'].includes(column.id)
             ? false
             : true,
           order: index,

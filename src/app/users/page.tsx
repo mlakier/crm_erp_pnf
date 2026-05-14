@@ -2,8 +2,7 @@ import Link from 'next/link'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import EditButton from '@/components/EditButton'
-import DeleteButton from '@/components/DeleteButton'
+import ListRowActions from '@/components/ListRowActions'
 import PaginationFooter from '@/components/PaginationFooter'
 import CreatePageLinkButton from '@/components/CreatePageLinkButton'
 import MasterDataPageHeader from '@/components/MasterDataPageHeader'
@@ -544,18 +543,12 @@ export default async function UsersPage({
                         case 'actions':
                           return (
                             <MasterDataBodyCell key={column.id} columnId={column.id}>
-                              <div className="flex items-center gap-2">
-                                <Link
-                                  href={`/users/${user.id}`}
-                                  className="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
-                                  style={{ backgroundColor: 'var(--accent-primary-strong)' }}
-                                >
-                                  Open
-                                </Link>
-                                <EditButton
-                                  endpoint="/api/users"
-                                  id={user.id}
-                                  fields={[
+                              <ListRowActions
+                                viewHref={`/users/${user.id}`}
+                                editButton={{
+                                  endpoint: '/api/users',
+                                  id: user.id,
+                                  fields: [
                                     ...(formCustomization.fields.name.visible ? [{ name: 'name', label: 'Name', value: user.name ?? '' }] : []),
                                     ...(formCustomization.fields.email.visible ? [{ name: 'email', label: 'Email', value: user.email, type: 'email' as const }] : []),
                                     ...(formCustomization.fields.roleId.visible
@@ -664,10 +657,10 @@ export default async function UsersPage({
                                     ...(formCustomization.fields.inactive.visible
                                       ? [{ name: 'inactive', label: 'Inactive', value: user.inactive ? 'true' : 'false', type: 'select' as const, options: fieldOptions.inactive ?? [] }]
                                       : []),
-                                  ]}
-                                />
-                                <DeleteButton resource="users" id={user.id} />
-                              </div>
+                                  ],
+                                }}
+                                deleteButton={{ resource: 'users', id: user.id }}
+                              />
                             </MasterDataBodyCell>
                           )
                         default:

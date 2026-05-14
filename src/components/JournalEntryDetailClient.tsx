@@ -12,6 +12,7 @@ import RecordGlImpactSection from '@/components/RecordGlImpactSection'
 import RecordDetailPageShell from '@/components/RecordDetailPageShell'
 import RecordHeaderDetails, { type RecordHeaderSection } from '@/components/RecordHeaderDetails'
 import SharedSearchableSelect, { type SearchableSelectOption as SharedSearchableSelectOption } from '@/components/SearchableSelect'
+import { useSeededDimensionLabels } from '@/components/SeededDimensionLabelsProvider'
 import SystemNotesSection, { type SystemNoteRow } from '@/components/SystemNotesSection'
 import TransactionStatsRow from '@/components/TransactionStatsRow'
 import {
@@ -46,12 +47,14 @@ import {
 import { buildTransactionCommunicationComposePayload } from '@/lib/transaction-communications'
 import { journalPageConfig } from '@/lib/transaction-page-configs/journal'
 import { findAccountingPeriodIdForDate } from '@/lib/accounting-periods'
+import { applySeededDimensionLabels } from '@/lib/transaction-gl-impact'
 import type { DocumentRelationshipSummary } from '@/lib/document-relationships'
 
 type EntityOption = { id: string; subsidiaryId: string; name: string }
 type AccountOption = { id: string; accountId: string; accountNumber: string; name: string }
 type DepartmentOption = { id: string; departmentId: string; departmentNumber: string | null; name: string }
 type LocationOption = { id: string; locationId: string; code: string; name: string }
+type ClassOption = { id: string; classId: string; name: string }
 type ProjectOption = { id: string; name: string; description: string | null }
 type CustomerOption = { id: string; customerId: string | null; name: string }
 type VendorOption = { id: string; vendorNumber: string | null; name: string }
@@ -100,6 +103,7 @@ type JournalLineDraft = {
   subsidiaryId: string
   departmentId: string
   locationId: string
+  classId: string
   projectId: string
   customerId: string
   vendorId: string
@@ -123,6 +127,7 @@ type JournalEntryDetailClientProps = {
   accounts: AccountOption[]
   departments: DepartmentOption[]
   locations: LocationOption[]
+  classes: ClassOption[]
   projects: ProjectOption[]
   customers: CustomerOption[]
   vendors: VendorOption[]
@@ -156,6 +161,7 @@ export default function JournalEntryDetailClient({
   accounts,
   departments,
   locations,
+  classes,
   projects,
   customers,
   vendors,
@@ -174,6 +180,8 @@ export default function JournalEntryDetailClient({
   systemNotes = [],
 }: JournalEntryDetailClientProps) {
   const router = useRouter()
+  const dimensionLabels = useSeededDimensionLabels()
+  const classLabelLower = (dimensionLabels.class?.trim() || 'Class').toLowerCase()
   const { req, isLocked } = useFormRequirementsState('journalCreate')
   const [headerValues, setHeaderValues] = useState<Record<string, string>>(initialHeaderValues)
   const [lineItems, setLineItems] = useState<JournalLineDraft[]>(initialLineItems)
@@ -211,6 +219,7 @@ export default function JournalEntryDetailClient({
         subsidiary: renderEntityLabel(entities, (isIntercompany ? line.subsidiaryId : '') || headerValues.subsidiaryId, 'subsidiaryId'),
         department: renderDepartmentLabel(departments, line.departmentId),
         location: renderLocationLabel(locations, line.locationId),
+        class: renderClassLabel(classes, line.classId),
         project: renderProjectLabel(projects, line.projectId),
         customer: renderCustomerLabel(customers, line.customerId),
         vendor: renderVendorLabel(vendors, line.vendorId),
@@ -225,11 +234,15 @@ export default function JournalEntryDetailClient({
         groupDebit: Number(line.groupDebit || 0),
         groupCredit: Number(line.groupCredit || 0),
       })),
-    [accounts, customers, departments, employees, entities, headerValues.subsidiaryId, isIntercompany, items, lineItems, locations, projects, vendors],
+    [accounts, classes, customers, departments, employees, entities, headerValues.subsidiaryId, isIntercompany, items, lineItems, locations, projects, vendors],
   )
   const lineColumnDefinitions = useMemo(
-    () => JOURNAL_LINE_COLUMNS.filter((column) => isIntercompany || column.id !== 'subsidiaryId'),
-    [isIntercompany],
+    () =>
+      applySeededDimensionLabels(
+        JOURNAL_LINE_COLUMNS.filter((column) => isIntercompany || column.id !== 'subsidiaryId'),
+        dimensionLabels,
+      ),
+    [dimensionLabels, isIntercompany],
   )
   const visibleLineColumns = useMemo(
     () =>
@@ -239,8 +252,12 @@ export default function JournalEntryDetailClient({
     [activeCustomization, lineColumnDefinitions],
   )
   const glImpactColumnDefinitions = useMemo(
-    () => JOURNAL_GL_IMPACT_COLUMNS.filter((column) => isIntercompany || column.id !== 'subsidiaryId'),
-    [isIntercompany],
+    () =>
+      applySeededDimensionLabels(
+        JOURNAL_GL_IMPACT_COLUMNS.filter((column) => isIntercompany || column.id !== 'subsidiaryId'),
+        dimensionLabels,
+      ),
+    [dimensionLabels, isIntercompany],
   )
   const visibleGlImpactColumns = useMemo(
     () =>
@@ -444,6 +461,7 @@ export default function JournalEntryDetailClient({
         subsidiaryId: isIntercompany ? headerValues.subsidiaryId || '' : '',
         departmentId: '',
         locationId: '',
+        classId: '',
         projectId: '',
         customerId: '',
         vendorId: '',
@@ -518,6 +536,7 @@ export default function JournalEntryDetailClient({
         subsidiaryId: isIntercompany ? line.subsidiaryId || null : null,
         departmentId: line.departmentId || null,
         locationId: line.locationId || null,
+        classId: line.classId || null,
         projectId: line.projectId || null,
         customerId: line.customerId || null,
         vendorId: line.vendorId || null,
@@ -945,6 +964,35 @@ export default function JournalEntryDetailClient({
                               />
                             </EditableCell>
                           )
+                        case 'classId':
+                          return (
+                            <EditableCell
+                              key={column.id}
+                              editing={editing || isNew}
+                              value={renderClassValue(classes, line.classId, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'view'))}
+                              title={renderClassLabel(classes, line.classId)}
+                              textClassName={lineReadOnlyTextClass}
+                              className={getJournalLineColumnClass(column.id, activeCustomization?.lineColumns?.[column.id])}
+                            >
+                              <SearchableSelectInput
+                                selectedValue={line.classId}
+                                options={classes.map((classOption) => ({
+                                  value: classOption.id,
+                                  label: `${classOption.classId} - ${classOption.name}`,
+                                  displayLabel: renderClassValue(classes, classOption.id, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'edit')),
+                                  menuLabel: renderClassValue(classes, classOption.id, getLineColumnDropdownDisplayMode(activeCustomization?.lineColumns?.[column.id])),
+                                  searchText: `${classOption.classId} ${classOption.name}`,
+                                  sortIdText: classOption.classId,
+                                  sortLabelText: classOption.name,
+                                }))}
+                                placeholder="None"
+                                searchPlaceholder={`Search ${classLabelLower}`}
+                                dropdownSort={getLineColumnDropdownSortMode(activeCustomization?.lineColumns?.[column.id])}
+                                textClassName={lineFontSize === 'sm' ? 'text-sm' : 'text-xs'}
+                                onSelect={(value) => updateLine(line.key, 'classId', value)}
+                              />
+                            </EditableCell>
+                          )
                         case 'projectId':
                           return (
                             <EditableCell key={column.id} editing={editing || isNew} value={renderProjectValue(projects, line.projectId, getLineColumnDisplayMode(activeCustomization?.lineColumns?.[column.id], 'view'))} title={renderProjectLabel(projects, line.projectId)} textClassName={lineReadOnlyTextClass} className={getJournalLineColumnClass(column.id, activeCustomization?.lineColumns?.[column.id])}>
@@ -1185,6 +1233,12 @@ export default function JournalEntryDetailClient({
                 return renderLocationValue(
                   locations,
                   line.locationId,
+                  getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[columnId]),
+                )
+              case 'classId':
+                return renderClassValue(
+                  classes,
+                  line.classId,
                   getGlImpactColumnDisplayMode(activeCustomization?.glImpactColumns?.[columnId]),
                 )
               case 'projectId':
@@ -1536,6 +1590,25 @@ function renderLocationValue(
   const value = values.find((entry) => entry.id === selectedId)
   if (!value) return '-'
   return renderCodeAndName(value.code, value.name, mode)
+}
+
+function renderClassLabel(
+  values: ClassOption[],
+  selectedId: string,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return `${value.classId} - ${value.name}`
+}
+
+function renderClassValue(
+  values: ClassOption[],
+  selectedId: string,
+  mode: JournalLineDisplayMode,
+) {
+  const value = values.find((entry) => entry.id === selectedId)
+  if (!value) return '-'
+  return renderCodeAndName(value.classId, value.name, mode)
 }
 
 function renderItemLabel(

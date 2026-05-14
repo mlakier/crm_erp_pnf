@@ -1,0 +1,662 @@
+{
+  "profit_and_loss": {
+    "sections": [
+      {
+        "id": "revenue",
+        "label": "Revenue",
+        "visible": true,
+        "showHeader": true,
+        "showTotal": true,
+        "order": 0,
+        "groups": [
+          {
+            "id": "revenue",
+            "label": "Revenue",
+            "visible": true,
+            "showHeader": true,
+            "showTotal": true,
+            "order": 0,
+            "categories": [
+              {
+                "id": "revenue",
+                "label": "Revenue",
+                "visible": true,
+                "showHeader": true,
+                "showTotal": true,
+                "order": 0
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cost-of-goods-sold",
+        "label": "Cost of Goods Sold",
+        "visible": true,
+        "showHeader": true,
+        "showTotal": true,
+        "order": 1,
+        "groups": []
+      },
+      {
+        "id": "cost-of-sales",
+        "label": "Cost of Sales",
+        "visible": true,
+        "showHeader": true,
+        "showTotal": true,
+        "order": 2,
+        "groups": [
+          {
+            "id": "cost-of-sales",
+            "label": "Cost of Sales",
+            "visible": true,
+            "showHeader": true,
+            "showTotal": true,
+            "order": 0,
+            "categories": [
+              {
+                "id": "cost-of-sales",
+                "label": "Cost of Sales",
+                "visible": true,
+                "showHeader": true,
+                "showTotal": true,
+                "order": 0
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "expenses",
+        "label": "Expenses",
+        "visible": true,
+        "showHeader": true,
+        "showTotal": true,
+        "order": 3,
+        "groups": [
+          {
+            "id": "cost-of-sales",
+            "label": "Cost of Sales",
+            "visible": true,
+            "showHeader": true,
+            "showTotal": true,
+            "order": 0,
+            "categories": [
+              {
+                "id": "cost-of-sales",
+                "label": "Cost of Sales",
+                "visible": true,
+                "showHeader": true,
+                "showTotal": true,
+                "order": 0
+              }
+            ]
+          },
+          {
+            "id": "operating-expenses",
+            "label": "Operating Expenses",
+            "visible": true,
+            "showHeader": true,
+            "showTotal": true,
+            "order": 1,
+            "categories": [
+              {
+                "id": "employee-costs",
+                "label": "Employee Costs",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 0
+              },
+              {
+                "id": "travel-entertainment",
+                "label": "Travel & Entertainment",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 1
+              },
+              {
+                "id": "facilities-expense",
+                "label": "Facilities Expense",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 2
+              },
+              {
+                "id": "office-expense",
+                "label": "Office Expense",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 3
+              },
+              {
+                "id": "professional-fees",
+                "label": "Professional Fees",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 4
+              },
+              {
+                "id": "advertising-promotion",
+                "label": "Advertising & Promotion",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 5
+              },
+              {
+                "id": "other-expenses",
+                "label": "Other Expenses",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 6
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "depreciation-amortization",
+        "label": "Depreciation & Amortization",
+        "visible": false,
+        "showHeader": false,
+        "showTotal": false,
+        "order": 4,
+        "groups": [
+          {
+            "id": "depreciation-amortization",
+            "label": "Depreciation & Amortization",
+            "visible": false,
+            "showHeader": false,
+            "showTotal": false,
+            "order": 0,
+            "categories": [
+              {
+                "id": "depreciation",
+                "label": "Depreciation",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 0
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "realized-gain-loss",
+        "label": "Realized (Gain) / Loss",
+        "visible": false,
+        "showHeader": false,
+        "showTotal": false,
+        "order": 5,
+        "groups": [
+          {
+            "id": "realized-gain-loss",
+            "label": "Realized (Gain) / Loss",
+            "visible": false,
+            "showHeader": false,
+            "showTotal": false,
+            "order": 0,
+            "categories": [
+              {
+                "id": "realized-gain-loss",
+                "label": "Realized (Gain) / Loss",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 0
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "unrealized-gains-losses",
+        "label": "Unrealized (Gains) / Losses",
+        "visible": false,
+        "showHeader": false,
+        "showTotal": false,
+        "order": 6,
+        "groups": [
+          {
+            "id": "unrealized-gains-losses",
+            "label": "Unrealized (Gains) / Losses",
+            "visible": false,
+            "showHeader": false,
+            "showTotal": false,
+            "order": 0,
+            "categories": [
+              {
+                "id": "unrealized-gains-losses",
+                "label": "Unrealized (Gains) / Losses",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 0
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "other-income-expense",
+        "label": "Other (Income) Expense",
+        "visible": false,
+        "showHeader": false,
+        "showTotal": false,
+        "order": 7,
+        "groups": [
+          {
+            "id": "other-income-expense",
+            "label": "Other (Income) Expense",
+            "visible": false,
+            "showHeader": false,
+            "showTotal": false,
+            "order": 0,
+            "categories": [
+              {
+                "id": "other-income-expense",
+                "label": "Other (Income) Expense",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 0
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "interest-income-expense",
+        "label": "Interest (Income) Expense",
+        "visible": false,
+        "showHeader": false,
+        "showTotal": false,
+        "order": 8,
+        "groups": [
+          {
+            "id": "interest-income-expense",
+            "label": "Interest (Income) Expense",
+            "visible": false,
+            "showHeader": false,
+            "showTotal": false,
+            "order": 0,
+            "categories": [
+              {
+                "id": "interest-income-expense",
+                "label": "Interest (Income) Expense",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 0
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "income-tax",
+        "label": "Income Tax",
+        "visible": false,
+        "showHeader": false,
+        "showTotal": false,
+        "order": 9,
+        "groups": [
+          {
+            "id": "income-tax",
+            "label": "Income Tax",
+            "visible": false,
+            "showHeader": false,
+            "showTotal": false,
+            "order": 0,
+            "categories": [
+              {
+                "id": "federal-income-tax",
+                "label": "Federal Income Tax",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 0
+              },
+              {
+                "id": "state-income-tax",
+                "label": "State Income Tax",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 1
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "calculatedRows": [
+      {
+        "id": "gross-margin",
+        "label": "Gross Margin",
+        "visible": true,
+        "order": 0,
+        "afterSectionId": "cost-of-sales"
+      },
+      {
+        "id": "ebitda",
+        "label": "EBITDA",
+        "visible": true,
+        "order": 1,
+        "afterSectionId": "expenses"
+      },
+      {
+        "id": "ebit",
+        "label": "EBIT",
+        "visible": true,
+        "order": 2,
+        "afterSectionId": "depreciation-amortization"
+      },
+      {
+        "id": "ebt",
+        "label": "EBT",
+        "visible": true,
+        "order": 3,
+        "afterSectionId": "interest-income-expense"
+      },
+      {
+        "id": "net-income",
+        "label": "Net Income",
+        "visible": true,
+        "order": 4,
+        "afterSectionId": "income-tax"
+      }
+    ]
+  },
+  "balance_sheet": {
+    "sections": [
+      {
+        "id": "assets",
+        "label": "Assets",
+        "visible": true,
+        "showHeader": true,
+        "showTotal": true,
+        "order": 0,
+        "groups": [
+          {
+            "id": "current-assets",
+            "label": "Current Assets",
+            "visible": true,
+            "showHeader": true,
+            "showTotal": true,
+            "order": 0,
+            "categories": [
+              {
+                "id": "cash",
+                "label": "Cash",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 0
+              },
+              {
+                "id": "accounts-receivable",
+                "label": "Accounts Receivable",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 1
+              },
+              {
+                "id": "intercompany-receivables",
+                "label": "Intercompany Receivables",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 2
+              },
+              {
+                "id": "inventory",
+                "label": "Inventory",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 3
+              },
+              {
+                "id": "prepaids",
+                "label": "Prepaids",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 4
+              },
+              {
+                "id": "other-current-assets",
+                "label": "Other Current Assets",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 5
+              },
+              {
+                "id": "deferred-tax-assets",
+                "label": "Deferred Tax Assets",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 6
+              }
+            ]
+          },
+          {
+            "id": "non-current-assets",
+            "label": "Non-Current Assets",
+            "visible": true,
+            "showHeader": true,
+            "showTotal": true,
+            "order": 1,
+            "categories": [
+              {
+                "id": "fixed-assets",
+                "label": "Fixed Assets",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 0
+              },
+              {
+                "id": "other-non-current-assets",
+                "label": "Other Non-Current Assets",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 1
+              },
+              {
+                "id": "notes-receivable",
+                "label": "Notes Receivable",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 2
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "liabilities",
+        "label": "Liabilities",
+        "visible": true,
+        "showHeader": true,
+        "showTotal": true,
+        "order": 1,
+        "groups": [
+          {
+            "id": "current-liabilities",
+            "label": "Current Liabilities",
+            "visible": true,
+            "showHeader": true,
+            "showTotal": true,
+            "order": 0,
+            "categories": [
+              {
+                "id": "accounts-payable",
+                "label": "Accounts Payable",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 0
+              },
+              {
+                "id": "intercompany-payables",
+                "label": "Intercompany Payables",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 1
+              },
+              {
+                "id": "credit-card-payables",
+                "label": "Credit Card Payables",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 2
+              },
+              {
+                "id": "accrued-expenses",
+                "label": "Accrued Expenses",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 3
+              },
+              {
+                "id": "deferred-revenue",
+                "label": "Deferred Revenue",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 4
+              },
+              {
+                "id": "other-current-liabilities",
+                "label": "Other Current Liabilities",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 5
+              }
+            ]
+          },
+          {
+            "id": "non-current-liabilities",
+            "label": "Non-Current Liabilities",
+            "visible": true,
+            "showHeader": true,
+            "showTotal": true,
+            "order": 1,
+            "categories": [
+              {
+                "id": "non-current-deferred-revenue",
+                "label": "Non-current Deferred Revenue",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 0
+              },
+              {
+                "id": "notes-payable",
+                "label": "Notes Payable",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "equity",
+        "label": "Equity",
+        "visible": true,
+        "showHeader": true,
+        "showTotal": true,
+        "order": 2,
+        "groups": [
+          {
+            "id": "equity",
+            "label": "Equity",
+            "visible": true,
+            "showHeader": true,
+            "showTotal": true,
+            "order": 0,
+            "categories": [
+              {
+                "id": "common-stock",
+                "label": "Common Stock",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 0
+              },
+              {
+                "id": "preferred-stock",
+                "label": "Preferred Stock",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 1
+              },
+              {
+                "id": "apic-common-stock",
+                "label": "APIC Common Stock",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 2
+              },
+              {
+                "id": "apic-preferred-stock",
+                "label": "APIC Preferred Stock",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 3
+              },
+              {
+                "id": "dividends-paid",
+                "label": "Dividends Paid",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 4
+              },
+              {
+                "id": "currency-translation-adjustment",
+                "label": "Currency Translation Adjustment",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 5
+              },
+              {
+                "id": "retained-earnings",
+                "label": "Retained Earnings",
+                "visible": true,
+                "showHeader": false,
+                "showTotal": false,
+                "order": 6
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

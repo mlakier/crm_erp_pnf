@@ -34,6 +34,7 @@ export function buildBillPaymentListColumns(): SavedSearchColumnOption[] {
     { id: 'method', label: 'Method' },
     { id: 'reference', label: 'Reference' },
     { id: 'status', label: 'Status' },
+    { id: 'gl-posting', label: 'GL Posting' },
     { id: 'notes', label: 'Description' },
     { id: 'db-id', label: 'DB Id' },
     { id: 'created', label: 'Created' },

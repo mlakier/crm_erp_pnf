@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateInvoiceReceiptNumber } from '@/lib/invoice-receipt-number'
 import { parseMoneyValue } from '@/lib/money'
-import { generateNextJournalNumber } from '@/lib/journal-number'
+import { generateNextSystemJournalNumber } from '@/lib/journal-number'
 import { generateCustomerRefundNumber } from '@/lib/customer-refund-number'
 import { logActivity, logFieldChangeActivities, logRecordSnapshotActivities } from '@/lib/activity'
 import { loadCompanySetupSettings } from '@/lib/company-setup-settings-store'
@@ -31,9 +31,17 @@ import {
   type InvoiceReceiptApplicationInput,
 } from '@/lib/invoice-receipt-applications'
 import { loadCashBankPostingAccounts } from '@/lib/posting-account-options'
+import { getRequiredStandardTransactionPostingContext } from '@/lib/transaction-posting-context'
+import { deriveSettlementLineDimensions } from '@/lib/settlement-dimension-policy'
 
 const INVOICE_RECEIPT_POSTING_STATUSES = new Set(['posted'])
 const AUTO_CUSTOMER_REFUND_NOTE = 'Auto-created from invoice receipt overpayment.'
+
+function isDateBefore(left: Date, right: Date) {
+  const l = new Date(left.getFullYear(), left.getMonth(), left.getDate()).getTime()
+  const r = new Date(right.getFullYear(), right.getMonth(), right.getDate()).getTime()
+  return l < r
+}
 
 async function deleteLegacyInvoiceReceiptSettlementApplications(
   receiptId: string,
@@ -238,6 +246,7 @@ async function loadInvoiceApplicationContext(invoiceIds: string[], currentReceip
 async function validateInvoiceReceiptApplications(
   applications: InvoiceReceiptApplicationInput[],
   receiptAmount: number,
+  receiptDate?: Date | null,
   currentReceiptId?: string,
   requireFullyApplied = false,
   overpaymentHandling?: string | null,
@@ -274,6 +283,13 @@ async function validateInvoiceReceiptApplications(
     }
     return context.invoice
   })
+
+  if (receiptDate) {
+    const futureInvoice = resolvedInvoices.find((invoice) => isDateBefore(receiptDate, invoice.createdAt))
+    if (futureInvoice) {
+      throw new Error(`Receipt date cannot be earlier than applied invoice ${futureInvoice.number} date`)
+    }
+  }
 
   const firstInvoice = resolvedInvoices[0]
   const customerId = firstInvoice.customerId
@@ -331,6 +347,9 @@ async function postInvoiceReceiptJournal(cashReceiptId: string) {
           userId: true,
           subsidiaryId: true,
           currencyId: true,
+          lineItems: {
+            select: { departmentId: true, locationId: true, classId: true },
+          },
         },
       },
       applications: {
@@ -346,6 +365,9 @@ async function postInvoiceReceiptJournal(cashReceiptId: string) {
               userId: true,
               subsidiaryId: true,
               currencyId: true,
+              lineItems: {
+                select: { departmentId: true, locationId: true, classId: true },
+              },
             },
           },
         },
@@ -364,6 +386,13 @@ async function postInvoiceReceiptJournal(cashReceiptId: string) {
 
   const amount = Number(receipt.amount)
   if (!Number.isFinite(amount) || amount <= 0 || !firstInvoice) return
+  const futureInvoice = appliedInvoices.find((invoice) => isDateBefore(receipt.date, invoice.createdAt))
+  if (futureInvoice) {
+    throw new Error(`Receipt date cannot be earlier than applied invoice ${futureInvoice.number} date`)
+  }
+  const settlementDimensions = await deriveSettlementLineDimensions(
+    appliedInvoices.flatMap((invoice) => invoice.lineItems),
+  )
 
   const {
     arAccountId,
@@ -518,7 +547,7 @@ async function postInvoiceReceiptJournal(cashReceiptId: string) {
 
   if (!arAccountId || !bankAccountId) return
 
-  const journalNumber = await generateNextJournalNumber()
+  const journalNumber = await generateNextSystemJournalNumber()
   const totalAppliedAmount = roundMoney(
     applicationsToSettle.reduce((sum, application) => sum + Number(application.appliedAmount), 0),
   )
@@ -582,13 +611,14 @@ async function postInvoiceReceiptJournal(cashReceiptId: string) {
     ? roundMoney(settlementSummaries.reduce((sum, summary) => sum + (summary.realizedFxGroupAmount ?? 0), 0))
     : null
   const fxLines = buildRealizedFxJournalLines({
-    description: `${receipt.number ?? receipt.id} realized FX`,
+    description: receipt.number ?? receipt.id,
     memo: receipt.reference ?? null,
     subsidiaryId: firstInvoice.subsidiaryId,
     customerId: firstInvoice.customerId,
     realizedFxGainAccountId,
     realizedFxLossAccountId,
     orientation: 'asset',
+    ...settlementDimensions,
     localAmount: realizedFxLocalTotal,
     functionalAmount: realizedFxFunctionalTotal,
     groupAmount: realizedFxGroupTotal,
@@ -632,6 +662,7 @@ async function postInvoiceReceiptJournal(cashReceiptId: string) {
             accountId: bankAccountId,
             subsidiaryId: firstInvoice.subsidiaryId,
             customerId: firstInvoice.customerId,
+            ...settlementDimensions,
           },
           {
             displayOrder: 1,
@@ -646,6 +677,7 @@ async function postInvoiceReceiptJournal(cashReceiptId: string) {
             accountId: arAccountId,
             subsidiaryId: firstInvoice.subsidiaryId,
             customerId: firstInvoice.customerId,
+            ...settlementDimensions,
           },
           ...fxLines,
         ],
@@ -845,10 +877,18 @@ export async function POST(req: NextRequest) {
     const postingContext = await validateInvoiceReceiptApplications(
       fallbackApplications,
       normalizedAmount,
+      new Date(date),
       undefined,
       INVOICE_RECEIPT_POSTING_STATUSES.has(normalizedStatus),
       overpaymentHandling,
     )
+    const requiredPostingContext = getRequiredStandardTransactionPostingContext('invoice-receipt', {
+      subsidiaryId: postingContext.subsidiaryId,
+      currencyId: postingContext.currencyId,
+    })
+    if ('error' in requiredPostingContext) {
+      return NextResponse.json({ error: requiredPostingContext.error }, { status: 400 })
+    }
 
     if (
       body.subsidiaryId
@@ -873,8 +913,8 @@ export async function POST(req: NextRequest) {
         status: normalizedStatus,
         overpaymentHandling,
         invoiceId: fallbackApplications[0]?.invoiceId ?? invoiceId,
-        subsidiaryId: postingContext.subsidiaryId,
-        currencyId: postingContext.currencyId,
+        subsidiaryId: requiredPostingContext.subsidiaryId,
+        currencyId: requiredPostingContext.currencyId,
         bankAccountId: body.bankAccountId || null,
         amount: normalizedAmount,
         date: new Date(date),
@@ -961,13 +1001,21 @@ export async function PUT(req: NextRequest) {
               }))
             : [{ invoiceId: body.invoiceId ?? before.invoiceId, appliedAmount: normalizedAmount }]
 
-    await validateInvoiceReceiptApplications(
+    const postingContext = await validateInvoiceReceiptApplications(
       fallbackApplications,
       normalizedAmount,
+      body.date ? new Date(body.date) : before.date,
       before.id,
       INVOICE_RECEIPT_POSTING_STATUSES.has(normalizedStatus),
       overpaymentHandling,
     )
+    const requiredPostingContext = getRequiredStandardTransactionPostingContext('invoice-receipt', {
+      subsidiaryId: postingContext.subsidiaryId,
+      currencyId: postingContext.currencyId,
+    })
+    if ('error' in requiredPostingContext) {
+      return NextResponse.json({ error: requiredPostingContext.error }, { status: 400 })
+    }
 
     const row = await prisma.cashReceipt.update({
       where: { id },
@@ -975,6 +1023,8 @@ export async function PUT(req: NextRequest) {
         ...(body.invoiceId !== undefined || applications.length > 0
           ? { invoiceId: fallbackApplications[0]?.invoiceId ?? body.invoiceId ?? before.invoiceId }
           : {}),
+        subsidiaryId: requiredPostingContext.subsidiaryId,
+        currencyId: requiredPostingContext.currencyId,
         ...(body.bankAccountId !== undefined ? { bankAccountId: body.bankAccountId || null } : {}),
         ...(body.status !== undefined ? { status: normalizedStatus } : {}),
         ...(body.overpaymentHandling !== undefined ? { overpaymentHandling } : {}),

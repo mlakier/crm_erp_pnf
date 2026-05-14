@@ -1,8 +1,10 @@
 'use client'
 
 import RecordGlImpactSection from '@/components/RecordGlImpactSection'
+import { useSeededDimensionLabels } from '@/components/SeededDimensionLabelsProvider'
 import { fmtCurrency } from '@/lib/format'
 import {
+  applySeededDimensionLabels,
   getOrderedVisibleTransactionGlImpactColumns,
   TRANSACTION_GL_IMPACT_COLUMNS,
   type TransactionGlImpactColumnCustomization,
@@ -36,6 +38,23 @@ function getColumnClassName(
   return [widthClass, alignment, wrapping].filter(Boolean).join(' ')
 }
 
+function getColumnStyle(
+  columnId: keyof TransactionGlImpactRow | keyof TransactionGlImpactColumnCustomization,
+  columnCustomization?: Record<string, { widthMode?: string }>,
+) {
+  const widthMode = columnCustomization?.[columnId as string]?.widthMode ?? 'auto'
+  const width =
+    widthMode === 'compact'
+      ? '6rem'
+      : widthMode === 'normal'
+        ? '9rem'
+        : widthMode === 'wide'
+          ? '14rem'
+          : undefined
+
+  return width ? { width, minWidth: width } : undefined
+}
+
 export default function TransactionGlImpactSection({
   rows,
   settings,
@@ -56,8 +75,10 @@ export default function TransactionGlImpactSection({
     group?: string | null
   }
 }) {
+  const dimensionLabels = useSeededDimensionLabels()
+  const columnDefinitions = applySeededDimensionLabels(TRANSACTION_GL_IMPACT_COLUMNS, dimensionLabels)
   const visibleColumns = getOrderedVisibleTransactionGlImpactColumns(
-    TRANSACTION_GL_IMPACT_COLUMNS,
+    columnDefinitions,
     columnCustomization,
   )
 
@@ -72,6 +93,7 @@ export default function TransactionGlImpactSection({
       getRowKey={(row) => row.id}
       getHeaderClassName={(columnId) => getColumnClassName(columnId, columnCustomization)}
       getCellClassName={(columnId) => getColumnClassName(columnId, columnCustomization)}
+      getColumnStyle={(columnId) => getColumnStyle(columnId, columnCustomization)}
       renderCell={(row, columnId) => {
         switch (columnId) {
           case 'date':
@@ -84,6 +106,12 @@ export default function TransactionGlImpactSection({
             return row.sourceNumber
           case 'account':
             return row.account
+          case 'department':
+            return row.department
+          case 'location':
+            return row.location
+          case 'class':
+            return row.class
           case 'description':
             return row.description
           case 'debit':

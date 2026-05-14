@@ -5,6 +5,8 @@ import { generateNextOpportunityNumber } from '@/lib/opportunity-number'
 import { isFieldRequiredServer } from '@/lib/form-requirements-store'
 import { calcLineTotal, parseMoneyValue, parseOptionalMoneyValue, parseQuantity, sumMoney } from '@/lib/money'
 import { resolveCustomerTransactionSnapshot } from '@/lib/transaction-snapshot-defaults'
+import { getTransactionLineRequirementsError } from '@/lib/transaction-line-requirements'
+import { getRequiredStandardTransactionPostingContext, getTransactionPostingContextError } from '@/lib/transaction-posting-context'
 import {
   coerceWorkflowValueForStep,
   getDefaultWorkflowStatus,
@@ -43,6 +45,10 @@ export async function POST(request: NextRequest) {
 
     const opportunityNumber = await generateNextOpportunityNumber()
     const snapshot = await resolveCustomerTransactionSnapshot(customerId, {})
+    const lineRequirementsError = getTransactionLineRequirementsError('opportunity', lineItems)
+    if (lineRequirementsError) {
+      return NextResponse.json({ error: lineRequirementsError }, { status: 400 })
+    }
 
     // Build line item create data
     const lineItemRows = Array.isArray(lineItems)
@@ -64,6 +70,15 @@ export async function POST(request: NextRequest) {
     const computedAmount = lineItemRows.length > 0
       ? sumMoney(lineItemRows.map((li: { lineTotal: number }) => li.lineTotal))
       : parseMoneyValue(amount)
+    const resolvedSubsidiaryId = subsidiaryId || snapshot.subsidiaryId
+    const resolvedCurrencyId = currencyId || snapshot.currencyId
+    const postingContext = getRequiredStandardTransactionPostingContext('opportunity', {
+      subsidiaryId: resolvedSubsidiaryId,
+      currencyId: resolvedCurrencyId,
+    })
+    if ('error' in postingContext) {
+      return NextResponse.json({ error: postingContext.error }, { status: 400 })
+    }
 
     const opportunity = await prisma.opportunity.create({
       data: {
@@ -79,8 +94,8 @@ export async function POST(request: NextRequest) {
         customerId,
         userId,
         probability: probability === '' || probability == null ? null : Number(probability),
-        subsidiaryId: subsidiaryId || snapshot.subsidiaryId,
-        currencyId: currencyId || snapshot.currencyId,
+        subsidiaryId: postingContext.subsidiaryId,
+        currencyId: postingContext.currencyId,
         ...(lineItemRows.length > 0 ? { lineItems: { create: lineItemRows } } : {}),
       },
       include: { lineItems: true },
@@ -121,6 +136,15 @@ export async function PUT(request: NextRequest) {
       'opportunity',
       typeof stage === 'string' ? stage : existing.stage,
     )
+    const nextSubsidiaryId = subsidiaryId === undefined ? existing.subsidiaryId : subsidiaryId || null
+    const nextCurrencyId = currencyId === undefined ? existing.currencyId : currencyId || null
+    const postingContextError = getTransactionPostingContextError('opportunity', {
+      subsidiaryId: nextSubsidiaryId,
+      currencyId: nextCurrencyId,
+    })
+    if (postingContextError) {
+      return NextResponse.json({ error: postingContextError }, { status: 400 })
+    }
 
     if (
       workflowStep === 'opportunity'
@@ -138,8 +162,8 @@ export async function PUT(request: NextRequest) {
         amount: amount === undefined ? existing.amount : parseOptionalMoneyValue(amount),
         closeDate: closeDate === undefined ? existing.closeDate : closeDate ? new Date(closeDate) : null,
         probability: probability === undefined ? existing.probability : probability === '' || probability == null ? null : Number(probability),
-        subsidiaryId: subsidiaryId === undefined ? existing.subsidiaryId : subsidiaryId || null,
-        currencyId: currencyId === undefined ? existing.currencyId : currencyId || null,
+        subsidiaryId: nextSubsidiaryId,
+        currencyId: nextCurrencyId,
       },
     })
 

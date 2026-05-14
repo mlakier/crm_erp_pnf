@@ -280,7 +280,7 @@ export default async function UserDetailPage({
       id: 'department',
       label: 'Department',
       value: user.department ? `${user.department.departmentId} - ${user.department.name}` : '-',
-      href: user.departmentId ? `/departments/${user.departmentId}` : null,
+      href: user.departmentId ? '/configuration/manage-dimensions' : null,
       accent: 'teal' as const,
       cardTone: 'teal',
       valueTone: 'teal',
@@ -383,7 +383,7 @@ export default async function UserDetailPage({
               reference: user.department.departmentId,
               name: user.department.name,
               details: user.department.description ?? '-',
-              href: `/departments/${user.department.id}`,
+              href: '/configuration/manage-dimensions',
             }
           : null,
         user.defaultSubsidiary
